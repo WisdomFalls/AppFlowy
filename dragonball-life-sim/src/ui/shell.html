@@ -7,6 +7,15 @@
       <p class="tagline">One life, one year at a time. Pick a species, pick a century, and find out
         how far you get before something stronger than you turns up.</p>
 
+      <div class="portrait-wrap">
+        <div class="portrait" id="create-portrait"></div>
+        <div class="portrait-meta">
+          <div class="portrait-name" id="create-name-echo">-</div>
+          <div class="portrait-sub" id="create-sub-echo">-</div>
+          <button class="ghost-btn" id="btn-random-look" style="margin-top:8px">Randomise look</button>
+        </div>
+      </div>
+
       <div class="field">
         <label class="field-label" for="in-name">Name</label>
         <div style="display:flex;gap:7px">
@@ -21,47 +30,8 @@
         <div class="race-card" id="race-card"></div>
       </div>
 
-      <div class="field">
-        <span class="field-label">Born into</span>
-        <div class="opts" id="opt-upbringing"></div>
-        <p class="row-note" id="upbringing-note" style="margin-top:6px"></p>
-      </div>
-
-      <div class="field">
-        <span class="field-label">Temperament</span>
-        <div class="opts" id="opt-temperament"></div>
-      </div>
-
-      <div class="field">
-        <span class="field-label">Build</span>
-        <div class="opts" id="opt-body"></div>
-      </div>
-
-      <div class="field">
-        <span class="field-label">Appearance</span>
-        <div style="display:grid;gap:7px">
-          <select class="text-input" id="in-hair"></select>
-          <select class="text-input" id="in-eyes"></select>
-          <select class="text-input" id="in-marking"></select>
-          <select class="text-input" id="in-sex"></select>
-        </div>
-      </div>
-
-      <div class="field">
-        <span class="field-label">Born in</span>
-        <select class="text-input" id="in-era"></select>
-        <p class="row-note" id="era-note" style="margin-top:6px"></p>
-      </div>
-
-      <div class="field">
-        <span class="field-label">Homeworld</span>
-        <select class="text-input" id="in-home"></select>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="in-seed">Seed (optional)</label>
-        <input class="text-input" id="in-seed" placeholder="leave blank for a random life" autocomplete="off">
-      </div>
+      <nav class="create-tabs" id="create-tabs"></nav>
+      <div id="create-panel"></div>
 
       <button class="primary-btn" id="btn-begin">Begin a life</button>
       <button class="ghost-btn" id="btn-random-all">Randomise everything</button>
@@ -74,6 +44,7 @@
   <section class="screen" id="screen-play">
     <header class="hud">
       <div class="hud-top">
+        <div class="hud-portrait" id="hud-portrait"></div>
         <div>
           <div class="hud-name" id="hud-name">-</div>
           <div class="hud-sub" id="hud-sub">-</div>
@@ -117,6 +88,66 @@
         <button class="tab-btn" data-panel="records"><span>&#9635;</span>Life</button>
       </div>
     </nav>
+  </section>
+
+  <!-- ========================================================= battle -->
+  <section class="screen" id="screen-battle">
+    <header class="foe-head">
+      <div class="foe-top">
+        <div>
+          <div class="foe-name" id="foe-name">-</div>
+          <div class="foe-sub" id="foe-sub">-</div>
+        </div>
+        <div class="foe-power" id="foe-power">-</div>
+      </div>
+      <div class="bar-track big"><div class="bar-fill foe-hp" id="foe-hp" style="width:100%"></div></div>
+      <div class="foe-meta">
+        <span id="foe-state">-</span>
+        <span id="battle-round">Round 1</span>
+      </div>
+      <div class="destruction" id="destruction" hidden>
+        <span>Collateral</span>
+        <div class="bar-track"><div class="bar-fill dmg" id="destruction-fill" style="width:0%"></div></div>
+      </div>
+    </header>
+
+    <div class="battle-log" id="battle-log"></div>
+
+    <div class="me-strip">
+      <div class="me-bars">
+        <div class="mini"><span>HP</span><div class="bar-track"><div class="bar-fill hp" id="my-hp" style="width:100%"></div></div></div>
+        <div class="mini"><span>KI</span><div class="bar-track"><div class="bar-fill ki" id="my-ki" style="width:100%"></div></div></div>
+        <div class="mini"><span>STA</span><div class="bar-track"><div class="bar-fill sta" id="my-sta" style="width:100%"></div></div></div>
+      </div>
+      <div class="me-state" id="my-state">Neutral</div>
+    </div>
+
+    <nav class="battle-tabs" id="battle-tabs"></nav>
+    <div class="battle-actions" id="battle-actions"></div>
+  </section>
+
+  <!-- ========================================================== trial -->
+  <section class="screen" id="screen-trial">
+    <header class="trial-head">
+      <div class="trial-kicker" id="trial-kicker">Trial</div>
+      <div class="trial-title" id="trial-title">-</div>
+      <div class="trial-blurb" id="trial-blurb">-</div>
+      <div class="trial-progress" id="trial-progress">-</div>
+    </header>
+    <div class="trial-stage" id="trial-stage"></div>
+    <div class="trial-foot" id="trial-foot"></div>
+  </section>
+
+  <!-- =========================================================== hunt -->
+  <section class="screen" id="screen-hunt">
+    <header class="hunt-head">
+      <div class="hunt-title" id="hunt-title">Search</div>
+      <div class="hunt-sub" id="hunt-sub">-</div>
+      <div class="hunt-pings" id="hunt-pings">-</div>
+    </header>
+    <div class="hunt-grid" id="hunt-grid"></div>
+    <div class="hunt-readout" id="hunt-readout"></div>
+    <div class="hunt-foot" id="hunt-foot"></div>
   </section>
 
   <!-- ======================================================== epitaph -->

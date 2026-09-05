@@ -4,7 +4,7 @@
 import {
   createGame, defaultCreation, characterSummary, currentYear, livingNpcs,
   startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy,
-  insertEvent, renarrateLast, ladderStatus, nearbyForms,
+  insertEvent, renarrateLast, skipRemaining, ladderStatus, nearbyForms,
   availableActions, runAction, actionOptions, Rng,
   initSampling, improviseEvent, narrateOutcome, backendName, getApiKey, setApiKey, errorCopy,
   eventsRemaining,
@@ -13,13 +13,24 @@ import {
 import { RACES, getRace, UPBRINGINGS, TEMPERAMENTS, BODY_TYPES } from '../data/races.js';
 import { PLACES, getPlace } from '../data/places.js';
 import { APPEARANCE } from '../engine/state.js';
+import { portraitSvg, defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS,
+  SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES as STANCE_LIST } from './portrait.js';
 import { eraName, worldPowerBaseline } from '../data/timeline.js';
 import { generateFullName } from '../data/names.js';
 import { BRANCHES, TECH_BY_ID } from '../data/techniques.js';
+import { getTransformation } from '../data/transformations.js';
 import { STAT_KEYS, STAT_LABELS, combatPower, powerTier } from '../engine/stats.js';
-import { relationLabel, bondScore } from '../engine/npc.js';
+import { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } from '../engine/npc.js';
+import { npcActions, runNpcAction } from '../engine/social.js';
+import { scoreReplyLocally, applyReply, impressionLabel } from '../engine/dialogue.js';
+import { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint } from '../engine/ai.js';
 import { numberish, zeni } from '../engine/text.js';
 import { getRng, saveRng } from '../engine/state.js';
+import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } from '../engine/battle.js';
+import { slotsLeft, slotsMax, costLabel } from '../engine/economy.js';
+import { ballsHeld, ballManifest, pingSquare, GRID } from '../engine/dragonballs.js';
+import { resolveTrial, getMastery } from '../engine/trials.js';
+import { playTrial } from './trialui.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => {
@@ -35,6 +46,9 @@ let SHEET_MODE = null;
 let AI_MODE = 'mixed';        // off | mixed | always
 let AI_BUSY = false;
 let PENDING_ACTION = null;
+let BATTLE = null;
+let BATTLE_TAB = 'strike';
+let BATTLE_RETURN = null;
 
 const ERAS = [
   { year: 720, label: 'Age 720 - long before any of it' },
@@ -86,14 +100,44 @@ function fillSelect(node, values, selected, labelFn) {
   }
 }
 
+let CREATE_TAB = 'face';
+
+const CREATE_TABS = [
+  { id: 'face', label: 'Face' },
+  { id: 'hair', label: 'Hair' },
+  { id: 'body', label: 'Body' },
+  { id: 'clothes', label: 'Clothes' },
+  { id: 'self', label: 'Self' },
+  { id: 'origin', label: 'Origin' },
+];
+
+function swatchRow(container, list, selectedId, onPick) {
+  const wrap = el('div', 'swatches');
+  for (const item of list) {
+    const b = el('button', 'swatch' + (item.id === selectedId ? ' on' : ''));
+    b.type = 'button';
+    b.style.background = item.hex;
+    b.title = item.name;
+    b.setAttribute('aria-label', item.name);
+    b.addEventListener('click', () => onPick(item.id));
+    wrap.appendChild(b);
+  }
+  container.appendChild(wrap);
+}
+
+function labelled(container, text) {
+  container.appendChild(el('span', 'field-label', text));
+}
+
 function renderCreation() {
   const race = getRace(DRAFT.raceId);
+  if (!DRAFT.look) DRAFT.look = defaultAppearance(new Rng(Date.now()), DRAFT.raceId);
 
   optionRow($('opt-race'), RACES.map((r) => ({ id: r.id, name: r.short })), DRAFT.raceId, (id) => {
     DRAFT.raceId = id;
     const r = getRace(id);
-    DRAFT.hair = r.hairColours[0] || APPEARANCE.hair[0];
     DRAFT.placeId = r.homeworlds[0];
+    DRAFT.look = defaultAppearance(new Rng(Date.now() ^ 7), id);
     if (!DRAFT.nameTouched) DRAFT.name = generateFullName(new Rng(Date.now()), id);
     renderCreation();
   });
@@ -104,39 +148,196 @@ function renderCreation() {
   card.appendChild(el('div', 'race-blurb', race.blurb));
   card.appendChild(el('div', 'race-note', race.notes));
 
-  optionRow($('opt-upbringing'), UPBRINGINGS, DRAFT.upbringingId, (id) => { DRAFT.upbringingId = id; renderCreation(); });
-  const up = UPBRINGINGS.find((u) => u.id === DRAFT.upbringingId);
-  $('upbringing-note').textContent = up ? up.blurb : '';
-
-  optionRow($('opt-temperament'), TEMPERAMENTS, DRAFT.temperamentId, (id) => { DRAFT.temperamentId = id; renderCreation(); });
-  optionRow($('opt-body'), BODY_TYPES, DRAFT.bodyId, (id) => { DRAFT.bodyId = id; renderCreation(); });
-
   $('in-name').value = DRAFT.name;
+  renderPortraitPreview();
 
-  const hairOptions = race.hairColours.length ? race.hairColours : APPEARANCE.hair;
-  fillSelect($('in-hair'), hairOptions.map((h) => ({ value: h, label: 'Hair: ' + h })), DRAFT.hair);
-  fillSelect($('in-eyes'), APPEARANCE.eyes.map((e2) => ({ value: e2, label: 'Eyes: ' + e2 })), DRAFT.eyes);
-  fillSelect($('in-marking'), APPEARANCE.marking.map((m) => ({ value: m, label: 'Marking: ' + m })), DRAFT.marking);
-  fillSelect($('in-sex'), [
-    { value: 'female', label: 'Female' }, { value: 'male', label: 'Male' }, { value: 'nonbinary', label: 'Non-binary' },
-  ], DRAFT.sex);
+  const tabs = $('create-tabs');
+  tabs.innerHTML = '';
+  for (const tab of CREATE_TABS) {
+    const b = el('button', 'ctab' + (CREATE_TAB === tab.id ? ' active' : ''), tab.label);
+    b.type = 'button';
+    b.addEventListener('click', () => { CREATE_TAB = tab.id; renderCreation(); });
+    tabs.appendChild(b);
+  }
 
-  fillSelect($('in-era'), ERAS.map((e2) => ({ value: String(e2.year), label: e2.label })), String(DRAFT.birthYear));
-  $('era-note').textContent = `${eraName(DRAFT.birthYear)}. A serious fighter of this era is around ${numberish(worldPowerBaseline(DRAFT.birthYear))}.`;
+  const panel = $('create-panel');
+  panel.innerHTML = '';
+  const look = DRAFT.look;
+  const set = (key, value) => { look[key] = value; renderCreation(); };
 
-  const homes = race.homeworlds.map((h) => getPlace(h)).filter(Boolean);
-  const homeList = (homes.length ? homes : PLACES.slice(0, 6));
-  fillSelect($('in-home'), homeList.map((p) => ({ value: p.id, label: p.name })), DRAFT.placeId);
+  if (CREATE_TAB === 'face') {
+    labelled(panel, 'Skin');
+    swatchRow(panel, SKIN_TONES, look.skin, (v) => set('skin', v));
+    labelled(panel, 'Face shape');
+    const faces = el('div', 'opts');
+    for (const f of FACE_SHAPES) {
+      const b = el('button', 'opt' + (look.face === f.id ? ' on' : ''), f.name);
+      b.type = 'button';
+      b.addEventListener('click', () => set('face', f.id));
+      faces.appendChild(b);
+    }
+    panel.appendChild(faces);
+    labelled(panel, 'Eye shape');
+    const eyes = el('div', 'opts');
+    for (const e2 of EYE_SHAPES) {
+      const b = el('button', 'opt' + (look.eyeShape === e2.id ? ' on' : ''), e2.name);
+      b.type = 'button';
+      b.addEventListener('click', () => set('eyeShape', e2.id));
+      eyes.appendChild(b);
+    }
+    panel.appendChild(eyes);
+    labelled(panel, 'Eye colour');
+    swatchRow(panel, EYE_COLOURS, look.eyeColour, (v) => set('eyeColour', v));
+    labelled(panel, 'Marking');
+    const marks = el('div', 'opts');
+    for (const m of [['none', 'None'], ['scar', 'Facial scar'], ['dots', 'Forehead dots'], ['thirdeye', 'Third eye']]) {
+      const b = el('button', 'opt' + (look.marking === m[0] ? ' on' : ''), m[1]);
+      b.type = 'button';
+      b.addEventListener('click', () => set('marking', m[0]));
+      marks.appendChild(b);
+    }
+    panel.appendChild(marks);
+  } else if (CREATE_TAB === 'hair') {
+    labelled(panel, 'Style');
+    const styles = el('div', 'opts');
+    for (const st of HAIR_STYLES) {
+      const b = el('button', 'opt' + (look.hairStyle === st.id ? ' on' : ''), st.name);
+      b.type = 'button';
+      b.addEventListener('click', () => set('hairStyle', st.id));
+      styles.appendChild(b);
+    }
+    panel.appendChild(styles);
+    labelled(panel, 'Colour');
+    swatchRow(panel, HAIR_COLOURS, look.hairColour, (v) => set('hairColour', v));
+    if (['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(DRAFT.raceId)) {
+      panel.appendChild(el('p', 'hint-text', `${race.short}s do not grow hair. The style is ignored.`));
+    }
+  } else if (CREATE_TAB === 'body') {
+    labelled(panel, 'Build');
+    optionRow(panel.appendChild(el('div', 'opts')), BODY_TYPES, DRAFT.bodyId, (id) => {
+      DRAFT.bodyId = id;
+      look.buildShape = id;
+      renderCreation();
+    });
+    labelled(panel, 'Height');
+    const hRow = el('div', 'slider-row');
+    const hIn = el('input');
+    hIn.type = 'range'; hIn.min = '110'; hIn.max = '260'; hIn.value = String(look.heightCm);
+    hIn.addEventListener('input', () => {
+      look.heightCm = Number(hIn.value);
+      $('create-sub-echo').textContent = describeBody();
+      hVal.textContent = look.heightCm + ' cm';
+    });
+    const hVal = el('div', 'slider-val', look.heightCm + ' cm');
+    hRow.appendChild(hIn); hRow.appendChild(hVal);
+    panel.appendChild(hRow);
+
+    labelled(panel, 'Weight');
+    const wRow = el('div', 'slider-row');
+    const wIn = el('input');
+    wIn.type = 'range'; wIn.min = '30'; wIn.max = '260'; wIn.value = String(look.weightKg);
+    wIn.addEventListener('input', () => {
+      look.weightKg = Number(wIn.value);
+      $('create-sub-echo').textContent = describeBody();
+      wVal.textContent = look.weightKg + ' kg';
+    });
+    const wVal = el('div', 'slider-val', look.weightKg + ' kg');
+    wRow.appendChild(wIn); wRow.appendChild(wVal);
+    panel.appendChild(wRow);
+  } else if (CREATE_TAB === 'clothes') {
+    labelled(panel, 'What you wear');
+    const fits = el('div', 'opts');
+    for (const o of OUTFITS) {
+      const b = el('button', 'opt' + (look.outfit === o.id ? ' on' : ''), o.name);
+      b.type = 'button';
+      b.addEventListener('click', () => set('outfit', o.id));
+      fits.appendChild(b);
+    }
+    panel.appendChild(fits);
+  } else if (CREATE_TAB === 'self') {
+    labelled(panel, 'Temperament');
+    optionRow(panel.appendChild(el('div', 'opts')), TEMPERAMENTS, DRAFT.temperamentId, (id) => {
+      DRAFT.temperamentId = id; renderCreation();
+    });
+    labelled(panel, 'Fighting stance');
+    const stances = el('div', 'opts');
+    for (const st of STANCE_LIST) {
+      const b = el('button', 'opt' + (look.stance === st.id ? ' on' : ''), st.name);
+      b.type = 'button';
+      b.addEventListener('click', () => set('stance', st.id));
+      stances.appendChild(b);
+    }
+    panel.appendChild(stances);
+    if (look.stance === 'custom') {
+      const input = el('input', 'text-input');
+      input.placeholder = 'Name your style';
+      input.maxLength = 32;
+      input.value = look.stanceName || '';
+      input.addEventListener('input', () => { look.stanceName = input.value; });
+      panel.appendChild(input);
+    }
+    labelled(panel, 'Gender');
+    const sexes = el('div', 'opts');
+    for (const sx of [['female', 'Female'], ['male', 'Male'], ['nonbinary', 'Non-binary']]) {
+      const b = el('button', 'opt' + (DRAFT.sex === sx[0] ? ' on' : ''), sx[1]);
+      b.type = 'button';
+      b.addEventListener('click', () => { DRAFT.sex = sx[0]; renderCreation(); });
+      sexes.appendChild(b);
+    }
+    panel.appendChild(sexes);
+  } else {
+    labelled(panel, 'Born into');
+    optionRow(panel.appendChild(el('div', 'opts')), UPBRINGINGS, DRAFT.upbringingId, (id) => {
+      DRAFT.upbringingId = id; renderCreation();
+    });
+    const up = UPBRINGINGS.find((u) => u.id === DRAFT.upbringingId);
+    panel.appendChild(el('p', 'row-note', up ? up.blurb : ''));
+
+    labelled(panel, 'Born in');
+    const era = el('select', 'text-input');
+    fillSelect(era, ERAS.map((e2) => ({ value: String(e2.year), label: e2.label })), String(DRAFT.birthYear));
+    era.addEventListener('change', () => { DRAFT.birthYear = Number(era.value); renderCreation(); });
+    panel.appendChild(era);
+    panel.appendChild(el('p', 'row-note',
+      `${eraName(DRAFT.birthYear)}. A serious fighter of this era is around ${numberish(worldPowerBaseline(DRAFT.birthYear))}.`));
+
+    labelled(panel, 'Homeworld');
+    const homes = race.homeworlds.map((h) => getPlace(h)).filter(Boolean);
+    const homeSel = el('select', 'text-input');
+    fillSelect(homeSel, (homes.length ? homes : PLACES.slice(0, 6)).map((p) => ({ value: p.id, label: p.name })), DRAFT.placeId);
+    homeSel.addEventListener('change', () => { DRAFT.placeId = homeSel.value; renderCreation(); });
+    panel.appendChild(homeSel);
+
+    labelled(panel, 'Seed (optional)');
+    const seed = el('input', 'text-input');
+    seed.id = 'in-seed';
+    seed.placeholder = 'leave blank for a random life';
+    seed.value = DRAFT.seed || '';
+    seed.addEventListener('input', () => { DRAFT.seed = seed.value; });
+    panel.appendChild(seed);
+  }
+}
+
+function describeBody() {
+  const look = DRAFT.look;
+  const build = BODY_TYPES.find((b) => b.id === DRAFT.bodyId);
+  const stance = STANCE_LIST.find((s2) => s2.id === look.stance);
+  const stanceName = look.stance === 'custom' && look.stanceName ? look.stanceName : (stance ? stance.name : '');
+  return `${getRace(DRAFT.raceId).short} - ${look.heightCm}cm, ${look.weightKg}kg - ${build ? build.name : ''}`
+    + (stanceName ? ` - ${stanceName}` : '');
+}
+
+function renderPortraitPreview() {
+  $('create-portrait').innerHTML = portraitSvg(
+    { raceId: DRAFT.raceId, tail: getRace(DRAFT.raceId).perks.includes('oozaru'), appearance: DRAFT.look },
+    {},
+  );
+  $('create-name-echo').textContent = DRAFT.name;
+  $('create-sub-echo').textContent = describeBody();
 }
 
 function readCreationInputs() {
   DRAFT.name = $('in-name').value.trim() || DRAFT.name;
-  DRAFT.hair = $('in-hair').value;
-  DRAFT.eyes = $('in-eyes').value;
-  DRAFT.marking = $('in-marking').value;
-  DRAFT.sex = $('in-sex').value;
-  DRAFT.birthYear = parseInt($('in-era').value, 10);
-  DRAFT.placeId = $('in-home').value;
 }
 
 function newDraft() {
@@ -144,14 +345,30 @@ function newDraft() {
   const d = defaultCreation(rng);
   d.birthYear = 737;
   d.nameTouched = false;
+  d.look = defaultAppearance(rng, d.raceId);
+  d.look.buildShape = d.bodyId;
+  d.seed = '';
   return d;
 }
 
 // -------------------------------------------------------------------- HUD
 
+/** The strongest form they have, used to tint the portrait's aura. */
+function bestOwnedForm(c) {
+  if (!c.transformations || !c.transformations.length) return null;
+  const forms = ladderStatus(GAME).filter((f) => f.owned);
+  if (!forms.length) return null;
+  return forms.sort((a, b) => b.mult - a.mult)[0];
+}
+
 function renderHud() {
   const s = characterSummary(GAME);
   const c = GAME.character;
+  const portraitBox = $('hud-portrait');
+  if (portraitBox) {
+    const form = c.activeForm || (c.transformations.length ? { name: '' } : null);
+    portraitBox.innerHTML = portraitSvg(c, { form: bestOwnedForm(c) });
+  }
   $('hud-name').textContent = c.name;
   $('hud-sub').textContent = `${s.race} - ${s.place} - Age ${s.year}${c.inAfterlife ? ' - OTHER WORLD' : ''}`;
   $('hud-age').innerHTML = `${c.age}<small>${c.inAfterlife ? 'dead' : 'years'}</small>`;
@@ -174,14 +391,24 @@ function renderHud() {
     p.innerHTML = `${label} <b>${value}</b>`;
     pills.appendChild(p);
   };
+  const left = slotsLeft(GAME);
+  add('Year', `${left}/${slotsMax(GAME)}`, left === 0 ? 'bad' : left <= 1 ? 'gold' : 'good');
   add('Zeni', zeni(c.zeni).replace(' Zeni', ''));
   add('Fame', Math.round(c.fame));
   add('Karma', Math.round(c.karma), c.karma > 20 ? 'good' : c.karma < -20 ? 'bad' : '');
   if (c.career) add('Job', c.career.title);
   if (c.senzu) add('Senzu', c.senzu, 'good');
-  if (GAME.world.dragonBalls) add('Dragon Balls', GAME.world.dragonBalls + '/7', 'gold');
+  const balls = ballsHeld(GAME);
+  if (balls) add('Dragon Balls', balls + '/7', 'gold');
   if (c.transformations.length) add('Forms', c.transformations.length, 'gold');
   if (GAME.legacy) add('Generation', GAME.legacy.generation);
+
+  // Coming back from the dead has to change the button under your thumb.
+  const ageBtn = $('btn-age');
+  if (ageBtn) {
+    ageBtn.textContent = c.inAfterlife ? 'Another year dead' : 'Age up';
+    ageBtn.classList.toggle('dead', !!c.inAfterlife);
+  }
 }
 
 // ------------------------------------------------------------------- feed
@@ -297,7 +524,7 @@ function showEvent(event) {
 }
 
 function answerEvent(event, choiceId) {
-  const next = choose(GAME, choiceId);
+  const pending = choose(GAME, choiceId);
   renderHud();
   renderFeed();
   maybeNarrate(event);
@@ -307,8 +534,19 @@ function answerEvent(event, choiceId) {
     showDeath();
     return;
   }
-  if (next) {
-    showEvent(next);
+
+  // A choice that starts a fight hands the turn to the battle screen; the rest
+  // of the year waits until it is finished.
+  const spec = GAME.turn && GAME.turn.pendingBattle;
+  if (spec) {
+    GAME.turn.pendingBattle = null;
+    closeSheet();
+    openBattle(spec);
+    return;
+  }
+
+  if (pending) {
+    showEvent(pending);
   } else {
     closeSheet();
     autosave();
@@ -389,7 +627,11 @@ async function requestAiEvent(replace) {
 // ---------------------------------------------------------------- panels
 
 function panelActivities() {
-  const { body } = sheetShell('Activities', `Age ${GAME.character.age}`);
+  const left = slotsLeft(GAME);
+  const { body } = sheetShell('Activities', `${left} of ${slotsMax(GAME)} left this year`);
+  if (left === 0) {
+    body.appendChild(el('p', 'row-note', 'The year is spent. Age up to get another one.'));
+  }
   const groups = { body: 'Body', mind: 'Mind', power: 'Power', social: 'People', world: 'World' };
   const actions = availableActions(GAME);
 
@@ -398,13 +640,19 @@ function panelActivities() {
     if (!inGroup.length) continue;
     body.appendChild(el('div', 'group-label', label));
     for (const action of inGroup) {
-      const b = el('button', 'row' + (action.danger ? ' danger' : ''));
+      const b = el('button', 'row' + (action.danger ? ' danger' : '') + (action.blocked ? ' locked' : ''));
       b.type = 'button';
+      b.disabled = !!action.blocked;
       const main = el('div', 'row-main');
       main.appendChild(el('div', 'row-title', action.name));
-      main.appendChild(el('div', 'row-note', action.desc));
+      main.appendChild(el('div', 'row-note', action.blocked || action.desc));
       b.appendChild(main);
-      b.appendChild(el('div', 'row-value', action.cost || ''));
+      const cost = el('div', 'row-value');
+      cost.textContent = action.cost;
+      if (action.maxPerYear) {
+        cost.appendChild(el('div', '', `${action.used}/${action.maxPerYear}`));
+      }
+      b.appendChild(cost);
       b.addEventListener('click', () => {
         const options = actionOptions(GAME, action.id);
         if (options && options.length) chooseActionTarget(action, options);
@@ -442,14 +690,44 @@ function doAction(actionId, params) {
   const result = runAction(GAME, rng, actionId, params);
   saveRng(GAME, rng);
 
+  if (result.refused) {
+    flash(result.text);
+    panelActivities();
+    return;
+  }
+
+  if (result.battle) {
+    closeSheet();
+    logLine({ kind: 'event', title: null, text: result.text });
+    openBattle(result.battle);
+    return;
+  }
+
+  if (result.hunt) {
+    closeSheet();
+    openHunt(result.hunt);
+    return;
+  }
+
+  if (result.trial) {
+    closeSheet();
+    logLine({ kind: 'event', title: null, text: result.text });
+    openTrial(result.trial);
+    return;
+  }
+
   const entry = { kind: 'event', title: null, text: result.text };
   if (result.gained) entry.text += ` Power level up ${numberish(result.gained)}.`;
+  if (result.skipYears) {
+    // A crossing that takes years takes them out of your life.
+    for (let i = 0; i < result.skipYears && GAME.character.alive; i++) {
+      startYear(GAME);
+      skipRemaining(GAME);
+    }
+  }
   if (result.unlocked) entry.text += ` ${result.unlocked} unlocked.`;
 
-  if (!GAME.log.length || GAME.log[GAME.log.length - 1].age !== GAME.character.age) {
-    GAME.log.push({ year: currentYear(GAME), age: GAME.character.age, entries: [] });
-  }
-  GAME.log[GAME.log.length - 1].entries.push(entry);
+  logLine(entry);
 
   if (GAME.character.vitals.health <= 0 && result.lethal) {
     GAME.character.alive = false;
@@ -476,7 +754,8 @@ function panelPeople() {
     ['Family', (n) => ['parent', 'sibling', 'child', 'spouse'].includes(n.relation)],
     ['Close', (n) => ['friend', 'bestfriend', 'lover', 'mentor', 'student'].includes(n.relation)],
     ['Bad blood', (n) => ['rival', 'nemesis', 'enemy'].includes(n.relation)],
-    ['Everyone else', (n) => !['parent', 'sibling', 'child', 'spouse', 'friend', 'bestfriend', 'lover', 'mentor', 'student', 'rival', 'nemesis', 'enemy'].includes(n.relation)],
+    ['Everyone else', (n) => !['parent', 'sibling', 'child', 'spouse', 'friend', 'bestfriend', 'lover',
+      'mentor', 'student', 'rival', 'nemesis', 'enemy'].includes(n.relation)],
   ];
 
   for (const [label, filter] of groups) {
@@ -484,12 +763,13 @@ function panelPeople() {
     if (!set.length) continue;
     body.appendChild(el('div', 'group-label', label));
     for (const npc of set.slice(0, 40)) {
-      const row = el('div', 'row');
+      const row = el('button', 'row');
+      row.type = 'button';
       const main = el('div', 'row-main');
-      const title = el('div', 'row-title', npc.name + (npc.isCanon ? ' ★' : ''));
-      main.appendChild(title);
+      main.appendChild(el('div', 'row-title', npc.name + (npc.isCanon ? ' \u2605' : '')));
+      const romance = romanceLabel(npc);
       main.appendChild(el('div', 'row-note',
-        `${relationLabel(npc)} - ${getRace(npc.raceId).short}, ${npc.age} - ${numberish(npc.power)}`));
+        `${relationLabel(npc)} - ${bondLabel(npc)}${romance ? ' - ' + romance : ''} - ${getRace(npc.raceId).short}, ${npc.age}`));
       row.appendChild(main);
 
       const bond = el('div', 'bond');
@@ -499,6 +779,7 @@ function panelPeople() {
       track.appendChild(fill);
       bond.appendChild(track);
       row.appendChild(bond);
+      row.addEventListener('click', () => panelPerson(npc.id));
       body.appendChild(row);
     }
   }
@@ -515,6 +796,150 @@ function panelPeople() {
     }
   }
   openSheet('panel');
+}
+
+/** One person: what you know about them, and what you can do about it. */
+function panelPerson(npcId) {
+  const npc = GAME.npcs[npcId];
+  if (!npc) { panelPeople(); return; }
+  const { body } = sheetShell(npc.name, knowledgeLabel(npc));
+
+  const romance = romanceLabel(npc);
+  body.appendChild(el('p', 'row-note',
+    `${relationLabel(npc)} - ${bondLabel(npc)}${romance ? ' - ' + romance : ''}`));
+
+  if (npc.isCanon && npc.personality) {
+    body.appendChild(el('p', 'entry-text', npc.personality));
+  }
+
+  body.appendChild(el('div', 'group-label', 'What you know'));
+  const table = el('div', 'dossier');
+  for (const row of dossier(npc, { full: npc.isCanon })) {
+    const line = el('div', 'dossier-row');
+    line.appendChild(el('span', 'dossier-key', row.label));
+    line.appendChild(el('span', 'dossier-val' + (row.value === '\u2014' ? ' unknown' : ''), row.value));
+    table.appendChild(line);
+  }
+  body.appendChild(table);
+
+  const tones = [['warm', 'Kindness'], ['romance', 'Romance'], ['hostile', 'Cruelty']];
+  const actions = npcActions(GAME, npc);
+  for (const [tone, label] of tones) {
+    const set = actions.filter((a) => a.tone === tone);
+    if (!set.length) continue;
+    body.appendChild(el('div', 'group-label', label));
+    for (const action of set) {
+      const b = el('button', 'row' + (action.tone === 'hostile' ? ' danger' : '') + (action.blocked ? ' locked' : ''));
+      b.type = 'button';
+      b.disabled = !!action.blocked;
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', action.name));
+      main.appendChild(el('div', 'row-note', action.blocked || action.desc));
+      b.appendChild(main);
+      b.appendChild(el('div', 'row-value', action.slots ? `${action.slots}` : '-'));
+      b.addEventListener('click', () => doSocial(npcId, action.id));
+      body.appendChild(b);
+    }
+  }
+
+  const back = el('button', 'ghost-btn', 'Back to everyone');
+  back.type = 'button';
+  back.addEventListener('click', panelPeople);
+  body.appendChild(back);
+  openSheet('panel');
+}
+
+/** A text box, and whatever the other person makes of what you wrote. */
+function openSayPanel(npcId) {
+  const npc = GAME.npcs[npcId];
+  if (!npc) return;
+  const { body } = sheetShell(`Say something to ${npc.name}`, npc.mood || '');
+
+  body.appendChild(el('p', 'row-note',
+    backendName() === 'none'
+      ? 'No model connected, so they read your tone rather than your meaning.'
+      : `${backendLabel()} will read this as ${npc.name} and answer in their voice.`));
+
+  const box = document.createElement('textarea');
+  box.className = 'text-input';
+  box.rows = 4;
+  box.maxLength = 400;
+  box.placeholder = `Whatever you actually want to say to ${npc.name}.`;
+  body.appendChild(box);
+
+  const output = el('div', 'entry-outcome');
+  output.style.marginTop = '10px';
+  body.appendChild(output);
+
+  const send = el('button', 'primary-btn', 'Say it');
+  send.type = 'button';
+  send.addEventListener('click', async () => {
+    const line = box.value.trim();
+    if (!line) { flash('Say something first.'); return; }
+    send.disabled = true;
+    box.disabled = true;
+    output.innerHTML = '<span class="spinner"></span>Waiting for an answer.';
+
+    const rng = getRng(GAME);
+    const charged = runNpcAction(GAME, rng, npcId, 'say');
+    saveRng(GAME, rng);
+    if (charged.refused) { flash(charged.text); send.disabled = false; box.disabled = false; return; }
+
+    let judged = null;
+    if (backendName() !== 'none') {
+      const asked = await judgeReply(GAME, npc, line);
+      if (asked && !asked.error) judged = asked;
+    }
+    if (!judged) judged = scoreReplyLocally(line, npc, GAME.character);
+
+    applyReply(npc, judged);
+    const summary = `${impressionLabel(judged.impression)} ${judged.reply || ''}`.trim();
+    output.textContent = summary;
+    logLine({ kind: 'event', title: `You said something to ${npc.name}`, text: `"${line}"`, outcome: summary });
+    renderHud();
+    renderFeed();
+    autosave();
+
+    const back = el('button', 'ghost-btn', 'Back to them');
+    back.type = 'button';
+    back.addEventListener('click', () => panelPerson(npcId));
+    body.appendChild(back);
+    send.remove();
+  });
+  body.appendChild(send);
+
+  const cancel = el('button', 'ghost-btn', 'Never mind');
+  cancel.type = 'button';
+  cancel.addEventListener('click', () => panelPerson(npcId));
+  body.appendChild(cancel);
+  openSheet('panel');
+}
+
+function doSocial(npcId, actionId) {
+  if (actionId === 'say') { openSayPanel(npcId); return; }
+  const rng = getRng(GAME);
+  const result = runNpcAction(GAME, rng, npcId, actionId);
+  saveRng(GAME, rng);
+
+  if (result.refused) {
+    flash(result.text);
+    return;
+  }
+
+  const npc = GAME.npcs[npcId];
+  if (result.battle) {
+    closeSheet();
+    logLine({ kind: 'event', title: null, text: result.text });
+    openBattle(result.battle);
+    return;
+  }
+
+  logLine({ kind: 'event', title: npc ? npc.name : null, text: result.text });
+  renderHud();
+  renderFeed();
+  autosave();
+  panelPerson(npcId);
+  flash(result.text.slice(0, 140));
 }
 
 function panelPower() {
@@ -543,11 +968,26 @@ function panelPower() {
     const row = el('div', 'row' + (form.owned ? ' owned' : form.missing.length ? ' locked' : ''));
     const main = el('div', 'row-main');
     main.appendChild(el('div', 'row-title', form.name));
-    main.appendChild(el('div', 'row-note', form.owned ? form.desc
+    const mastery = getMastery(GAME, form.id);
+    main.appendChild(el('div', 'row-note', form.owned
+      ? `${mastery}% mastered - ${form.desc}`
       : form.missing.length ? 'Needs ' + form.missing.slice(0, 3).join(', ') : 'Ready to attempt'));
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', 'x' + numberish(form.mult)));
     body.appendChild(row);
+  }
+
+  if (c.customForms && c.customForms.length) {
+    body.appendChild(el('div', 'group-label', 'Forms nobody else has'));
+    for (const form of c.customForms) {
+      const row = el('div', 'row owned');
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', form.name));
+      main.appendChild(el('div', 'row-note', `Built from ${getTransformation(form.baseId) ? getTransformation(form.baseId).name : 'something'} in Age ${form.year}.`));
+      row.appendChild(main);
+      row.appendChild(el('div', 'row-value', 'x' + numberish(form.mult)));
+      body.appendChild(row);
+    }
   }
 
   body.appendChild(el('div', 'group-label', 'Techniques'));
@@ -662,22 +1102,71 @@ function panelRecords() {
   }
   body.appendChild(modeRow);
 
-  if (backendName() !== 'sample') {
-    const keyField = el('div', 'field');
-    keyField.style.marginTop = '10px';
-    const input = el('input', 'text-input');
-    input.type = 'password';
-    input.placeholder = 'Anthropic API key (optional)';
-    input.value = getApiKey();
-    input.addEventListener('change', () => {
-      setApiKey(input.value.trim());
-      flash(input.value.trim() ? 'Key saved in this browser only.' : 'Key removed.');
+  const cfg = getAiConfig();
+  body.appendChild(el('p', 'row-note', `Currently: ${backendLabel()}.`));
+
+  const providers = [['auto', 'Automatic'], ['anthropic', 'Anthropic key'], ['custom', 'Custom endpoint'], ['off', 'Off']];
+  const provRow = el('div', 'opts');
+  for (const [id, label] of providers) {
+    const b = el('button', 'opt' + (cfg.provider === id ? ' on' : ''), label);
+    b.type = 'button';
+    b.addEventListener('click', () => { setAiConfig({ provider: id }); panelRecords(); });
+    provRow.appendChild(b);
+  }
+  body.appendChild(provRow);
+
+  if (cfg.provider === 'anthropic' || (cfg.provider === 'auto' && backendName() !== 'sample')) {
+    const keyInput = el('input', 'text-input');
+    keyInput.type = 'password';
+    keyInput.placeholder = 'Anthropic API key';
+    keyInput.value = getApiKey();
+    keyInput.style.marginTop = '8px';
+    keyInput.addEventListener('change', () => {
+      setApiKey(keyInput.value.trim());
+      flash(keyInput.value.trim() ? 'Key saved in this browser only.' : 'Key removed.');
       panelRecords();
     });
-    keyField.appendChild(input);
-    keyField.appendChild(el('p', 'hint-text',
-      'Stored in this browser and sent only to Anthropic. Leave blank to play on the built-in generator.'));
-    body.appendChild(keyField);
+    body.appendChild(keyInput);
+  }
+
+  if (cfg.provider === 'custom') {
+    const fields = [
+      ['baseUrl', 'Endpoint URL', 'https://your-model/v1/chat/completions', 'text'],
+      ['model', 'Model name', 'the model id your endpoint expects', 'text'],
+      ['key', 'API key (optional)', 'sent in the auth header', 'password'],
+    ];
+    for (const [key, label, placeholder, type] of fields) {
+      body.appendChild(el('span', 'field-label', label));
+      const input = el('input', 'text-input');
+      input.type = type;
+      input.placeholder = placeholder;
+      input.value = cfg[key] || '';
+      input.addEventListener('change', () => setAiConfig({ [key]: input.value.trim() }));
+      body.appendChild(input);
+    }
+    body.appendChild(el('span', 'field-label', 'Request shape'));
+    const shapes = el('div', 'opts');
+    for (const [id, label] of [['openai', 'OpenAI-compatible'], ['anthropic', 'Anthropic Messages']]) {
+      const b = el('button', 'opt' + (cfg.format === id ? ' on' : ''), label);
+      b.type = 'button';
+      b.addEventListener('click', () => { setAiConfig({ format: id }); panelRecords(); });
+      shapes.appendChild(b);
+    }
+    body.appendChild(shapes);
+
+    const test = el('button', 'ghost-btn', 'Test the connection');
+    test.type = 'button';
+    test.addEventListener('click', async () => {
+      test.disabled = true;
+      test.textContent = 'Testing...';
+      const res = await testAiEndpoint();
+      test.disabled = false;
+      test.textContent = 'Test the connection';
+      flash(res.ok ? `Answered: ${res.text || '(empty)'}` : `Failed: ${res.message}`, 5000);
+    });
+    body.appendChild(test);
+    body.appendChild(el('p', 'hint-text',
+      'Anything that answers on either shape works. Settings stay in this browser and are sent only to the endpoint you name.'));
   }
 
   body.appendChild(el('div', 'group-label', 'Save'));
@@ -730,6 +1219,293 @@ function panelRecords() {
   body.appendChild(quitBtn);
 
   openSheet('panel');
+}
+
+// ------------------------------------------------------------------ trial
+
+let TRIAL = null;
+
+function openTrial(trial) {
+  TRIAL = trial;
+  showScreen('trial');
+  playTrial(trial, (score) => {
+    const rng = getRng(GAME);
+    const result = resolveTrial(GAME, rng, TRIAL, score);
+    saveRng(GAME, rng);
+    logLine({ kind: 'event', title: TRIAL.label, text: result.text });
+    TRIAL = null;
+    renderHud();
+    renderFeed();
+    autosave();
+    if (!GAME.character.alive) { showDeath(); return; }
+    showPlay();
+    flash(result.text.slice(0, 140));
+  });
+}
+
+// ------------------------------------------------------------------- hunt
+
+let HUNT = null;
+
+function openHunt(hunt) {
+  HUNT = hunt;
+  $('hunt-title').textContent = hunt.ballName || 'Search';
+  $('hunt-sub').textContent = hunt.message;
+  $('hunt-readout').innerHTML = '';
+  renderHunt();
+  showScreen('hunt');
+}
+
+function renderHunt() {
+  $('hunt-pings').textContent = HUNT.over
+    ? 'Search over'
+    : `${HUNT.pingsLeft} of ${HUNT.pings} sweeps left`;
+
+  const grid = $('hunt-grid');
+  grid.innerHTML = '';
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const seen = HUNT.revealed.find((r) => r.x === x && r.y === y);
+      const cls = seen
+        ? (seen.d === 0 ? 'cell d0' : seen.d === 1 ? 'cell d1' : seen.d === 2 ? 'cell d2'
+          : seen.d === 3 ? 'cell d3' : 'cell far')
+        : 'cell';
+      const b = el('button', cls, seen ? (seen.d === 0 ? '*' : String(seen.d)) : '');
+      b.type = 'button';
+      b.disabled = !!seen || HUNT.over;
+      b.setAttribute('aria-label', `Search square ${x + 1}, ${y + 1}`);
+      b.addEventListener('click', () => huntPing(x, y));
+      grid.appendChild(b);
+    }
+  }
+
+  const foot = $('hunt-foot');
+  foot.innerHTML = '';
+  if (HUNT.over) {
+    const done = el('button', 'primary-btn', HUNT.found ? 'Take it' : 'Give up the season');
+    done.type = 'button';
+    done.addEventListener('click', closeHunt);
+    foot.appendChild(done);
+  } else {
+    const leave = el('button', 'ghost-btn', 'Abandon the search');
+    leave.type = 'button';
+    leave.addEventListener('click', closeHunt);
+    foot.appendChild(leave);
+  }
+}
+
+function huntPing(x, y) {
+  const rng = getRng(GAME);
+  const res = pingSquare(GAME, HUNT, rng, x, y);
+  saveRng(GAME, rng);
+  const line = el('div', res.found ? 'found' : '', res.message);
+  $('hunt-readout').appendChild(line);
+  $('hunt-readout').scrollTop = $('hunt-readout').scrollHeight;
+  renderHunt();
+}
+
+function closeHunt() {
+  const found = HUNT.found;
+  const name = HUNT.ballName;
+  HUNT = null;
+  if (found) {
+    logLine({ kind: 'event', title: 'Dragon Ball found', text: `${name}. ${ballsHeld(GAME)} of seven.` });
+    flash(`${name} recovered. ${ballsHeld(GAME)} of seven.`);
+  } else {
+    logLine({ kind: 'event', title: null, text: 'A season of searching and nothing to show for it.' });
+  }
+  renderHud();
+  renderFeed();
+  autosave();
+  showPlay();
+}
+
+// ----------------------------------------------------------------- battle
+
+const BATTLE_TABS = [
+  { id: 'strike', label: 'Strike', kinds: ['physical'] },
+  { id: 'ki', label: 'Ki', kinds: ['ki'] },
+  { id: 'form', label: 'Form', kinds: ['form'] },
+  { id: 'stance', label: 'Stance', kinds: ['stance'] },
+  { id: 'other', label: 'Other', kinds: ['defend', 'item', 'move'] },
+];
+
+function openBattle(spec, onDone) {
+  const rng = getRng(GAME);
+  BATTLE = createBattle(GAME, rng, spec);
+  saveRng(GAME, rng);
+  BATTLE_RETURN = onDone || null;
+  BATTLE_TAB = 'strike';
+  $('battle-log').innerHTML = '';
+  pushBattleLines([
+    spec.intro || BATTLE.intro || '',
+    describeMatchup(BATTLE),
+    BATTLE.civilians ? 'There are people below. Whatever you break here, somebody lived in it.' : '',
+  ].filter(Boolean), 'big');
+  renderBattle();
+  showScreen('battle');
+}
+
+function pushBattleLines(lines, cls) {
+  const log = $('battle-log');
+  for (const line of lines) {
+    if (!line) continue;
+    log.appendChild(el('div', 'line ' + (cls || 'new'), line));
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderBattle() {
+  const st = battleStatus(BATTLE);
+  $('foe-name').textContent = st.them.name;
+  $('foe-sub').textContent = [st.them.tier, st.them.form, st.them.stance].filter(Boolean).join(' - ');
+  $('foe-power').textContent = numberish(st.them.power);
+  $('foe-hp').style.width = Math.max(0, st.them.hp) + '%';
+  $('foe-state').textContent = st.them.hp > 60 ? 'Barely marked'
+    : st.them.hp > 30 ? 'Hurt' : st.them.hp > 10 ? 'Badly hurt' : 'Barely standing';
+  $('battle-round').textContent = 'Round ' + st.round;
+
+  const destruction = $('destruction');
+  destruction.hidden = !BATTLE.civilians;
+  $('destruction-fill').style.width = st.destruction + '%';
+
+  $('my-hp').style.width = Math.max(0, st.me.hp) + '%';
+  $('my-ki').style.width = Math.max(0, (st.me.ki / Math.max(1, st.me.kiMax)) * 100) + '%';
+  $('my-sta').style.width = Math.max(0, st.me.stamina) + '%';
+  $('my-state').textContent = [st.me.form, st.me.stance].filter(Boolean).join(' - ');
+
+  const tabs = $('battle-tabs');
+  tabs.innerHTML = '';
+  const actions = battleActions(GAME, BATTLE);
+  for (const tab of BATTLE_TABS) {
+    const count = actions.filter((a) => tab.kinds.includes(a.kind)).length;
+    if (!count) continue;
+    const b = el('button', 'btab' + (BATTLE_TAB === tab.id ? ' active' : ''), tab.label);
+    b.type = 'button';
+    b.addEventListener('click', () => { BATTLE_TAB = tab.id; renderBattle(); });
+    tabs.appendChild(b);
+  }
+
+  const wrap = $('battle-actions');
+  wrap.innerHTML = '';
+  const tab = BATTLE_TABS.find((t) => t.id === BATTLE_TAB) || BATTLE_TABS[0];
+  const shown = actions.filter((a) => tab.kinds.includes(a.kind));
+  for (const action of shown) {
+    const b = el('button', 'bact'
+      + (action.kind === 'form' ? ' form-btn' : '')
+      + (action.kind === 'move' ? ' escape wide' : ''));
+    b.type = 'button';
+    b.disabled = !!action.disabled;
+    b.appendChild(el('span', 'bact-label', action.label));
+    if (action.hint || action.reason) b.appendChild(el('span', 'bact-hint', action.reason || action.hint));
+    b.addEventListener('click', () => battleTurn(action.id));
+    wrap.appendChild(b);
+  }
+}
+
+function battleTurn(actionId) {
+  const rng = getRng(GAME);
+  pushBattleLines(['Round ' + BATTLE.round], 'turn');
+  const res = takeTurn(GAME, BATTLE, rng, actionId);
+  saveRng(GAME, rng);
+  pushBattleLines(res.lines);
+  renderBattle();
+  if (res.over) endBattle();
+}
+
+function endBattle() {
+  const rng = getRng(GAME);
+  const after = battleAftermath(GAME, rng, BATTLE, {});
+  saveRng(GAME, rng);
+  if (after.lines.length) pushBattleLines(after.lines, 'big');
+
+  const wrap = $('battle-actions');
+  wrap.innerHTML = '';
+  $('battle-tabs').innerHTML = '';
+
+  const outcomeLine = {
+    won: 'You win.', lost: 'You lose.', fled: 'You got out.',
+    yielded: 'You yielded and they let it stand.', draw: 'Neither of you could finish it.',
+  }[BATTLE.outcome] || 'It is over.';
+
+  const done = el('button', 'bact wide');
+  done.type = 'button';
+  done.appendChild(el('span', 'bact-label', outcomeLine));
+  done.appendChild(el('span', 'bact-hint', 'Back to your life'));
+  done.addEventListener('click', () => closeBattle(after));
+  wrap.appendChild(done);
+
+  // Beating somebody is a decision point, not just a result.
+  if (BATTLE.outcome === 'won' && BATTLE.stakes !== 'spar') {
+    const spare = el('button', 'bact');
+    spare.type = 'button';
+    spare.appendChild(el('span', 'bact-label', 'Let them live'));
+    spare.addEventListener('click', () => {
+      GAME.character.karma = Math.min(100, GAME.character.karma + 8);
+      pushBattleLines(['You leave them breathing. They will remember that, one way or the other.'], 'big');
+      spare.remove();
+      const kill = document.querySelector('.bact.kill');
+      if (kill) kill.remove();
+    });
+    wrap.appendChild(spare);
+
+    const kill = el('button', 'bact kill danger');
+    kill.type = 'button';
+    kill.appendChild(el('span', 'bact-label', 'Finish them'));
+    kill.addEventListener('click', () => {
+      const ref = BATTLE.context || {};
+      const npc = ref.npcId ? GAME.npcs[ref.npcId] : (ref.canonId ? GAME.npcs['canon_' + ref.canonId] : null);
+      if (npc) { npc.alive = false; npc.causeOfDeath = 'You killed them'; }
+      GAME.character.karma = Math.max(-100, GAME.character.karma - 22);
+      GAME.stats.kills += 1;
+      pushBattleLines(['You finish it. Nobody argues with the result.'], 'big');
+      kill.remove();
+      const s2 = document.querySelector('.bact:not(.wide):not(.kill)');
+      if (s2) s2.remove();
+    });
+    wrap.appendChild(kill);
+  }
+}
+
+function closeBattle(after) {
+  const summary = {
+    won: `You beat ${BATTLE.them.name}.`,
+    lost: `${BATTLE.them.name} beat you.`,
+    fled: `You broke off from ${BATTLE.them.name}.`,
+    yielded: `You yielded to ${BATTLE.them.name}.`,
+    draw: `You and ${BATTLE.them.name} could not finish it.`,
+  }[BATTLE.outcome] || '';
+
+  logLine({ kind: 'event', title: `Fight: ${BATTLE.them.name}`, text: summary, outcome: after.text || '' });
+
+  const death = after.death;
+  BATTLE = null;
+  BATTLE_RETURN = null;
+  renderHud();
+  renderFeed();
+  autosave();
+
+  if (death) {
+    GAME.character.alive = false;
+    GAME.character.death = { cause: death, year: currentYear(GAME), age: GAME.character.age };
+    showDeath();
+    return;
+  }
+  if (GAME.character.vitals.health <= 0 && GAME.character.alive) {
+    // A fight can leave you at zero; the year change decides whether that kills you.
+    flash('You are barely alive. Age up and find out if you make it.');
+  }
+  showPlay();
+  const next = currentEvent(GAME);
+  if (next) showEvent(next);
+}
+
+/** Append an entry to the current year in the feed. */
+function logLine(entry) {
+  if (!GAME.log.length || GAME.log[GAME.log.length - 1].age !== GAME.character.age) {
+    GAME.log.push({ year: currentYear(GAME), age: GAME.character.age, entries: [] });
+  }
+  GAME.log[GAME.log.length - 1].entries.push(entry);
 }
 
 // ------------------------------------------------------------------ death
@@ -814,8 +1590,6 @@ function showPlay() {
   renderHud();
   renderFeed();
   showScreen('play');
-  $('btn-age').textContent = GAME.character.inAfterlife ? 'Another year dead' : 'Age up';
-  $('btn-age').classList.toggle('dead', !!GAME.character.inAfterlife);
 }
 
 function autosave() {
@@ -826,7 +1600,7 @@ function autosave() {
 
 function startGame() {
   readCreationInputs();
-  const seed = $('in-seed').value.trim();
+  const seed = (DRAFT.seed || '').trim();
   GAME = createGame({
     name: DRAFT.name,
     raceId: DRAFT.raceId,
@@ -834,11 +1608,9 @@ function startGame() {
     upbringingId: DRAFT.upbringingId,
     temperamentId: DRAFT.temperamentId,
     bodyId: DRAFT.bodyId,
-    hair: DRAFT.hair,
-    eyes: DRAFT.eyes,
-    marking: DRAFT.marking,
     birthYear: DRAFT.birthYear,
     placeId: DRAFT.placeId,
+    look: DRAFT.look,
   }, seed || undefined);
   autosave();
   showPlay();
@@ -848,13 +1620,21 @@ function startGame() {
 function wire() {
   $('btn-begin').addEventListener('click', startGame);
   $('btn-random-all').addEventListener('click', () => { DRAFT = newDraft(); renderCreation(); });
+  $('btn-random-look').addEventListener('click', () => {
+    DRAFT.look = defaultAppearance(new Rng(Date.now() ^ Math.floor(Math.random() * 1e9)), DRAFT.raceId);
+    DRAFT.look.buildShape = DRAFT.bodyId;
+    renderCreation();
+  });
   $('btn-reroll-name').addEventListener('click', () => {
     DRAFT.name = generateFullName(new Rng(Date.now() ^ Math.floor(Math.random() * 1e9)), DRAFT.raceId);
     DRAFT.nameTouched = false;
     $('in-name').value = DRAFT.name;
   });
-  $('in-name').addEventListener('input', () => { DRAFT.nameTouched = true; });
-  $('in-era').addEventListener('change', () => { readCreationInputs(); renderCreation(); });
+  $('in-name').addEventListener('input', () => {
+    DRAFT.nameTouched = true;
+    DRAFT.name = $('in-name').value;
+    $('create-name-echo').textContent = DRAFT.name;
+  });
 
   $('btn-age').addEventListener('click', ageUp);
   $('scrim').addEventListener('click', () => { if (SHEET_MODE !== 'event') closeSheet(); });

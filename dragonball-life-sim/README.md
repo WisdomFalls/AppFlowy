@@ -2,7 +2,7 @@
 
 A mobile life simulator in the shape of BitLife or Manhua Life, set in Dragon Ball.
 You are born as one of twelve species in a chosen era, and you live one year at a
-time: training, working, falling out with people, unlocking transformations, dying,
+time: training, fighting, falling out with people, unlocking transformations, dying,
 and continuing in the Other World because death is a location in this setting rather
 than an ending.
 
@@ -38,7 +38,7 @@ Durable facts ("Piccolo took you on", "you let Kale die") are queryable, so late
 can call back to earlier ones by name. Running arcs apply pressure: a rivalry that has
 gone quiet for six years starts pushing itself back to the surface.
 
-**The model writes, the engine referees.** Where Claude is available the game asks it
+**The model writes, the engine referees.** Where a model is available the game asks it
 for entirely new events, given a compact picture of the character, their relationships,
 their story memory, and an explicit list of recent beats not to repeat. The reply is
 JSON: prose plus proposed consequences. Every number in it is clamped, every unknown key
@@ -50,56 +50,211 @@ but it cannot change the rules.
 
 | | |
 |---|---|
-| Species | 12, each with its own stat floor, growth curve, lifespan, ageing rate and mechanics: Saiyan zenkai, Namekian regeneration and solo reproduction, Frost Demon innate power and terrible work ethic, Majin absorption, Android upgrades, Shinjin divine ki |
-| Transformations | 46 across race-specific ladders, gated on power, stats, story flags, mentors and rituals rather than a single unlock number |
+| Species | 12, each with its own stat floor, growth curve, lifespan, ageing rate, maturity rate and mechanics: Saiyan zenkai, Namekian regeneration and solo reproduction, Frost Demon innate power and terrible work ethic, Majin absorption, Android infinite stamina, Shinjin divine ki |
+| Transformations | 46 across race-specific ladders, gated on power, stats, story flags, mentors and rituals rather than a single unlock number — plus mastery levels and forms you invent and name yourself |
 | Techniques | 54 in six branches with a real prerequisite tree, plus a signature technique you invent and name yourself |
 | Canon characters | 75, era-gated by birth and death year, with power interpolated across the sagas so Goku in Age 762 is not Goku in Age 780 |
-| Places | 34 across Earth, Namek, Planet Vegeta, the Frieza Force, Yardrat, the Other World and the Null Realm, each with its own training multiplier and danger |
-| Timeline | 21 canon events from the fall of Planet Vegeta to the Tournament of Power. You can walk into any of them, and if you resolve one differently the timeline forks |
-| Events | 78 templates plus unlimited model-authored ones |
+| Places | 34 across 10 worlds, each with its own training multiplier and danger |
+| Timeline | 21 canon events from the fall of Planet Vegeta to the Tournament of Power. They fire on their year whether you want them to or not, and you play them rather than read them |
+| Events | 88 templates plus unlimited model-authored ones |
 | Careers | 15 with promotion ladders, from martial arts instructor to Frieza Force sector commander |
+| Social verbs | 20 direct interactions per person, from teaching and healing to extortion and a duel to the death |
 
-Also: relationships that decay if you neglect them, marriage and children who inherit
-your potential, the Dragon Balls and twelve wishes with real costs, tournaments,
+Also: relationships that decay if you neglect them, romance and marriage and children who
+inherit your potential, the Dragon Balls and twelve wishes with real costs, tournaments,
 crime and prison, the Hyperbolic Time Chamber, King Yemma's desk, Snake Way, Hell,
 revival, reincarnation, and a legacy mode that continues as your child in a world that
 remembers everything the previous generation did.
+
+## The year, as a budget
+
+Power in this game is exponential and training multiplies, so an unbounded year is not a
+year — it is a way to reach thirteen billion by age five. Every activity costs slots from
+a yearly budget that is a function of biological maturity, and most actions also have a
+hard per-year cap.
+
+A toddler gets one slot; a fighter in their prime gets six; the very old get three. Perks
+move it: android stamina and a meditative discipline each add one, discipline at 80 adds
+one, injury takes one away, and the dead get an extra because they have nothing else to
+do. Training also grants power against a separate yearly ceiling, so spending every slot
+on the same drill produces diminishing returns rather than an exploit.
+
+Maturity and ageing are separate rates. A Namekian is an adult in four years but lives
+three hundred; a Kai ages so slowly they are still a child at twelve. The budget follows
+maturity, the lifespan follows ageing.
+
+## Fighting
+
+Fights are turn-based rather than a die roll. You pick a stance (each trades attack,
+defence and ki economy differently), then spend turns on physical strikes, techniques
+from your tree, guarding, charging, or transforming mid-fight — the escalation is the
+point, and so is coming out of a form when the drain gets away from you.
+
+Damage scales on the power ratio through a compressed curve, so a large gap is decisive
+without being instant and an upset is always possible. Ki and stamina are real budgets.
+Techniques that drain, absorb, regenerate or heal resolve on their own branches instead
+of being treated as strikes. A destruction meter tracks what the fight is doing to the
+area around it, and Instant Transmission lets you move the fight somewhere emptier — the
+consequences of not doing that are collateral karma, which the world remembers. Saiyans
+take a zenkai from surviving near death; losing badly leaves you humiliated, furious, or
+on the brink, and those states are exactly what the transformation ladder wants.
+
+Losing is not dying. A defeat leaves you wrecked, with a health floor, unless the fight
+was declared lethal — and lethal is something you choose, not something you stumble into.
+
+Where a fight needs to be resolved without you (a background war, an NPC's own life)
+the same model runs headless.
+
+## Hunting the Dragon Balls
+
+The seven balls scatter across the universe, weighted so that finding one on a world
+makes a second one there markedly less likely — your home world and known Dragon Ball
+worlds get a thumb on the scale, everything else is thin. Summoning is not a menu item
+you spam: attempts are limited, and a wish rescatters everything and turns the balls
+inert for a year.
+
+Finding one is a search. A planet is a 7×7 grid, you get a small number of radar sweeps,
+and each sweep returns a Chebyshev-distance reading. Triangulating takes about four
+sweeps of the seven available, so a careless hunt fails and a careful one usually does not.
+
+## Learning things
+
+Training a stat, learning a technique, unlocking a transformation, and mastering one all
+run through the same trial system with four minigame shapes: timing, sequence, endurance
+and push. Each stat maps to the shape that fits it — catching thrown stones blindfolded
+for speed, drilled forms for technique, sitting still far too long for discipline.
+
+Mastery is a per-form value that reduces its drain by up to three quarters and adds up to
+a quarter of its power multiplier, so holding a form longer and going past your previous
+ceiling are separate achievements from unlocking it. Once a form is yours you can invent
+your own from it, name it, and teach it to other people.
+
+Transformations still want an emotional trigger, but they are no longer hostage to one:
+enough raw power (25× the requirement) breaks through without the story beat.
+
+## Worlds
+
+Ten worlds, each with its own inhabitants, flora, defenders, law and alignment. Travel
+between them costs what it should: Instant Transmission is free and instant if you have
+it, a pod costs years of your life, and flight costs more years than that and is gated
+on your speed.
+
+On any world you can protect it, rule it, purge it, or recruit from it, and the world
+responds. Influence and law are tracked per world, and moving a world's alignment sends
+its living defenders after you — turn evil on Earth and the Z Fighters come to find you,
+by name, at the power they have in that year. Higher up, Beerus and Whis notice, and
+noticing goes three ways: they end you, they spare you, or they decide you are
+interesting enough to train.
+
+## People
+
+Every person carries far more than you can see: skills, techniques, transformations,
+mood, power, weapons, appearance, clothing, goals, money, home, whether they are holding
+a Dragon Ball, their own relationships, fame and dead relatives. You reveal it
+progressively — sparring shows you what they can do, time spent shows you who they are,
+and invading their mind shows you everything at once and costs you the relationship,
+sometimes converting a close friend into an enemy.
+
+The twenty social verbs split into warm, romance and hostile. Romance is age-gated
+(crushes at 10, romance at 15, commitment at 16) and runs through its own track, so
+marriage, affection, children and a spouse's own expectations are all live. Hostile
+covers threats, extortion, humiliation, kidnapping and a duel to the death, and the world
+prices all of them.
+
+You can also just write what you say. Free text is scored against that specific person —
+"Fight me" reads very differently to a proud fighter than to someone in mourning — either
+locally or by the model when one is connected, and the result moves closeness, respect,
+trust, romance and tension separately.
+
+Non-canon people are not scenery. They train, hit walls, break through them, unlock forms,
+have children, and those children grow into interests of their own.
+
+## Looking like someone
+
+Character creation is tabbed: race and era, body (height, weight, build), face (shape, eye
+shape, eye colour, skin), hair (style and colour), presentation (clothing, stance
+including one you describe yourself, presence), and outlook (morality). It draws as you
+edit — a parametric layered SVG portrait, back hair behind the torso, front hair over the
+head, race features on top, and an aura and gold hair when a form is active.
+
+## Death, and after
+
+Dying puts you in the Other World with things to do: King Yemma, Snake Way, King Kai's
+planet, Hell, and the ongoing question of whether anyone alive cares enough to wish you
+back. Revival is not a timer. Specific people commit to gathering the balls for you, with
+a chance drawn from how close you actually were and how much you were worth to them, and
+their effort accumulates across years with visible milestones. When it lands, you are
+alive again in the same session, in the world as it now stands.
 
 ## Layout
 
 ```
 src/
   data/         content: races, techniques, transformations, canon, places,
-                timeline, jobs, items, names, the phrasing lexicon
+                planets, timeline, jobs, items, names, the phrasing lexicon
   engine/
     rng.js          seeded PRNG - every life replays from its seed
     text.js         the grammar
     memory.js       fingerprints, facts, threads
     generator.js    eligibility, weighted selection, choice resolution
-    lifecycle.js    the year loop, death, afterlife, legacy
+    lifecycle.js    the year loop, death, afterlife, revival, legacy
+    economy.js      the yearly slot budget and training ceilings
     stats.js        power maths - exponential, so growth compounds
-    combat.js       exchange-model fights, tournaments
+    battle.js       turn-based combat: stances, ki, destruction, escalation
+    combat.js       exchange-model fights for background resolution
+    trials.js       the four minigame shapes, mastery, inventing forms
+    dragonballs.js  universe-wide scatter and the radar search
+    worlds.js       travel, influence, conquest, and who comes after you
+    social.js       the twenty interaction verbs
+    dialogue.js     scoring free-text replies against a specific person
     progression.js  transformation gating
+    npc.js          NPC interiors and their own life progression
     aieffects.js    the referee for model-authored events
-    ai.js           sampling backends and prompts
-    events/         78 event templates in seven themed packs
+    ai.js           pluggable model backends and prompts
+    events/         88 event templates in eight themed packs
   ui/           mobile-first interface, vanilla DOM
+    portrait.js     the parametric SVG character
+    trialui.js      the minigame screens
 build/bundle.mjs  dependency-free bundler: per-module scope, single-file output
 ```
 
 ## The AI layer
 
-Two optional backends, and the game is complete without either:
+The game is complete without a model. With one, it writes events, judges what you say to
+people, and fills in the world's reactions. Three backends:
 
 - **Published as an Artifact**, it uses the viewer's own Claude through the `sample`
   capability. No key, no setup. The first call asks the viewer's permission.
-- **Anywhere else**, you can paste an Anthropic API key under the Life tab. It is stored
-  in that browser only and sent only to Anthropic.
+- **An Anthropic API key**, pasted under the Life tab. Stored in that browser only, sent
+  only to Anthropic.
+- **Any custom endpoint.** Give it a base URL, a model name, a key, an auth header name
+  and prefix, and whether it speaks the OpenAI chat-completions shape or the Anthropic
+  Messages shape. Replies are read out of `content[]`, `choices[]`, `response` or
+  `output`, so most self-hosted gateways work as-is. There is a test button that makes
+  one round trip and reports exactly what came back.
 
 Three modes: off, mixed (the default, roughly every other year), and every year. Any
-event also has a "Something else happens instead" button that asks Claude for a
-replacement on the spot.
+event also has a "Something else happens instead" button that asks for a replacement on
+the spot.
 
-The API path uses `claude-opus-5` with server-side refusal fallbacks enabled. It has not
-been executed against the live API from this environment, which has no credentials; the
-capability path is the one the published page uses.
+The Anthropic path uses `claude-opus-5` with server-side refusal fallbacks enabled. It has
+not been executed against the live API from this environment, which has no credentials;
+the capability path is the one the published page uses.
+
+## Balance
+
+`npm run sim` plays complete lifetimes headlessly. The current 150-life run at a cap of
+age 95:
+
+```
+crashes         : none
+survived to cap : 55/150
+age at end      : median 75, range 9-95
+final power     : median 61,648,364, max 261,474,349,901,359,420
+events per life : median 191
+forms unlocked  : median 1, max 6
+techniques      : median 7
+people met      : median 19
+```
+
+Deaths are meant to be earned: the largest cause is fights you chose, not attrition.

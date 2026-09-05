@@ -55,7 +55,13 @@ export function missingRequirements(state, form) {
   }
   for (const f of req.flags || []) if (!c.flags[f]) missing.push(f.replace(/_/g, ' '));
   if (req.anyFlag && !req.anyFlag.some((f) => c.flags[f])) {
-    missing.push('a moment strong enough to trigger it');
+    // Emotion is the usual door, but it is not the only one. A fighter who has
+    // trained far past the threshold overflows into the form on their own -
+    // which is what stops a huge power level from being a dead end.
+    const waiver = (req.power || 1) * (req.flagWaiverMult || 25);
+    if (!req.power || c.power < waiver) {
+      missing.push('a moment strong enough to trigger it');
+    }
   }
   for (const t of req.traits || []) {
     if (t === 'tail' && !c.tail) missing.push('a tail');

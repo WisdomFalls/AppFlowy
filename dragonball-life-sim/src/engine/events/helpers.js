@@ -6,6 +6,7 @@ import { adjust, addNpc, findNpc, setFlag, setWorldFlag } from '../state.js';
 import { makeNpc, makeCanonNpc, nextNpcId, bondScore } from '../npc.js';
 import { canonAvailable, getCanon, canonPower } from '../../data/canon.js';
 import { trainingRate, combatPower, powerTier } from '../stats.js';
+import { createBattle, autoResolve, battleAftermath } from '../battle.js';
 import { getPlace, PLACES } from '../../data/places.js';
 import { zeni, numberish } from '../text.js';
 
@@ -199,6 +200,46 @@ export function scaledFoePower(ctx, factor = 1, spread = 0.5) {
 
 export function tierOf(power) {
   return powerTier(power);
+}
+
+/**
+ * Hand a fight to the player, or resolve it headlessly when nothing is driving
+ * the UI (the soak harness, tests, background brackets). Either way the caller
+ * gets a `text` it can show and the world gets the same consequences.
+ */
+export function offerBattle(ctx, foe, opts = {}) {
+  const spec = {
+    foe,
+    stakes: opts.stakes || 'serious',
+    reason: opts.reason || 'fight',
+    protecting: !!opts.protecting,
+    placeId: opts.placeId || ctx.character.placeId,
+    intro: opts.intro || '',
+    context: {
+      reason: opts.reason || 'fight',
+      npcId: opts.npcId || foe.npcId || null,
+      canonId: opts.canonId || foe.canonId || null,
+      timelineId: opts.timelineId || null,
+    },
+  };
+
+  if (!ctx.state.autoBattle) {
+    return { text: opts.intro || '', battle: spec };
+  }
+
+  const battle = createBattle(ctx.state, ctx.rng, spec);
+  autoResolve(ctx.state, ctx.rng, battle);
+  const after = battleAftermath(ctx.state, ctx.rng, battle, opts);
+  const summary = battle.outcome === 'won'
+    ? `${foe.name} goes down.`
+    : battle.outcome === 'lost' ? `${foe.name} puts you on the ground.`
+      : battle.outcome === 'fled' ? 'You break off and go.'
+        : `Neither of you finishes it.`;
+  return {
+    text: [opts.intro || '', summary, after.text].filter(Boolean).join(' '),
+    outcome: after.death ? { death: after.death } : null,
+    battleResult: battle.outcome,
+  };
 }
 
 export { bondScore, findNpc, setFlag, setWorldFlag, numberish, nextNpcId, getCanon, canonPower };

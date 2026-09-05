@@ -146,6 +146,7 @@ test('templates render and resolve without throwing across many random states', 
       bodyId: rng.pick(BODY_TYPES).id, birthYear: rng.pick([737, 756, 767, 780]),
       placeId: rng.pick(race.homeworlds),
     }, 'probe-' + i);
+    state.autoBattle = true;
 
     // Push the character into a varied place in its life.
     state.character.age = rng.int(1, 70);
@@ -180,6 +181,7 @@ test('a full lifetime plays through without crashing', () => {
     name: 'Full Life', raceId: 'halfsaiyan', sex: 'female', upbringingId: 'city',
     temperamentId: 'kind', bodyId: 'balanced', birthYear: 749, placeId: 'earth',
   }, 'lifetime');
+  state.autoBattle = true;
 
   let event = startYear(state);
   let guard = 0;
@@ -216,6 +218,7 @@ test('a save survives a round trip mid-event', () => {
     name: 'Saver', raceId: 'namekian', sex: 'nonbinary', upbringingId: 'temple',
     temperamentId: 'stoic', bodyId: 'lean', birthYear: 753, placeId: 'namek',
   }, 'save');
+  state.autoBattle = true;
   let event = startYear(state);
   for (let i = 0; i < 40 && state.character.alive; i++) {
     if (!event) { event = startYear(state); continue; }

@@ -2,7 +2,7 @@
 
 import { Rng, clamp, hashSeed } from './rng.js';
 import { createMemory, addFact } from './memory.js';
-import { RACES, getRace, UPBRINGINGS, BODY_TYPES, TEMPERAMENTS, hasPerk } from '../data/races.js';
+import { RACES, getRace, UPBRINGINGS, BODY_TYPES, TEMPERAMENTS, hasPerk, maturity } from '../data/races.js';
 import { getPlace } from '../data/places.js';
 import { eraName, worldPowerBaseline } from '../data/timeline.js';
 import { generateFullName } from '../data/names.js';
@@ -68,10 +68,14 @@ export function createGame(creation, seedInput) {
     name: creation.name || generateFullName(rng, creation.raceId),
     raceId: creation.raceId,
     sex: creation.sex || 'nonbinary',
-    appearance: {
-      hair: creation.hair || '', eyes: creation.eyes || '',
-      build: body.name, marking: creation.marking || '',
-    },
+    appearance: Object.assign({
+      build: body.name,
+      buildShape: body.id,
+      hairStyle: 'spiked', hairColour: 'black',
+      eyeShape: 'sharp', eyeColour: 'black',
+      skin: 'light', face: 'square', outfit: 'casual', marking: 'none',
+      heightCm: 175, weightKg: 70, stance: 'formless', stanceName: '',
+    }, creation.look || {}),
     upbringingId: upbringing.id,
     temperamentId: temperament.id,
     bodyId: body.id,
@@ -141,6 +145,9 @@ export function createGame(creation, seedInput) {
     pending: null,
     aiEnabled: true,
     aiCalls: 0,
+    // Headless callers (tests, the soak harness) flip this on so fights resolve
+    // without a UI driving them turn by turn.
+    autoBattle: false,
     legacy: null,
     stats: { fights: 0, wins: 0, losses: 0, kills: 0, deaths: 0, yearsPlayed: 0, techniquesLearned: 0 },
   };
@@ -251,8 +258,7 @@ export function aiContext(state) {
 }
 
 export function isChild(state) {
-  const race = getRace(state.character.raceId);
-  return state.character.age * race.agingRate < 13;
+  return maturity(state.character) < 13;
 }
 
 export function isAdult(state) {

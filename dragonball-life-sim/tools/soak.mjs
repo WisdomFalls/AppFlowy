@@ -42,6 +42,7 @@ for (let i = 0; i < LIVES; i++) {
   let state;
   try {
     state = createGame(creation, 'soak-seed-' + i);
+    state.autoBattle = true;   // nothing is driving the battle UI out here
     let event = startYear(state);
     let guard = 0;
     let afterlifeUsed = false;

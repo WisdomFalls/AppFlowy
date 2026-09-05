@@ -4,12 +4,197 @@
 import { registerEvents, npcSlot } from '../generator.js';
 import { apply, fact, stranger, relate, thread, trainYear, powerLine, meetCanon,
   odds, findNpc, scaledFoePower, moveTo } from './helpers.js';
+import { canonHere, offerBattle } from './helpers.js';
+import { reviveCharacter } from '../lifecycle.js';
 import { fight, narrateFight, describeGap, runTournament, buildField } from '../combat.js';
 import { combatPower } from '../stats.js';
+import { canonAlive } from '../../data/canon.js';
 import { generateFullName } from '../../data/names.js';
 import { numberish } from '../text.js';
 
+function canonAliveNow(ctx, c) {
+  return canonAlive(c, ctx.year);
+}
+
 registerEvents([
+  {
+    id: 'dead_reunion', tags: ['afterlife', 'social'], weight: 40,
+    requiresAfterlife: true,
+    when: (ctx) => Object.values(ctx.state.npcs).some((n) => !n.alive),
+    slots: (ctx) => {
+      const dead = Object.values(ctx.state.npcs).filter((n) => !n.alive);
+      if (!dead.length) return null;
+      const npc = ctx.rng.pick(dead);
+      return { npcId: npc.id, npcName: npc.name, gone: Math.max(1, ctx.year - (npc.deadSince || ctx.year)) };
+    },
+    title: (ctx, s) => `${s.npcName}`,
+    text: `{You are not looking for them and there they are|Somebody says your name from behind|The queue moves and it is them}:
+      [npcName], [gone] years dead, {with a halo and the same face|looking exactly as you remember|younger than when they died}.`,
+    choices: (ctx, s) => [
+      { id: 'together', label: 'Stay with them', effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        if (npc) { npc.closeness = Math.min(100, npc.closeness + 25); npc.trust = Math.min(100, (npc.trust ?? 30) + 20); }
+        const changes = apply(c2, { happiness: 25 });
+        fact(c2, `Found ${sl.npcName} again in the Other World.`, { type: 'afterlife', weight: 6, subject: sl.npcId, tags: ['death', 'family'] });
+        return { text: `{Neither of you says anything for a long time|There is nothing to catch up on and you talk for a week anyway|Being dead together is easier than being alive apart}.`, changes };
+      } },
+      { id: 'train_dead', label: 'Train with them', effect: (c2, sl) => {
+        const t = trainYear(c2, { intensity: 1.3, placeMult: 2.0, mentorMult: 1.2 });
+        const npc = findNpc(c2.state, sl.npcId);
+        if (npc) npc.closeness = Math.min(100, npc.closeness + 15);
+        const changes = apply(c2, { happiness: 12, stats: { technique: 3 } });
+        return { text: `{Nobody here can be hurt permanently, which changes how you both fight|They are better than they were alive|You go at it for what might be years}. ${powerLine(t.gained)}`, changes };
+      } },
+    ],
+  },
+
+  {
+    id: 'watch_the_living', tags: ['afterlife', 'quiet'], weight: 30,
+    requiresAfterlife: true,
+    when: (ctx) => ctx.npcs.some((n) => n.alive),
+    slots: (ctx) => {
+      const alive = ctx.npcs.filter((n) => n.alive);
+      if (!alive.length) return null;
+      const npc = ctx.rng.pick(alive);
+      return { npcId: npc.id, npcName: npc.name };
+    },
+    title: 'Looking Down',
+    text: `{King Kai lets you use his antennae|You can watch, if you want to|Somebody shows you how}.
+      [npcName] is down there, {carrying on|not carrying on very well|doing something you would not have predicted}.`,
+    choices: (ctx, s) => [
+      { id: 'watch', label: 'Watch', effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        const changes = apply(c2, { happiness: npc && npc.closeness > 60 ? -8 : 4 });
+        if (npc) npc.knowledge = Math.min(4, (npc.knowledge || 0) + 1);
+        return { text: `{They are managing|They are not managing|They talk to somebody about you and you cannot hear the words}. {You watch for a long time|It does not help|You learn something you did not know about them}.`, changes };
+      } },
+      { id: 'lookaway', label: 'Do not look', effect: (c2) => {
+        const t = trainYear(c2, { intensity: 1.4, placeMult: 2.0 });
+        const changes = apply(c2, { stats: { discipline: 5 }, happiness: -3 });
+        return { text: `{Watching does nothing|You have work here|You put it down and go back to training}. ${powerLine(t.gained)}`, changes };
+      } },
+    ],
+  },
+
+  {
+    id: 'grand_kai', tags: ['afterlife', 'mentor'], weight: 26,
+    requiresAfterlife: true,
+    when: (ctx) => ['kai_planet', 'otherworld_arena'].includes(ctx.character.placeId),
+    slots: (ctx) => ({
+      who: ctx.rng.pick(['a fighter who has been dead nine thousand years',
+        'somebody who held a title in a galaxy that no longer exists',
+        'a monk who has spent four centuries on one movement',
+        'a Metamoran who will not stop talking about fusion',
+        'a warrior whose whole species is extinct']),
+    }),
+    title: "The Grand Kai's Planet",
+    text: `{Everybody dead and worth anything ends up here eventually|The training grounds go on for miles|Nobody here has anything to lose}.
+      You end up sparring with [who].`,
+    choices: () => [
+      { id: 'learn', label: 'Learn from them', effect: (ctx) => {
+        const t = trainYear(ctx, { intensity: 1.5, placeMult: 3.0, mentorMult: 1.6 });
+        const changes = apply(ctx, { stats: { technique: 5, kiControl: 4, discipline: 3 }, happiness: 10 });
+        fact(ctx, 'Trained on the Grand Kai\'s planet with the honoured dead.', { type: 'mentor', weight: 6, tags: ['death', 'training'] });
+        return { text: `{They fight nothing like anyone living|Their style predates most of the techniques you know|You are outclassed for a year and then you are not}. ${powerLine(t.gained)}`, changes };
+      } },
+      { id: 'teach', label: 'Show them something they have not seen', effect: (ctx) => {
+        const changes = apply(ctx, { stats: { charisma: 4, technique: 3 }, happiness: 12, fame: 3 });
+        return { text: `{Nine thousand years and they have not seen this|They make you do it four times|Somebody takes notes}. {It is the proudest you have been since dying|They call others over|You are somebody here}.`, changes };
+      } },
+    ],
+  },
+
+  {
+    id: 'hell_recruit', tags: ['afterlife', 'villain'], weight: 24,
+    requiresAfterlife: true,
+    when: (ctx) => ctx.character.placeId === 'hell',
+    slots: (ctx) => {
+      const pool = canonHere(ctx, (c) => c.tags.includes('villain') && !canonAliveNow(ctx, c));
+      const who = pool.length ? ctx.rng.pick(pool) : null;
+      return { name: who ? who.name : 'a tyrant with no empire left', canonId: who ? who.id : null };
+    },
+    title: (ctx, s) => `${s.name}, Down Here`,
+    text: `{Everyone you ever heard of is in here somewhere|The spike fields are crowded|Nobody in Hell has anything to do}.
+      [name] {wants something|is bored|has been watching you}.`,
+    choices: (ctx, s) => [
+      { id: 'train', label: 'Train with the damned', effect: (c2, sl) => {
+        const t = trainYear(c2, { intensity: 1.6, placeMult: 2.6, mentorMult: 1.4 });
+        const changes = apply(c2, { karma: -8, stats: { strength: 5, technique: 4 } });
+        fact(c2, `Trained with ${sl.name} in Hell.`, { type: 'afterlife', weight: 5, tags: ['villain', 'death'] });
+        return { text: `{Nobody holds back down here|You cannot die twice|It is the best and worst training of your life}. ${powerLine(t.gained)}`, changes };
+      } },
+      { id: 'fight', label: 'Fight them', effect: (c2, sl) => offerBattle(c2, {
+        name: sl.name, power: Math.max(1, combatPower(c2.character) * c2.rng.float(0.8, 2.4)),
+        canonId: sl.canonId, raceId: 'other', techniques: ['ki_blast', 'death_beam'],
+      }, { reason: 'hell', canonId: sl.canonId, stakes: 'spar', intro: 'Nothing here stays broken. Neither of you holds back.' }) },
+      { id: 'refuse', label: 'Want nothing to do with them', effect: (c2) => {
+        const changes = apply(c2, { karma: 6, stats: { discipline: 4 } });
+        return { text: `{You walk away|Whatever they are offering, no|They shout after you and you keep going}.`, changes };
+      } },
+    ],
+  },
+
+  {
+    id: 'kai_apprentice', tags: ['afterlife', 'mentor', 'divine'], weight: 22,
+    requiresAfterlife: true,
+    when: (ctx) => ctx.character.karma > 20 && ctx.character.yearsInAfterlife >= 2,
+    slots: () => ({}),
+    title: 'The Sacred World of the Kais',
+    text: `{Somebody with skin the colour of a bruise arrives without walking|A Kai has been reading your file|You are summoned, which nobody explains}.
+      {There is a sword stuck in a rock|The trees here are the wrong shape|Time works differently and nobody mentions it}.`,
+    choices: () => [
+      { id: 'train', label: 'Accept the training', effect: (ctx) => {
+        ctx.character.placeId = 'sacred_world';
+        if (!ctx.character.mentors.includes('supreme_kai')) ctx.character.mentors.push('supreme_kai');
+        meetCanon(ctx, 'supreme_kai', 'mentor');
+        const t = trainYear(ctx, { intensity: 1.4, placeMult: 3.0, mentorMult: 1.8 });
+        const changes = apply(ctx, { stats: { kiControl: 7, discipline: 5, intellect: 3 }, happiness: 10 });
+        fact(ctx, 'Trained on the Sacred World of the Kais.', { type: 'mentor', weight: 7, tags: ['divine', 'death'] });
+        return { text: `{It is not fighting|Most of it is sitting still|You are shown what divine ki actually is}. ${powerLine(t.gained)}`, changes };
+      } },
+      { id: 'sword', label: 'Try to pull the sword out', effect: (ctx) => {
+        if (odds(ctx, 0.3 + ctx.character.stats.strength / 300)) {
+          ctx.character.items.push('z_sword');
+          ctx.character.flags.pulled_z_sword = true;
+          const changes = apply(ctx, { happiness: 16, stats: { strength: 5 }, fame: 5 });
+          fact(ctx, 'Pulled the Z-Sword out of the rock.', { type: 'item', weight: 7, tags: ['divine'] });
+          return { text: `{It comes out|Nobody has managed it in generations|It is heavier than a building and you can barely lift it}. {The Kai stares|Somebody says a word in an old language|You have it now, for whatever that is worth}.`, changes };
+        }
+        const changes = apply(ctx, { health: -10, happiness: -6 });
+        return { text: `{It does not move|You tear something in your back|The Kai says nothing, which is worse}.`, changes };
+      } },
+      { id: 'decline', label: 'Decline', effect: (ctx) => ({
+        text: `{You have your own methods|Gods have not helped so far|You say no to a Kai, which nobody does}.`,
+        changes: apply(ctx, { stats: { discipline: 3 } }),
+      }) },
+    ],
+  },
+
+  {
+    id: 'afterlife_threat', tags: ['afterlife', 'combat'], weight: 22,
+    requiresAfterlife: true,
+    minBioAge: 8,
+    slots: (ctx) => ({
+      what: ctx.rng.pick(['something has got out of Hell and is loose in the check-in queue',
+        'a soul nobody can process is tearing up the road',
+        'an old god is eating the dead',
+        'the ogres have lost control of the spike fields',
+        'somebody has worked out how to kill people who are already dead']),
+    }),
+    title: 'Even Here',
+    text: `[what:cap]. {King Yemma is shouting|The Kais are not answering|Nobody dead has ever had to deal with this before}.`,
+    choices: (ctx, s) => [
+      { id: 'fight', label: 'Deal with it', effect: (c2, sl) => offerBattle(c2, {
+        name: sl.what.split(' ').slice(0, 3).join(' '), raceId: 'other',
+        power: Math.max(1, combatPower(c2.character) * c2.rng.float(0.7, 2.0)),
+      }, { reason: 'afterlife', stakes: 'spar', protecting: true, intro: 'You cannot die here. That is the only advantage you have.' }) },
+      { id: 'ignore', label: 'Not your problem', effect: (c2) => ({
+        text: `{Somebody else handles it|You stay out of it|It gets worse before it gets better}.`,
+        changes: apply(c2, { karma: -6 }),
+      }) },
+    ],
+  },
+
   {
     id: 'check_in', tags: ['afterlife'], weight: 100,
     requiresAfterlife: true,
@@ -215,42 +400,30 @@ registerEvents([
   },
 
   {
-    id: 'revival_chance', tags: ['afterlife', 'opportunity'], weight: 40,
+    id: 'wished_back', tags: ['afterlife', 'opportunity'], weight: 400,
     requiresAfterlife: true,
-    when: (ctx) => ctx.character.yearsInAfterlife >= 1,
+    when: (ctx) => ctx.state.world.revival && ctx.state.world.revival.progress >= 100,
     slots: (ctx) => {
-      const mourners = ctx.npcs.filter((n) => n.alive && n.closeness > 55);
-      return {
-        who: mourners.length ? ctx.rng.pick(mourners).name : 'somebody you never expected',
-        hasMourners: mourners.length > 0,
-      };
+      const ids = ctx.state.world.revival.backers || [];
+      const who = ids.map((id) => ctx.state.npcs[id]).filter(Boolean).map((n) => n.name);
+      return { who: who.join(' and ') || 'somebody' };
     },
-    title: 'Somebody Is Looking For The Balls',
-    text: `{Word gets up here eventually|King Kai tells you|You feel it}: [who] is {gathering the Dragon Balls|asking about a wish|halfway to seven}.
-      {It might be for you|It is for you|They have not said who it is for}.`,
+    title: 'They Found All Seven',
+    text: `{The sky goes dark down there and you feel it up here|King Kai says it out loud before you notice|Something enormous is being asked for}:
+      [who] {has all seven|found the last one|is standing in front of the dragon}. {The wish is you|They are asking for you|Nobody had to ask them to do this}.`,
     choices: (ctx, s) => [
-      { id: 'hope', label: 'Let them', effect: (c2, sl) => {
-        if (odds(c2, sl.hasMourners ? 0.55 : 0.2)) {
-          c2.character.inAfterlife = false;
-          c2.character.alive = true;
-          c2.character.death = null;
-          c2.character.flags.judged = false;
-          c2.character.flags.died_once = true;
-          c2.character.placeId = 'east_city';
-          c2.character.yearsInAfterlife = 0;
-          const changes = apply(c2, { health: 100, happiness: 25, ki: 999 });
-          c2.state.stats.deaths = c2.state.stats.deaths || 0;
-          fact(c2, `Brought back to life by ${sl.who}.`, { type: 'revival', weight: 10, tags: ['revival'] });
-          return { text: `{It happens without warning|One moment there is cloud and then there is grass|You come back the way you left, halo and all until it fades}. {${sl.who} is standing right there|Somebody is crying|You have a great deal to catch up on}.`, changes };
-        }
-        const changes = apply(c2, { happiness: -10 });
-        return { text: `{The wish goes to somebody else|They fail|It was not for you}. {You go back to training|Nobody explains|It stings more than dying did}.`, changes };
+      { id: 'go', label: 'Go back', effect: (c2, sl) => {
+        reviveCharacter(c2.state);
+        const changes = apply(c2, { health: 100, happiness: 28, ki: 999 });
+        fact(c2, `Brought back to life by ${sl.who}.`, { type: 'revival', weight: 10, tags: ['revival'] });
+        return { text: `{One moment there is cloud and then there is grass|You come back exactly where you died|The halo goes out}. ${sl.who} {is standing right there|will not let go of you|says your name like a question}. {You have a great deal to catch up on|Years have gone past|Nothing down here waited for you}.`, changes };
       } },
-      { id: 'refuse', label: 'Tell them not to', effect: (c2) => {
+      { id: 'refuse', label: 'Refuse it', effect: (c2, sl) => {
         c2.character.flags.refused_revival = true;
-        const changes = apply(c2, { karma: 10, happiness: -6, stats: { discipline: 5 } });
+        c2.state.world.revival = null;
+        const changes = apply(c2, { karma: 10, happiness: -8, stats: { discipline: 5 } });
         fact(c2, 'Refused to be brought back.', { type: 'afterlife', weight: 8, tags: ['death'] });
-        return { text: `{You send word down|"Leave me here"|It is better this way and you believe that most days}. {There is training here nobody living can get|You are needed less than you thought|Somebody down there is furious with you}.`, changes };
+        return { text: `{You send word down|"Leave me here"|You do not explain}. {${sl.who} does not understand|Somebody down there is furious with you|The wish goes to somebody else}.`, changes };
       } },
     ],
   },

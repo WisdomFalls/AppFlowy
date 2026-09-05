@@ -8,7 +8,7 @@
 
 import { render } from './text.js';
 import { noveltyWeight, remember, threadPressure } from './memory.js';
-import { getRace, hasPerk } from '../data/races.js';
+import { getRace, hasPerk, maturity } from '../data/races.js';
 import { getPlace } from '../data/places.js';
 import { eraName, worldPowerBaseline } from '../data/timeline.js';
 import { combatPower, powerTier } from './stats.js';
@@ -49,7 +49,7 @@ export function buildContext(state, rng) {
     world: state.world,
     year,
     age: c.age,
-    bioAge: c.age * race.agingRate,
+    bioAge: maturity(c),
     place,
     race,
     era: eraName(year),
@@ -169,6 +169,23 @@ function viewOf(ctx) {
   };
 }
 
+/**
+ * Build a specific template regardless of weighting. Used for events the world
+ * imposes on you - a canon saga arriving, a scripted beat you cannot dodge.
+ */
+export function forceEvent(state, rng, templateId, extra = {}) {
+  const template = REGISTRY.get(templateId);
+  if (!template) return null;
+  const ctx = buildContext(state, rng);
+  if (extra.evId) ctx.forceEvId = extra.evId;
+  let slots;
+  try { slots = template.slots ? template.slots(ctx) : {}; } catch (err) { return null; }
+  if (slots === null || slots === undefined) return null;
+  const event = materialise(ctx, template, Object.assign(slots, extra));
+  event.forced = true;
+  return event;
+}
+
 /** Full pipeline: pick something that fits, and build it. */
 export function generateEvent(state, rng, opts = {}) {
   const ctx = buildContext(state, rng);
@@ -228,6 +245,7 @@ export function resolveChoice(state, rng, event, choiceId) {
     followUp: result.followUp || null,
     aiHint: result.aiHint || null,
     outcome: result.outcome || null,
+    battle: result.battle || null,
   };
 }
 

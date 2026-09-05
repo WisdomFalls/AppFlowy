@@ -38,6 +38,13 @@ function migrate(state, from) {
   if (!state.character.extraPerks) state.character.extraPerks = [];
   if (state.character.yearsInAfterlife === undefined) state.character.yearsInAfterlife = 0;
   if (state.character.senzu === undefined) state.character.senzu = 0;
+  if (state.character.slotsMax === undefined) state.character.slotsMax = 5;
+  if (state.character.slotsLeft === undefined) state.character.slotsLeft = state.character.slotsMax;
+  if (!state.character.yearUse) state.character.yearUse = {};
+  for (const npc of Object.values(state.npcs || {})) {
+    if (npc.trust === undefined) npc.trust = 30;
+    if (npc.knowledge === undefined) npc.knowledge = 1;
+  }
   state.version = SAVE_VERSION;
   return state;
 }

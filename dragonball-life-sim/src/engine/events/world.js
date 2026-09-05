@@ -4,28 +4,38 @@
 
 import { registerEvents, npcSlot } from '../generator.js';
 import { apply, fact, stranger, relate, thread, trainYear, powerLine, meetCanon, canonHere,
-  odds, killNpc, findNpc, scaledFoePower, moveTo, setWorldFlag } from './helpers.js';
+  odds, killNpc, findNpc, scaledFoePower, moveTo, setWorldFlag, offerBattle } from './helpers.js';
 import { fight, narrateFight, describeGap, runTournament, buildField } from '../combat.js';
 import { combatPower, powerTier } from '../stats.js';
 import { TIMELINE, isTournamentYear, worldPowerBaseline, eraName } from '../../data/timeline.js';
 import { canonAvailable } from '../../data/canon.js';
+import { ensureBallSet, ballsHeld, ballsOn, ballManifest, scatterAfterWish, ballsAreInert } from '../dragonballs.js';
 import { WISHES, getItem } from '../../data/items.js';
 import { getPlace, PLACES } from '../../data/places.js';
 import { generateFullName } from '../../data/names.js';
 import { getTechnique, TECHNIQUES } from '../../data/techniques.js';
 import { numberish, zeni, ordinal } from '../text.js';
 
+/** Hand over N of the still-hidden balls, no searching required. */
+function claimBalls(state, rng, count) {
+  ensureBallSet(state, rng);
+  const hidden = state.world.ballSet.balls.filter((b) => !b.found);
+  for (const ball of rng.sample(hidden, count)) ball.found = true;
+  return ballsHeld(state);
+}
+
 registerEvents([
   {
-    id: 'timeline_event', noFatigue: true, tags: ['world', 'threat', 'cosmic'], weight: 60,
-    minBioAge: 10,
+    id: 'timeline_event', noFatigue: true, tags: ['world', 'threat', 'cosmic'], weight: 400,
     when: (ctx) => TIMELINE.some((t) => t.year === ctx.year
       && !ctx.state.world.resolved.includes(t.id)
       && !(t.cancelIf && ctx.state.world.flags[t.cancelIf])),
     slots: (ctx) => {
-      const ev = TIMELINE.find((t) => t.year === ctx.year
-        && !ctx.state.world.resolved.includes(t.id)
-        && !(t.cancelIf && ctx.state.world.flags[t.cancelIf]));
+      const ev = ctx.forceEvId
+        ? TIMELINE.find((t) => t.id === ctx.forceEvId)
+        : TIMELINE.find((t) => t.year === ctx.year
+          && !ctx.state.world.resolved.includes(t.id)
+          && !(t.cancelIf && ctx.state.world.flags[t.cancelIf]));
       if (!ev) return null;
       const here = getPlace(ctx.character.placeId);
       const reachable = ev.planet === here.planet || ev.scope === 'multiverse' || ev.planet === 'void'
@@ -39,38 +49,66 @@ registerEvents([
       ${describeGap(combatPower(ctx.character), s.evThreat)}`,
     choices: (ctx, s) => {
       const list = [];
-      // Walking into a saga is an adult decision; a child can only watch.
-      if (s.reachable && ctx.bioAge >= 13) {
+      const child = ctx.age < 12;
+      if (child) {
+        // A child lives through a saga rather than fighting in it, but they are
+        // still there, and what they do still matters to them later.
         list.push({
-          id: 'intervene', label: 'Go. Put yourself in the middle of it.', danger: true,
+          id: 'child_witness', label: 'Watch it happen',
           effect: (c2, sl) => {
             const ev = TIMELINE.find((t) => t.id === sl.evId);
             c2.state.world.resolved.push(ev.id);
-            const foe = { name: ev.name, power: ev.threat };
-            const mine = combatPower(c2.character);
-            const res = fight(c2.state, c2.rng, foe, { lethality: 0.3, maxRounds: 7 });
-            c2.state.stats.fights++;
-            apply(c2, { health: -Math.round(res.damageTaken * 0.9), ki: -40 });
-            if (res.won) {
-              c2.state.stats.wins++;
-              setWorldFlag(c2.state, ev.id + '_changed');
-              c2.state.world.divergences.push({ year: c2.year, event: ev.id, how: 'player resolved it' });
-              if (ev.id === 'namek_war' || ev.id === 'golden_frieza') setWorldFlag(c2.state, 'frieza_dead');
-              if (ev.id === 'androids') setWorldFlag(c2.state, 'gero_dead');
-              if (ev.id === 'cell_games') setWorldFlag(c2.state, 'cell_dead');
-              if (ev.id === 'buu_freed') setWorldFlag(c2.state, 'babidi_dead');
-              apply(c2, { fame: 30, karma: 15, happiness: 20 });
-              fact(c2, `Changed history: ${ev.name}.`, { type: 'history', weight: 10, tags: ['legend', 'divergence'] });
-              return { text: `${narrateFight(res, c2.rng, ev.name)} {It should not have been you|Nobody expected you to be the one|The history books will get this wrong}. ${ev.name} ends differently because you were there.`, changes: [] };
-            }
-            c2.state.stats.losses++;
-            if (res.lethal || odds(c2, 0.3)) {
-              return { text: `${narrateFight(res, c2.rng, ev.name)} {You were never going to be enough|You knew and you went anyway|It does not even slow down}.`,
-                changes: [], outcome: { death: `Died at ${ev.name}` } };
-            }
-            apply(c2, { fame: 12, karma: 10, happiness: -10 });
-            fact(c2, `Was there when ${ev.name} happened. Survived it.`, { type: 'history', weight: 7, tags: ['witness'] });
-            return { text: `${narrateFight(res, c2.rng, ev.name)} {Somebody drags you out|You live, which is not the same as helping|Others finish what you could not}.`, changes: [] };
+            c2.character.flags.witnessed_saga = true;
+            const changes = apply(c2, { happiness: -10, stats: { discipline: 3 } });
+            fact(c2, `Was a child when ${ev.name} happened, and saw it.`,
+              { type: 'history', weight: 6, tags: ['witness', 'origin'] });
+            return { text: `{You are too small to do anything but look|Somebody holds you back|You watch from a doorway}. {You will remember every second of this|It goes in and it does not come out|Nobody explains it to you}. #dread#`, changes };
+          },
+        });
+        list.push({
+          id: 'child_hide', label: 'Hide, and survive it',
+          effect: (c2, sl) => {
+            const ev = TIMELINE.find((t) => t.id === sl.evId);
+            c2.state.world.resolved.push(ev.id);
+            const changes = apply(c2, { happiness: -6, health: -4, stats: { intellect: 2, speed: 2 } });
+            fact(c2, `Survived ${ev.name} by staying out of sight.`, { type: 'history', weight: 5, tags: ['witness'] });
+            return { text: `{You get underground|You do not move for two days|Somebody puts you somewhere safe and does not come back for you}. {It ends|Eventually it is quiet|You come out into a different world}.`, changes };
+          },
+        });
+        if (s.reachable) {
+          list.push({
+            id: 'child_run_toward', label: 'Run toward it anyway', danger: true,
+            effect: (c2, sl) => {
+              const ev = TIMELINE.find((t) => t.id === sl.evId);
+              c2.state.world.resolved.push(ev.id);
+              const hurt = odds(c2, 0.6);
+              c2.character.flags.brink_of_death = hurt || c2.character.flags.brink_of_death;
+              const changes = apply(c2, { health: hurt ? -45 : -12, happiness: -8, karma: 6, stats: { durability: 4, discipline: 4 } });
+              fact(c2, `Ran toward ${ev.name} as a child and lived.`, { type: 'history', weight: 7, tags: ['witness', 'origin'] });
+              return { text: `{You are eight and you run at it|Nobody can stop you|You do not think about it}. ${hurt ? '{It nearly kills you|You wake up much later|Somebody drags you out of the rubble}.' : '{You get closer than anyone expected|You see it properly|You are not hurt, which is luck and nothing else}.'}`, changes };
+            },
+          });
+        }
+        return list;
+      }
+      if (s.reachable) {
+        list.push({
+          id: 'intervene', label: 'Go. Put yourself in the middle of it.', danger: true,
+          hint: describeGap(combatPower(ctx.character), s.evThreat),
+          effect: (c2, sl) => {
+            const ev = TIMELINE.find((t) => t.id === sl.evId);
+            c2.state.world.resolved.push(ev.id);
+            fact(c2, `Walked into ${ev.name}.`, { type: 'history', weight: 6, tags: ['witness'] });
+            // A warlord with tanks does not open with a Kamehameha.
+            const kit = ev.threat > 1e8 ? ['ki_blast', 'death_beam', 'death_ball']
+              : ev.threat > 1e4 ? ['ki_blast', 'galick_gun']
+                : ev.threat > 500 ? ['ki_blast', 'dodon_ray'] : [];
+            return offerBattle(c2, {
+              name: ev.foe || ev.name, power: ev.threat, raceId: 'other', techniques: kit,
+            }, {
+              reason: 'saga', timelineId: ev.id, stakes: 'lethal', protecting: true,
+              intro: `${ev.blurb} You are standing in it.`,
+            });
           },
         });
         list.push({
@@ -106,8 +144,9 @@ registerEvents([
       });
       // When the gap is hopeless, the reckless option stops being the default
       // one under the reader's thumb.
-      const hopeless = combatPower(ctx.character) < s.evThreat / 50;
-      if (hopeless) {
+      // A saga you cannot survive should not have "walk into it" sitting under
+      // the reader's thumb as the default option.
+      if (combatPower(ctx.character) < s.evThreat * 0.3) {
         const idx = list.findIndex((c) => c.id === 'intervene');
         if (idx > -1) list.push(list.splice(idx, 1)[0]);
       }
@@ -162,42 +201,40 @@ registerEvents([
 
   {
     id: 'dragonball_rumour', tags: ['world', 'dragonball', 'opportunity', 'revival'],
-    weight: (ctx) => 22 + ctx.state.world.dragonBalls * 16,
+    weight: (ctx) => 20 + ballsHeld(ctx.state) * 10,
     minBioAge: 9,
-    when: (ctx) => ctx.state.world.dragonBalls < 7 && !ctx.character.inAfterlife,
-    slots: (ctx) => ({
-      source: '#rumourSource#',
-      where: ctx.rng.pick(['at the bottom of a lake', 'inside a mountain', 'in a village that worships it',
-        'in the belly of something large', 'in a museum case', 'under a city', 'in a Frieza Force evidence locker',
-        'on an island that is not on any map', 'in the crater it made when it landed']),
-      have: ctx.state.world.dragonBalls,
-    }),
-    title: 'One of the Seven',
-    text: `You hear it from #rumourSource#: a ball with stars inside it, [where].
-      {You have [have] already|You have [have] of them|This would make [have] plus one}.`,
+    when: (ctx) => ballsHeld(ctx.state) < 7 && !ctx.character.inAfterlife && !ballsAreInert(ctx.state),
+    slots: (ctx) => {
+      const set = ensureBallSet(ctx.state, ctx.rng);
+      const hidden = set.balls.filter((b) => !b.found && !b.surveyed);
+      if (!hidden.length) return null;
+      const ball = ctx.rng.pick(hidden);
+      return { star: ball.star, ballName: ball.name, where: getPlace(ball.placeId).name, region: ball.region };
+    },
+    title: 'Word of One of Them',
+    text: `You hear it from #rumourSource#: [ballName], {on|somewhere on} [where], in [region].
+      {They could be lying|It matches two other stories you have heard|It is the first solid thing anyone has said}.`,
     choices: (ctx, s) => [
-      { id: 'go', label: 'Go and get it', effect: (c2, sl) => {
-        const bonus = c2.character.items.includes('dragon_radar') ? 0.4 : 0;
-        if (odds(c2, 0.58 + bonus + c2.character.stats.intellect / 400)) {
-          c2.state.world.dragonBalls = Math.min(7, c2.state.world.dragonBalls + 1);
-          const changes = apply(c2, { happiness: 10, health: -6, zeni: -5000 });
-          fact(c2, `Found a Dragon Ball. That makes ${c2.state.world.dragonBalls}.`, { type: 'dragonball', weight: 4, tags: ['dragonball'] });
-          return { text: `{It takes months|It takes a week and a lot of digging|It is exactly where they said}. ${c2.state.world.dragonBalls === 7 ? `{That is seven|Seven. All of them|The last one}. {They start to glow when you put them together|The air changes|You should probably think carefully about this}.` : `${c2.state.world.dragonBalls} of seven.`}`, changes };
-        }
-        const changes = apply(c2, { happiness: -6, health: -8, zeni: -12000 });
-        return { text: `{Somebody got there first|It is not there|It was there and now there is a hole and a set of tracks}. {You waste the season|You come back with nothing|Somebody with a radar beat you by two days}.`, changes };
-      } },
-      { id: 'ignore', label: 'Leave it. Wishes cause trouble.', effect: (c2) => {
-        const changes = apply(c2, { karma: 3, stats: { discipline: 2 } });
-        return { text: `{You have seen what people wish for|Not your business|Let somebody else be tempted}.`, changes };
-      } },
+      { id: 'note', label: 'Mark it down', hint: 'It goes on your manifest. Going there is another matter.',
+        effect: (c2, sl) => {
+          const set = c2.state.world.ballSet;
+          const ball = set.balls.find((b) => b.star === sl.star);
+          if (ball) ball.surveyed = true;
+          const changes = apply(c2, { stats: { intellect: 1 }, zeni: -2000 });
+          fact(c2, `Learned that ${sl.ballName} is on ${sl.where}.`, { type: 'dragonball', weight: 2, tags: ['dragonball'] });
+          return { text: `{You write it down|You pay for the rest of the story|You buy them a drink and get the region out of them}. ${sl.ballName}: ${sl.where}, ${sl.region}.`, changes };
+        } },
+      { id: 'ignore', label: 'Wishes cause trouble', effect: (c2) => ({
+        text: `{You have seen what people wish for|Let somebody else be tempted|Not your business}.`,
+        changes: apply(c2, { karma: 3 }),
+      }) },
     ],
   },
 
   {
-    id: 'summon_dragon', noFatigue: true, tags: ['world', 'dragonball', 'revival'], weight: 200,
-    when: (ctx) => ctx.state.world.dragonBalls >= 7,
-    slots: (ctx) => ({ dragon: ctx.place.planet === 'namek' || ctx.place.planet === 'new_namek' ? 'Porunga' : 'Shenron' }),
+    id: 'summon_dragon', noFatigue: true, tags: ['world', 'dragonball', 'revival'], weight: 400,
+    when: (ctx) => ballsHeld(ctx.state) >= 7,
+    slots: (ctx) => ({ dragon: (ctx.state.world.ballSet && ctx.state.world.ballSet.dragon) || 'Shenron' }),
     title: 'Summoning',
     text: `Seven balls in a circle, and {the sky goes black|the sun goes out|the clouds come apart}.
       [dragon] {rises|uncoils|fills the sky}. {"State your wish"|"Speak. I will grant one wish"|"You have summoned me. Make it quick"}.`,
@@ -209,7 +246,7 @@ registerEvents([
         label: w.name,
         hint: w.desc,
         effect: (c2) => {
-          c2.state.world.dragonBalls = 0;
+          scatterAfterWish(c2.state, c2.rng);
           c2.state.world.wishesUsed.push(w.id);
           fact(c2, `Wished: ${w.name}.`, { type: 'wish', weight: 7, tags: ['dragonball', 'wish'] });
           switch (w.id) {
@@ -309,14 +346,14 @@ registerEvents([
 
   {
     id: 'dragonball_cache', tags: ['world', 'dragonball', 'opportunity', 'revival'],
-    weight: (ctx) => (ctx.state.world.dragonBalls >= 2 ? 22 : 8),
+    weight: (ctx) => (ballsHeld(ctx.state) >= 2 ? 20 : 7),
     minBioAge: 10,
-    when: (ctx) => ctx.state.world.dragonBalls < 7 && !ctx.character.inAfterlife,
+    when: (ctx) => ballsHeld(ctx.state) < 7 && !ctx.character.inAfterlife && !ballsAreInert(ctx.state),
     slots: (ctx) => ({
       who: ctx.rng.pick(['a collector with a very good safe', 'a small emperor with a big robot',
         'a museum that does not know what it has', 'a cult that has been gathering them for a century',
         'a dying scavenger who wants one thing in return', 'a Frieza Force quartermaster with a price']),
-      count: Math.min(7 - ctx.state.world.dragonBalls, ctx.rng.int(2, 3)),
+      count: Math.min(7 - ballsHeld(ctx.state), ctx.rng.int(1, 2)),
     }),
     title: 'Somebody Else Has Been Collecting',
     text: `[who:cap] has [count] of them. {They are not hidden well|They are hidden extremely well|They are on display, which is insulting}.
@@ -324,10 +361,10 @@ registerEvents([
     choices: (ctx, s) => [
       { id: 'take', label: 'Take them', danger: true, effect: (c2, sl) => {
         if (odds(c2, 0.55 + c2.character.stats.speed / 400)) {
-          c2.state.world.dragonBalls = Math.min(7, c2.state.world.dragonBalls + sl.count);
+          claimBalls(c2.state, c2.rng, sl.count);
           const changes = apply(c2, { karma: -8, health: -8, fame: 3 });
           fact(c2, `Took ${sl.count} Dragon Balls from ${sl.who}.`, { type: 'dragonball', weight: 4, tags: ['dragonball', 'crime'] });
-          return { text: `{You are in and out in a minute|It is louder than you planned|Nobody stops you}. ${c2.state.world.dragonBalls} of seven.`, changes };
+          return { text: `{You are in and out in a minute|It is louder than you planned|Nobody stops you}. ${ballsHeld(c2.state)} of seven.`, changes };
         }
         const foe = stranger(c2, { relation: 'enemy', tension: 60, powerTarget: scaledFoePower(c2, 1.1), metHow: 'dragonball' });
         const changes = apply(c2, { health: -18, karma: -6 });
@@ -336,15 +373,15 @@ registerEvents([
       { id: 'trade', label: 'Buy or bargain for them', effect: (c2, sl) => {
         const price = c2.rng.int(300000, 3000000);
         if (c2.character.zeni >= price) {
-          c2.state.world.dragonBalls = Math.min(7, c2.state.world.dragonBalls + sl.count);
+          claimBalls(c2.state, c2.rng, sl.count);
           const changes = apply(c2, { zeni: -price, karma: 2 });
           fact(c2, `Bought ${sl.count} Dragon Balls for ${zeni(price)}.`, { type: 'dragonball', weight: 3, tags: ['dragonball'] });
-          return { text: `${zeni(price)}. {It is robbery and you pay it|You do not haggle|They throw in a bag}. ${c2.state.world.dragonBalls} of seven.`, changes };
+          return { text: `${zeni(price)}. {It is robbery and you pay it|You do not haggle|They throw in a bag}. ${ballsHeld(c2.state)} of seven.`, changes };
         }
         if (odds(c2, 0.35 + c2.character.stats.charisma / 250)) {
-          c2.state.world.dragonBalls = Math.min(7, c2.state.world.dragonBalls + 1);
+          claimBalls(c2.state, c2.rng, 1);
           const changes = apply(c2, { karma: 4, happiness: 4 });
-          return { text: `{You have nothing like ${zeni(price)}|You offer something else|You do them a favour instead}. They part with one. ${c2.state.world.dragonBalls} of seven.`, changes };
+          return { text: `{You have nothing like ${zeni(price)}|You offer something else|You do them a favour instead}. They part with one. ${ballsHeld(c2.state)} of seven.`, changes };
         }
         return { text: `{The price is ${zeni(price)}|You cannot come close|They laugh you out of the building}.`, changes: [] };
       } },
@@ -419,7 +456,9 @@ registerEvents([
       } },
       { id: 'defy', label: 'Stand your ground', danger: true, effect: (c2, sl) => {
         const npc = meetCanon(c2, sl.godId, 'acquaintance');
-        if (odds(c2, 0.25)) {
+        // Standing up to a god is about the gap, not a flat dice roll.
+        const gap = combatPower(c2.character) / Math.max(1, npc.power);
+        if (odds(c2, 0.05 + Math.min(0.85, gap * 0.9))) {
           relate(c2, npc, { respect: 35, closeness: 8 });
           const changes = apply(c2, { fame: 10, happiness: 12, stats: { discipline: 4 } });
           fact(c2, `Stood up to ${npc.name} and was not erased for it.`, { type: 'divine', weight: 8, subject: npc.id, tags: ['divine', 'legend'] });

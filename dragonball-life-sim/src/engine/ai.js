@@ -20,6 +20,43 @@ import { getPlace } from '../data/places.js';
 export const MODEL = 'claude-opus-5';
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const KEY_STORAGE = 'dbls.apiKey';
+const CONFIG_STORAGE = 'dbls.aiConfig';
+
+/**
+ * Where the prose comes from. The default is the viewer's own Claude through
+ * the artifact runtime; `anthropic` uses a key the player supplies; `custom`
+ * points at any endpoint that speaks either the Anthropic Messages shape or
+ * the OpenAI chat-completions shape, so a self-hosted or third-party model can
+ * drive the game instead.
+ */
+export const DEFAULT_CONFIG = {
+  provider: 'auto',        // auto | anthropic | custom | off
+  baseUrl: '',
+  model: '',
+  key: '',
+  format: 'openai',        // openai | anthropic
+  headerName: 'Authorization',
+  headerPrefix: 'Bearer ',
+};
+
+export function getAiConfig() {
+  try {
+    if (typeof localStorage === 'undefined') return { ...DEFAULT_CONFIG };
+    const raw = localStorage.getItem(CONFIG_STORAGE);
+    if (!raw) return { ...DEFAULT_CONFIG };
+    return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+  } catch (e) {
+    return { ...DEFAULT_CONFIG };
+  }
+}
+
+export function setAiConfig(patch) {
+  const next = { ...getAiConfig(), ...patch };
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(CONFIG_STORAGE, JSON.stringify(next));
+  } catch (e) { /* ignore */ }
+  return next;
+}
 
 let sampleFn = null;
 let samplePromise = null;
@@ -56,9 +93,31 @@ export function setApiKey(key) {
 }
 
 export function backendName() {
-  if (sampleFn) return 'sample';
-  if (getApiKey()) return 'api';
+  const cfg = getAiConfig();
+  if (cfg.provider === 'off') return 'none';
+  if (cfg.provider === 'custom' && cfg.baseUrl && cfg.model) return 'custom';
+  if (cfg.provider === 'anthropic' && getApiKey()) return 'api';
+  if (cfg.provider === 'auto') {
+    if (sampleFn) return 'sample';
+    if (getApiKey()) return 'api';
+    if (cfg.baseUrl && cfg.model) return 'custom';
+  }
   return 'none';
+}
+
+export function backendLabel() {
+  const name = backendName();
+  const cfg = getAiConfig();
+  switch (name) {
+    case 'sample': return 'Claude, through this page';
+    case 'api': return 'Claude, on your own API key';
+    case 'custom': return `${cfg.model || 'custom model'} at ${shortHost(cfg.baseUrl)}`;
+    default: return 'Not connected';
+  }
+}
+
+function shortHost(url) {
+  try { return new URL(url).host; } catch (e) { return url || 'nowhere'; }
 }
 
 export function aiAvailable() {
@@ -229,6 +288,63 @@ async function callApi(prompt, opts = {}) {
   return block ? block.text : '';
 }
 
+/**
+ * Any endpoint the player points us at. Two request shapes are supported
+ * because between them they cover almost everything that serves a model.
+ */
+async function callCustom(prompt, opts = {}) {
+  const cfg = getAiConfig();
+  if (!cfg.baseUrl || !cfg.model) throw Object.assign(new Error('no endpoint configured'), { code: 'not_granted' });
+
+  const headers = { 'content-type': 'application/json' };
+  if (cfg.key) headers[cfg.headerName || 'Authorization'] = (cfg.headerPrefix || '') + cfg.key;
+
+  let body;
+  if (cfg.format === 'anthropic') {
+    headers['anthropic-version'] = '2023-06-01';
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    body = { model: cfg.model, max_tokens: 2000, messages: [{ role: 'user', content: prompt }] };
+  } else {
+    body = {
+      model: cfg.model,
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }],
+    };
+  }
+
+  const res = await fetch(cfg.baseUrl, {
+    method: 'POST', headers, signal: opts.signal, body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw Object.assign(new Error(`${res.status}: ${detail.slice(0, 200)}`), {
+      code: res.status === 429 ? 'rate_limited' : res.status === 401 ? 'not_granted' : 'upstream_error',
+    });
+  }
+  const data = await res.json();
+  // Read both reply shapes without assuming which one came back.
+  if (Array.isArray(data.content)) {
+    const block = data.content.find((b) => b.type === 'text');
+    return block ? block.text : '';
+  }
+  if (Array.isArray(data.choices) && data.choices.length) {
+    const choice = data.choices[0];
+    return (choice.message && choice.message.content) || choice.text || '';
+  }
+  if (typeof data.response === 'string') return data.response;
+  if (typeof data.output === 'string') return data.output;
+  return '';
+}
+
+export async function testAiEndpoint() {
+  try {
+    const text = await callCustom('Reply with exactly the word: ready');
+    return { ok: true, text: (text || '').trim().slice(0, 80) };
+  } catch (err) {
+    return { ok: false, code: err.code || 'upstream_error', message: String(err && err.message).slice(0, 160) };
+  }
+}
+
 function parseJsonLoosely(text) {
   if (!text) return null;
   const trimmed = String(text).trim();
@@ -260,11 +376,9 @@ export async function improviseEvent(state, opts = {}) {
   const prompt = buildEventPrompt(state, opts);
   try {
     let raw;
-    if (backend === 'sample') {
-      raw = await callSampleJson(prompt, opts);
-    } else {
-      raw = parseJsonLoosely(await callApi(prompt, opts));
-    }
+    if (backend === 'sample') raw = await callSampleJson(prompt, opts);
+    else if (backend === 'custom') raw = parseJsonLoosely(await callCustom(prompt, opts));
+    else raw = parseJsonLoosely(await callApi(prompt, opts));
     const event = buildAiEvent(raw, `ai_${currentYear(state)}_${++aiEventCounter}`);
     if (event) state.aiCalls = (state.aiCalls || 0) + 1;
     return event;
@@ -279,9 +393,9 @@ export async function narrateOutcome(state, event, outcomeText, opts = {}) {
   if (backend === 'none') return outcomeText;
   const prompt = buildNarrationPrompt(state, event, outcomeText);
   try {
-    const text = backend === 'sample'
-      ? await callSampleText(prompt, opts)
-      : await callApi(prompt, opts);
+    const text = backend === 'sample' ? await callSampleText(prompt, opts)
+      : backend === 'custom' ? await callCustom(prompt, opts)
+        : await callApi(prompt, opts);
     const clean = sanitiseText(text, 700);
     return clean.length > 20 ? clean : outcomeText;
   } catch (err) {
@@ -307,4 +421,57 @@ export function errorCopy(code) {
     default:
       return 'The AI could not be reached. Using a generated event instead.';
   }
+}
+
+
+// ------------------------------------------------------------ dialogue
+
+/**
+ * The player writes their own line. The model scores the impression it makes
+ * on this specific person and writes their reply in character.
+ */
+export async function judgeReply(state, npc, playerLine, opts = {}) {
+  const backend = backendName();
+  const ctx = aiContext(state);
+  const prompt = `A Dragon Ball life simulator. Judge one line of dialogue and answer in character.
+
+${STYLE}
+
+WHO IS SPEAKING: ${ctx.name}, ${ctx.race}, age ${ctx.age}, ${ctx.tier}, karma ${ctx.karma}.
+WHO THEY ARE SPEAKING TO: ${npc.name}, a ${npc.raceId}, ${npc.age}, currently ${npc.mood || 'hard to read'}.
+Their standing with each other: closeness ${npc.closeness}, respect ${npc.respect}, tension ${npc.tension}${npc.romance ? `, romance ${npc.romance}` : ''}.
+What ${npc.name} wants out of life: ${npc.goal || 'unclear'}.
+${npc.personality ? `Character notes: ${npc.personality}` : ''}
+
+WHAT WAS SAID: "${playerLine.slice(0, 400)}"
+
+Judge it as ${npc.name} would. Flattery on somebody proud lands differently from
+flattery on somebody grieving. Reply with ONLY a JSON object:
+{"impression": -40 to 40, "reply": "what they say back, 10-45 words, in their voice",
+ "closeness": -12 to 12, "respect": -12 to 12, "tension": -12 to 12, "romance": -8 to 12}`;
+
+  if (backend === 'none') return null;
+  try {
+    let raw;
+    if (backend === 'sample') raw = await callSampleJson(prompt, opts);
+    else if (backend === 'custom') raw = parseJsonLoosely(await callCustom(prompt, opts));
+    else raw = parseJsonLoosely(await callApi(prompt, opts));
+    if (!raw || typeof raw !== 'object') return null;
+    return {
+      impression: clampNum(raw.impression, -40, 40),
+      reply: sanitiseText(raw.reply, 320),
+      closeness: clampNum(raw.closeness, -12, 12),
+      respect: clampNum(raw.respect, -12, 12),
+      tension: clampNum(raw.tension, -12, 12),
+      romance: clampNum(raw.romance, -8, 12),
+    };
+  } catch (err) {
+    return { error: true, code: err && err.code ? err.code : 'upstream_error' };
+  }
+}
+
+function clampNum(v, lo, hi) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(lo, Math.min(hi, Math.round(n)));
 }

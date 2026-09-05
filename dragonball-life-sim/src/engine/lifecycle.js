@@ -3,16 +3,21 @@
 
 import { clamp } from './rng.js';
 import { render } from './text.js';
-import { generateEvent, resolveChoice, buildContext, directorBias } from './generator.js';
+import { generateEvent, resolveChoice, buildContext, directorBias, forceEvent } from './generator.js';
 import { addFact, recallSummary } from './memory.js';
-import { relationshipTick, makeNpc, makeChild } from './npc.js';
+import { relationshipTick, progressNpc, makeNpc, makeChild } from './npc.js';
+import { ladderFor } from '../data/transformations.js';
+import { TECHNIQUES } from '../data/techniques.js';
 import { getRace, hasPerk } from '../data/races.js';
 import { getPlace } from '../data/places.js';
 import { TIMELINE, eraName, worldPowerBaseline } from '../data/timeline.js';
-import { agingDecay, naturalDeathChance, combatPower, powerTier, kiMaxFor, lifeExpectancy, STAT_KEYS } from './stats.js';
+import { agingDecay, naturalDeathChance, combatPower, powerTier, kiMaxFor, lifeExpectancy, zenkaiBoost, STAT_KEYS } from './stats.js';
 import { getRng, saveRng, currentYear, livingNpcs, adjust, place as placeOf, characterSummary } from './state.js';
 import { getCareer } from '../data/jobs.js';
+import { resetYearBudget } from './economy.js';
 import { getItem } from '../data/items.js';
+
+const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
 
 const DEATH_CAUSES = {
   age: ['Old age', 'The body simply stopped', 'Died in their sleep'],
@@ -24,9 +29,25 @@ export function startYear(state) {
   const rng = getRng(state);
   const c = state.character;
 
+  // Settle last year's damage BEFORE anything heals. Spending a year at zero
+  // health used to be free because the new year's recovery ran first.
+  if (!c.inAfterlife && c.alive && c.vitals.health <= 0) {
+    const survived = resolveCriticalCondition(state, rng);
+    if (!survived) {
+      state.turn = {
+        year: currentYear(state), age: c.age, count: 0, used: [], queue: [],
+        index: 0, entries: [{ kind: 'death', text: `${c.death.cause}. You are ${c.age}.` }], done: true,
+      };
+      state.log.push({ year: state.turn.year, age: state.turn.age, entries: state.turn.entries.slice() });
+      saveRng(state, rng);
+      return null;
+    }
+  }
+
   c.age += 1;
   state.stats.yearsPlayed++;
   if (c.inAfterlife) c.yearsInAfterlife = (c.yearsInAfterlife || 0) + 1;
+  resetYearBudget(state);
 
   const entries = [];
   entries.push(...passiveYear(state, rng));
@@ -46,10 +67,21 @@ export function startYear(state) {
   }
   if (c.techniques.includes('senzu_farming') && rng.chance(0.7)) c.senzu += 1;
 
+  const revivalNews = tickRevivalEffort(state, rng);
+  if (revivalNews) entries.push(revivalNews);
+
   // NPCs live their own year.
   for (const npc of Object.values(state.npcs)) {
     if (npc.alive) {
       relationshipTick(rng, npc, c);
+      const news = progressNpc(rng, npc, currentYear(state), {
+        techniquePool: TECHNIQUE_POOL,
+        formsFor: (n) => ladderFor(n.raceId),
+      });
+      // You only hear about the lives of people you actually keep up with.
+      if (news && (npc.closeness > 45 || ['rival', 'nemesis', 'child', 'spouse', 'student'].includes(npc.relation))) {
+        entries.push({ kind: 'news', text: news });
+      }
       const npcRace = getRace(npc.raceId);
       const npcSpan = npc.isCanon ? Infinity : (npcRace.lifespan[0] + npcRace.lifespan[1]) / 2;
       if (npc.age > npcSpan * 0.8 && rng.chance(0.02 + (npc.age - npcSpan * 0.8) * 0.01)) {
@@ -81,11 +113,30 @@ export function startYear(state) {
     done: false,
   };
 
+  // A canon saga is not a news bulletin: if one is due this year it is the
+  // first thing that happens to you, and you get to decide what you do about it.
+  const due = TIMELINE.filter((t) => t.year === currentYear(state)
+    && !state.world.resolved.includes(t.id)
+    && !(t.cancelIf && state.world.flags[t.cancelIf]));
+  for (let i = 0; i < due.length; i++) {
+    // Two sagas landing in the same year both get played, not summarised.
+    const forced = forceEvent(state, rng, 'timeline_event', { evId: due[i].id });
+    if (!forced) break;
+    state.turn.queue.push(forced);
+    state.turn.count = Math.max(state.turn.count, state.turn.queue.length + 1);
+    // Mark it claimed so the next forceEvent picks the following one.
+    state.world.resolved.push(due[i].id);
+  }
+  // The choice handlers push the id again; keep the list unique.
+  state.world.resolved = Array.from(new Set(state.world.resolved));
+
   // Events are generated one at a time rather than all at once, so the second
   // event of a year sees what the first one did to you.
-  const first = nextGenerated(state, rng);
-  if (first) state.turn.queue.push(first);
-  else state.turn.done = true;
+  if (!state.turn.queue.length) {
+    const first = nextGenerated(state, rng);
+    if (first) state.turn.queue.push(first);
+    else state.turn.done = true;
+  }
 
   saveRng(state, rng);
   if (state.turn.done) finishYear(state);
@@ -170,6 +221,10 @@ export function choose(state, choiceId) {
     templateId: event.templateId,
   });
 
+  // A choice that starts a fight parks the spec here; the UI picks it up and
+  // hands control to the battle screen before the year continues.
+  if (result.battle) t.pendingBattle = result.battle;
+
   for (const f of result.facts || []) {
     addFact(state.memory, { type: f.type || 'event', text: f.text, year: state.character.age, weight: f.weight ?? 1, tags: f.tags || [] });
   }
@@ -228,7 +283,7 @@ function passiveYear(state, rng) {
   }
 
   // Recovery and mood
-  const heal = c.inAfterlife ? 30 : (16 + c.stats.durability * 0.2 + (hasPerk(c, 'regeneration') ? 25 : 0));
+  const heal = c.inAfterlife ? 40 : (24 + c.stats.durability * 0.28 + (hasPerk(c, 'regeneration') ? 30 : 0));
   adjust(state, { health: heal, ki: 999 });
   const moodDrift = rng.float(-4, 4)
     + (livingNpcs(state).filter((n) => n.closeness > 55).length * 0.8)
@@ -269,19 +324,9 @@ function finishYear(state) {
   if (!c.inAfterlife && c.alive && !c.flags.immortal && rng.chance(naturalDeathChance(c))) {
     die(state, rng.pick(DEATH_CAUSES.age));
   } else if (!c.inAfterlife && c.alive && c.vitals.health <= 0) {
-    // Bottoming out your health is a crisis, not an automatic ending. Half the
-    // time somebody gets to you, or your species simply refuses to stop.
-    const tough = hasPerk(c, 'regeneration') || hasPerk(c, 'hardToKill') || c.senzu > 0;
-    if (c.senzu > 0) {
-      c.senzu -= 1;
-      c.vitals.health = 100;
-      state.turn.entries.push({ kind: 'survival', text: 'You were carrying a senzu bean. It is gone now, and you are not.' });
-    } else if (rng.chance(tough ? 0.2 : 0.4)) {
-      die(state, rng.pick(DEATH_CAUSES.health));
-    } else {
-      c.vitals.health = 14;
-      c.flags.brink_of_death = true;
-      state.turn.entries.push({ kind: 'survival', text: 'You should not have survived this year. You did.' });
+    const survived = resolveCriticalCondition(state, rng);
+    if (survived && state.turn) {
+      state.turn.entries.push({ kind: 'survival', text: survived });
     }
   }
 
@@ -293,6 +338,36 @@ function finishYear(state) {
   if (state.log.length > 200) state.log.shift();
 
   saveRng(state, rng);
+}
+
+/**
+ * Health at or below zero. A senzu saves you, a tough species usually pulls
+ * through, and otherwise it is a real coin flip. Returns the survival line, or
+ * false when it killed you.
+ */
+function resolveCriticalCondition(state, rng) {
+  const c = state.character;
+  if (c.senzu > 0) {
+    c.senzu -= 1;
+    c.vitals.health = 100;
+    return 'You were carrying a senzu bean. It is gone now, and you are not.';
+  }
+  const tough = hasPerk(c, 'regeneration') || hasPerk(c, 'hardToKill');
+  const durability = (c.stats.durability || 50) / 100;
+  const survivalOdds = (tough ? 0.62 : 0.38) + durability * 0.2;
+  if (rng.chance(survivalOdds)) {
+    c.vitals.health = tough ? 30 : 12;
+    // Coming back from this is exactly the state a Saiyan grows out of.
+    c.flags.brink_of_death = true;
+    c.flags.grief = c.flags.grief || false;
+    if (hasPerk(c, 'zenkai') || hasPerk(c, 'zenkaiWeak')) {
+      const gain = zenkaiBoost(c, rng, 1.2);
+      return `You should not have survived that. Your body rebuilds heavier. Power level up ${Math.round(gain).toLocaleString('en-US')}.`;
+    }
+    return 'You should not have survived that. You did, and it will cost you later.';
+  }
+  die(state, rng.pick(DEATH_CAUSES.health));
+  return false;
 }
 
 export function die(state, cause) {
@@ -312,9 +387,90 @@ export function die(state, cause) {
   }
 }
 
+/**
+ * Gathering seven Dragon Balls takes years, not an afternoon. Whoever down
+ * there cares enough to try makes progress each year according to how capable
+ * and how motivated they are, and the player hears about it at milestones
+ * rather than every single year.
+ */
+export function tickRevivalEffort(state, rng) {
+  const c = state.character;
+  if (!c.inAfterlife) return null;
+  const world = state.world;
+
+  if (!world.revival) {
+    const backers = Object.values(state.npcs).filter((n) => n.alive && n.closeness > 48);
+    if (!backers.length) return null;
+    // Not everyone who liked you will spend six years on a scavenger hunt.
+    const committed = backers.filter((n) => rng.chance(0.18 + n.closeness / 260));
+    if (!committed.length) return null;
+    world.revival = {
+      backers: committed.map((n) => n.id),
+      progress: 0,
+      announced: [],
+      startedYear: currentYear(state),
+    };
+    return {
+      kind: 'revival',
+      text: `${committed.map((n) => n.name).join(' and ')} ${committed.length > 1 ? 'have' : 'has'} started looking for the Dragon Balls. It will take years.`,
+    };
+  }
+
+  const backers = world.revival.backers.map((id) => state.npcs[id]).filter((n) => n && n.alive);
+  if (!backers.length) {
+    const line = 'Whoever was gathering the Dragon Balls for you has stopped.';
+    world.revival = null;
+    return { kind: 'revival', text: line };
+  }
+
+  let rate = 0;
+  for (const n of backers) {
+    const smart = ((n.stats && n.stats.intellect) || 45) / 100;
+    const rich = n.isCanon ? 0.5 : 0.2;
+    const radar = n.hasRadar ? 0.5 : 0;
+    rate += 6 + smart * 10 + rich * 10 + radar * 10;
+  }
+  rate *= rng.float(0.6, 1.3);
+  world.revival.progress = Math.min(100, world.revival.progress + rate);
+
+  const p = world.revival.progress;
+  for (const mark of [35, 70]) {
+    if (p >= mark && !world.revival.announced.includes(mark)) {
+      world.revival.announced.push(mark);
+      return {
+        kind: 'revival',
+        text: mark === 35
+          ? `Word comes up from below: ${backers[0].name} has two or three of them.`
+          : `${backers[0].name} is close. Five, maybe six.`,
+      };
+    }
+  }
+  return null;
+}
+
+/** Bring a dead character back to the world of the living, properly. */
+export function reviveCharacter(state) {
+  const c = state.character;
+  c.inAfterlife = false;
+  c.alive = true;
+  c.death = null;
+  c.yearsInAfterlife = 0;
+  c.keptBody = false;
+  c.flags.judged = false;
+  c.flags.died_once = true;
+  c.vitals.health = 100;
+  c.vitals.ki = c.vitals.kiMax;
+  if (['check_in', 'snake_way', 'kai_planet', 'hell', 'otherworld_arena', 'sacred_world'].includes(c.placeId)) {
+    c.placeId = state.world.deathPlaceId || 'east_city';
+  }
+  state.world.revival = null;
+  return state;
+}
+
 /** Move a dead character into the Other World and keep playing. */
 export function enterAfterlife(state) {
   const c = state.character;
+  state.world.deathPlaceId = c.placeId;
   c.inAfterlife = true;
   c.alive = true;
   c.vitals.health = 100;

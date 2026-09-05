@@ -1,5 +1,6 @@
 // Public game API. Importing this registers every event pack.
 
+import './engine/events/origins.js';
 import './engine/events/childhood.js';
 import './engine/events/life.js';
 import './engine/events/adult.js';
@@ -12,7 +13,8 @@ import './engine/events/actions.js';
 
 import { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext } from './engine/state.js';
 import { startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die,
-  insertEvent, renarrateLast, skipRemaining, eventsRemaining } from './engine/lifecycle.js';
+  insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter,
+  tickRevivalEffort } from './engine/lifecycle.js';
 import { initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable,
   getApiKey, setApiKey, errorCopy } from './engine/ai.js';
 import { save, load, listSaves, clearSlot, exportString, importString } from './engine/save.js';
@@ -24,7 +26,7 @@ import { ACTIONS, availableActions, runAction, actionOptions } from './engine/ev
 export {
   createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext,
   startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die,
-  insertEvent, renarrateLast, skipRemaining, eventsRemaining,
+  insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort,
   initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable,
   getApiKey, setApiKey, errorCopy,
   save, load, listSaves, clearSlot, exportString, importString,

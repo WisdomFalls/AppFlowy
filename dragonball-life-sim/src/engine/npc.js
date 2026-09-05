@@ -38,6 +38,20 @@ const PERSONALITY_TAGS = ['loyal', 'jealous', 'brave', 'greedy', 'kind', 'cold',
   'ambitious', 'lazy', 'honest', 'devious', 'protective', 'reckless', 'patient', 'vain',
   'curious', 'superstitious', 'blunt', 'gentle', 'vengeful', 'generous'];
 
+const APPEARANCE_HAIR = ['cropped black', 'a long braid', 'wild and unwashed', 'shaved', 'silver, prematurely',
+  'dyed something impractical', 'tied back hard', 'lavender', 'a single stubborn cowlick', 'none at all'];
+const APPEARANCE_EYES = ['dark', 'pale grey', 'green', 'red-rimmed', 'gold', 'one clouded over', 'black, no visible iris'];
+const APPEARANCE_MARK = ['a scar through one eyebrow', 'burn scars along the jaw', 'a family tattoo',
+  'four fingers on the left hand', 'no marks at all', 'a brand on the shoulder', 'a broken nose that set badly'];
+const CLOTHING = ['a patched training gi', 'battle armour a size too big', 'a good coat, badly kept',
+  'work clothes and nothing else', 'Frieza Force issue with the insignia scraped off', 'monastic robes',
+  'a city suit', 'whatever was on the floor', 'weighted training gear', 'a uniform from an army that no longer exists'];
+const GEAR = ['a cracked scouter', 'a sword that has been re-hilted twice', 'nothing at all', 'a capsule case',
+  'a senzu bean they will not admit to', 'a photograph they do not explain', 'a dented flask',
+  'their teacher\'s weighted wristbands'];
+const MOODS = ['steady', 'restless', 'grieving', 'furious about something', 'quietly pleased',
+  'exhausted', 'obsessive', 'content', 'frightened', 'spoiling for a fight'];
+
 const GOALS = ['to be the strongest', 'to find their missing sibling', 'to open a school',
   'to avenge a dead world', 'to be left alone', 'to get rich', 'to be remembered',
   'to protect one specific person', 'to see the Dragon Balls used properly',
@@ -82,6 +96,8 @@ export function makeNpc(rng, opts = {}) {
     respect: opts.respect ?? rng.int(20, 60),
     tension: opts.tension ?? rng.int(0, 25),
     romance: opts.romance ?? 0,
+    trust: opts.trust ?? rng.int(15, 45),
+    knowledge: opts.knowledge ?? 0,
     tags: rng.sample(PERSONALITY_TAGS, rng.int(2, 3)),
     goal: rng.pick(GOALS),
     look: null,
@@ -90,8 +106,28 @@ export function makeNpc(rng, opts = {}) {
     metHow: opts.metHow || 'chance',
     history: [],
     techniques: [],
+    transformations: [],
     isCanon: false,
     signature: rng.chance(0.25) ? generateSignatureName(rng) : null,
+
+    // The dossier. Most of it stays hidden until you have earned a look at it.
+    look: {
+      hair: rng.pick(APPEARANCE_HAIR),
+      eyes: rng.pick(APPEARANCE_EYES),
+      mark: rng.pick(APPEARANCE_MARK),
+      clothing: rng.pick(CLOTHING),
+    },
+    gear: rng.pick(GEAR),
+    mood: rng.pick(MOODS),
+    zeni: Math.round(Math.pow(10, rng.float(3, 6.4))),
+    homePlaceId: opts.placeId || 'east_city',
+    kin: {
+      parents: rng.chance(0.55) ? [generateFullName(rng, raceId), generateFullName(rng, raceId)] : [],
+      lost: rng.chance(0.4) ? generateFullName(rng, raceId) : null,
+    },
+    hasDragonBall: false,
+    wall: null,
+    growthFocus: rng.pick(['power', 'technique', 'family', 'money', 'peace']),
   };
   return npc;
 }
@@ -233,21 +269,168 @@ export function makeChild(rng, character, partner, year) {
   return child;
 }
 
+const FOCUS_PATHS = ['power', 'technique', 'family', 'money', 'peace'];
+
+/**
+ * An NPC's own year. They train, stall, break through, learn things, get rich,
+ * grow up and choose a direction - so a friend you have known for thirty years
+ * is not the person you met.
+ *
+ * Returns a line of news when something happened worth hearing about.
+ */
+export function progressNpc(rng, npc, year, opts = {}) {
+  if (!npc.alive || npc.isCanon) return null;
+  let news = null;
+
+  // Children pick a direction somewhere in their teens.
+  if (npc.age === 12 || (npc.age > 12 && !npc.growthFocus)) {
+    npc.growthFocus = rng.pick(FOCUS_PATHS);
+    if (npc.relation === 'child') {
+      news = `${npc.name} has decided what they are: ${
+        { power: 'a fighter, obviously', technique: 'a student of technique', family: 'the sort who stays home',
+          money: 'far more interested in money than in training', peace: 'not interested in fighting at all' }[npc.growthFocus]
+      }.`;
+    }
+  }
+
+  const focus = npc.growthFocus || 'power';
+
+  if (focus === 'power' || focus === 'technique') {
+    if (npc.wall) {
+      // Stuck. Everybody gets stuck.
+      const years = year - npc.wall;
+      if (years >= rng.int(2, 5)) {
+        npc.wall = null;
+        npc.power = Math.round(npc.power * rng.float(1.7, 3.1));
+        news = `${npc.name} has broken through whatever they were stuck on. They are not the same fighter.`;
+      } else {
+        npc.power = Math.round(npc.power * rng.float(0.99, 1.02));
+      }
+    } else {
+      const rate = focus === 'power' ? rng.float(1.04, 1.18) : rng.float(1.02, 1.1);
+      npc.power = Math.round(npc.power * (npc.age < 40 ? rate : 1 + (rate - 1) * 0.4));
+      if (rng.chance(0.12)) {
+        npc.wall = year;
+        if (rng.chance(0.4)) news = `${npc.name} has hit a wall and knows it.`;
+      }
+    }
+    if (focus === 'technique' && rng.chance(0.14) && opts.techniquePool) {
+      const known = npc.techniques || [];
+      const options = opts.techniquePool.filter((t) => !known.includes(t));
+      if (options.length) {
+        const learned = rng.pick(options);
+        npc.techniques = known.concat(learned);
+        if (rng.chance(0.5)) news = `${npc.name} has learned something new.`;
+      }
+    }
+    // A form, if their species has one and they have grown into it.
+    if (opts.formsFor && rng.chance(0.06)) {
+      const forms = opts.formsFor(npc);
+      // Only the forms a power level alone can explain. A ritual or a mentor is
+      // the player's story, not background bookkeeping.
+      const next = forms.find((f) => !(npc.transformations || []).includes(f.id)
+        && f.req.power && npc.power >= f.req.power * 1.5
+        && !f.req.custom && !(f.req.mentors || []).length && !(f.req.techniques || []).length);
+      if (next) {
+        npc.transformations = (npc.transformations || []).concat(next.id);
+        news = `${npc.name} can do something they could not do before. ${next.name}.`;
+      }
+    }
+  } else if (focus === 'money') {
+    npc.zeni = Math.round((npc.zeni || 1000) * rng.float(1.05, 1.4));
+    npc.power = Math.round(npc.power * rng.float(0.99, 1.03));
+    if (rng.chance(0.05)) news = `${npc.name} has done extremely well for themselves.`;
+  } else if (focus === 'family') {
+    npc.power = Math.round(npc.power * rng.float(0.98, 1.04));
+    if (npc.age > 18 && npc.age < 50 && rng.chance(0.09)) {
+      npc.children = (npc.children || 0) + 1;
+      news = `${npc.name} has a child.`;
+    }
+  } else {
+    npc.power = Math.round(npc.power * rng.float(0.97, 1.02));
+  }
+
+  if (rng.chance(0.25)) {
+    npc.mood = rng.pick(['steady', 'restless', 'grieving', 'furious about something', 'quietly pleased',
+      'exhausted', 'obsessive', 'content', 'frightened', 'spoiling for a fight']);
+  }
+  if (rng.chance(0.04)) npc.hasDragonBall = true;
+
+  return news;
+}
+
 /** Yearly drift in a relationship when nothing specific happens. */
 export function relationshipTick(rng, npc, character) {
   if (!npc.alive) return;
   npc.age += 1;
-  const neglect = rng.float(0, 3.2);
-  const familyBond = RELATIONS[npc.relation]?.family ? 0.5 : 0;
-  npc.closeness = clamp(npc.closeness - neglect + familyBond + (npc.tags.includes('loyal') ? 1.5 : 0), 0, 100);
+  // Decay slows as a bond deepens: people you have known for thirty years do
+  // not become strangers because you skipped a year.
+  const depth = (npc.closeness + (npc.trust ?? 30)) / 200;
+  const neglect = rng.float(0, 3.2) * (1 - depth * 0.75);
+  const familyBond = RELATIONS[npc.relation]?.family ? 1.2 : 0;
+  const married = npc.relation === 'spouse' ? 1.5 : 0;
+  npc.closeness = clamp(npc.closeness - neglect + familyBond + married
+    + (npc.tags.includes('loyal') ? 1.5 : 0), 0, 100);
+  npc.trust = clamp((npc.trust ?? 30) + (npc.closeness > 60 ? 0.6 : -0.3), 0, 100);
   npc.tension = clamp(npc.tension + rng.float(-1.5, 1.2) + (npc.tags.includes('jealous') ? 0.8 : 0), 0, 100);
   if (npc.relation === 'rival' || npc.relation === 'nemesis') {
-    // Rivals train too. That is the point of them.
-    npc.power = Math.round(npc.power * rng.float(1.02, 1.24));
-  } else if (!npc.isCanon && npc.age < 45) {
-    npc.power = Math.round(npc.power * rng.float(1.0, 1.08));
+    // Rivals train harder than anyone, because you are the reason.
+    npc.power = Math.round(npc.power * rng.float(1.05, 1.28));
   }
   if (npc.romance > 0) npc.romance = clamp(npc.romance - rng.float(0, 1.5) + (npc.closeness > 65 ? 1.2 : 0), 0, 100);
+}
+
+/**
+ * What you actually know about somebody, gated by how well you know them.
+ * Everything unknown reads as a blank rather than being silently omitted, so
+ * the gaps are visible and worth closing.
+ */
+export function dossier(npc, opts = {}) {
+  const k = opts.full ? 4 : (npc.knowledge || 0);
+  const unknown = '—';
+  const race = getRace(npc.raceId);
+  const rows = [];
+
+  rows.push({ label: 'Species', value: race.short });
+  rows.push({ label: 'Age', value: String(npc.age) });
+  rows.push({ label: 'Standing', value: relationLabel(npc) });
+  rows.push({ label: 'Mood', value: k >= 1 ? npc.mood : unknown });
+  rows.push({
+    label: 'Power',
+    value: k >= 2 ? Math.round(npc.power).toLocaleString('en-US')
+      : k >= 1 ? approximatePower(npc.power) : unknown,
+  });
+  rows.push({ label: 'Wearing', value: k >= 1 && npc.look ? npc.look.clothing : unknown });
+  rows.push({
+    label: 'Looks',
+    value: k >= 1 && npc.look ? `${npc.look.hair} hair, ${npc.look.eyes} eyes, ${npc.look.mark}` : unknown,
+  });
+  rows.push({ label: 'Carries', value: k >= 2 ? npc.gear : unknown });
+  rows.push({
+    label: 'Techniques',
+    value: k >= 2 ? ((npc.techniques || []).length ? npc.techniques.length + ' known' : 'nothing formal') : unknown,
+  });
+  rows.push({
+    label: 'Forms',
+    value: k >= 3 ? ((npc.transformations || []).length ? npc.transformations.length + ' unlocked' : 'none') : unknown,
+  });
+  rows.push({ label: 'Wants', value: k >= 2 ? npc.goal : unknown });
+  rows.push({ label: 'Money', value: k >= 3 ? Math.round(npc.zeni || 0).toLocaleString('en-US') + ' Zeni' : unknown });
+  rows.push({ label: 'Lives', value: k >= 3 ? getPlace(npc.homePlaceId || 'east_city').name : unknown });
+  rows.push({
+    label: 'Family',
+    value: k >= 3 && npc.kin
+      ? [(npc.kin.parents || []).join(' and ') || 'nobody they name',
+        npc.kin.lost ? `${npc.kin.lost}, dead` : null].filter(Boolean).join('; ')
+      : unknown,
+  });
+  rows.push({ label: 'Dragon Ball', value: k >= 4 ? (npc.hasDragonBall ? 'Has one' : 'No') : unknown });
+  return rows;
+}
+
+function approximatePower(p) {
+  const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(1, p))));
+  return `around ${Math.round(p / magnitude) * magnitude}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 export function describeNpc(npc) {
@@ -260,7 +443,55 @@ export function relationLabel(npc) {
   return RELATIONS[npc.relation]?.label || 'Acquaintance';
 }
 
-/** Overall feeling, used for event gating and the relationship screen. */
+/**
+ * Overall feeling. Weighted so a genuinely close platonic bond can reach 100 -
+ * the old formula quietly capped friendship in the seventies, which made every
+ * long relationship feel stuck.
+ */
 export function bondScore(npc) {
-  return clamp(Math.round(npc.closeness * 0.6 + npc.respect * 0.3 - npc.tension * 0.5 + npc.romance * 0.2), -50, 100);
+  const trust = npc.trust ?? 30;
+  const raw = npc.closeness * 0.5 + npc.respect * 0.22 + trust * 0.28
+    + npc.romance * 0.12 - npc.tension * 0.45;
+  return clamp(Math.round(raw), -50, 100);
+}
+
+const BOND_TIERS = [
+  [92, 'Inseparable'], [78, 'Very close'], [62, 'Close'], [46, 'Friendly'],
+  [30, 'Familiar'], [14, 'Acquainted'], [0, 'Distant'], [-20, 'Cold'], [-100, 'Hostile'],
+];
+
+export function bondLabel(npc) {
+  const score = bondScore(npc);
+  for (const [floor, label] of BOND_TIERS) if (score >= floor) return label;
+  return 'Hostile';
+}
+
+const ROMANCE_TIERS = [
+  [90, 'Devoted'], [72, 'In love'], [54, 'Serious'], [36, 'Courting'],
+  [18, 'Interested'], [1, 'A spark'],
+];
+
+export function romanceLabel(npc) {
+  const r = npc.romance || 0;
+  for (const [floor, label] of ROMANCE_TIERS) if (r >= floor) return label;
+  return null;
+}
+
+/** What you have worked out about somebody, from nothing to their whole file. */
+export const KNOWLEDGE_LEVELS = [
+  'You barely know them',
+  'You know roughly what they can do',
+  'You have seen them fight properly',
+  'You know what they are hiding',
+  'You know them completely',
+];
+
+export function knowledgeLabel(npc) {
+  return KNOWLEDGE_LEVELS[Math.min(4, npc.knowledge || 0)];
+}
+
+/** Learning about somebody: sparring, time, or reading their mind. */
+export function learnAbout(npc, amount = 1) {
+  npc.knowledge = Math.min(4, (npc.knowledge || 0) + amount);
+  return npc.knowledge;
 }

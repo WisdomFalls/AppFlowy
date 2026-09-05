@@ -13,6 +13,7 @@ export const RACES = [
     startPower: [8, 40],
     lifespan: [78, 105],
     agingRate: 0.78,
+    maturityRate: 0.9,
     appetite: 3.2,
     perks: ['zenkai', 'oozaru', 'battleLust', 'proudLineage'],
     transformLadder: 'saiyan',
@@ -33,6 +34,7 @@ export const RACES = [
     startPower: [4, 20],
     lifespan: [85, 115],
     agingRate: 0.86,
+    maturityRate: 0.95,
     appetite: 2.2,
     perks: ['hiddenPotential', 'ragePower', 'zenkaiWeak', 'oozaru'],
     transformLadder: 'halfsaiyan',
@@ -53,6 +55,7 @@ export const RACES = [
     startPower: [1, 6],
     lifespan: [72, 96],
     agingRate: 1.0,
+    maturityRate: 1.0,
     appetite: 1.0,
     perks: ['techniqueGenius', 'luck', 'socialAnimal', 'cheapTraining'],
     transformLadder: 'earthling',
@@ -73,6 +76,7 @@ export const RACES = [
     startPower: [3, 18],
     lifespan: [240, 500],
     agingRate: 0.35,
+    maturityRate: 3.2,
     appetite: 0.05,
     perks: ['regeneration', 'giantForm', 'assimilate', 'waterOnly', 'asexualBirth', 'meditative'],
     transformLadder: 'namekian',
@@ -93,6 +97,7 @@ export const RACES = [
     startPower: [400, 4000],
     lifespan: [150, 260],
     agingRate: 0.55,
+    maturityRate: 1.4,
     appetite: 0.6,
     perks: ['innatePower', 'suppressionForms', 'vacuumProof', 'arrogance', 'survivesAnything'],
     transformLadder: 'frostdemon',
@@ -113,6 +118,7 @@ export const RACES = [
     startPower: [50, 900],
     lifespan: [400, 900],
     agingRate: 0.2,
+    maturityRate: 1.0,
     appetite: 4.5,
     perks: ['regeneration', 'absorption', 'candyBeam', 'elastic', 'chaos', 'hardToKill'],
     transformLadder: 'majin',
@@ -133,6 +139,7 @@ export const RACES = [
     startPower: [200, 2500],
     lifespan: [300, 800],
     agingRate: 0.08,
+    maturityRate: 1.6,
     appetite: 0.3,
     perks: ['noKiSignature', 'infiniteStamina', 'upgradeable', 'energyAbsorb', 'coldLogic'],
     transformLadder: 'android',
@@ -153,6 +160,7 @@ export const RACES = [
     startPower: [100, 1800],
     lifespan: [200, 600],
     agingRate: 0.15,
+    maturityRate: 3.0,
     appetite: 1.5,
     perks: ['absorption', 'regeneration', 'copyTechnique', 'perfectForm', 'noKiSignature'],
     transformLadder: 'bioandroid',
@@ -173,6 +181,7 @@ export const RACES = [
     startPower: [20, 300],
     lifespan: [1200, 5000],
     agingRate: 0.03,
+    maturityRate: 0.55,
     appetite: 0.7,
     perks: ['divineKi', 'kaiKai', 'potara', 'longView', 'magicAptitude'],
     transformLadder: 'shinjin',
@@ -193,6 +202,7 @@ export const RACES = [
     startPower: [1, 5],
     lifespan: [90, 140],
     agingRate: 0.9,
+    maturityRate: 1.0,
     appetite: 0.8,
     perks: ['techGenius', 'machineMutant', 'grudge', 'inventor'],
     transformLadder: 'tuffle',
@@ -213,6 +223,7 @@ export const RACES = [
     startPower: [2, 12],
     lifespan: [110, 180],
     agingRate: 0.7,
+    maturityRate: 0.9,
     appetite: 0.5,
     perks: ['spiritControl', 'instantTransmissionNative', 'shapeShift', 'pacifist'],
     transformLadder: 'yardratian',
@@ -233,6 +244,7 @@ export const RACES = [
     startPower: [2, 10],
     lifespan: [80, 120],
     agingRate: 0.9,
+    maturityRate: 1.0,
     appetite: 1.0,
     perks: ['survivor', 'fastLearner', 'grudge', 'dragonTouched'],
     transformLadder: 'cerealian',
@@ -248,6 +260,16 @@ export const RACE_BY_ID = Object.fromEntries(RACES.map((r) => [r.id, r]));
 
 export function getRace(id) {
   return RACE_BY_ID[id] || RACE_BY_ID.earthling;
+}
+
+/**
+ * How grown-up someone is, which is not the same as how slowly they age.
+ * A Namekian is an adult in four years and lives for three centuries; a Kai
+ * ages barely at all but is still a child at ten.
+ */
+export function maturity(character) {
+  const race = getRace(character.raceId);
+  return character.age * (race.maturityRate ?? 1);
 }
 
 export function hasPerk(character, perk) {

@@ -3,12 +3,23 @@
 
 import { registerEvents, pickNpc, npcSlot } from '../generator.js';
 import { apply, fact, stranger, relate, thread, bumpThread, trainYear, powerLine,
-  meetCanon, canonHere, odds, killNpc, findNpc, scaledFoePower, tierOf } from './helpers.js';
+  meetCanon, canonHere, odds, killNpc, findNpc, scaledFoePower, tierOf, offerBattle } from './helpers.js';
 import { fight, narrateFight, describeGap } from '../combat.js';
 import { combatPower, powerTier, zenkaiBoost } from '../stats.js';
 import { numberish } from '../text.js';
 import { canonAvailable, canonPower } from '../../data/canon.js';
 import { hasPerk } from '../../data/races.js';
+
+/**
+ * When the gap is hopeless, the reckless option stops sitting under the
+ * reader's thumb as the default.
+ */
+function reorderByDanger(ctx, foePower, choices) {
+  if (foePower < combatPower(ctx.character) * 2.5) return choices;
+  const safe = choices.filter((c) => c.id !== 'fight');
+  const risky = choices.filter((c) => c.id === 'fight');
+  return safe.concat(risky);
+}
 
 function fightOutcome(ctx, foe, opts = {}) {
   const res = fight(ctx.state, ctx.rng, foe, opts);
@@ -27,6 +38,14 @@ function fightOutcome(ctx, foe, opts = {}) {
     fame: res.won ? (opts.fameGain ?? 3) : 0,
   };
   apply(ctx, changes);
+
+  // Being comprehensively beaten is one of the states forms unlock out of.
+  if (!res.won) {
+    if (res.ratio < 0.25) ctx.character.flags.humiliated = true;
+    if (res.nearDeath) ctx.character.flags.brink_of_death = true;
+    if (opts.protecting) ctx.character.flags.protected_someone = true;
+    ctx.character.flags.fury = true;
+  }
   if (res.zenkai) {
     fact(ctx, `Came back from near death stronger. Zenkai.`, { type: 'zenkai', weight: 4, tags: ['saiyan', 'power'] });
   }
@@ -50,13 +69,12 @@ registerEvents([
     choices: (ctx, s) => [
       { id: 'fight', label: 'Fight them properly', effect: (c2, sl) => {
         const npc = findNpc(c2.state, sl.npcId);
-        const { res } = fightOutcome(c2, npc, { lethality: 0.06 });
-        relate(c2, npc, { respect: res.won ? 12 : 20, tension: res.won ? -6 : 10, power: res.won ? 1.15 : 1.3 });
-        bumpThread(c2, 'rivalry', npc.id, res.won ? -8 : 14);
-        fact(c2, `${res.won ? 'Beat' : 'Lost to'} ${npc.name}.`, { type: 'fight', weight: 3, subject: npc.id, tags: ['rival'] });
-        let text = narrateFight(res, c2.rng, npc.name);
-        if (res.zenkai) text += ` {You come back from it stronger|Whatever nearly killed you made room for something|Your body rebuilds heavier}. ${powerLine(res.zenkai)}`;
-        return { text, changes: [] };
+        bumpThread(c2, 'rivalry', npc.id, 6);
+        fact(c2, `Fought ${npc.name} again.`, { type: 'fight', weight: 2, subject: npc.id, tags: ['rival'] });
+        return offerBattle(c2, {
+          name: npc.name, power: npc.power, npcId: npc.id, raceId: npc.raceId,
+          techniques: npc.techniques || [], forms: npc.transformations || [],
+        }, { reason: 'rival', npcId: npc.id, stakes: 'serious', intro: `${npc.name} does not wait for you to say yes.` });
       } },
       { id: 'refuse', label: 'Refuse the fight', effect: (c2, sl) => {
         const npc = findNpc(c2.state, sl.npcId);
@@ -95,18 +113,9 @@ registerEvents([
     choices: (ctx, s) => [
       { id: 'accept', label: 'Accept', effect: (c2, sl) => {
         const foe = stranger(c2, { relation: 'acquaintance', powerTarget: scaledFoePower(c2, sl.scale, 0.4), metHow: 'challenge' });
-        const { res } = fightOutcome(c2, foe, { lethality: 0.08 });
-        if (res.won) {
-          relate(c2, foe, { respect: 30, relation: odds(c2, 0.4) ? 'rival' : 'acquaintance' });
-          if (foe.relation === 'rival') thread(c2, 'rivalry', foe.id, { title: `Rivalry with ${foe.name}`, heat: 50, maxStage: 4 });
-        } else {
-          relate(c2, foe, { relation: 'rival', tension: 30, respect: 10 });
-          thread(c2, 'rivalry', foe.id, { title: `${foe.name} beat you`, heat: 65, maxStage: 4 });
-        }
-        fact(c2, `${res.won ? 'Beat' : 'Lost to'} ${foe.name}, a challenger.`, { type: 'fight', weight: 2, subject: foe.id, tags: ['fight'] });
-        let text = `${foe.name}. ${describeGap(res.myPower, res.theirPower)} ${narrateFight(res, c2.rng, foe.name)}`;
-        if (res.zenkai) text += ` ${powerLine(res.zenkai)}`;
-        return { text, changes: [] };
+        return offerBattle(c2, {
+          name: foe.name, power: foe.power, npcId: foe.id, raceId: foe.raceId, techniques: foe.techniques || [],
+        }, { reason: 'challenge', npcId: foe.id, stakes: 'serious', intro: `${foe.name} steps up. ${describeGap(combatPower(c2.character), foe.power)}` });
       } },
       { id: 'decline', label: 'Decline', effect: (c2) => {
         const changes = apply(c2, { fame: -4, happiness: -2, karma: 2 });
@@ -142,17 +151,10 @@ registerEvents([
       {The authorities are useless|People are running the wrong way|You are the closest thing to help available}.`,
     choices: (ctx, s) => [
       { id: 'fight', label: 'Deal with it', effect: (c2, sl) => {
-        const foe = { name: sl.thing, power: scaledFoePower(c2, c2.rng.float(0.5, 2.2), 0.5) };
-        const { res } = fightOutcome(c2, foe, { lethality: 0.14, fameGain: 8 });
-        if (res.won) {
-          const changes = apply(c2, { karma: 10, fame: 6, happiness: 6 });
-          fact(c2, `Stopped ${sl.thing} before it reached ${sl.target}.`, { type: 'heroism', weight: 4, tags: ['hero'] });
-          return { text: `${narrateFight(res, c2.rng, 'It')} {Afterwards people come out and look at you|Somebody thanks you and you do not know what to say|You leave before the cameras arrive}.`, changes };
-        }
-        const casualties = odds(c2, 0.5);
-        const changes = apply(c2, { karma: casualties ? -2 : 3, happiness: -12 });
-        if (casualties) fact(c2, `Failed to stop ${sl.thing}. ${sl.target} did not survive it.`, { type: 'failure', weight: 5, tags: ['loss'] });
-        return { text: `${narrateFight(res, c2.rng, 'It')} ${casualties ? `{You wake up in the ruins|By the time you can stand it is over|You were not enough}. #grief#` : `{Somebody else finishes it|It leaves on its own|Help arrives}.`}`, changes };
+        fact(c2, `Went at ${sl.thing} before it reached ${sl.target}.`, { type: 'heroism', weight: 4, tags: ['hero'] });
+        return offerBattle(c2, {
+          name: sl.thing, power: scaledFoePower(c2, c2.rng.float(0.5, 2.2), 0.5), raceId: 'other',
+        }, { reason: 'monster', stakes: 'serious', protecting: true, intro: `It is between you and ${sl.target}.` });
       } },
       { id: 'evacuate', label: 'Get people out instead', effect: (c2, sl) => {
         const changes = apply(c2, { karma: 12, health: -6, fame: 3, happiness: 4 });
@@ -225,28 +227,11 @@ registerEvents([
     choices: (ctx, s) => [
       { id: 'finish', label: 'Finish it', danger: true, effect: (c2, sl) => {
         const npc = findNpc(c2.state, sl.npcId);
-        const { res } = fightOutcome(c2, npc, { lethality: 0.35, fameGain: 6 });
-        let text = narrateFight(res, c2.rng, npc.name);
-        if (res.won) {
-          if (odds(c2, 0.55)) {
-            killNpc(c2, npc, 'You finished it');
-            c2.state.stats.kills++;
-            apply(c2, { karma: -8 });
-            text += ` {It is over|You end it|There is no version of this where they stop otherwise}.`;
-          } else {
-            relate(c2, npc, { tension: -20, respect: 25 });
-            apply(c2, { karma: 6 });
-            text += ` {You let them live|You leave them breathing|You do not finish it}, which {surprises both of you|they do not understand|may be a mistake}.`;
-          }
-          bumpThread(c2, 'vendetta', npc.id, -40);
-        } else if (res.lethal) {
-          text += ` {It ends here|You do not get up|That is the last thing that happens}.`;
-          return { text, changes: [], outcome: { death: `Killed by ${npc.name}` } };
-        } else {
-          bumpThread(c2, 'vendetta', npc.id, 15);
-          text += ` {They leave you alive on purpose|They want you to know it is not finished|You are still breathing, which is the message}.`;
-        }
-        return { text, changes: [] };
+        bumpThread(c2, 'vendetta', npc.id, 5);
+        return offerBattle(c2, {
+          name: npc.name, power: npc.power, npcId: npc.id, raceId: npc.raceId,
+          techniques: npc.techniques || [], forms: npc.transformations || [],
+        }, { reason: 'vendetta', npcId: npc.id, stakes: 'lethal', intro: `${npc.name} has been waiting years for this.` });
       } },
       { id: 'talk', label: 'Try to end it with words', effect: (c2, sl) => {
         const npc = findNpc(c2.state, sl.npcId);
@@ -280,22 +265,18 @@ registerEvents([
     }),
     title: 'They Came Down',
     text: `[who:cap] {lands|arrives|is simply there one morning}. {They are not asking questions|They start with the outskirts|They read a number off a device and look disappointed}.`,
-    choices: (ctx, s) => [
+    choices: (ctx, s) => reorderByDanger(ctx, scaledFoePower(ctx, s.scale, 0), [
       { id: 'fight', label: 'Meet them', effect: (c2, sl) => {
-        const foe = { name: sl.who, power: scaledFoePower(c2, sl.scale, 0.4) };
-        const { res } = fightOutcome(c2, foe, { lethality: 0.16, fameGain: 10 });
-        let text = `${describeGap(res.myPower, res.theirPower)} ${narrateFight(res, c2.rng, 'They')}`;
-        if (res.won) {
-          apply(c2, { karma: 8 });
-          fact(c2, `Drove off ${sl.who}.`, { type: 'heroism', weight: 5, tags: ['hero', 'cosmic'] });
-          if (odds(c2, 0.4)) {
-            c2.character.flags.imperial_attention = true;
-            text += ` {Somebody very far away is told about this|The report goes up the chain|You are now a line item in an imperial file}.`;
-          }
-        } else if (res.lethal) {
-          return { text, changes: [], outcome: { death: `Killed resisting ${sl.who}` } };
-        }
-        return { text, changes: [] };
+        c2.character.flags.imperial_attention = true;
+        fact(c2, `Met ${sl.who} head on.`, { type: 'heroism', weight: 5, tags: ['hero', 'cosmic'] });
+        const power = scaledFoePower(c2, sl.scale, 0.4);
+        const outclassed = power > combatPower(c2.character) * 2.5;
+        return offerBattle(c2, {
+          name: sl.who, power, raceId: 'other', techniques: ['ki_blast', 'death_beam'],
+        }, {
+          reason: 'invasion', stakes: outclassed ? 'lethal' : 'serious', protecting: true,
+          intro: 'They read a number off a device and stop looking bored.',
+        });
       } },
       { id: 'hide', label: 'Hide and survive', effect: (c2, sl) => {
         const changes = apply(c2, { karma: -6, happiness: -12, health: -3 });
@@ -309,11 +290,11 @@ registerEvents([
           fact(c2, `Signed on with ${sl.who}.`, { type: 'career', weight: 5, tags: ['imperial', 'villain'] });
           return { text: `{They laugh, and then they take you seriously|They test you first|The paperwork is surprisingly thorough}. {You are on the ship by evening|The armour fits|You do not look back at the place you came from}.`, changes };
         }
-        const foe = { name: sl.who, power: scaledFoePower(c2, sl.scale * 1.2, 0.3) };
-        const { res } = fightOutcome(c2, foe, { lethality: 0.3 });
-        return { text: `They {laugh|do not answer|shoot first}. ${narrateFight(res, c2.rng, 'They')}`, changes: [] };
+        return offerBattle(c2, {
+          name: sl.who, power: scaledFoePower(c2, sl.scale * 1.2, 0.3), raceId: 'other',
+        }, { reason: 'invasion', stakes: 'lethal', intro: 'They laugh, and then they shoot first.' });
       } },
-    ],
+    ]),
   },
 
   {
@@ -335,18 +316,21 @@ registerEvents([
     choices: (ctx, s) => [
       { id: 'fight', label: `Ask ${s.canonName} for a fight`, effect: (c2, sl) => {
         const npc = meetCanon(c2, sl.canonId, 'acquaintance');
-        const holdingBack = npc.power > combatPower(c2.character) * 20;
-        const foe = { name: npc.name, power: holdingBack ? combatPower(c2.character) * c2.rng.float(0.8, 1.6) : npc.power };
-        const { res } = fightOutcome(c2, foe, { lethality: holdingBack ? 0 : 0.08 });
-        relate(c2, npc, { respect: res.won ? 30 : 15, closeness: 12 });
-        fact(c2, `Fought ${npc.name}${holdingBack ? ' (who was not trying)' : ''}. ${res.won ? 'Won' : 'Lost'}.`,
-          { type: 'fight', weight: 5, subject: npc.id, tags: ['canon', 'fight'] });
-        let text = holdingBack
-          ? `{They are not using anything like everything|You can feel them holding it down to your level|It is a lesson wearing a fight's clothes}. `
-          : '';
-        text += narrateFight(res, c2.rng, npc.name);
-        if (res.zenkai) text += ` ${powerLine(res.zenkai)}`;
-        return { text, changes: [] };
+        // Goku will spar down to your level. A God of Destruction will not, and
+        // neither will anyone whose whole character is not caring about you.
+        const willHoldBack = (npc.canonTags || []).some((t) => ['hero', 'mentor', 'ally', 'friendly', 'rival'].includes(t))
+          && !(npc.canonTags || []).some((t) => ['destroyer', 'omniking', 'threat', 'emperor'].includes(t));
+        const holdingBack = willHoldBack && npc.power > combatPower(c2.character) * 20;
+        const power = holdingBack ? Math.round(combatPower(c2.character) * c2.rng.float(0.9, 1.7)) : npc.power;
+        fact(c2, `Fought ${npc.name}.`, { type: 'fight', weight: 5, subject: npc.id, tags: ['canon', 'fight'] });
+        return offerBattle(c2, {
+          name: npc.name, power, canonId: sl.canonId, raceId: npc.raceId, techniques: npc.techniques || [],
+        }, {
+          reason: 'canon', canonId: sl.canonId, stakes: holdingBack ? 'spar' : 'serious',
+          intro: holdingBack
+            ? 'They are not using anything like everything. It is a lesson wearing a fight\'s clothes.'
+            : `${npc.name} is not going to hold anything back for you.`,
+        });
       } },
       { id: 'talk', label: 'Just talk to them', effect: (c2, sl) => {
         const npc = meetCanon(c2, sl.canonId, 'acquaintance');
