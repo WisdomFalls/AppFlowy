@@ -291,6 +291,11 @@ export const UPBRINGINGS = [
   { id: 'orphan_pod', name: 'Landed in a Pod', blurb: 'Someone found you in a crater.', stats: { durability: 5, strength: 4, charisma: -2 }, wealth: 0.4, power: 1.2 },
   { id: 'royal', name: 'Royal Blood', blurb: 'A throne, or the memory of one.', stats: { charisma: 8, discipline: 4, strength: 3 }, wealth: 3.0, power: 1.35 },
   { id: 'exile', name: 'Exile', blurb: 'Your people are gone or you are not welcome back.', stats: { discipline: 5, technique: 4, charisma: -3, intellect: 3 }, wealth: 0.4, power: 1.1 },
+  { id: 'self_raised', name: 'Raised Yourself', blurb: 'Nobody came. You worked it out.', stats: { discipline: 8, durability: 6, charisma: -8, intellect: 4 }, wealth: 0.1, power: 1.2, tags: ['alone'] },
+  { id: 'animals', name: 'Raised by Animals', blurb: 'You learned to hunt before you learned to talk.', stats: { speed: 8, durability: 7, strength: 4, charisma: -12, intellect: -4 }, wealth: 0.05, power: 1.3, tags: ['feral'] },
+  { id: 'foster', name: 'Fostered', blurb: 'Somebody took you in who did not have to.', stats: { charisma: 5, discipline: 3, kiControl: 2 }, wealth: 0.7, power: 1.05, tags: ['kind'] },
+  { id: 'saiyan_creche', name: 'Saiyan Creche', blurb: 'Graded at birth and shipped out at three.', stats: { strength: 7, durability: 6, discipline: 4, charisma: -6 }, wealth: 0.5, power: 1.45, tags: ['saiyan'] },
+  { id: 'conquered', name: 'Occupied World', blurb: 'Somebody else\'s flag over your town.', stats: { speed: 4, discipline: 4, intellect: 3, charisma: -2 }, wealth: 0.3, power: 1.1, tags: ['bitter'] },
 ];
 
 export const BODY_TYPES = [

@@ -6,6 +6,7 @@ import { RACES, getRace, UPBRINGINGS, BODY_TYPES, TEMPERAMENTS, hasPerk, maturit
 import { getPlace } from '../data/places.js';
 import { eraName, worldPowerBaseline } from '../data/timeline.js';
 import { generateFullName } from '../data/names.js';
+import { rollOrigin } from './origins.js';
 import { makeFamily, resetNpcCounter } from './npc.js';
 import { STAT_KEYS, kiMaxFor, lifeExpectancy, combatPower, powerTier } from './stats.js';
 
@@ -47,9 +48,14 @@ export function createGame(creation, seedInput) {
   resetNpcCounter(0);
 
   const race = getRace(creation.raceId);
-  const upbringing = UPBRINGINGS.find((u) => u.id === creation.upbringingId) || UPBRINGINGS[6];
-  const temperament = TEMPERAMENTS.find((t) => t.id === creation.temperamentId) || TEMPERAMENTS[2];
-  const body = BODY_TYPES.find((b) => b.id === creation.bodyId) || BODY_TYPES[2];
+  const birthYearIn = creation.birthYear ?? 737;
+
+  // You pick a species, a century and a name. Everything else about where you
+  // came from is rolled against what that species was doing in that century.
+  const origin = rollOrigin(rng, creation.raceId, birthYearIn, { placeId: creation.placeId });
+  const upbringing = UPBRINGINGS.find((u) => u.id === (creation.upbringingId || origin.upbringingId)) || UPBRINGINGS[6];
+  const temperament = TEMPERAMENTS.find((t) => t.id === (creation.temperamentId || origin.temperamentId)) || TEMPERAMENTS[2];
+  const body = BODY_TYPES.find((b) => b.id === (creation.bodyId || origin.bodyId)) || BODY_TYPES[2];
 
   const stats = {};
   for (const k of STAT_KEYS) {
@@ -61,8 +67,10 @@ export function createGame(creation, seedInput) {
   const [plo, phi] = race.startPower;
   const startPower = Math.max(1, Math.round(rng.float(plo, phi) * upbringing.power));
 
-  const birthYear = creation.birthYear ?? 737;
-  const placeId = creation.placeId && getPlace(creation.placeId) ? creation.placeId : race.homeworlds[0];
+  const birthYear = birthYearIn;
+  const placeId = creation.placeId && getPlace(creation.placeId)
+    ? creation.placeId
+    : (origin.placeId || race.homeworlds[0]);
 
   const character = {
     name: creation.name || generateFullName(rng, creation.raceId),
@@ -76,7 +84,15 @@ export function createGame(creation, seedInput) {
       skin: 'light', face: 'square', outfit: 'casual',
       marks: [], customMark: '', accessories: [], customAccessory: '',
       heightCm: 175, weightKg: 70, stance: 'formless', stanceName: '',
-    }, creation.look || {}),
+    }, origin.look || {}, creation.look || {}),
+
+    // Rolled, not chosen. These are the numbers a life sim should not let you
+    // shop for: what you could become, how fast you read a fight, how quick
+    // you are, and how the universe treats you.
+    potential: origin.potential,
+    battleInstinct: origin.battleInstinct,
+    iq: origin.iq,
+    luck: origin.luck,
     // What the life leaves on the body. Each entry is drawn on the portrait
     // and listed in the record, with who or what did it.
     scars: [],

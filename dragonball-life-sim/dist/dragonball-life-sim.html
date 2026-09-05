@@ -724,17 +724,8 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
   <section class="screen active" id="screen-create">
     <div class="create">
       <h1 class="logo">Dragon Ball<em>Mortal Coil</em></h1>
-      <p class="tagline">One life, one year at a time. Pick a species, pick a century, and find out
-        how far you get before something stronger than you turns up.</p>
-
-      <div class="portrait-wrap">
-        <div class="portrait" id="create-portrait"></div>
-        <div class="portrait-meta">
-          <div class="portrait-name" id="create-name-echo">-</div>
-          <div class="portrait-sub" id="create-sub-echo">-</div>
-          <button class="ghost-btn" id="btn-random-look" style="margin-top:8px">Randomise look</button>
-        </div>
-      </div>
+      <p class="tagline">One life, one year at a time. Pick a species and a century. Everything
+        else is decided for you, the way it is for everybody.</p>
 
       <div class="field">
         <label class="field-label" for="in-name">Name</label>
@@ -750,11 +741,26 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
         <div class="race-card" id="race-card"></div>
       </div>
 
-      <nav class="create-tabs" id="create-tabs"></nav>
-      <div id="create-panel"></div>
+      <div class="field">
+        <span class="field-label">Born in</span>
+        <select class="text-input" id="in-era"></select>
+        <p class="row-note" id="era-note" style="margin-top:6px"></p>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Sex</span>
+        <div class="opts" id="opt-sex"></div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="in-seed">Seed (optional)</label>
+        <input class="text-input" id="in-seed" placeholder="leave blank for a random life" autocomplete="off">
+      </div>
+
+      <p class="hint-text">Everything else — where you were born, who raised you, what you look
+        like, and what you were born capable of — is rolled for you. You find out by living it.</p>
 
       <button class="primary-btn" id="btn-begin">Begin a life</button>
-      <button class="ghost-btn" id="btn-random-all">Randomise everything</button>
       <button class="ghost-btn" id="btn-continue" hidden>Continue saved life</button>
       <p class="hint-text" id="create-ai-note"></p>
     </div>
@@ -1651,6 +1657,11 @@ const UPBRINGINGS = [
   { id: 'orphan_pod', name: 'Landed in a Pod', blurb: 'Someone found you in a crater.', stats: { durability: 5, strength: 4, charisma: -2 }, wealth: 0.4, power: 1.2 },
   { id: 'royal', name: 'Royal Blood', blurb: 'A throne, or the memory of one.', stats: { charisma: 8, discipline: 4, strength: 3 }, wealth: 3.0, power: 1.35 },
   { id: 'exile', name: 'Exile', blurb: 'Your people are gone or you are not welcome back.', stats: { discipline: 5, technique: 4, charisma: -3, intellect: 3 }, wealth: 0.4, power: 1.1 },
+  { id: 'self_raised', name: 'Raised Yourself', blurb: 'Nobody came. You worked it out.', stats: { discipline: 8, durability: 6, charisma: -8, intellect: 4 }, wealth: 0.1, power: 1.2, tags: ['alone'] },
+  { id: 'animals', name: 'Raised by Animals', blurb: 'You learned to hunt before you learned to talk.', stats: { speed: 8, durability: 7, strength: 4, charisma: -12, intellect: -4 }, wealth: 0.05, power: 1.3, tags: ['feral'] },
+  { id: 'foster', name: 'Fostered', blurb: 'Somebody took you in who did not have to.', stats: { charisma: 5, discipline: 3, kiControl: 2 }, wealth: 0.7, power: 1.05, tags: ['kind'] },
+  { id: 'saiyan_creche', name: 'Saiyan Creche', blurb: 'Graded at birth and shipped out at three.', stats: { strength: 7, durability: 6, discipline: 4, charisma: -6 }, wealth: 0.5, power: 1.45, tags: ['saiyan'] },
+  { id: 'conquered', name: 'Occupied World', blurb: 'Somebody else\'s flag over your town.', stats: { speed: 4, discipline: 4, intellect: 3, charisma: -2 }, wealth: 0.3, power: 1.1, tags: ['bitter'] },
 ];
 
 const BODY_TYPES = [
@@ -2894,6 +2905,1006 @@ function generateSignatureName(rng) {
   return { generateName, generateFullName, EPITHETS, TITLES, generateTitle, generateEpithet, generateSignatureName };
 })();
 
+/* ==== ui/portrait.js ==== */
+const __mod_ui_portrait_js = (function () {
+// A parametric portrait. Every choice in the character creator changes the
+// drawing, and the drawing follows the character through the game: transform
+// and the aura appears, lose the tail and the tail is gone.
+
+const HAIR_STYLES = [
+  { id: 'spiked', name: 'Spiked upward' },
+  { id: 'wild', name: 'Wild and unruly' },
+  { id: 'long', name: 'Long and loose' },
+  { id: 'ponytail', name: 'Tied back' },
+  { id: 'bob', name: 'Short bob' },
+  { id: 'cropped', name: 'Cropped close' },
+  { id: 'mohawk', name: 'Mohawk' },
+  { id: 'bald', name: 'Shaved bald' },
+  { id: 'braid', name: 'Single braid' },
+  { id: 'topknot', name: 'Topknot' },
+];
+
+const HAIR_COLOURS = [
+  { id: 'black', name: 'Black', hex: '#181420' },
+  { id: 'darkbrown', name: 'Dark brown', hex: '#3b2418' },
+  { id: 'brown', name: 'Brown', hex: '#6b4326' },
+  { id: 'blonde', name: 'Blonde', hex: '#e8c766' },
+  { id: 'white', name: 'White', hex: '#efeae2' },
+  { id: 'silver', name: 'Silver', hex: '#c8ccd6' },
+  { id: 'lavender', name: 'Lavender', hex: '#b49ede' },
+  { id: 'blue', name: 'Blue', hex: '#4a7bd4' },
+  { id: 'orange', name: 'Orange', hex: '#e2762f' },
+  { id: 'red', name: 'Red', hex: '#b8342c' },
+  { id: 'green', name: 'Green', hex: '#4c9e63' },
+  { id: 'pink', name: 'Pink', hex: '#e58fb4' },
+];
+
+const EYE_SHAPES = [
+  { id: 'sharp', name: 'Sharp' },
+  { id: 'round', name: 'Round' },
+  { id: 'narrow', name: 'Narrow' },
+  { id: 'heavy', name: 'Heavy-lidded' },
+  { id: 'wide', name: 'Wide' },
+];
+
+const EYE_COLOURS = [
+  { id: 'black', name: 'Black', hex: '#1a1620' },
+  { id: 'brown', name: 'Brown', hex: '#5b3a1e' },
+  { id: 'green', name: 'Green', hex: '#3f8f5c' },
+  { id: 'blue', name: 'Blue', hex: '#3f7fc4' },
+  { id: 'grey', name: 'Grey', hex: '#8a8f9c' },
+  { id: 'gold', name: 'Gold', hex: '#d6a83c' },
+  { id: 'red', name: 'Red', hex: '#b8342c' },
+  { id: 'violet', name: 'Violet', hex: '#8b6bd6' },
+];
+
+const SKIN_TONES = [
+  { id: 'pale', name: 'Pale', hex: '#f0d3bc' },
+  { id: 'light', name: 'Light', hex: '#e5bb99' },
+  { id: 'tan', name: 'Tan', hex: '#c99266' },
+  { id: 'brown', name: 'Brown', hex: '#95633c' },
+  { id: 'deep', name: 'Deep', hex: '#5f3a24' },
+  { id: 'green', name: 'Namekian green', hex: '#5d9b52' },
+  { id: 'pink', name: 'Majin pink', hex: '#e79ec0' },
+  { id: 'white', name: 'Chitin white', hex: '#eae6dd' },
+  { id: 'blue', name: 'Cold blue', hex: '#8fb2cc' },
+  { id: 'grey', name: 'Ash grey', hex: '#9aa0a6' },
+  { id: 'purple', name: 'Kai violet', hex: '#a884c4' },
+];
+
+const FACE_SHAPES = [
+  { id: 'square', name: 'Square' },
+  { id: 'round', name: 'Round' },
+  { id: 'angular', name: 'Angular' },
+  { id: 'long', name: 'Long' },
+];
+
+const OUTFITS = [
+  { id: 'gi_orange', name: 'Orange gi', main: '#e2762f', trim: '#2c4d9e' },
+  { id: 'gi_blue', name: 'Blue gi', main: '#2f5bb7', trim: '#e8e2d6' },
+  { id: 'gi_black', name: 'Black gi', main: '#25222e', trim: '#c0392b' },
+  { id: 'armour_saiyan', name: 'Saiyan battle armour', main: '#3a4250', trim: '#c9a227' },
+  { id: 'armour_frieza', name: 'Frieza Force armour', main: '#4b3f6b', trim: '#d8dde6' },
+  { id: 'namek_robe', name: 'Namekian robes', main: '#6d4aa0', trim: '#d8d2c4' },
+  { id: 'casual', name: 'Ordinary clothes', main: '#6d7280', trim: '#e8e2d6' },
+  { id: 'coat', name: 'Long coat', main: '#3c3229', trim: '#8a6f4a' },
+  { id: 'lab', name: 'Lab issue', main: '#dfe3e8', trim: '#5b6470' },
+  { id: 'kai', name: 'Kai vestments', main: '#3f7a6d', trim: '#e2c96a' },
+  { id: 'none', name: 'Bare-chested', main: null, trim: null },
+];
+
+const STANCES = [
+  { id: 'turtle', name: 'Turtle School' },
+  { id: 'crane', name: 'Crane School' },
+  { id: 'saiyan', name: 'Saiyan brawler' },
+  { id: 'namek', name: 'Namekian guard' },
+  { id: 'demon', name: 'Demon style' },
+  { id: 'formless', name: 'No style at all' },
+  { id: 'custom', name: 'Something of your own' },
+];
+
+const BUILD_SHAPES = ['small', 'wiry', 'lean', 'balanced', 'stocky', 'massive'];
+
+// Marks are things that happened to a body: scars, burns, what is missing, what
+// was inked on. A character can carry any number, chosen at creation or
+// earned in play, and each one is drawn.
+const MARK_PRESETS = [
+  { id: 'scar_cheek', name: 'Scar across the cheek', where: 'face' },
+  { id: 'scar_eye', name: 'Scar through one eye', where: 'face' },
+  { id: 'scar_brow', name: 'Split eyebrow', where: 'face' },
+  { id: 'scar_chest', name: 'Scar across the chest', where: 'body' },
+  { id: 'scar_arm', name: 'Old cut down the arm', where: 'body' },
+  { id: 'burn_arm', name: 'Burn scars, forearms', where: 'body' },
+  { id: 'burn_face', name: 'Burn along the jaw', where: 'face' },
+  { id: 'missing_eye', name: 'Missing eye', where: 'face' },
+  { id: 'missing_ear', name: 'Missing ear', where: 'face' },
+  { id: 'missing_arm', name: 'Missing arm', where: 'body' },
+  { id: 'cyber_eye', name: 'Mechanical eye', where: 'face' },
+  { id: 'cyber_arm', name: 'Mechanical arm', where: 'body' },
+  { id: 'dots', name: 'Forehead dots', where: 'face' },
+  { id: 'thirdeye', name: 'Third eye', where: 'face' },
+  { id: 'tattoo_face', name: 'Face tattoo', where: 'face' },
+  { id: 'tattoo_arm', name: 'Arm tattoo', where: 'body' },
+  { id: 'crack_tooth', name: 'Cracked tooth', where: 'face' },
+  { id: 'birthmark', name: 'Birthmark', where: 'face' },
+  { id: 'custom', name: 'Something else', where: 'body' },
+];
+
+// Accessories are things a body wears. Some you can pick at the start; others
+// arrive with the items you own, the titles you win, and the state you are in
+// (the dead wear a halo whether they like it or not).
+const ACCESSORY_PRESETS = [
+  { id: 'headband', name: 'Headband', starter: true },
+  { id: 'bandana', name: 'Bandana', starter: true },
+  { id: 'glasses', name: 'Glasses', starter: true },
+  { id: 'sunglasses', name: 'Sunglasses', starter: true },
+  { id: 'earring', name: 'Single earring', starter: true },
+  { id: 'earrings', name: 'Earrings', starter: true },
+  { id: 'necklace', name: 'Necklace', starter: true },
+  { id: 'wristbands', name: 'Wristbands', starter: true },
+  { id: 'cape', name: 'Cape', starter: true },
+  { id: 'turban', name: 'Turban', starter: true },
+  { id: 'hat', name: 'Wide hat', starter: true },
+  { id: 'eyepatch', name: 'Eyepatch', starter: true },
+  { id: 'scarf', name: 'Scarf', starter: true },
+  { id: 'scouter', name: 'Scouter', starter: false, item: 'scouter' },
+  { id: 'potara', name: 'Potara earrings', starter: false, item: 'potara' },
+  { id: 'sword', name: 'Sword on the back', starter: false, item: 'z_sword' },
+  { id: 'pole', name: 'Power Pole', starter: false, item: 'power_pole' },
+  { id: 'belt', name: 'Championship belt', starter: false, item: 'championship_belt' },
+  { id: 'shell', name: 'Turtle shell', starter: false, item: 'turtle_shell' },
+  { id: 'halo', name: 'Halo', starter: false },
+  { id: 'custom', name: 'Something else', starter: true },
+];
+
+/** Every accessory the character is wearing right now, from all sources. */
+function wornAccessories(character) {
+  const a = character.appearance || {};
+  const out = new Set(a.accessories || []);
+  const items = character.items || [];
+  for (const acc of ACCESSORY_PRESETS) {
+    if (acc.item && items.includes(acc.item)) out.add(acc.id);
+  }
+  // Shop accessories carry the id of what they put on you.
+  for (const id of items) {
+    if (id.startsWith('acc_')) out.add(id.slice(4));
+  }
+  if (items.includes('cyber_eye')) out.add('cyber_eye');
+  if (character.inAfterlife && !character.keptBody) out.add('halo');
+  // Missing an eye without a patch is a choice; the default is the patch.
+  const marks = allMarks(character);
+  if (marks.includes('missing_eye') && !out.has('cyber_eye')) out.add('eyepatch');
+  return [...out];
+}
+
+/** Marks from creation plus everything the life has left on the body. */
+function allMarks(character) {
+  const a = character.appearance || {};
+  const list = (a.marks || []).slice();
+  // Legacy single marking from older saves.
+  if (a.marking && a.marking !== 'none' && !list.length) {
+    list.push(a.marking === 'scar' ? 'scar_cheek' : a.marking);
+  }
+  for (const sc of character.scars || []) if (sc.mark && !list.includes(sc.mark)) list.push(sc.mark);
+  return list;
+}
+
+/** Darken or lighten a hex colour, for brows and shadow detail. */
+function shade(hex, amount) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex));
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const mix = (c) => Math.max(0, Math.min(255, Math.round(c + (amount < 0 ? c * amount : (255 - c) * amount))));
+  const r = mix((n >> 16) & 255);
+  const g = mix((n >> 8) & 255);
+  const b = mix(n & 255);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+function look(list, id, fallback) {
+  return list.find((x) => x.id === id) || list.find((x) => x.id === fallback) || list[0];
+}
+
+/**
+ * Hair comes in two layers: anything that hangs down (a braid, a ponytail,
+ * long hair) is drawn behind the head, and the cap and fringe are drawn over
+ * it. Drawing them together is what puts a plait down somebody's face.
+ */
+/**
+ * The skull, as numbers. Hair used to guess at these and sat eight pixels
+ * below the crown, which put a band across the forehead and left the top of
+ * the head bare. Everything that has to sit on the head now reads from here.
+ */
+function skull(headTop, cx, headR, headH) {
+  return {
+    cx,
+    top: headTop - 12,           // the actual apex of the cranium
+    temple: headTop + 18,        // widest point, where the sides go vertical
+    brow: headTop + 1,           // hairline, high on the forehead
+    eyeLine: headTop + 30,       // nothing that is not a deliberate fringe goes below this
+    left: cx - headR,
+    right: cx + headR,
+    r: headR,
+    chin: headTop + headH + 18,
+  };
+}
+
+/**
+ * The dome of the hair, following the skull outline with `lift` of clearance.
+ * Mirrors the head path exactly, so hair can never sit inside the scalp.
+ */
+function domePath(sk, lift = 3, dropL = 0, dropR = 0) {
+  const L = sk.left - lift * 0.4;
+  const R = sk.right + lift * 0.4;
+  const top = sk.top - lift;
+  return `M${L} ${sk.brow + dropL}
+    Q${L} ${top} ${sk.cx} ${top}
+    Q${R} ${top} ${R} ${sk.brow + dropR}
+    Q${sk.cx} ${sk.brow + 8} ${L} ${sk.brow + dropL} Z`;
+}
+
+/** A point on the dome, for hanging spikes and fringes off it. */
+function onDome(sk, t, lift = 3) {
+  // t: 0 at the left temple, 1 at the right.
+  const angle = Math.PI * (1 - t);
+  return {
+    x: sk.cx - Math.cos(angle) * (sk.r + lift * 0.4),
+    y: sk.temple - Math.sin(angle) * (sk.temple - (sk.top - lift)),
+  };
+}
+
+function hairBackPath(style, headTop, cx, headR, headH) {
+  const sk = skull(headTop, cx, headR, headH);
+  const L = sk.left - 2;
+  const R = sk.right + 2;
+  const y = sk.temple - 8;
+  switch (style) {
+    case 'long':
+      return `M${L} ${y} Q${sk.cx} ${sk.top - 4} ${R} ${y}
+        L${R + 7} ${y + 108} L${R - 11} ${y + 102}
+        L${R - 11} ${y + 26} L${L + 11} ${y + 26}
+        L${L + 11} ${y + 102} L${L - 7} ${y + 108} Z`;
+    case 'ponytail':
+      // Gathered at the back of the crown, falling behind the shoulder.
+      return `M${R - 12} ${sk.temple - 6} Q${R + 10} ${sk.temple - 2} ${R + 13} ${sk.temple + 18}
+        L${R + 19} ${sk.temple + 74} L${R + 3} ${sk.temple + 76}
+        L${R - 4} ${sk.temple + 20} Q${R - 14} ${sk.temple + 6} ${R - 12} ${sk.temple - 6} Z`;
+    case 'braid':
+      // Down the back of the neck, not the face.
+      return `M${sk.cx - 7} ${sk.chin - 6} L${sk.cx + 7} ${sk.chin - 6}
+        L${sk.cx + 6} ${sk.chin + 84} L${sk.cx - 6} ${sk.chin + 84} Z`;
+    case 'bob':
+      return `M${L - 3} ${y} Q${sk.cx} ${sk.top - 4} ${R + 3} ${y}
+        L${R + 4} ${y + 40} L${L - 4} ${y + 40} Z`;
+    default:
+      return '';
+  }
+}
+
+function hairPath(style, headTop, cx, headR, headH) {
+  const sk = skull(headTop, cx, headR, headH);
+  const dome = domePath(sk, 3);
+
+  switch (style) {
+    case 'spiked': {
+      // Spikes are raised off points on the dome, so every root is on the head.
+      const roots = [0.06, 0.22, 0.38, 0.5, 0.62, 0.78, 0.94];
+      const heights = [16, 30, 22, 34, 24, 29, 15];
+      let d = `M${sk.left - 1} ${sk.brow}`;
+      for (let i = 0; i < roots.length; i++) {
+        const a = onDome(sk, roots[i], 3);
+        const b = onDome(sk, Math.min(1, roots[i] + 0.08), 3);
+        const lean = (roots[i] - 0.5) * 22;
+        d += ` L${a.x + lean * 0.4} ${a.y - heights[i]} L${b.x} ${b.y}`;
+      }
+      d += ` L${sk.right + 1} ${sk.brow} Q${sk.cx} ${sk.brow + 9} ${sk.left - 1} ${sk.brow} Z`;
+      return d;
+    }
+    case 'wild': {
+      const roots = [0.08, 0.28, 0.5, 0.72, 0.92];
+      let d = `M${sk.left - 2} ${sk.brow + 4}`;
+      for (let i = 0; i < roots.length; i++) {
+        const a = onDome(sk, roots[i], 4);
+        const b = onDome(sk, Math.min(1, roots[i] + 0.12), 4);
+        const sway = (i % 2 ? 9 : -9);
+        d += ` C${a.x + sway} ${a.y - 26} ${b.x + sway} ${b.y - 30} ${b.x} ${b.y}`;
+      }
+      d += ` L${sk.right + 2} ${sk.brow + 2} Q${sk.cx} ${sk.brow + 10} ${sk.left - 2} ${sk.brow + 2} Z`;
+      return d;
+    }
+    case 'long':
+    case 'ponytail':
+      // A dome with a parted fringe, rather than a helmet.
+      return `${domePath(sk, 3, 4, 4)}
+        M${sk.left + 2} ${sk.brow + 2} Q${sk.cx - 6} ${sk.brow + 12} ${sk.cx + 6} ${sk.brow + 14}
+        Q${sk.cx - 10} ${sk.brow + 18} ${sk.left} ${sk.brow + 12} Z`;
+    case 'braid':
+      return domePath(sk, 3, 4, 4);
+    case 'bob':
+      return `${domePath(sk, 4)}
+        M${sk.left - 4} ${sk.brow + 6} L${sk.left - 5} ${sk.brow + 52} L${sk.left + 5} ${sk.brow + 52} L${sk.left + 4} ${sk.brow + 6} Z
+        M${sk.right + 4} ${sk.brow + 6} L${sk.right + 5} ${sk.brow + 52} L${sk.right - 5} ${sk.brow + 52} L${sk.right - 4} ${sk.brow + 6} Z`;
+    case 'cropped':
+      return domePath(sk, 1.5);
+    case 'mohawk': {
+      const crest = onDome(sk, 0.5, 2);
+      return `M${sk.cx - 11} ${sk.brow + 2}
+        C${sk.cx - 15} ${crest.y - 30} ${sk.cx + 15} ${crest.y - 30} ${sk.cx + 11} ${sk.brow + 2}
+        Q${sk.cx} ${sk.brow + 10} ${sk.cx - 11} ${sk.brow + 2} Z`;
+    }
+    case 'topknot': {
+      const crest = onDome(sk, 0.5, 3);
+      return `${domePath(sk, 3)}
+        M${sk.cx - 11} ${crest.y + 2} C${sk.cx - 14} ${crest.y - 22} ${sk.cx + 14} ${crest.y - 22} ${sk.cx + 11} ${crest.y + 2} Z`;
+    }
+    default:
+      return '';
+  }
+}
+
+const EXPRESSIONS = [
+  { id: 'neutral', name: 'Neutral' },
+  { id: 'grin', name: 'Grinning' },
+  { id: 'scowl', name: 'Scowling' },
+  { id: 'focused', name: 'Focused' },
+  { id: 'tired', name: 'Exhausted' },
+  { id: 'sad', name: 'Grieving' },
+  { id: 'smug', name: 'Smug' },
+  { id: 'shock', name: 'Caught off guard' },
+  { id: 'rage', name: 'Furious' },
+  { id: 'serene', name: 'Serene' },
+];
+
+/**
+ * What the face is doing, read off the live character rather than chosen.
+ * Health first, because a body at ten per cent does not smirk.
+ */
+function expressionFor(character, opts = {}) {
+  if (opts.expression) return opts.expression;
+  const v = character.vitals || {};
+  const f = character.flags || {};
+  if (opts.form) return 'rage';
+  if (v.health !== undefined && v.health < 25) return 'tired';
+  if (f.fury || f.humiliated) return 'rage';
+  if (f.brink_of_death) return 'shock';
+  if (v.happiness !== undefined && v.happiness < 25) return 'sad';
+  if (v.happiness !== undefined && v.happiness > 82) return 'grin';
+  if ((character.karma || 0) < -40) return 'smug';
+  if ((character.stats && character.stats.discipline) > 75) return 'serene';
+  if (v.happiness !== undefined && v.happiness > 62) return 'focused';
+  return 'neutral';
+}
+
+function eyeShape(shape, x, y, colour, mood = 'neutral', flip = 1) {
+  // Expression narrows, widens or closes the eye before its shape is drawn.
+  const squint = { scowl: 0.55, focused: 0.7, tired: 0.4, rage: 0.5, smug: 0.6, serene: 0.25, grin: 0.55 }[mood] || 1;
+  const grow = { shock: 1.35, sad: 1.1 }[mood] || 1;
+  const k = squint * grow;
+  const out = [];
+  if (mood === 'serene' || (mood === 'grin' && shape !== 'wide')) {
+    // Eyes closed, curving the way the mouth does.
+    out.push(`<path d="M${x - 9} ${y + 1} q9 ${mood === 'serene' ? 4 : -6} 18 0" fill="none" stroke="${colour}" stroke-width="2.6" stroke-linecap="round"/>`);
+    return out.join('');
+  }
+  switch (shape) {
+    case 'narrow':
+      out.push(`<rect x="${x - 9}" y="${y - 2 * k}" width="18" height="${Math.max(2, 5 * k)}" rx="2.5" fill="${colour}"/>`);
+      break;
+    case 'round':
+      out.push(`<ellipse cx="${x}" cy="${y}" rx="6" ry="${Math.max(1.6, 6 * k)}" fill="${colour}"/>`);
+      break;
+    case 'wide':
+      out.push(`<ellipse cx="${x}" cy="${y}" rx="8.5" ry="${Math.max(2, 7 * k)}" fill="${colour}"/>`);
+      break;
+    case 'heavy':
+      out.push(`<path d="M${x - 9} ${y} q9 ${-8 * k} 18 0 q-9 ${6 * k} -18 0 Z" fill="${colour}"/>`);
+      break;
+    default: // sharp
+      out.push(`<path d="M${x - 10 * flip} ${y + 3 * k} L${x + 10 * flip} ${y - 4 * k} L${x + 9 * flip} ${y + 3 * k} Z" fill="${colour}"/>`);
+  }
+  if (mood === 'tired') {
+    out.push(`<path d="M${x - 8} ${y + 7} q8 3 16 0" fill="none" stroke="rgba(0,0,0,.22)" stroke-width="1.8" stroke-linecap="round"/>`);
+  }
+  return out.join('');
+}
+
+/** Brow angle and mouth shape, which is most of what an expression is. */
+function faceExpression(mood, cx, eyeY, mouthY, browColour) {
+  const parts = [];
+  const brows = {
+    neutral: [-4, -4], grin: [-6, -6], scowl: [5, 5], focused: [2, 2],
+    tired: [-2, -2], sad: [-7, -7], smug: [-8, 3], shock: [-9, -9],
+    rage: [8, 8], serene: [-3, -3],
+  }[mood] || [-4, -4];
+  parts.push(`<path d="M${cx - 21} ${eyeY - 11 + brows[0]} l15 ${-brows[0] * 0.9 - 3}" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
+  parts.push(`<path d="M${cx + 21} ${eyeY - 11 + brows[1]} l-15 ${-brows[1] * 0.9 - 3}" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
+
+  const ink = 'rgba(0,0,0,.45)';
+  const mouths = {
+    neutral: `M${cx - 7} ${mouthY} q7 4 14 0`,
+    grin: `M${cx - 11} ${mouthY - 2} q11 12 22 0`,
+    scowl: `M${cx - 8} ${mouthY + 3} q8 -6 16 0`,
+    focused: `M${cx - 8} ${mouthY} l16 0`,
+    tired: `M${cx - 7} ${mouthY + 2} q7 2 14 -1`,
+    sad: `M${cx - 9} ${mouthY + 4} q9 -8 18 0`,
+    smug: `M${cx - 8} ${mouthY + 1} q10 -6 17 -4`,
+    shock: null,
+    rage: `M${cx - 11} ${mouthY - 1} q11 10 22 0 q-11 -3 -22 0`,
+    serene: `M${cx - 7} ${mouthY} q7 3 14 0`,
+  };
+  if (mood === 'shock') {
+    parts.push(`<ellipse cx="${cx}" cy="${mouthY + 2}" rx="5" ry="7" fill="${ink}"/>`);
+  } else if (mood === 'rage') {
+    parts.push(`<path d="${mouths.rage}" fill="${ink}"/>`);
+  } else {
+    parts.push(`<path d="${mouths[mood] || mouths.neutral}" fill="none" stroke="${ink}" stroke-width="2.4" stroke-linecap="round"/>`);
+  }
+  return parts.join('');
+}
+
+/**
+ * Build the portrait. `character` is the live character object; `opts.form`
+ * adds the aura and hair changes of an active transformation.
+ */
+function portraitSvg(character, opts = {}) {
+  const a = character.appearance || {};
+  const skin = look(SKIN_TONES, a.skin, 'light').hex;
+  const hairColour = look(HAIR_COLOURS, a.hairColour, 'black').hex;
+  const eyeColour = look(EYE_COLOURS, a.eyeColour, 'black').hex;
+  const outfit = look(OUTFITS, a.outfit, 'gi_orange');
+  const style = a.hairStyle || 'spiked';
+  const face = a.face || 'square';
+  const build = a.buildShape || 'balanced';
+  const race = character.raceId;
+
+  const W = 220;
+  const H = 260;
+  const cx = W / 2;
+  const headTop = 44;
+  const headR = face === 'round' ? 40 : face === 'long' ? 36 : 38;
+  const headH = face === 'long' ? 52 : face === 'round' ? 42 : 46;
+  const chin = headTop + headH + 18;
+
+  // Frame differs by sex as well as build: narrower shoulders and neck, a
+  // softer jaw, a waist that comes in rather than going straight down.
+  const fem = character.sex === 'female';
+  const enby = character.sex === 'nonbinary';
+  const sexScale = fem ? 0.84 : enby ? 0.93 : 1;
+  const shoulderWidth = Math.round(({ small: 44, wiry: 50, lean: 56, balanced: 62, stocky: 70, massive: 80 }[build] || 62) * sexScale);
+  const neckWidth = Math.round(({ small: 11, wiry: 12, lean: 13, balanced: 15, stocky: 18, massive: 21 }[build] || 15) * (fem ? 0.82 : enby ? 0.92 : 1));
+  const waist = Math.round(shoulderWidth * (fem ? 0.82 : enby ? 0.9 : 0.96));
+  const jawTaper = fem ? 8 : enby ? 6 : 4;
+  const mood = expressionFor(character, opts);
+
+  const goldHair = opts.form && /Super Saiyan|Golden/.test(opts.form.name);
+  const finalHair = goldHair ? '#f2cf4a' : hairColour;
+  const auraColour = !opts.form ? null
+    : /Blue/.test(opts.form.name) ? '#4fa8ff'
+      : /God|Ultra Ego/.test(opts.form.name) ? '#ff5f7a'
+        : /Ultra Instinct|Mastered/.test(opts.form.name) ? '#dfe7ef'
+          : goldHair ? '#ffd24a' : '#b98cff';
+
+  const parts = [];
+
+  parts.push(`<defs>
+    <radialGradient id="pg-bg" cx="50%" cy="34%" r="72%">
+      <stop offset="0%" stop-color="var(--surface-2)"/>
+      <stop offset="100%" stop-color="var(--ground)"/>
+    </radialGradient>
+    <radialGradient id="pg-aura" cx="50%" cy="55%" r="55%">
+      <stop offset="0%" stop-color="${auraColour || '#000'}" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="${auraColour || '#000'}" stop-opacity="0"/>
+    </radialGradient>
+  </defs>`);
+  parts.push(`<rect width="${W}" height="${H}" fill="url(#pg-bg)"/>`);
+  if (auraColour) parts.push(`<rect width="${W}" height="${H}" fill="url(#pg-aura)"/>`);
+
+  // Saiyan tail, behind the body.
+  if (character.tail) {
+    parts.push(`<path d="M${cx + shoulderWidth - 6} ${H - 10} C${cx + shoulderWidth + 34} ${H - 60}
+      ${cx + shoulderWidth + 10} ${H - 108} ${cx + shoulderWidth - 16} ${H - 96}"
+      fill="none" stroke="#7a4a24" stroke-width="9" stroke-linecap="round"/>`);
+  }
+
+  // Hair that hangs down goes behind everything else.
+  const hasHair = !['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(race) && style !== 'bald';
+  if (hasHair) {
+    const back = hairBackPath(style, headTop, cx, headR, headH);
+    if (back) parts.push(`<path d="${back.replace(/\s+/g, ' ')}" fill="${finalHair}" opacity="0.92"/>`);
+  }
+
+  // Torso and clothing.
+  parts.push(`<path d="M${cx - waist} ${H}
+    C${cx - waist - 3} ${H - 40} ${cx - shoulderWidth} ${chin + 46} ${cx - shoulderWidth + 6} ${chin + 26}
+    Q${cx} ${chin + 2} ${cx + shoulderWidth - 6} ${chin + 26}
+    C${cx + shoulderWidth} ${chin + 46} ${cx + waist + 3} ${H - 40} ${cx + waist} ${H} Z"
+    fill="${outfit.main || skin}"/>`);
+  if (outfit.main) {
+    parts.push(`<path d="M${cx - 16} ${chin + 14} L${cx} ${chin + 44} L${cx + 16} ${chin + 14}
+      L${cx + 26} ${chin + 22} L${cx} ${H} L${cx - 26} ${chin + 22} Z" fill="${outfit.trim}" opacity="0.9"/>`);
+    if (outfit.id.startsWith('armour')) {
+      parts.push(`<path d="M${cx - shoulderWidth + 2} ${chin + 34} q${shoulderWidth} -22 ${shoulderWidth * 2 - 4} 0"
+        fill="none" stroke="${outfit.trim}" stroke-width="6"/>`);
+    }
+  }
+
+  // Neck and head.
+  parts.push(`<rect x="${cx - neckWidth / 2}" y="${chin - 14}" width="${neckWidth}" height="26" fill="${skin}"/>`);
+  parts.push(`<path d="M${cx - headR} ${headTop + 18}
+    Q${cx - headR} ${headTop - 12} ${cx} ${headTop - 12}
+    Q${cx + headR} ${headTop - 12} ${cx + headR} ${headTop + 18}
+    L${cx + headR - jawTaper} ${headTop + headH}
+    Q${cx} ${chin + 6} ${cx - headR + jawTaper} ${headTop + headH} Z" fill="${skin}"/>`);
+
+  // Ears, or whatever this species has instead.
+  if (race === 'namekian') {
+    parts.push(`<path d="M${cx - headR + 2} ${headTop + 34} l-16 -6 l16 12 Z" fill="${skin}"/>`);
+    parts.push(`<path d="M${cx + headR - 2} ${headTop + 34} l16 -6 l-16 12 Z" fill="${skin}"/>`);
+    parts.push(`<path d="M${cx - 12} ${headTop - 6} q2 -22 -8 -30" fill="none" stroke="${skin}" stroke-width="5" stroke-linecap="round"/>`);
+    parts.push(`<path d="M${cx + 12} ${headTop - 6} q-2 -22 8 -30" fill="none" stroke="${skin}" stroke-width="5" stroke-linecap="round"/>`);
+  } else if (race === 'frostdemon') {
+    parts.push(`<path d="M${cx - headR + 6} ${headTop + 6} l-20 -14 l6 20 Z" fill="#c8b8d8"/>`);
+    parts.push(`<path d="M${cx + headR - 6} ${headTop + 6} l20 -14 l-6 20 Z" fill="#c8b8d8"/>`);
+    parts.push(`<ellipse cx="${cx}" cy="${headTop + 4}" rx="${headR - 8}" ry="14" fill="#b7a6cc" opacity="0.85"/>`);
+  } else if (race === 'majin') {
+    parts.push(`<path d="M${cx + 6} ${headTop - 8} c14 -18 34 -8 26 12 c-6 14 -22 12 -26 2"
+      fill="none" stroke="${skin}" stroke-width="9" stroke-linecap="round"/>`);
+  } else if (race === 'shinjin') {
+    parts.push(`<circle cx="${cx - headR + 2}" cy="${headTop + 38}" r="4" fill="#e2c96a"/>`);
+    parts.push(`<circle cx="${cx + headR - 2}" cy="${headTop + 38}" r="4" fill="#e2c96a"/>`);
+  } else {
+    parts.push(`<ellipse cx="${cx - headR + 1}" cy="${headTop + 32}" rx="5" ry="8" fill="${skin}"/>`);
+    parts.push(`<ellipse cx="${cx + headR - 1}" cy="${headTop + 32}" rx="5" ry="8" fill="${skin}"/>`);
+  }
+
+  // Hair.
+  if (hasHair) {
+    const d = hairPath(style, headTop, cx, headR, headH);
+    if (d) {
+      parts.push(`<path d="${d.replace(/\s+/g, ' ')}" fill="${finalHair}" stroke="${shade(finalHair, 0.22)}" stroke-width="1"/>`);
+    }
+  }
+
+  // Face. The expression is read off the character, not chosen.
+  const eyeY = headTop + 30;
+  const eyeGap = fem ? 14 : 15;
+  parts.push(eyeShape(a.eyeShape || 'sharp', cx - eyeGap, eyeY, eyeColour, mood, -1));
+  parts.push(eyeShape(a.eyeShape || 'sharp', cx + eyeGap, eyeY, eyeColour, mood, 1));
+  if (fem) {
+    // Lashes at the outer corner, which is most of the visual difference at
+    // this scale without leaning on anything sillier.
+    parts.push(`<path d="M${cx - eyeGap - 9} ${eyeY - 3} l-5 -3 M${cx + eyeGap + 9} ${eyeY - 3} l5 -3" stroke="rgba(0,0,0,.5)" stroke-width="2" stroke-linecap="round"/>`);
+  }
+  // A shade off the hair, so the brows do not merge into the hairline.
+  const browColour = hasHair ? shade(finalHair, -0.25) : 'rgba(0,0,0,.32)';
+  parts.push(faceExpression(mood, cx, eyeY, headTop + 52, browColour));
+
+  drawMarks(parts, character, { cx, headTop, headH, headR, chin, eyeY, eyeColour, skin, shoulderWidth, H });
+  drawAccessories(parts, character, { cx, headTop, headH, headR, chin, eyeY, skin, shoulderWidth, H, hasHair, hairColour: finalHair, outfit });
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" role="img" aria-label="Character portrait" xmlns="http://www.w3.org/2000/svg">${parts.join('')}</svg>`;
+}
+
+const SCAR = 'rgba(60,20,20,.55)';
+const INK = 'rgba(20,20,40,.55)';
+const METAL = '#9aa3b2';
+
+function drawMarks(parts, character, g) {
+  const { cx, headTop, headH, headR, chin, eyeY, eyeColour, shoulderWidth, H } = g;
+  const marks = allMarks(character);
+  for (const m of marks) {
+    switch (m) {
+      case 'scar_cheek':
+        parts.push(`<path d="M${cx + 10} ${headTop + 14} l7 30" stroke="${SCAR}" stroke-width="2.6" stroke-linecap="round"/>`);
+        break;
+      case 'scar_eye':
+        parts.push(`<path d="M${cx - 21} ${eyeY - 16} l12 34" stroke="${SCAR}" stroke-width="2.6" stroke-linecap="round"/>`);
+        break;
+      case 'scar_brow':
+        parts.push(`<path d="M${cx + 13} ${eyeY - 18} l3 10" stroke="${SCAR}" stroke-width="2.8" stroke-linecap="round"/>`);
+        break;
+      case 'scar_chest':
+        parts.push(`<path d="M${cx - 18} ${chin + 30} l36 26" stroke="${SCAR}" stroke-width="3" stroke-linecap="round"/>`);
+        break;
+      case 'scar_arm':
+        parts.push(`<path d="M${cx + shoulderWidth - 12} ${chin + 44} l4 40" stroke="${SCAR}" stroke-width="2.6" stroke-linecap="round"/>`);
+        break;
+      case 'burn_arm':
+        for (let i = 0; i < 4; i++) {
+          parts.push(`<ellipse cx="${cx - shoulderWidth + 12 + (i % 2) * 6}" cy="${chin + 50 + i * 12}" rx="5" ry="3.5" fill="rgba(120,40,30,.4)"/>`);
+        }
+        break;
+      case 'burn_face':
+        parts.push(`<path d="M${cx - headR + 6} ${headTop + headH - 6} q10 12 26 10" stroke="rgba(120,40,30,.45)" stroke-width="7" stroke-linecap="round" fill="none"/>`);
+        break;
+      case 'missing_eye':
+        // The eye itself is gone; the patch (or the mechanical eye) is drawn
+        // over it by the accessory pass.
+        parts.push(`<path d="M${cx + 8} ${eyeY} q7 -3 14 0" stroke="rgba(0,0,0,.45)" stroke-width="2.4" fill="none"/>`);
+        break;
+      case 'missing_ear':
+        parts.push(`<path d="M${cx + headR - 4} ${headTop + 26} l4 12" stroke="${SCAR}" stroke-width="3" stroke-linecap="round"/>`);
+        break;
+      case 'missing_arm':
+        parts.push(`<path d="M${cx - shoulderWidth - 2} ${chin + 40} L${cx - shoulderWidth + 14} ${chin + 40} L${cx - shoulderWidth + 10} ${H} L${cx - shoulderWidth - 6} ${H} Z" fill="var(--ground)"/>`);
+        parts.push(`<path d="M${cx - shoulderWidth} ${chin + 42} q8 -6 14 0" stroke="${SCAR}" stroke-width="3" fill="none"/>`);
+        break;
+      case 'cyber_eye':
+        parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="7" fill="${METAL}"/>`);
+        parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="3" fill="#d1322a"/>`);
+        break;
+      case 'cyber_arm':
+        parts.push(`<path d="M${cx + shoulderWidth - 20} ${chin + 40} L${cx + shoulderWidth + 2} ${chin + 36} L${cx + shoulderWidth} ${H} L${cx + shoulderWidth - 18} ${H} Z" fill="${METAL}"/>`);
+        parts.push(`<path d="M${cx + shoulderWidth - 16} ${chin + 60} h14 M${cx + shoulderWidth - 15} ${chin + 80} h14" stroke="#5e6673" stroke-width="2"/>`);
+        break;
+      case 'dots':
+        for (let i = 0; i < 3; i++) parts.push(`<circle cx="${cx - 10 + i * 10}" cy="${headTop + 8}" r="2.2" fill="rgba(0,0,0,.4)"/>`);
+        break;
+      case 'thirdeye':
+        parts.push(eyeShape('round', cx, headTop + 12, eyeColour));
+        break;
+      case 'tattoo_face':
+        parts.push(`<path d="M${cx - headR + 8} ${eyeY + 6} q6 10 0 20 M${cx - headR + 12} ${eyeY + 2} q10 14 2 28" stroke="${INK}" stroke-width="2" fill="none"/>`);
+        break;
+      case 'tattoo_arm':
+        parts.push(`<path d="M${cx + shoulderWidth - 16} ${chin + 46} q10 8 0 18 q-10 8 0 18 q10 8 0 18" stroke="${INK}" stroke-width="2.4" fill="none"/>`);
+        break;
+      case 'crack_tooth':
+        parts.push(`<path d="M${cx - 2} ${headTop + 53} l1 4" stroke="rgba(255,255,255,.8)" stroke-width="2"/>`);
+        break;
+      case 'birthmark':
+        parts.push(`<ellipse cx="${cx - 12}" cy="${headTop + 46}" rx="4" ry="3" fill="rgba(90,40,30,.45)"/>`);
+        break;
+      case 'custom':
+        // Something the player described; we cannot draw it faithfully, so it
+        // is a mark, placed where a mark would be.
+        parts.push(`<path d="M${cx - 6} ${chin + 34} l12 14 M${cx + 6} ${chin + 34} l-12 14" stroke="${SCAR}" stroke-width="2.4" stroke-linecap="round"/>`);
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+function drawAccessories(parts, character, g) {
+  const { cx, headTop, headH, headR, chin, eyeY, shoulderWidth, H, hairColour, outfit } = g;
+  const worn = wornAccessories(character);
+  const trim = (outfit && outfit.trim) || '#c9a227';
+  for (const acc of worn) {
+    switch (acc) {
+      case 'headband':
+        parts.push(`<path d="M${cx - headR + 2} ${headTop + 6} Q${cx} ${headTop - 2} ${cx + headR - 2} ${headTop + 6}" stroke="#c0392b" stroke-width="7" fill="none"/>`);
+        break;
+      case 'bandana':
+        parts.push(`<path d="M${cx - headR} ${headTop + 8} Q${cx} ${headTop - 20} ${cx + headR} ${headTop + 8} Q${cx} ${headTop + 2} ${cx - headR} ${headTop + 8} Z" fill="#2f5bb7"/>`);
+        parts.push(`<path d="M${cx + headR - 4} ${headTop + 8} l16 14 l-6 -14" fill="#2f5bb7"/>`);
+        break;
+      case 'turban':
+        parts.push(`<ellipse cx="${cx}" cy="${headTop - 2}" rx="${headR + 4}" ry="20" fill="#e8e2d6"/>`);
+        parts.push(`<path d="M${cx - headR} ${headTop + 2} Q${cx} ${headTop - 18} ${cx + headR} ${headTop + 2}" stroke="#d8cdb9" stroke-width="3" fill="none"/>`);
+        break;
+      case 'hat':
+        parts.push(`<ellipse cx="${cx}" cy="${headTop + 2}" rx="${headR + 26}" ry="8" fill="#3c3229"/>`);
+        parts.push(`<path d="M${cx - headR + 4} ${headTop + 2} Q${cx} ${headTop - 34} ${cx + headR - 4} ${headTop + 2} Z" fill="#4a3d32"/>`);
+        break;
+      case 'glasses':
+        parts.push(`<circle cx="${cx - 15}" cy="${eyeY}" r="9" stroke="#2a2a30" stroke-width="2" fill="none"/>`);
+        parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="9" stroke="#2a2a30" stroke-width="2" fill="none"/>`);
+        parts.push(`<path d="M${cx - 6} ${eyeY} h12" stroke="#2a2a30" stroke-width="2"/>`);
+        break;
+      case 'sunglasses':
+        parts.push(`<rect x="${cx - 25}" y="${eyeY - 7}" width="20" height="13" rx="4" fill="#1a1620"/>`);
+        parts.push(`<rect x="${cx + 5}" y="${eyeY - 7}" width="20" height="13" rx="4" fill="#1a1620"/>`);
+        parts.push(`<path d="M${cx - 5} ${eyeY - 2} h10" stroke="#1a1620" stroke-width="2"/>`);
+        break;
+      case 'eyepatch':
+        parts.push(`<path d="M${cx + 6} ${eyeY - 9} h18 v16 h-18 Z" fill="#1a1620"/>`);
+        parts.push(`<path d="M${cx - headR} ${headTop + 22} L${cx + 24} ${eyeY - 8} M${cx + 24} ${eyeY - 8} L${cx + headR} ${headTop + 16}" stroke="#1a1620" stroke-width="2" fill="none"/>`);
+        break;
+      case 'scouter':
+        parts.push(`<path d="M${cx + headR - 2} ${headTop + 30} l-6 -14 l-26 4" stroke="#3a3a44" stroke-width="3" fill="none"/>`);
+        parts.push(`<rect x="${cx + 4}" y="${eyeY - 9}" width="20" height="15" rx="3" fill="#3fd6a4" opacity="0.8"/>`);
+        break;
+      case 'cyber_eye':
+        break;
+      case 'earring':
+        parts.push(`<circle cx="${cx + headR + 1}" cy="${headTop + 41}" r="3" fill="${trim}"/>`);
+        break;
+      case 'earrings':
+        parts.push(`<circle cx="${cx + headR + 1}" cy="${headTop + 41}" r="3" fill="${trim}"/>`);
+        parts.push(`<circle cx="${cx - headR - 1}" cy="${headTop + 41}" r="3" fill="${trim}"/>`);
+        break;
+      case 'potara':
+        parts.push(`<circle cx="${cx + headR + 2}" cy="${headTop + 42}" r="5" fill="#3fa46a"/>`);
+        parts.push(`<circle cx="${cx - headR - 2}" cy="${headTop + 42}" r="5" fill="#3fa46a"/>`);
+        break;
+      case 'necklace':
+        parts.push(`<path d="M${cx - 16} ${chin + 12} Q${cx} ${chin + 34} ${cx + 16} ${chin + 12}" stroke="${trim}" stroke-width="2.4" fill="none"/>`);
+        parts.push(`<circle cx="${cx}" cy="${chin + 33}" r="3.5" fill="${trim}"/>`);
+        break;
+      case 'scarf':
+        parts.push(`<path d="M${cx - 20} ${chin + 6} Q${cx} ${chin + 22} ${cx + 20} ${chin + 6} L${cx + 22} ${chin + 18} Q${cx} ${chin + 34} ${cx - 22} ${chin + 18} Z" fill="#c0392b"/>`);
+        parts.push(`<path d="M${cx + 8} ${chin + 24} l6 40 l10 -4 l-8 -38 Z" fill="#c0392b"/>`);
+        break;
+      case 'wristbands':
+        parts.push(`<rect x="${cx - shoulderWidth - 2}" y="${H - 34}" width="18" height="10" rx="2" fill="#2f5bb7"/>`);
+        parts.push(`<rect x="${cx + shoulderWidth - 16}" y="${H - 34}" width="18" height="10" rx="2" fill="#2f5bb7"/>`);
+        break;
+      case 'cape':
+        parts.push(`<path d="M${cx - shoulderWidth + 2} ${chin + 24} L${cx - shoulderWidth - 14} ${H} L${cx - shoulderWidth + 8} ${H} Z" fill="#e8e2d6" opacity="0.95"/>`);
+        parts.push(`<path d="M${cx + shoulderWidth - 2} ${chin + 24} L${cx + shoulderWidth + 14} ${H} L${cx + shoulderWidth - 8} ${H} Z" fill="#e8e2d6" opacity="0.95"/>`);
+        parts.push(`<path d="M${cx - shoulderWidth + 4} ${chin + 26} q${shoulderWidth - 4} -14 ${shoulderWidth * 2 - 8} 0" stroke="#e8e2d6" stroke-width="7" fill="none"/>`);
+        break;
+      case 'belt':
+        parts.push(`<rect x="${cx - 30}" y="${H - 22}" width="60" height="14" rx="3" fill="#3a2a10"/>`);
+        parts.push(`<rect x="${cx - 14}" y="${H - 24}" width="28" height="18" rx="4" fill="#f5c451"/>`);
+        break;
+      case 'shell':
+        parts.push(`<path d="M${cx - shoulderWidth - 8} ${chin + 40} q${shoulderWidth + 8} -18 ${(shoulderWidth + 8) * 2} 0 L${cx + shoulderWidth + 4} ${chin + 60} L${cx - shoulderWidth - 4} ${chin + 60} Z" fill="#6b5a3a" opacity="0.9"/>`);
+        parts.push(`<path d="M${cx - shoulderWidth + 6} ${chin + 30} L${cx + shoulderWidth - 6} ${chin + 30}" stroke="#6b5a3a" stroke-width="5"/>`);
+        break;
+      case 'sword':
+        parts.push(`<path d="M${cx + shoulderWidth - 30} ${chin + 20} l-16 -50" stroke="#5a4a3a" stroke-width="6" stroke-linecap="round"/>`);
+        parts.push(`<path d="M${cx + shoulderWidth - 40} ${chin - 20} l-12 -6 M${cx + shoulderWidth - 44} ${chin - 32} l12 -3" stroke="#c9a227" stroke-width="4" stroke-linecap="round"/>`);
+        parts.push(`<path d="M${cx - shoulderWidth + 6} ${chin + 26} L${cx + shoulderWidth - 6} ${H - 30}" stroke="#5a4a3a" stroke-width="4"/>`);
+        break;
+      case 'pole':
+        parts.push(`<path d="M${cx - shoulderWidth + 20} ${chin - 40} L${cx + shoulderWidth - 20} ${H}" stroke="#c0392b" stroke-width="5" stroke-linecap="round"/>`);
+        break;
+      case 'halo':
+        parts.push(`<ellipse cx="${cx}" cy="${headTop - 30}" rx="24" ry="6" stroke="#f5c451" stroke-width="4" fill="none" opacity="0.95"/>`);
+        break;
+      case 'custom': {
+        // A described accessory gets a small, neutral badge at the collar so it
+        // is at least visibly there.
+        parts.push(`<rect x="${cx + 18}" y="${chin + 14}" width="10" height="10" rx="2" fill="${trim}"/>`);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+}
+
+/** Sensible defaults for a species, used when randomising. */
+function defaultAppearance(rng, raceId) {
+  const skinByRace = {
+    namekian: 'green', majin: 'pink', frostdemon: 'white', shinjin: 'purple',
+    bioandroid: 'green', android: 'light', tuffle: 'grey',
+  };
+  const outfitByRace = {
+    saiyan: 'armour_saiyan', halfsaiyan: 'gi_orange', namekian: 'namek_robe',
+    frostdemon: 'armour_frieza', android: 'casual', bioandroid: 'none',
+    shinjin: 'kai', majin: 'none', tuffle: 'lab', yardratian: 'namek_robe',
+    cerealian: 'coat', earthling: 'gi_orange',
+  };
+  // Saiyans are black-haired; Namekians have none. A species that has a colour
+  // gets it, and everybody else gets the full spread.
+  const hairByRace = {
+    saiyan: ['black', 'black', 'black', 'darkbrown'],
+    halfsaiyan: ['black', 'black', 'darkbrown', 'lavender'],
+    frostdemon: ['white'], majin: ['pink'], namekian: ['black'], bioandroid: ['black'],
+    shinjin: ['white', 'silver'], tuffle: ['brown', 'darkbrown'],
+    yardratian: ['white', 'silver', 'black'], cerealian: ['white', 'silver', 'brown'],
+    android: ['black', 'blonde', 'darkbrown', 'brown', 'white'],
+  };
+  const palette = hairByRace[raceId] || HAIR_COLOURS.map((h) => h.id);
+  return {
+    hairStyle: rng.pick(HAIR_STYLES).id,
+    hairColour: rng.pick(palette),
+    eyeShape: rng.pick(EYE_SHAPES).id,
+    eyeColour: rng.pick(EYE_COLOURS).id,
+    skin: skinByRace[raceId] || rng.pick(SKIN_TONES.slice(0, 5)).id,
+    face: rng.pick(FACE_SHAPES).id,
+    outfit: outfitByRace[raceId] || 'casual',
+    marks: rng.chance(0.4) ? [rng.pick(['scar_cheek', 'scar_brow', 'dots', 'thirdeye', 'birthmark', 'tattoo_arm', 'scar_chest'])] : [],
+    customMark: '',
+    accessories: rng.chance(0.35) ? [rng.pick(ACCESSORY_PRESETS.filter((x) => x.starter && x.id !== 'custom')).id] : [],
+    customAccessory: '',
+    buildShape: 'balanced',
+    heightCm: rng.int(150, 200),
+    weightKg: rng.int(48, 110),
+    stance: rng.pick(STANCES).id,
+    stanceName: '',
+  };
+}
+  return { HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS, SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES, BUILD_SHAPES, MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks, EXPRESSIONS, expressionFor, portraitSvg, defaultAppearance };
+})();
+
+/* ==== engine/origins.js ==== */
+const __mod_engine_origins_js = (function () {
+// Where you came from, decided for you.
+//
+// Character creation used to be a shop: pick a build, pick a face, pick an
+// upbringing. That is not how being born works, and it is not how a life sim
+// reads. You choose a species and a century; everything else is rolled against
+// what that species was doing in that century.
+//
+// The roll is not uniform. A Saiyan born in Age 730 goes into a creche on
+// Planet Vegeta because that is what happened to Saiyans born in Age 730.
+
+const { RACES, getRace, UPBRINGINGS, TEMPERAMENTS, BODY_TYPES } = __mod_data_races_js;
+const { PLACES, getPlace } = __mod_data_places_js;
+const { defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS, SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES, MARK_PRESETS, ACCESSORY_PRESETS } = __mod_ui_portrait_js;
+
+/**
+ * How likely each upbringing is, for this species in this year. Weight 0 means
+ * it cannot happen at all.
+ */
+function upbringingWeights(raceId, year) {
+  const w = {
+    warrior_clan: 3, street: 3, wealthy: 2, temple: 2, lab: 1, farm: 3, city: 4,
+    orphan_pod: 1, royal: 0.5, exile: 1.5,
+    self_raised: 1.5, animals: 0.8, foster: 2.5, saiyan_creche: 0, conquered: 1,
+  };
+
+  switch (raceId) {
+    case 'saiyan':
+      // Planet Vegeta ran a creche system until it did not.
+      if (year < 737) {
+        Object.assign(w, { saiyan_creche: 14, warrior_clan: 6, royal: 1.5, city: 0, farm: 0, wealthy: 0, temple: 0, lab: 0, animals: 0.3 });
+      } else {
+        Object.assign(w, { saiyan_creche: 0, orphan_pod: 8, exile: 6, self_raised: 4, foster: 5, animals: 2, warrior_clan: 2, city: 1, farm: 1, wealthy: 0.3, royal: 0.4 });
+      }
+      break;
+    case 'halfsaiyan':
+      Object.assign(w, { saiyan_creche: 0, city: 6, wealthy: 5, farm: 4, temple: 2, warrior_clan: 2, royal: 0, foster: 2, animals: 0.4 });
+      break;
+    case 'earthling':
+      Object.assign(w, { saiyan_creche: 0, city: 8, farm: 6, street: 5, temple: 4, wealthy: 3, warrior_clan: 3, royal: 0.3, lab: 1, animals: 1, self_raised: 1 });
+      if (year >= 749 && year < 756) w.conquered = 4;      // Red Ribbon years
+      break;
+    case 'namekian':
+      Object.assign(w, { saiyan_creche: 0, temple: 8, warrior_clan: 5, exile: 3, self_raised: 4, city: 0, wealthy: 0, street: 0, farm: 1, lab: 0, foster: 2, animals: 0 });
+      if (year >= 762 && year <= 763) w.exile = 12;        // Frieza on Namek
+      break;
+    case 'frostdemon':
+      Object.assign(w, { saiyan_creche: 0, royal: 12, warrior_clan: 5, wealthy: 4, city: 0, farm: 0, temple: 0, street: 0, foster: 0, animals: 0, self_raised: 1 });
+      break;
+    case 'majin':
+      Object.assign(w, { saiyan_creche: 0, self_raised: 8, animals: 5, exile: 4, street: 3, city: 2, temple: 1, farm: 1, wealthy: 0, royal: 0, lab: 1 });
+      break;
+    case 'android':
+    case 'bioandroid':
+      Object.assign(w, { saiyan_creche: 0, lab: 16, self_raised: 3, city: 2, exile: 2, street: 1, farm: 0, temple: 0, wealthy: 0, royal: 0, animals: 0, foster: 1 });
+      break;
+    case 'shinjin':
+      Object.assign(w, { saiyan_creche: 0, temple: 14, royal: 4, city: 0, farm: 0, street: 0, wealthy: 0, lab: 0, animals: 0, self_raised: 1, foster: 1 });
+      break;
+    case 'tuffle':
+      Object.assign(w, { saiyan_creche: 0, lab: 8, exile: 8, self_raised: 4, wealthy: 3, city: 2, conquered: 6, farm: 0, warrior_clan: 0, royal: 1 });
+      break;
+    case 'yardratian':
+      Object.assign(w, { saiyan_creche: 0, temple: 10, city: 3, self_raised: 3, farm: 2, warrior_clan: 1, wealthy: 1, royal: 0.5, animals: 0.5 });
+      break;
+    case 'cerealian':
+      Object.assign(w, { saiyan_creche: 0, conquered: 10, exile: 6, self_raised: 5, animals: 2, farm: 3, city: 2, street: 2, royal: 0.5, wealthy: 0.5 });
+      break;
+    default:
+      break;
+  }
+  return w;
+}
+
+/** Worlds that do not exist in a given year, because somebody blew them up. */
+function existsIn(placeId, year) {
+  if (placeId === 'planet_vegeta') return year < 737;
+  if (placeId === 'namek') return year < 763;
+  if (placeId === 'new_namek') return year >= 763;
+  if (placeId === 'cereal') return year < 740 || year > 780;
+  return true;
+}
+
+/** Nobody is born in the Hyperbolic Time Chamber or on Beerus's world. */
+const UNBORN_TAGS = ['otherworld', 'divine', 'extreme', 'tournament', 'prison', 'destroyer', 'omniking'];
+function birthable(place, year) {
+  if (!place || !existsIn(place.id, year)) return false;
+  if (place.tags.some((t) => UNBORN_TAGS.includes(t))) return false;
+  if (place.planet === 'otherworld' || place.planet === 'void') return false;
+  return true;
+}
+
+/** A homeworld that makes sense for this species, upbringing and year. */
+function placeFor(rng, raceId, upbringingId, year) {
+  const race = getRace(raceId);
+  let homes = (race.homeworlds || []).map((id) => getPlace(id))
+    .filter((p) => birthable(p, year));
+  if (!homes.length) homes = PLACES.filter((p) => p.tags.includes('civilised') && birthable(p, year));
+
+  if (upbringingId === 'saiyan_creche' && existsIn('planet_vegeta', year)) return 'planet_vegeta';
+  if (upbringingId === 'lab') {
+    const labs = PLACES.filter((p) => (p.tags.includes('lab') || p.tags.includes('tech')) && birthable(p, year));
+    if (labs.length) return rng.pick(labs).id;
+  }
+  if (upbringingId === 'animals' || upbringingId === 'self_raised') {
+    const wilds = PLACES.filter((p) => (p.tags.includes('wild') || p.tags.includes('forest') || p.tags.includes('mountain'))
+      && birthable(p, year) && homes.some((h) => h.planet === p.planet));
+    if (wilds.length) return rng.pick(wilds).id;
+  }
+  if (upbringingId === 'temple') {
+    const temples = PLACES.filter((p) => (p.tags.includes('sacred') || p.tags.includes('mentor'))
+      && birthable(p, year) && homes.some((h) => h.planet === p.planet));
+    if (temples.length) return rng.pick(temples).id;
+  }
+  return homes.length ? rng.pick(homes).id : 'east_city';
+}
+
+/** Height and weight from species and build, not from a slider. */
+function bodyFor(rng, raceId, bodyId) {
+  const base = {
+    saiyan: [168, 66], halfsaiyan: [170, 64], earthling: [168, 62], namekian: [196, 78],
+    frostdemon: [158, 52], majin: [180, 96], android: [170, 64], bioandroid: [198, 92],
+    shinjin: [150, 46], tuffle: [140, 40], yardratian: [146, 38], cerealian: [172, 66],
+  }[raceId] || [168, 64];
+  const shift = {
+    small: [-22, -16], wiry: [-8, -12], lean: [0, -6], balanced: [0, 0], stocky: [4, 14], massive: [16, 38],
+  }[bodyId] || [0, 0];
+  return {
+    heightCm: Math.max(90, Math.round(rng.gauss(base[0] + shift[0], 8, 90, 260))),
+    weightKg: Math.max(20, Math.round(rng.gauss(base[1] + shift[1], 7, 20, 300))),
+  };
+}
+
+/**
+ * Roll a whole origin. The player picked a species, a century and a name;
+ * everything below is what the universe decided about them.
+ */
+function rollOrigin(rng, raceId, birthYear, opts = {}) {
+  const race = getRace(raceId);
+  const weights = upbringingWeights(raceId, birthYear);
+  const pool = UPBRINGINGS.filter((u) => (weights[u.id] ?? 1) > 0);
+  const upbringing = rng.weighted(pool, (u) => weights[u.id] ?? 1);
+  const temperament = rng.pick(TEMPERAMENTS);
+  const body = rng.pick(BODY_TYPES);
+  const placeId = opts.placeId || placeFor(rng, raceId, upbringing.id, birthYear);
+
+  const look = defaultAppearance(rng, raceId);
+  Object.assign(look, bodyFor(rng, raceId, body.id));
+  look.buildShape = body.id;
+
+  // Upbringing leaves a mark before the life even starts.
+  if (upbringing.id === 'animals') {
+    look.marks = ['scar_arm'];
+    look.outfit = 'none';
+    look.hairStyle = 'wild';
+  } else if (upbringing.id === 'lab') {
+    look.marks = rng.chance(0.6) ? ['dots'] : [];
+    look.outfit = 'lab';
+  } else if (upbringing.id === 'saiyan_creche') {
+    look.outfit = 'armour_saiyan';
+    look.stance = 'saiyan';
+  } else if (upbringing.id === 'self_raised') {
+    look.marks = rng.chance(0.5) ? ['scar_cheek'] : [];
+  } else if (upbringing.id === 'temple') {
+    look.stance = rng.pick(['turtle', 'crane', 'namek']);
+  } else if (upbringing.id === 'conquered') {
+    look.marks = rng.chance(0.4) ? ['burn_arm'] : [];
+  }
+
+  return {
+    upbringingId: upbringing.id,
+    temperamentId: temperament.id,
+    bodyId: body.id,
+    placeId,
+    look,
+    // Everything a life sim ought to roll rather than let you shop for.
+    potential: Math.round(rng.gauss(50, 18, 5, 99)),
+    battleInstinct: Math.round(rng.gauss(50, 18, 5, 99)),
+    iq: Math.round(rng.gauss(100, 18, 55, 180)),
+    luck: Math.round(rng.gauss(50, 20, 1, 99)),
+    charismaSeed: Math.round(rng.gauss(50, 18, 5, 99)),
+  };
+}
+
+/** One line describing where this character started, for the record. */
+function describeOrigin(character) {
+  const up = UPBRINGINGS.find((u) => u.id === character.upbringingId);
+  const place = getPlace(character.placeId);
+  return `${up ? up.name : 'Unknown origins'} on ${place ? place.name : 'somewhere'}, ${up ? up.blurb.toLowerCase() : ''}`;
+}
+  return { rollOrigin, describeOrigin };
+})();
+
 /* ==== data/canon.js ==== */
 const __mod_data_canon_js = (function () {
 // Real characters from the series. `years` gates when they can appear at all,
@@ -3922,6 +4933,7 @@ const { RACES, getRace, UPBRINGINGS, BODY_TYPES, TEMPERAMENTS, hasPerk, maturity
 const { getPlace } = __mod_data_places_js;
 const { eraName, worldPowerBaseline } = __mod_data_timeline_js;
 const { generateFullName } = __mod_data_names_js;
+const { rollOrigin } = __mod_engine_origins_js;
 const { makeFamily, resetNpcCounter } = __mod_engine_npc_js;
 const { STAT_KEYS, kiMaxFor, lifeExpectancy, combatPower, powerTier } = __mod_engine_stats_js;
 
@@ -3963,9 +4975,14 @@ function createGame(creation, seedInput) {
   resetNpcCounter(0);
 
   const race = getRace(creation.raceId);
-  const upbringing = UPBRINGINGS.find((u) => u.id === creation.upbringingId) || UPBRINGINGS[6];
-  const temperament = TEMPERAMENTS.find((t) => t.id === creation.temperamentId) || TEMPERAMENTS[2];
-  const body = BODY_TYPES.find((b) => b.id === creation.bodyId) || BODY_TYPES[2];
+  const birthYearIn = creation.birthYear ?? 737;
+
+  // You pick a species, a century and a name. Everything else about where you
+  // came from is rolled against what that species was doing in that century.
+  const origin = rollOrigin(rng, creation.raceId, birthYearIn, { placeId: creation.placeId });
+  const upbringing = UPBRINGINGS.find((u) => u.id === (creation.upbringingId || origin.upbringingId)) || UPBRINGINGS[6];
+  const temperament = TEMPERAMENTS.find((t) => t.id === (creation.temperamentId || origin.temperamentId)) || TEMPERAMENTS[2];
+  const body = BODY_TYPES.find((b) => b.id === (creation.bodyId || origin.bodyId)) || BODY_TYPES[2];
 
   const stats = {};
   for (const k of STAT_KEYS) {
@@ -3977,8 +4994,10 @@ function createGame(creation, seedInput) {
   const [plo, phi] = race.startPower;
   const startPower = Math.max(1, Math.round(rng.float(plo, phi) * upbringing.power));
 
-  const birthYear = creation.birthYear ?? 737;
-  const placeId = creation.placeId && getPlace(creation.placeId) ? creation.placeId : race.homeworlds[0];
+  const birthYear = birthYearIn;
+  const placeId = creation.placeId && getPlace(creation.placeId)
+    ? creation.placeId
+    : (origin.placeId || race.homeworlds[0]);
 
   const character = {
     name: creation.name || generateFullName(rng, creation.raceId),
@@ -3992,7 +5011,15 @@ function createGame(creation, seedInput) {
       skin: 'light', face: 'square', outfit: 'casual',
       marks: [], customMark: '', accessories: [], customAccessory: '',
       heightCm: 175, weightKg: 70, stance: 'formless', stanceName: '',
-    }, creation.look || {}),
+    }, origin.look || {}, creation.look || {}),
+
+    // Rolled, not chosen. These are the numbers a life sim should not let you
+    // shop for: what you could become, how fast you read a fight, how quick
+    // you are, and how the universe treats you.
+    potential: origin.potential,
+    battleInstinct: origin.battleInstinct,
+    iq: origin.iq,
+    luck: origin.luck,
     // What the life leaves on the body. Each entry is drawn on the portrait
     // and listed in the record, with who or what did it.
     scars: [],
@@ -5775,6 +6802,48 @@ const LANDING_WORLDS = [
   { placeId: 'sadala', weight: 3, blurb: 'Saiyans, everywhere, and none of them conquerors.' },
 ];
 
+/**
+ * A pod is aimed. Which coordinates you set - or which your parents set for
+ * you - changes what you land in, and how long you are in there.
+ */
+const POD_HEADINGS = [
+  {
+    id: 'nearest', name: 'The nearest habitable world',
+    hint: 'Days, not years. Whatever is close is close for a reason.',
+    years: 0,
+    worlds: ['planet_frieza_79', 'wastes', 'sadala'],
+    danger: 0.35,
+  },
+  {
+    id: 'far', name: 'As far from the Frieza Force as the fuel allows',
+    hint: 'Years asleep. Nobody will come looking.',
+    years: 3,
+    worlds: ['paozu', 'east_city', 'west_city', 'penguin_village'],
+    danger: 0.05,
+  },
+  {
+    id: 'weak', name: 'A world too weak to fight back',
+    hint: 'What a Saiyan pod is normally aimed at. You will not be welcome.',
+    years: 1,
+    worlds: ['paozu', 'wastes', 'cereal', 'east_city'],
+    danger: 0.15,
+  },
+  {
+    id: 'allies', name: 'Somewhere the Saiyans had friends',
+    hint: 'There were not many. The coordinates may be years out of date.',
+    years: 2,
+    worlds: ['yardrat', 'namek', 'sadala'],
+    danger: 0.2,
+  },
+  {
+    id: 'blind', name: 'Do not set them at all',
+    hint: 'Launch and let the pod decide. It has done this before.',
+    years: 2,
+    worlds: null,
+    danger: 0.25,
+  },
+];
+
 const FINDERS = [
   {
     id: 'kind_family', weight: 26, karma: 6,
@@ -5820,6 +6889,88 @@ const FINDERS = [
   },
 ];
 
+/**
+ * Launching. The heading decides where you come down and how long you are
+ * under; whether anyone comes with you depends on whether they had any warning
+ * and any standing, which is to say on the life you have had up to now.
+ */
+function podLaunch(c2, sl, heading) {
+  const c = c2.character;
+  c.flags.vegeta_resolved = true;
+  c.flags.in_pod = true;
+  c.flags.homeworld_destroyed = true;
+  c.flags.grief = true;
+  c.flags.pod_heading = heading.id;
+  c2.state.world.resolved.push('saiyan_purge');
+
+  // Anyone who did not get off the planet did not get off the planet.
+  const kin = Object.values(c2.state.npcs).filter((n) => n.alive
+    && ['parent', 'sibling', 'mentor'].includes(n.relation));
+
+  // Did your family get out? They needed warning, a second pod, and a reason
+  // to spend it on you rather than on themselves.
+  const warned = c.flags.warned_of_frieza || c.flags.bardock_warning;
+  const standing = (c.upbringingId === 'royal' ? 0.28 : 0)
+    + (c.upbringingId === 'warrior_clan' ? 0.14 : 0)
+    + Math.min(0.25, (c.fame || 0) / 240);
+  const closeness = kin.length ? Math.max(...kin.map((n) => n.closeness || 0)) / 100 : 0;
+  const chance = Math.min(0.75, (warned ? 0.42 : 0.08) + standing + closeness * 0.22);
+  const escaped = kin.length ? c2.rng.chance(chance) : false;
+  const survivors = escaped ? c2.rng.sample(kin, Math.min(kin.length, c2.rng.int(1, 2))) : [];
+
+  for (const npc of Object.values(c2.state.npcs)) {
+    if (survivors.includes(npc)) continue;
+    if (npc.placeId === 'planet_vegeta' && npc.alive) {
+      npc.alive = false;
+      npc.deadSince = 737;
+      npc.causeOfDeath = 'Planet Vegeta';
+    }
+  }
+  if (survivors.length) {
+    c.flags.kin_escaped = true;
+    for (const npc of survivors) {
+      npc.closeness = Math.min(100, (npc.closeness || 0) + 20);
+      npc.history.push({ year: 737, note: 'Got off Planet Vegeta.' });
+    }
+    fact(c2, `${survivors.map((n) => n.name).join(' and ')} got a pod out too.`,
+      { type: 'origin', weight: 10, tags: ['origin', 'family', 'saiyan'] });
+  } else {
+    fact(c2, 'Was put in a pod hours before Planet Vegeta was destroyed.',
+      { type: 'origin', weight: 10, tags: ['origin', 'loss', 'saiyan'] });
+  }
+
+  // A long crossing costs you years, and a bad heading costs you more.
+  const hurt = c2.rng.chance(heading.danger);
+  const changes = apply(c2, {
+    happiness: survivors.length ? -14 : -30,
+    health: hurt ? -18 : 0,
+    stats: { discipline: 4, durability: 3 },
+  });
+  const lines = [];
+  lines.push(c2.rng.pick([
+    'The hatch closes and you cannot hear anything after that.',
+    'There is no time to say goodbye properly, so nobody does.',
+    'You are asleep before the atmosphere.',
+  ]));
+  if (heading.years) lines.push(`You are under for ${heading.years} year${heading.years > 1 ? 's' : ''}.`);
+  lines.push(c2.rng.pick([
+    'Somewhere behind you a light goes on and stays on.',
+    'You do not see it happen.',
+    'The whole thing takes about four seconds.',
+  ]));
+  if (survivors.length) {
+    lines.push(`${survivors.map((n) => n.name).join(' and ')} made it into a second pod. You do not know that yet.`);
+  }
+  if (hurt) lines.push('Something in the launch goes wrong and you come round wrong.');
+
+  // A crossing costs what it costs. You come out of the pod older.
+  if (heading.years) {
+    c.age += heading.years;
+    c.flags.pod_years = heading.years;
+  }
+  return { text: lines.join(' '), changes };
+}
+
 registerEvents([
   {
     id: 'vegeta_last_day', noFatigue: true, tags: ['world', 'origin', 'threat'], weight: 900,
@@ -5839,8 +6990,17 @@ registerEvents([
     : 'There is a pod. There is one pod, and there is not much time to decide anything about it.'}`,
     choices: (ctx, s) => {
       const list = [];
+      // A pod is aimed. Which way changes everything that comes after it.
+      for (const heading of POD_HEADINGS) {
+        list.push({
+          id: 'pod_' + heading.id,
+          label: `Pod: ${heading.name.toLowerCase()}`,
+          hint: heading.hint,
+          effect: (c2, sl) => podLaunch(c2, sl, heading),
+        });
+      }
       list.push({
-        id: 'pod', label: 'Get in the pod',
+        id: 'pod', hidden: true, label: 'Get in the pod',
         hint: 'You will land somewhere else entirely, and be raised by whoever finds you.',
         effect: (c2, sl) => {
           c2.character.flags.vegeta_resolved = true;
@@ -5936,15 +7096,25 @@ registerEvents([
     id: 'pod_landing', noFatigue: true, tags: ['origin', 'travel'], weight: 900,
     when: (ctx) => ctx.flag('in_pod'),
     slots: (ctx) => {
-      const world = ctx.rng.weighted(LANDING_WORLDS, (w) => w.weight);
-      const finder = ctx.rng.weighted(FINDERS, (f) => f.weight);
+      const heading = POD_HEADINGS.find((h) => h.id === ctx.character.flags.pod_heading);
+      const pool = heading && heading.worlds
+        ? LANDING_WORLDS.filter((w) => heading.worlds.includes(w.placeId))
+        : LANDING_WORLDS;
+      const world = ctx.rng.weighted(pool.length ? pool : LANDING_WORLDS, (w) => w.weight);
+      // Parents who got a pod of their own are waiting when yours opens.
+      const withKin = !!ctx.character.flags.kin_escaped;
+      const finder = withKin
+        ? { id: 'own_kin', name: 'your own family', text: '', upbringing: 'warrior_clan', closeness: 85, respect: 55, relation: 'parent', karma: 4 }
+        : ctx.rng.weighted(FINDERS, (f) => f.weight);
       return {
         placeId: world.placeId,
         placeName: getPlace(world.placeId).name,
         landing: world.blurb,
         finderId: finder.id,
         finderName: finder.name,
-        finderText: finder.text,
+        finderText: withKin
+          ? 'A second pod is already open beside yours, and somebody is sitting on it waiting for you to wake up.'
+          : finder.text,
       };
     },
     title: 'The Pod Comes Down',
@@ -5952,7 +7122,8 @@ registerEvents([
       [placeName]. [landing] [finderText]`,
     choices: (ctx, s) => [
       { id: 'accept', label: `Be raised by ${s.finderName}`, effect: (c2, sl) => {
-        const finder = FINDERS.find((f) => f.id === sl.finderId);
+        const finder = FINDERS.find((f) => f.id === sl.finderId)
+          || { id: 'own_kin', upbringing: 'warrior_clan', closeness: 85, respect: 55, relation: 'parent', karma: 4 };
         c2.character.flags.in_pod = false;
         moveTo(c2, sl.placeId);
         c2.character.upbringingId = finder.upbringing;
@@ -6030,6 +7201,7 @@ registerEvents([
     ],
   },
 ]);
+  return { POD_HEADINGS };
 })();
 
 /* ==== engine/events/childhood.js ==== */
@@ -11745,6 +12917,805 @@ registerEvents([
   return { canonDrift };
 })();
 
+/* ==== engine/events/saiyanpolitics.js ==== */
+const __mod_engine_events_saiyanpolitics_js = (function () {
+// The survivors, and what they want from you.
+//
+// A few thousand Saiyans were off-world when Planet Vegeta went. What is left
+// of them is not a people, it is a lobby: a handful of hardliners trying to
+// rebuild the institutions of a dead planet on whatever rock they can hold.
+// If you take a world, or somebody else takes one, they turn up.
+//
+// The pressure they apply is political and institutional, because that is what
+// this faction is: they advise, then they offer, then they pay, then they
+// sanction, then they send somebody. It escalates the way an occupying
+// bureaucracy escalates, and every stage can be refused, argued with, or met
+// with violence. Nothing here is a sexual scene and nothing is written as one;
+// what is on the table is a contract, a rank and a threat.
+
+const { registerEvents, npcSlot } = __mod_engine_generator_js;
+const { apply, fact, relate, thread, trainYear, powerLine, stranger, findNpc, offerBattle, moveTo } = __mod_engine_events_helpers_js;
+const { combatPower, powerTier } = __mod_engine_stats_js;
+const { generateFullName } = __mod_data_names_js;
+const { getPlace, PLACES } = __mod_data_places_js;
+const { PLANETS } = __mod_data_planets_js;
+const { numberish, zeni } = __mod_engine_text_js;
+const { clamp } = __mod_engine_rng_js;
+
+/** Is there a Saiyan homeworld project, and are you inside it? */
+function colony(state) {
+  return state.world.saiyanColony || null;
+}
+
+function isSaiyan(ctx) {
+  return ctx.race.id === 'saiyan' || ctx.race.id === 'halfsaiyan';
+}
+
+/** How badly the Council wants an heir out of you specifically. */
+function heirPressure(ctx) {
+  const c = ctx.character;
+  const col = colony(ctx.state);
+  if (!col || !isSaiyan(ctx)) return 0;
+  const bio = ctx.age;
+  if (bio < 18 || bio > 55) return 0;
+  const kids = Object.values(ctx.state.npcs).filter((n) => n.relation === 'child').length;
+  if (kids >= 2) return 0;
+  // They want strength on the register, and they want it from people who have
+  // not already contributed.
+  const strength = Math.log10(Math.max(10, combatPower(c))) / 12;
+  return clamp(0.25 + strength + (c.fame / 200) - kids * 0.4 + (col.stage || 0) * 0.12, 0, 1);
+}
+
+const COUNCIL_NAMES = ['the Restoration Council', 'the Blood Register', 'the Sadala Compact',
+  'the Second Vegeta Assembly', 'the Elite Remnant'];
+
+registerEvents([
+  // ------------------------------------------------ somebody founds a homeworld
+  {
+    id: 'saiyan_colony_founded', noFatigue: true, tags: ['saiyan', 'world', 'politics'], weight: 60,
+    minBioAge: 14,
+    when: (ctx) => isSaiyan(ctx) && !colony(ctx.state) && ctx.year > 738
+      && (ctx.flag('homeworld_destroyed') || ctx.character.fame > 20),
+    slots: (ctx) => {
+      const held = Object.entries(ctx.state.world.planets || {})
+        .filter(([, r]) => r && (r.act === 'rule' || r.act === 'purge'))
+        .map(([id]) => id);
+      const mine = held.length > 0;
+      const planet = mine ? PLANETS.find((p) => p.id === held[0]) : null;
+      const other = generateFullName(ctx.rng, 'saiyan');
+      return {
+        mine,
+        planetName: planet ? planet.name : ctx.rng.pick(['a scrub world with breathable air',
+          'a mining colony nobody claimed', 'an old Frieza Force garrison', 'a world with one continent and no people']),
+        planetId: planet ? planet.id : null,
+        founder: mine ? ctx.character.name : other,
+        council: ctx.rng.pick(COUNCIL_NAMES),
+      };
+    },
+    title: (ctx, s) => (s.mine ? 'They Want To Call It Vegeta' : 'Somebody Has Taken A World'),
+    text: (ctx, s) => (s.mine
+      ? `{They come to you|A delegation lands without asking|Six of them, and one of them is old enough to remember the planet}.
+         You hold [planetName]. {They want to put Saiyans on it|They want it registered|They have brought paperwork, which is somehow the worst part}.
+         [council:cap], they call themselves. {They have a flag already|They have a register with your name in it|They have plans that assume you will agree}.`
+      : `{Word travels|A broadcast in a language you have not heard in years|Somebody sends for you}.
+         [founder] has taken [planetName] {and is calling it a homeworld|and is inviting every Saiyan alive|and means it}.
+         [council:cap] {is being reconstituted|has issued a register|wants every survivor on it}.`),
+    choices: (ctx, s) => {
+      const list = [];
+      list.push({
+        id: 'join', label: s.mine ? 'Let them build it' : 'Go, and put your name on the register',
+        hint: 'A people again, with everything that comes with that.',
+        effect: (c2, sl) => {
+          c2.state.world.saiyanColony = {
+            planetId: sl.planetId, name: sl.planetName, council: sl.council,
+            founder: sl.founder, yours: !!sl.mine, member: true, stage: 0, standing: sl.mine ? 60 : 25,
+          };
+          c2.character.flags.saiyan_register = true;
+          fact(c2, `${sl.mine ? 'Let the Council build a homeworld on their own world' : 'Signed the Saiyan register on ' + sl.planetName}.`,
+            { type: 'politics', weight: 8, tags: ['saiyan', 'origin'] });
+          for (let i = 0; i < 2; i++) {
+            const n = stranger(c2, { raceId: 'saiyan', relation: 'acquaintance', minAge: 20, maxAge: 60 });
+            if (n) relate(c2, n, { respect: 20, closeness: 10 });
+          }
+          return { text: `{It is the first time in years anybody has spoken to you in your own language and meant it|`
+            + `There are hundreds of them and it is not nearly enough|They read the register out loud, which takes eleven minutes}. `
+            + `{You are on it|Your name is somewhere in the middle|It is a strange thing to be counted}.`,
+          changes: apply(c2, { happiness: 16, fame: 8 }) };
+        },
+      });
+      list.push({
+        id: 'refuse', label: 'Want no part of it',
+        hint: 'They will keep asking.',
+        effect: (c2, sl) => {
+          c2.state.world.saiyanColony = {
+            planetId: sl.planetId, name: sl.planetName, council: sl.council,
+            founder: sl.founder, yours: !!sl.mine, member: false, stage: 0, standing: -10,
+          };
+          fact(c2, `Refused ${sl.council}.`, { type: 'politics', weight: 6, tags: ['saiyan'] });
+          return { text: `{You tell them no|"There is no Planet Vegeta"|You do not sign anything}. `
+            + `{They take it better than you expected|The old one looks at you for a long time|They leave the paperwork anyway}. `
+            + `{They will be back|This is not the end of it|Nobody says the word 'traitor' out loud}.`,
+          changes: apply(c2, { happiness: -4 }) };
+        },
+      });
+      if (s.mine) {
+        list.push({
+          id: 'own_terms', label: 'It is your world. Your rules.', hint: 'No register, no creche, no Council.',
+          effect: (c2, sl) => {
+            c2.state.world.saiyanColony = {
+              planetId: sl.planetId, name: sl.planetName, council: sl.council,
+              founder: c2.character.name, yours: true, member: true, stage: 0, standing: 80, reformed: true,
+            };
+            c2.character.flags.saiyan_reformer = true;
+            fact(c2, 'Took in the survivors and refused to rebuild the old system with them.',
+              { type: 'politics', weight: 9, tags: ['saiyan', 'legacy'] });
+            return { text: `{You take the survivors and burn the register|"No creches. No grading. No breeding programme."|`
+              + `You let them land and you tell them what is not happening}. `
+              + `{Half of them stay|The old ones are furious|Somebody calls you worse than Frieza and you let them}.`,
+            changes: apply(c2, { happiness: 12, fame: 14, karma: 12 }) };
+          },
+        });
+      }
+      return list;
+    },
+  },
+
+  // ------------------------------------------------------ the escalating ask
+  {
+    id: 'saiyan_heir_pressure', noFatigue: true, tags: ['saiyan', 'politics', 'social'], weight: 40,
+    minBioAge: 18,
+    when: (ctx) => heirPressure(ctx) > 0.35 && colony(ctx.state)
+      && !ctx.character.flags.saiyan_reformer && !ctx.character.flags.heir_refused_finally,
+    slots: (ctx) => {
+      const col = colony(ctx.state);
+      const stage = col.stage || 0;
+      return {
+        council: col.council,
+        stage,
+        colonyName: col.name,
+        officer: col.officerName || (col.officerName = generateFullName(ctx.rng, 'saiyan')),
+        purse: 200000 * (stage + 1) * 4,
+      };
+    },
+    title: (ctx, s) => ([
+      'The Council Would Like A Word',
+      'They Have Made You An Offer',
+      'They Are Not Asking Any More',
+      'A Summons',
+    ][Math.min(3, s.stage)]),
+    text: (ctx, s) => ([
+      `{[officer] comes to find you|It is put politely|They bring tea, which nobody wants}.
+       [council:cap] {has looked at the register|has been counting|has done the arithmetic}.
+       {There are not enough of us|Nine hundred and forty, and falling|The next generation is forty-one children}.
+       {You are strong and you have had no children|They mention this the way a doctor mentions a shadow on a scan|Nobody says the word 'duty' but it is in the room}.`,
+      `{This time there is a number attached|[officer] brings a contract|They have stopped appealing to your better nature}.
+       {A seat on the Council|Land on [colonyName]|[purse] Zeni and a rank} for a Saiyan of your line, registered.
+       {They are not subtle|It is a good offer, which is the insulting part|They think you have a price}.`,
+      `{The tone has changed|[officer] does not sit down|There are two of them outside}.
+       [council:cap] has {frozen your standing|struck your name from the register|declared you outside the settlement}.
+       {No landing rights|No trade|Nobody on [colonyName] will speak to you} until {you comply|the matter is resolved|you see sense}.
+       {They have selected somebody|A name has been put beside yours on a list|It has already been decided, as far as they are concerned}.`,
+      `{They have stopped writing letters|[officer] is at the door with six of them|The summons is not a request}.
+       {Present yourself|You will be brought|Come, or be brought}. {The pairing has been entered in the register|It is done on paper already|Somebody has signed on your behalf}.`,
+    ][Math.min(3, s.stage)]),
+    choices: (ctx, s) => {
+      const col = colony(ctx.state);
+      const list = [];
+
+      list.push({
+        id: 'comply', label: s.stage >= 2 ? 'Go with them' : 'Agree to it',
+        hint: 'On your own terms if you move first, on theirs if you wait.',
+        effect: (c2, sl) => {
+          const col2 = colony(c2.state);
+          col2.stage = 0;
+          col2.standing = clamp((col2.standing || 0) + 30, -100, 100);
+          const partner = stranger(c2, {
+            raceId: 'saiyan', relation: 'lover', minAge: Math.max(18, c2.character.age - 10),
+            maxAge: c2.character.age + 10, closeness: 30, respect: 45, metHow: 'assigned to you',
+          });
+          if (partner) {
+            partner.romance = 20;
+            partner.trust = 25;
+            partner.assigned = true;
+            fact(c2, `${partner.name} was matched to them by ${sl.council}.`,
+              { type: 'politics', weight: 8, subject: partner.id, tags: ['saiyan', 'family'] });
+          }
+          c2.character.flags.saiyan_matched = true;
+          return { text: `{You go|You sign it|You stop arguing, which is not the same as agreeing}. `
+            + `${partner ? `${partner.name}. {They did not choose this either|They are as unimpressed as you are|`
+              + `The first thing they say to you is an apology}. {Whatever this becomes, it starts here and it starts badly|`
+              + `You are two strangers with a file between you|You will either make something of it or you will not}.` : ''} `
+            + `{The Council records it and loses interest in you|Your standing is restored the same afternoon|Nobody thanks you}.`,
+          changes: apply(c2, { happiness: -8, fame: 4 }) };
+        },
+      });
+
+      if (s.stage === 1) {
+        list.push({
+          id: 'take_money', label: 'Take the money, promise nothing',
+          hint: 'They will notice eventually.',
+          effect: (c2, sl) => {
+            const col2 = colony(c2.state);
+            col2.stage = 2;
+            col2.standing = clamp((col2.standing || 0) - 15, -100, 100);
+            return { text: `{You take it|The Zeni clears the same day|You sign the part about the land and not the part about the register}. `
+              + `{They will work it out|It buys you about two years|You have made an enemy of a filing cabinet}.`,
+            changes: apply(c2, { zeni: sl.purse, happiness: 6, karma: -6 }) };
+          },
+        });
+      }
+
+      list.push({
+        id: 'refuse', label: 'Refuse',
+        hint: s.stage >= 2 ? 'They have already stopped asking.' : 'They will escalate.',
+        effect: (c2, sl) => {
+          const col2 = colony(c2.state);
+          col2.stage = (col2.stage || 0) + 1;
+          col2.standing = clamp((col2.standing || 0) - 18, -100, 100);
+          thread(c2, 'saiyan_pressure', null, { title: `${sl.council} and the register`, heat: 60 + col2.stage * 10, maxStage: 4 });
+          fact(c2, `Refused ${sl.council} for the ${['first', 'second', 'third', 'fourth'][Math.min(3, col2.stage - 1)]} time.`,
+            { type: 'politics', weight: 5, tags: ['saiyan'] });
+          return { text: `{"No"|You do not give them a reason|You give them a reason and they write it down without reading it}. `
+            + `{[officer] does not argue|They were expecting this|Somebody makes a note}. `
+            + `{It will be worse next time|They have somewhere else to escalate to|This is a machine and you have just moved a lever}.`,
+          changes: apply(c2, { happiness: -6, stats: { discipline: 2 } }) };
+        },
+      });
+
+      if (s.stage >= 2) {
+        list.push({
+          id: 'fight', label: 'Throw them off your land', danger: true,
+          hint: 'They came with six. You can be the reason they stop coming.',
+          effect: (c2, sl) => {
+            const col2 = colony(c2.state);
+            col2.stage = 3;
+            col2.standing = clamp((col2.standing || 0) - 30, -100, 100);
+            return offerBattle(c2, {
+              name: sl.officer, power: Math.max(50, combatPower(c2.character) * c2.rng.float(0.5, 1.3)),
+              raceId: 'saiyan',
+            }, {
+              reason: 'politics', stakes: 'serious',
+              intro: `${sl.officer} came here with a register and six people. Only one of those things is going to matter.`,
+            });
+          },
+        });
+        list.push({
+          id: 'leave', label: 'Leave. Let them have their planet.',
+          hint: 'Off the register, off the world, done with it.',
+          effect: (c2, sl) => {
+            const col2 = colony(c2.state);
+            col2.member = false;
+            col2.stage = 0;
+            col2.standing = -60;
+            c2.character.flags.heir_refused_finally = true;
+            c2.character.flags.saiyan_exile = true;
+            const away = PLACES.filter((p) => p.planet === 'earth' && p.tags.includes('civilised'));
+            if (away.length) moveTo(c2, c2.rng.pick(away).id);
+            fact(c2, `Left ${sl.colonyName} rather than be entered in the register.`,
+              { type: 'politics', weight: 9, tags: ['saiyan', 'exile'] });
+            return { text: `{You go|You do not tell anyone you are going|There is nothing on that world you cannot replace}. `
+              + `{They strike you off|You are the last of your line as far as the register is concerned|`
+              + `Somebody who was almost a friend does not say goodbye}. {It is quieter where you land|You are on your own again|`
+              + `You have been on your own before}.`,
+            changes: apply(c2, { happiness: -12, fame: -6, stats: { discipline: 4 } }) };
+          },
+        });
+      }
+      return list;
+    },
+  },
+
+  // ---------------------------------------------------- creches, for your kids
+  {
+    id: 'saiyan_creche_demand', tags: ['saiyan', 'politics', 'family'], weight: 30,
+    minBioAge: 20,
+    when: (ctx) => colony(ctx.state) && isSaiyan(ctx) && !ctx.character.flags.saiyan_reformer
+      && Object.values(ctx.state.npcs).some((n) => n.alive && n.relation === 'child' && n.age >= 2 && n.age <= 8),
+    slots: (ctx) => {
+      const kids = Object.values(ctx.state.npcs).filter((n) => n.alive && n.relation === 'child' && n.age >= 2 && n.age <= 8);
+      const kid = ctx.rng.pick(kids);
+      const col = colony(ctx.state);
+      return { ...npcSlot(kid), kidAge: kid.age, council: col.council, colonyName: col.name };
+    },
+    title: (ctx, s) => `They Have Come For ${s.npcName}`,
+    text: `{The letter arrives before they do|It is framed as an opportunity|They have a place already allocated}.
+      [council:cap] {is reopening the creches|has restored the old grading|has a training establishment on [colonyName]}.
+      [npcName] is [kidAge]. {That is the age|On the old planet it was three|They have a transport waiting}.
+      {Graded at birth, shipped out at three, and it made the strongest army in the galaxy|
+       It is what was done to you|It is what was done to everybody, and look what happened to them}.`,
+    choices: (ctx, s) => [
+      { id: 'send', label: 'Let them go', hint: 'It made warriors. It also made Frieza\'s army.', effect: (c2, sl) => {
+        const kid = findNpc(c2.state, sl.npcId);
+        if (kid) {
+          kid.power = Math.round(kid.power * 4.5);
+          kid.creche = true;
+          relate(c2, kid, { closeness: -30, respect: 15, trust: -20 });
+        }
+        const col2 = colony(c2.state);
+        col2.standing = clamp((col2.standing || 0) + 20, -100, 100);
+        fact(c2, `Sent ${sl.npcName} to the creche on ${sl.colonyName}.`,
+          { type: 'family', weight: 8, subject: sl.npcId, tags: ['saiyan', 'child'] });
+        return { text: `{The transport takes about four minutes|They do not cry, which is worse|You are told visiting is discouraged}. `
+          + `{You will see them at eight and they will be a stranger|They will be very strong|`
+          + `Somebody hands you a receipt, and that is the part you think about later}.`,
+        changes: apply(c2, { happiness: -20, fame: 6, karma: -8 }) };
+      } },
+      { id: 'refuse', label: 'They are not going', danger: true, effect: (c2, sl) => {
+        const kid = findNpc(c2.state, sl.npcId);
+        if (kid) relate(c2, kid, { closeness: 15, trust: 20 });
+        const col2 = colony(c2.state);
+        col2.standing = clamp((col2.standing || 0) - 25, -100, 100);
+        col2.stage = Math.min(3, (col2.stage || 0) + 1);
+        fact(c2, `Refused to give ${sl.npcName} to the creche.`,
+          { type: 'family', weight: 8, subject: sl.npcId, tags: ['saiyan', 'child'] });
+        return { text: `{You put yourself in the doorway|"No"|You do not raise your voice and you do not move}. `
+          + `{They go|They do not go far|Somebody writes something down}. `
+          + `{[npcName] does not understand what just happened|You will explain it in about fifteen years|`
+          + `Your standing on [colonyName] is not what it was this morning}.`,
+        changes: apply(c2, { happiness: 8, karma: 10 }) };
+      } },
+      { id: 'teach', label: 'Train them yourself', hint: 'The Council thinks that is sentiment.', effect: (c2, sl) => {
+        const kid = findNpc(c2.state, sl.npcId);
+        if (kid) {
+          kid.power = Math.round(kid.power * 2.6);
+          relate(c2, kid, { closeness: 25, respect: 25, trust: 25 });
+        }
+        const col2 = colony(c2.state);
+        col2.standing = clamp((col2.standing || 0) - 10, -100, 100);
+        fact(c2, `Trained ${sl.npcName} rather than hand them over.`,
+          { type: 'family', weight: 7, subject: sl.npcId, tags: ['saiyan', 'child', 'legacy'] });
+        return { text: `{You tell the Council you will do it|They point out that you are not a training establishment|You point out that you are}. `
+          + `{It takes years|They are slower than the creche children and they are yours|`
+          + `You are worse at teaching than the institution and better at everything else}.`,
+        changes: apply(c2, { happiness: 14, stats: { charisma: 3, discipline: 3 } }) };
+      } },
+    ],
+  },
+]);
+})();
+
+/* ==== engine/events/otherworld.js ==== */
+const __mod_engine_events_otherworld_js = (function () {
+// The Other World, as a place with things in it.
+//
+// Death in this setting is a change of address. The afterlife pack already had
+// King Yemma, Snake Way, King Kai and Hell; this one gives the address a
+// population and a economy. The people you loved are here and the meeting goes
+// differently depending on how you left it. The people you killed are here too,
+// they have had nothing to do but train, and some of them have got somewhere.
+
+const { registerEvents, npcSlot } = __mod_engine_generator_js;
+const { apply, fact, relate, thread, trainYear, powerLine, stranger, findNpc, offerBattle, meetCanon, moveTo, killNpc } = __mod_engine_events_helpers_js;
+const { combatPower, powerTier } = __mod_engine_stats_js;
+const { CANON, getCanon, canonPower } = __mod_data_canon_js;
+const { ladderFor, getTransformation } = __mod_data_transformations_js;
+const { TECHNIQUES, getTechnique } = __mod_data_techniques_js;
+const { generateFullName } = __mod_data_names_js;
+const { numberish, zeni } = __mod_engine_text_js;
+const { clamp } = __mod_engine_rng_js;
+
+/** How this person felt about you at the end, which is what the meeting is. */
+function reunionTone(npc) {
+  const bond = (npc.closeness || 0) + (npc.trust ?? 30) * 0.5 - (npc.tension || 0);
+  const killedByYou = /you killed|killed by you/i.test(npc.causeOfDeath || '');
+  if (killedByYou) return 'killed';
+  if ((npc.romance || 0) > 55) return 'love';
+  if (npc.relation === 'child') return 'child';
+  if (npc.relation === 'parent') return 'parent';
+  if (npc.relation === 'rival' || (npc.tension || 0) > 55) return 'rival';
+  if (bond > 90) return 'close';
+  if (bond < 25) return 'distant';
+  return 'friend';
+}
+
+const REUNION = {
+  love: {
+    title: (n) => `${n}, Again`,
+    text: `{You are not looking for them and there they are|The queue moves and it is them|Somebody says your name the way only one person ever said it}.
+      {Neither of you has anything sensible to say|They are exactly as you remember and that is the hard part|
+       They have been waiting, which they will not admit}.`,
+    stay: `{You do not let go for a long time|There is nothing to catch up on and you talk for a week anyway|
+      Being dead together turns out to be easier than being alive apart}. {It is the best thing that has happened to you in years|
+      Neither of you mentions that one of you might be wished back|You are not going to waste this}.`,
+    gain: { happiness: 34 },
+  },
+  child: {
+    title: (n) => `${n} Was Waiting`,
+    text: `{They got here first|They are the same age they were|Somebody points and you follow the finger}.
+      {You had years of things you were going to say and none of them work now|
+       They are not angry, which you were not prepared for|They ask if you are staying}.`,
+    stay: `{You stay|You are not leaving them again|You sit down next to them and that is the whole decision}.
+      {It is quiet here|Nobody makes you explain|Whatever else you got wrong, you are here now}.`,
+    gain: { happiness: 30, karma: 6 },
+  },
+  parent: {
+    title: (n) => `${n} Is At The Front Of The Queue`,
+    text: `{Older than you remember, or not older at all|They see you before you see them|You are, briefly, small again}.
+      {They want to know what you did with it|They ask about the life like it was homework|
+       They are proud and it takes them the whole conversation to get to it}.`,
+    stay: `{You tell them all of it|It takes days|You leave out the parts you are ashamed of and they know anyway}.
+      {They say the thing you spent your whole life waiting to hear|It is not a big speech|You did not know you still needed it}.`,
+    gain: { happiness: 26, stats: { discipline: 3 } },
+  },
+  close: {
+    title: (n) => `${n}`,
+    text: `{You are not looking for them and there they are|The queue moves and it is them|
+      Somebody claps you on the shoulder from behind and you know the weight of the hand}.
+      {No halo suits them|They look well, for a corpse|They have clearly been here long enough to have opinions about the food}.`,
+    stay: `{You pick it up exactly where it was left|Nothing has to be explained|You are both furious about the same things, still}.`,
+    gain: { happiness: 24 },
+  },
+  friend: {
+    title: (n) => `${n}, Of All People`,
+    text: `{You had not thought about them in years|It takes a second to place them|They remember you better than you remember them}.
+      {They are pleased to see you, which is a small shock|They ask what happened|Neither of you is quite sure what you were to each other}.`,
+    stay: `{You end up talking for longer than you ever did alive|It turns out you liked them|
+      You are the only person here who knows what they were like before}.`,
+    gain: { happiness: 16 },
+  },
+  distant: {
+    title: (n) => `${n} Does Not Get Up`,
+    text: `{They see you coming and stay where they are|There is no warmth in it|You were not close and death has not fixed that}.
+      {They ask what you want|You do not have an answer|It is exactly as awkward as it was alive}.`,
+    stay: `{You sit down anyway|It does not get easier|You stay because there is nowhere else to be and eventually they talk}.
+      {It is not friendship|It is something|Better than the queue}.`,
+    gain: { happiness: 6 },
+  },
+  rival: {
+    title: (n) => `${n} Has Been Waiting For This`,
+    text: `{They are already on their feet|They have been here longer than you and they have been busy|
+      They start grinning about forty metres out}.
+      {"Nobody can die here"|They have been waiting to say this|There is no reason not to, now}.`,
+    stay: `{You do not talk|You go at it for what might be a year|Neither of you can be finished off, which is the point}.
+      {It is the best fight either of you ever had|Somebody complains about the noise|You are almost friends by the end of it}.`,
+    gain: { happiness: 20, stats: { technique: 4, durability: 3 } },
+  },
+  killed: {
+    title: (n) => `${n}, Who You Killed`,
+    text: `{You knew this was coming|They have had a long time to think about it|They are not surprised to see you}.
+      {They do not attack|That is somehow worse|They just look at you}.
+      {There is a long stretch where neither of you says anything|Nobody here is going to intervene|
+       Whatever you say now, you have to mean it}.`,
+    stay: `{You say it|It is not enough and you say it anyway|They listen to the whole thing}.
+      {They do not forgive you|They say they will think about it|Something between you moves, slightly}.`,
+    gain: { happiness: -6, karma: 12 },
+  },
+};
+
+/**
+ * Somebody you killed, or somebody who died as an enemy, and what they have
+ * done with eternity. The dead have nothing but time, and some of them use it.
+ */
+function grownEnemy(state, rng, year) {
+  const dead = Object.values(state.npcs).filter((n) => !n.alive
+    && ((n.tension || 0) > 45 || /you killed/i.test(n.causeOfDeath || '')));
+  if (!dead.length) return null;
+  const npc = rng.pick(dead);
+  const years = Math.max(1, year - (npc.deadSince || year));
+  // They have trained for as long as they have been dead.
+  const grown = Math.round((npc.power || 100) * Math.pow(1.14, Math.min(60, years)));
+  return { npc, years, grown };
+}
+
+registerEvents([
+  // ------------------------------------------------------ people you loved
+  {
+    id: 'other_world_reunion', noFatigue: true, tags: ['afterlife', 'social', 'loss'], weight: 46,
+    requiresAfterlife: true,
+    when: (ctx) => Object.values(ctx.state.npcs).some((n) => !n.alive),
+    slots: (ctx) => {
+      const dead = Object.values(ctx.state.npcs).filter((n) => !n.alive);
+      if (!dead.length) return null;
+      // The ones you were closest to, or angriest at, find you first.
+      const npc = ctx.rng.weighted(dead, (n) => 1 + (n.closeness || 0) / 12 + (n.tension || 0) / 25
+        + (/you killed/i.test(n.causeOfDeath || '') ? 6 : 0));
+      const tone = reunionTone(npc);
+      return {
+        ...npcSlot(npc),
+        tone,
+        gone: Math.max(1, ctx.year - (npc.deadSince || ctx.year)),
+        how: npc.causeOfDeath || 'nobody says how',
+      };
+    },
+    title: (ctx, s) => REUNION[s.tone].title(s.npcName),
+    text: (ctx, s) => REUNION[s.tone].text,
+    choices: (ctx, s) => {
+      const spec = REUNION[s.tone];
+      const list = [];
+      list.push({
+        id: 'stay', label: s.tone === 'killed' ? 'Say what you should have said' : s.tone === 'rival' ? 'Give them the fight' : 'Stay with them',
+        effect: (c2, sl) => {
+          const npc = findNpc(c2.state, sl.npcId);
+          if (npc) {
+            relate(c2, npc, { closeness: sl.tone === 'killed' ? 18 : 24, trust: 15, tension: sl.tone === 'rival' ? -25 : -10 });
+            npc.reunited = true;
+          }
+          fact(c2, `Found ${sl.npcName} again in the Other World.`,
+            { type: 'afterlife', weight: 7, subject: sl.npcId, tags: ['death', 'reunion'] });
+          return { text: spec.stay, changes: apply(c2, spec.gain) };
+        },
+      });
+      list.push({
+        id: 'train', label: 'Train with them', hint: 'Nobody here can be permanently hurt.',
+        effect: (c2, sl) => {
+          const npc = findNpc(c2.state, sl.npcId);
+          if (npc) relate(c2, npc, { closeness: 12, respect: 10 });
+          const t = trainYear(c2, { intensity: 1.4, placeMult: 2.0, mentorMult: 1.2 });
+          return { text: `{Nobody here can be hurt permanently, which changes how you both fight|`
+            + `They are better than they were alive|You go at it for what might be years}. ${powerLine(t.gained)}`,
+          changes: apply(c2, { happiness: 12, stats: { technique: 3 } }) };
+        },
+      });
+      if (s.tone !== 'killed') {
+        list.push({
+          id: 'ask', label: 'Ask them what it was like at the end',
+          effect: (c2, sl) => {
+            const npc = findNpc(c2.state, sl.npcId);
+            if (npc) { relate(c2, npc, { trust: 20, closeness: 10 }); npc.knowledge = 4; }
+            return { text: `{They tell you|It takes a while and they do not spare you|`
+              + `You wanted to know and now you know}. {[how]|It was quick, or it was not|`
+              + `You will carry this and it will not help}.`,
+            changes: apply(c2, { happiness: -8, stats: { intellect: 2 } }), view: { how: sl.how } };
+          },
+        });
+      } else {
+        list.push({
+          id: 'nothing', label: 'Say nothing and walk on', danger: true,
+          effect: (c2, sl) => {
+            const npc = findNpc(c2.state, sl.npcId);
+            if (npc) relate(c2, npc, { tension: 25 });
+            return { text: `{You walk past|There is nothing to say that would help|You do not look back}. `
+              + `{They watch you the whole way|You will see them again|This is a small place and eternity is long}.`,
+            changes: apply(c2, { happiness: -12, karma: -6 }) };
+          },
+        });
+      }
+      return list;
+    },
+  },
+
+  // ------------------------------------- the ones you killed have been busy
+  {
+    id: 'hell_grown_strong', noFatigue: true, tags: ['afterlife', 'threat', 'combat'], weight: 34,
+    requiresAfterlife: true,
+    when: (ctx) => !!grownEnemy(ctx.state, ctx.rng, ctx.year),
+    slots: (ctx) => {
+      const found = grownEnemy(ctx.state, ctx.rng, ctx.year);
+      if (!found) return null;
+      const { npc, years, grown } = found;
+      // What eternity bought them.
+      const ladder = ladderFor(npc.raceId || 'other');
+      const form = ladder.filter((f) => f.req && f.req.power && f.req.power <= grown).pop();
+      return {
+        ...npcSlot(npc),
+        years,
+        grown,
+        tier: powerTier(grown),
+        formName: form ? form.name : null,
+        gap: grown > combatPower(ctx.character) * 1.4 ? 'They are stronger than you now.'
+          : grown > combatPower(ctx.character) * 0.7 ? 'It would be close.'
+            : 'You are still the stronger one.',
+      };
+    },
+    title: (ctx, s) => `${s.npcName} Has Had ${s.years} Years With Nothing To Do`,
+    text: `{You feel it before you see it|The ki is wrong for this place|Somebody in the crowd is putting out more than a dead person should}.
+      [npcName]. {[years] years down here|Dead the whole time|Nothing to eat, nothing to sleep, nothing to do but train}.
+      [tier], {and grinning|and unhurried|and very pleased you came}.
+      {They have found something|There is a colour to them that was not there before|Whatever they worked out, they worked it out alone}.
+      [gap]`,
+    choices: (ctx, s) => [
+      { id: 'fight', label: 'Settle it', danger: true, effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        if (npc) npc.power = sl.grown;
+        return offerBattle(c2, {
+          name: sl.npcName, power: sl.grown, npcId: sl.npcId,
+          raceId: npc ? npc.raceId : 'other',
+          forms: sl.formName && npc ? (npc.transformations || []) : [],
+        }, {
+          reason: 'rival', stakes: 'serious',
+          intro: `${sl.npcName}${sl.formName ? `, and whatever ${sl.formName} is doing to them,` : ''} has been waiting for this for ${sl.years} years.`,
+        });
+      } },
+      { id: 'learn', label: 'Ask how they did it', hint: 'They have no reason to tell you, and every reason to boast.', effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        if (npc) { npc.power = sl.grown; relate(c2, npc, { respect: 15, tension: -10 }); npc.knowledge = 3; }
+        const t = trainYear(c2, { intensity: 1.6, placeMult: 2.4 });
+        fact(c2, `Learned something from ${sl.npcName}, who spent ${sl.years} years dead and training.`,
+          { type: 'training', weight: 6, subject: sl.npcId, tags: ['afterlife'] });
+        return { text: `{They tell you|Vanity is the last thing to die and it does not die here|`
+          + `They demonstrate, at length, because nobody else has asked}. `
+          + `{Most of it is nonsense|A quarter of it is the most useful thing you have ever been told|`
+          + `You take notes you cannot write down}. ${powerLine(t.gained)}`,
+        changes: apply(c2, { stats: { technique: 4, kiControl: 3 } }) };
+      } },
+      { id: 'avoid', label: 'Go the other way', effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        if (npc) { npc.power = sl.grown; relate(c2, npc, { tension: 12 }); }
+        return { text: `{You do not engage|There is a lot of Hell and you use most of it|You are not ready and you know it}. `
+          + `{They let you go|They shout something after you|It will keep}.`,
+        changes: apply(c2, { happiness: -6 }) };
+      } },
+    ],
+  },
+
+  // ---------------------------------------------------- the economy of Hell
+  {
+    id: 'hell_society', tags: ['afterlife', 'world'], weight: 28,
+    requiresAfterlife: true,
+    when: (ctx) => ['hell', 'check_in', 'snake_way'].includes(ctx.character.placeId) || ctx.character.karma < 0,
+    slots: (ctx) => ({
+      scene: ctx.rng.pick([
+        'a queue for a machine that dispenses nothing',
+        'a fighting pit run by three ogres and a spreadsheet',
+        'a bar where nobody gets drunk and everybody stays',
+        'a market trading favours, because there is no money down here',
+        'a choir of the damned, which is exactly as bad as it sounds',
+        'a library somebody has been assembling out of memory for four hundred years',
+        'a field of spikes that somebody has made into a garden',
+      ]),
+      who: generateFullName(ctx.rng, ctx.rng.pick(['other', 'earthling', 'frostdemon', 'saiyan'])),
+    }),
+    title: 'Hell Is Not Empty',
+    text: `{Nobody warns you about the boredom|The screaming stops being the worst part quite quickly|
+      It is the permanence that gets people}.
+      There is [scene]. {[who] runs it|[who] has been here longest and everybody defers to them|
+      [who] explains the rules, and there are rules}.`,
+    choices: (ctx, s) => [
+      { id: 'join', label: 'Make yourself useful', effect: (c2, sl) => {
+        const npc = stranger(c2, { relation: 'acquaintance', minAge: 30, maxAge: 90, metHow: 'in Hell' });
+        if (npc) { npc.alive = false; relate(c2, npc, { closeness: 20, respect: 15 }); }
+        fact(c2, `Found a place in Hell, of a sort.`, { type: 'afterlife', weight: 4, tags: ['death'] });
+        return { text: `{You take a job|Nobody calls it a job|It gives the days edges, which is what everybody down here is actually short of}. `
+          + `{You are good at it|It is the first thing you have been asked to do in years|People start knowing your name again}.`,
+        changes: apply(c2, { happiness: 14, stats: { charisma: 3 } }) };
+      } },
+      { id: 'fight_pit', label: 'Fight in the pit', effect: (c2, sl) => {
+        const t = trainYear(c2, { intensity: 1.8, placeMult: 2.2 });
+        return { text: `{You go in|You cannot die and neither can they, so it goes on until somebody gets bored|`
+          + `The ogres keep a ranking and you climb it}. {Nobody down here holds back|`
+          + `You learn things you could never have learned alive|It is the only honest thing in Hell}. ${powerLine(t.gained)}`,
+        changes: apply(c2, { stats: { durability: 4, strength: 3 }, happiness: 8 }) };
+      } },
+      { id: 'walk', label: 'Keep walking', effect: (c2) => ({
+        text: `{You do not stop|There is nowhere to get to and you go there anyway|`
+          + `Whatever they are doing, they can do it without you}. #dread#`,
+        changes: apply(c2, { happiness: -6, stats: { discipline: 3 } }),
+      }) },
+    ],
+  },
+
+  // ------------------------------------------------------ a canon dead face
+  {
+    id: 'other_world_canon', noFatigue: true, tags: ['afterlife', 'canon', 'social'], weight: 30,
+    requiresAfterlife: true,
+    when: (ctx) => CANON.some((ch) => ch.years[1] !== null && ctx.year > ch.years[1]),
+    slots: (ctx) => {
+      const gone = CANON.filter((ch) => ch.years[1] !== null && ctx.year > ch.years[1]
+        && !ch.tags.some((t) => ['omniking', 'destroyer', 'angel', 'dragon', 'wish'].includes(t)));
+      if (!gone.length) return null;
+      const ch = ctx.rng.pick(gone);
+      const years = ctx.year - ch.years[1];
+      const dead = Math.round(canonPower(ch, ch.years[1]) * Math.pow(1.09, Math.min(50, years)));
+      // Frieza spent his death training and came back gold. Anyone with long
+      // enough down here and a ladder to climb can do the same.
+      const ladder = ladderFor(ch.race || 'other');
+      const earned = ladder.filter((f) => f.req && f.req.power && f.req.power <= dead
+        && !(f.req.mentors || []).length && !f.req.custom).pop();
+      const form = years > 8 && earned ? earned : null;
+      return {
+        canonId: ch.id,
+        npcName: ch.name,
+        years,
+        theirPower: form ? Math.round(dead * Math.min(4, form.mult)) : dead,
+        formName: form ? form.name : null,
+        formId: form ? form.id : null,
+        tier: powerTier(form ? dead * Math.min(4, form.mult) : dead),
+        villain: ch.tags.some((t) => ['villain', 'threat', 'emperor'].includes(t)),
+        quirk: ch.quirk || '',
+      };
+    },
+    title: (ctx, s) => `${s.npcName}, ${s.years} Years Dead`,
+    text: (ctx, s) => (s.villain
+      ? `{You know the face before you know the ki|Everybody down here knows who that is|The crowd is giving them room}.
+         [npcName]. {[years] years in Hell with nothing but time|Still furious|Still, somehow, immaculate}.
+         [tier] now, which is more than they managed alive.
+         ${s.formName ? `{They have found something down here and it has a colour to it|There is a form on them that did not exist when they were alive|They call it [formName], and they want you to ask}.` : ''}
+         {[quirk]|They have not improved as a person|Death did nothing for the personality}.`
+      : `{They are easy to find|Everybody knows where they train|You are pointed at a hill}.
+         [npcName], [years] years dead and still at it. [tier].
+         {[quirk]|They ask who you are and then they ask if you can fight|They are pleased to have company}.`),
+    choices: (ctx, s) => {
+      const list = [];
+      list.push({
+        id: 'spar', label: 'Ask them for a fight', effect: (c2, sl) => {
+          const npc = meetCanon(c2, sl.canonId, sl.villain ? 'rival' : 'acquaintance');
+          if (npc) { npc.alive = false; npc.power = sl.theirPower; }
+          if (npc && sl.formId) npc.transformations = [sl.formId];
+          return offerBattle(c2, {
+            name: sl.npcName, power: sl.theirPower, canonId: sl.canonId,
+            npcId: npc ? npc.id : null,
+            forms: sl.formId ? [sl.formId] : [],
+          }, {
+            reason: sl.villain ? 'rival' : 'spar', stakes: 'spar',
+            intro: `Nobody here can die twice. ${sl.npcName} has been counting on that for ${sl.years} years.`
+              + (sl.formName ? ` And they did not have ${sl.formName} when you last saw them.` : ''),
+          });
+        },
+      });
+      list.push({
+        id: 'train', label: 'Train under them', effect: (c2, sl) => {
+          const npc = meetCanon(c2, sl.canonId, 'mentor');
+          if (npc) { npc.alive = false; npc.power = sl.theirPower; relate(c2, npc, { respect: 20, closeness: 12 }); }
+          const t = trainYear(c2, { intensity: 1.7, placeMult: 2.4, mentorMult: 1.5 });
+          fact(c2, `Trained under ${sl.npcName} in the Other World.`,
+            { type: 'training', weight: 7, tags: ['afterlife', 'canon'] });
+          return { text: `{They agree immediately|It takes some persuading and then they will not stop|`
+            + `Being dead has made them generous with their time, of which there is a great deal}. `
+            + `{You are worked harder than you have ever been worked|Nothing here can injure you, so nothing is off limits|`
+            + `It goes on for what you eventually realise is years}. ${powerLine(t.gained)}`,
+          changes: apply(c2, { stats: { technique: 5, kiControl: 4, discipline: 3 }, happiness: 12 }) };
+        },
+      });
+      list.push({
+        id: 'talk', label: 'Just talk to them', effect: (c2, sl) => {
+          const npc = meetCanon(c2, sl.canonId, 'acquaintance');
+          if (npc) { npc.alive = false; relate(c2, npc, { closeness: 16, trust: 10 }); npc.knowledge = 3; }
+          return { text: `{They talk for a very long time|Nobody has asked them anything in decades|`
+            + `Most of it is about people who are still alive}. `
+            + `{You learn things about the living that nobody living knows|`
+            + `They ask you to pass something on and you will not be able to|You like them, which is inconvenient}.`,
+          changes: apply(c2, { happiness: 14, stats: { intellect: 3, charisma: 2 } }) };
+        },
+      });
+      return list;
+    },
+  },
+
+  // -------------------------------------------------- what the dead can do
+  {
+    id: 'other_world_errand', tags: ['afterlife', 'quest'], weight: 26,
+    requiresAfterlife: true,
+    slots: (ctx) => ({
+      task: ctx.rng.pick([
+        'a message for somebody still alive, which is against every rule here',
+        'a body that needs recovering from a part of Hell nobody goes into',
+        'an ogre who has lost the ledger for four thousand souls',
+        'a soul in the wrong queue who has been in it for a century',
+        'a section of Snake Way that has come away from its moorings',
+        'a fighter who will not stop challenging the check-in desk',
+      ]),
+      who: ctx.rng.pick(['King Yemma, personally', 'one of the ogres', 'a Kai with a clipboard',
+        'somebody who says they know you', 'the desk, via a note']),
+    }),
+    title: 'There Is Work, Even Here',
+    text: `{Being dead is mostly queueing|The afterlife has an administration and the administration has problems|
+      Somebody finds you because you are the only one not doing anything}.
+      [who:cap] {needs something dealt with|has a problem|asks for a favour}: [task].`,
+    choices: (ctx, s) => [
+      { id: 'do', label: 'Do it', effect: (c2, sl) => {
+        const good = c2.rng.chance(0.62);
+        fact(c2, `Did the Other World a favour: ${sl.task}.`, { type: 'afterlife', weight: 5, tags: ['death'] });
+        if (good) {
+          c2.character.flags.otherworld_favour = true;
+          return { text: `{It takes longer than anybody said|You are the only one who could have|It is done}. `
+            + `{Somebody owes you now, and up here that is worth something|`
+            + `Your name goes in a different ledger|Yemma nods at you, once, which is apparently enormous}.`,
+          changes: apply(c2, { karma: 12, happiness: 14, fame: 4 }) };
+        }
+        return { text: `{It goes wrong|You make it worse|Nobody blames you, which is worse than being blamed}. `
+          + `{The paperwork will take a century|Somebody is still in the wrong queue|You tried}.`,
+        changes: apply(c2, { happiness: -8, karma: 4 }) };
+      } },
+      { id: 'refuse', label: 'You are dead. Let somebody else.', effect: (c2) => {
+        const t = trainYear(c2, { intensity: 1.5, placeMult: 2.0 });
+        return { text: `{You are not an employee|There is training to do and forever to do it in|You decline}. ${powerLine(t.gained)}`,
+        changes: apply(c2, { karma: -4 }) };
+      } },
+    ],
+  },
+]);
+})();
+
 /* ==== engine/economy.js ==== */
 const __mod_engine_economy_js = (function () {
 // The action economy.
@@ -11888,7 +13859,7 @@ const { addFact, recallSummary } = __mod_engine_memory_js;
 const { relationshipTick, progressNpc, makeNpc, makeChild } = __mod_engine_npc_js;
 const { ladderFor } = __mod_data_transformations_js;
 const { TECHNIQUES } = __mod_data_techniques_js;
-const { getRace, hasPerk } = __mod_data_races_js;
+const { getRace, hasPerk, maturity } = __mod_data_races_js;
 const { getPlace } = __mod_data_places_js;
 const { TIMELINE, eraName, worldPowerBaseline } = __mod_data_timeline_js;
 const { agingDecay, naturalDeathChance, combatPower, powerTier, kiMaxFor, lifeExpectancy, zenkaiBoost, STAT_KEYS } = __mod_engine_stats_js;
@@ -11898,6 +13869,61 @@ const { resetYearBudget } = __mod_engine_economy_js;
 const { getItem } = __mod_data_items_js;
 
 const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
+
+const BUILD_ORDER = ['small', 'wiry', 'lean', 'balanced', 'stocky', 'massive'];
+
+/**
+ * The body changes because of what you did to it, not because you dragged a
+ * slider. Children grow, training thickens you, starvation and long illness
+ * strip you down, and after seventy everybody shrinks.
+ */
+function driftBody(state, rng) {
+  const c = state.character;
+  const a = c.appearance;
+  if (!a) return null;
+  const bio = maturity(c);
+  const race = getRace(c.raceId);
+  let note = null;
+
+  // Growing up. Adult height is reached around biological eighteen.
+  if (bio < 18) {
+    const adult = a.adultHeight || (a.adultHeight = a.heightCm);
+    const childScale = 0.34 + 0.66 * Math.min(1, bio / 18);
+    a.heightCm = Math.round(adult * childScale);
+    a.weightKg = Math.max(3, Math.round((a.adultWeight || (a.adultWeight = a.weightKg)) * Math.pow(childScale, 2.4)));
+  } else if (bio > 70 && rng.chance(0.35)) {
+    a.heightCm = Math.max(90, a.heightCm - 1);
+  }
+
+  // What the year was spent on shows up in the frame.
+  const idx = BUILD_ORDER.indexOf(a.buildShape);
+  if (idx >= 0 && bio >= 14) {
+    const trained = c.flags.trainedHardThisYear;
+    const starved = c.vitals.health < 35;
+    if (trained && c.stats.strength > 65 && idx < BUILD_ORDER.length - 1 && rng.chance(0.06)) {
+      a.buildShape = BUILD_ORDER[idx + 1];
+      a.weightKg = Math.round(a.weightKg * 1.06);
+      note = 'You have put on real muscle this year. Your clothes do not fit.';
+    } else if (starved && idx > 0 && rng.chance(0.12)) {
+      a.buildShape = BUILD_ORDER[idx - 1];
+      a.weightKg = Math.round(a.weightKg * 0.93);
+      note = 'You have lost weight you could not afford to lose.';
+    } else if (trained && rng.chance(0.25)) {
+      a.weightKg = Math.min(Math.round(a.weightKg * 1.01) + 1, 400);
+    } else if (!trained && bio > 40 && rng.chance(0.18)) {
+      a.weightKg = Math.round(a.weightKg * 1.012) + 1;
+    }
+  }
+
+  // Long lives go grey, unless the species does not.
+  if (!a.wentGrey && bio > 55 && race.agingRate >= 0.7 && rng.chance(0.08)
+    && !['white', 'silver'].includes(a.hairColour)) {
+    a.wentGrey = true;
+    a.hairColour = rng.chance(0.5) ? 'silver' : 'white';
+    note = 'You went grey this year, all at once, the way it happens.';
+  }
+  return note;
+}
 
 const DEATH_CAUSES = {
   age: ['Old age', 'The body simply stopped', 'Died in their sleep'],
@@ -11930,6 +13956,9 @@ function startYear(state) {
   resetYearBudget(state);
 
   const entries = [];
+  // The body changes before anything else happens to it this year.
+  const bodyNote = driftBody(state, rng);
+  if (bodyNote) entries.push({ kind: 'body', text: bodyNote });
   entries.push(...passiveYear(state, rng));
 
   // Career bookkeeping
@@ -14051,9 +16080,63 @@ const DEFAULT_CONFIG = {
   baseUrl: '',
   model: '',
   key: '',
-  format: 'openai',        // openai | anthropic
+  format: 'openai',        // openai | anthropic | kobold
   headerName: 'Authorization',
   headerPrefix: 'Bearer ',
+  // KoboldAI / KoboldCpp sampler settings. They are exposed because a local
+  // model needs different handling from a hosted one: too much temperature and
+  // the JSON comes back malformed, too little and every event reads the same.
+  temperature: 0.8,
+  topP: 0.92,
+  maxTokens: 700,
+};
+
+/**
+ * One-click presets for the endpoints people actually run. KoboldCpp serves
+ * both its own API and an OpenAI-compatible one; the native route is the
+ * default because it works on plain KoboldAI too.
+ */
+const PRESETS = {
+  kobold: {
+    label: 'KoboldAI / KoboldCpp',
+    baseUrl: 'http://localhost:5001/api/v1/generate',
+    format: 'kobold',
+    model: 'kobold',
+    key: '',
+    hint: 'Start Kobold with --host and the default port. No key needed. If you run it elsewhere, replace localhost.',
+  },
+  kobold_openai: {
+    label: 'KoboldCpp (OpenAI route)',
+    baseUrl: 'http://localhost:5001/v1/chat/completions',
+    format: 'openai',
+    model: 'koboldcpp',
+    key: '',
+    hint: 'KoboldCpp only. Use this if the native route gives you trouble.',
+  },
+  ollama: {
+    label: 'Ollama',
+    baseUrl: 'http://localhost:11434/v1/chat/completions',
+    format: 'openai',
+    model: 'llama3.1',
+    key: 'ollama',
+    hint: 'Set the model to whatever you have pulled.',
+  },
+  lmstudio: {
+    label: 'LM Studio',
+    baseUrl: 'http://localhost:1234/v1/chat/completions',
+    format: 'openai',
+    model: 'local-model',
+    key: '',
+    hint: 'Start the local server from the LM Studio developer tab.',
+  },
+  openai_compat: {
+    label: 'Any OpenAI-compatible endpoint',
+    baseUrl: '',
+    format: 'openai',
+    model: '',
+    key: '',
+    hint: 'Point at a /v1/chat/completions URL.',
+  },
 };
 
 function getAiConfig() {
@@ -14112,12 +16195,14 @@ function setApiKey(key) {
 function backendName() {
   const cfg = getAiConfig();
   if (cfg.provider === 'off') return 'none';
-  if (cfg.provider === 'custom' && cfg.baseUrl && cfg.model) return 'custom';
+  // KoboldAI needs no model name and no key, so "configured" is just a URL.
+  const customReady = !!cfg.baseUrl && (cfg.format === 'kobold' || !!cfg.model);
+  if (cfg.provider === 'custom' && customReady) return 'custom';
   if (cfg.provider === 'anthropic' && getApiKey()) return 'api';
   if (cfg.provider === 'auto') {
     if (sampleFn) return 'sample';
     if (getApiKey()) return 'api';
-    if (cfg.baseUrl && cfg.model) return 'custom';
+    if (customReady) return 'custom';
   }
   return 'none';
 }
@@ -14128,7 +16213,9 @@ function backendLabel() {
   switch (name) {
     case 'sample': return 'Claude, through this page';
     case 'api': return 'Claude, on your own API key';
-    case 'custom': return `${cfg.model || 'custom model'} at ${shortHost(cfg.baseUrl)}`;
+    case 'custom': return cfg.format === 'kobold'
+      ? `KoboldAI at ${shortHost(cfg.baseUrl)}`
+      : `${cfg.model || 'custom model'} at ${shortHost(cfg.baseUrl)}`;
     default: return 'Not connected';
   }
 }
@@ -14311,20 +16398,44 @@ async function callApi(prompt, opts = {}) {
  */
 async function callCustom(prompt, opts = {}) {
   const cfg = getAiConfig();
-  if (!cfg.baseUrl || !cfg.model) throw Object.assign(new Error('no endpoint configured'), { code: 'not_granted' });
+  const needsModel = cfg.format !== 'kobold';
+  if (!cfg.baseUrl || (needsModel && !cfg.model)) {
+    throw Object.assign(new Error('no endpoint configured'), { code: 'not_granted' });
+  }
 
   const headers = { 'content-type': 'application/json' };
   if (cfg.key) headers[cfg.headerName || 'Authorization'] = (cfg.headerPrefix || '') + cfg.key;
 
+  const maxTokens = Math.max(120, Math.min(4000, Number(cfg.maxTokens) || 700));
+  const temperature = Math.max(0, Math.min(2, Number(cfg.temperature ?? 0.8)));
+  const topP = Math.max(0.01, Math.min(1, Number(cfg.topP ?? 0.92)));
+
   let body;
-  if (cfg.format === 'anthropic') {
+  if (cfg.format === 'kobold') {
+    // KoboldAI's native generate route: one prompt string, samplers alongside.
+    // It has no chat roles, so the instruction goes in the prompt and we stop
+    // on the tokens a local model most often runs on with.
+    body = {
+      prompt,
+      max_context_length: 4096,
+      max_length: maxTokens,
+      temperature,
+      top_p: topP,
+      rep_pen: 1.07,
+      rep_pen_range: 320,
+      trim_stop: true,
+      stop_sequence: ['\n\n\n', '</s>', '<|im_end|>', '<|eot_id|>', 'USER:', 'ASSISTANT:'],
+    };
+  } else if (cfg.format === 'anthropic') {
     headers['anthropic-version'] = '2023-06-01';
     headers['anthropic-dangerous-direct-browser-access'] = 'true';
-    body = { model: cfg.model, max_tokens: 2000, messages: [{ role: 'user', content: prompt }] };
+    body = { model: cfg.model, max_tokens: maxTokens, temperature, messages: [{ role: 'user', content: prompt }] };
   } else {
     body = {
       model: cfg.model,
-      max_tokens: 2000,
+      max_tokens: maxTokens,
+      temperature,
+      top_p: topP,
       messages: [{ role: 'user', content: prompt }],
     };
   }
@@ -14348,8 +16459,14 @@ async function callCustom(prompt, opts = {}) {
     const choice = data.choices[0];
     return (choice.message && choice.message.content) || choice.text || '';
   }
+  // KoboldAI: { results: [ { text } ] }
+  if (Array.isArray(data.results) && data.results.length) {
+    const r = data.results[0];
+    return (r && (r.text || r.generated_text)) || '';
+  }
   if (typeof data.response === 'string') return data.response;
   if (typeof data.output === 'string') return data.output;
+  if (typeof data.text === 'string') return data.text;
   return '';
 }
 
@@ -14534,7 +16651,7 @@ function clampNum(v, lo, hi) {
   if (!Number.isFinite(n)) return 0;
   return Math.max(lo, Math.min(hi, Math.round(n)));
 }
-  return { MODEL, DEFAULT_CONFIG, getAiConfig, setAiConfig, initSampling, getApiKey, setApiKey, backendName, backendLabel, aiAvailable, buildEventPrompt, buildNarrationPrompt, testAiEndpoint, improviseEvent, narrateOutcome, errorCopy, judgeReply, interpretWish };
+  return { MODEL, DEFAULT_CONFIG, PRESETS, getAiConfig, setAiConfig, initSampling, getApiKey, setApiKey, backendName, backendLabel, aiAvailable, buildEventPrompt, buildNarrationPrompt, testAiEndpoint, improviseEvent, narrateOutcome, errorCopy, judgeReply, interpretWish };
 })();
 
 /* ==== engine/save.js ==== */
@@ -14687,634 +16804,17 @@ const __mod_game_js = (function () {
 
 
 
+
+
 const { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext } = __mod_engine_state_js;
 const { startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort } = __mod_engine_lifecycle_js;
-const { initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish } = __mod_engine_ai_js;
+const { initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish, PRESETS } = __mod_engine_ai_js;
 const { save, load, listSaves, clearSlot, exportString, importString } = __mod_engine_save_js;
 const { allTemplates } = __mod_engine_generator_js;
 const { ladderStatus, nearbyForms, unlockableForms } = __mod_engine_progression_js;
 const { Rng, Rng: RngClass } = __mod_engine_rng_js;
 const { ACTIONS, availableActions, runAction, actionOptions } = __mod_engine_events_actions_js;
-  return { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort, initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish, save, load, listSaves, clearSlot, exportString, importString, allTemplates, ladderStatus, nearbyForms, unlockableForms, Rng, ACTIONS, availableActions, runAction, actionOptions };
-})();
-
-/* ==== ui/portrait.js ==== */
-const __mod_ui_portrait_js = (function () {
-// A parametric portrait. Every choice in the character creator changes the
-// drawing, and the drawing follows the character through the game: transform
-// and the aura appears, lose the tail and the tail is gone.
-
-const HAIR_STYLES = [
-  { id: 'spiked', name: 'Spiked upward' },
-  { id: 'wild', name: 'Wild and unruly' },
-  { id: 'long', name: 'Long and loose' },
-  { id: 'ponytail', name: 'Tied back' },
-  { id: 'bob', name: 'Short bob' },
-  { id: 'cropped', name: 'Cropped close' },
-  { id: 'mohawk', name: 'Mohawk' },
-  { id: 'bald', name: 'Shaved bald' },
-  { id: 'braid', name: 'Single braid' },
-  { id: 'topknot', name: 'Topknot' },
-];
-
-const HAIR_COLOURS = [
-  { id: 'black', name: 'Black', hex: '#181420' },
-  { id: 'darkbrown', name: 'Dark brown', hex: '#3b2418' },
-  { id: 'brown', name: 'Brown', hex: '#6b4326' },
-  { id: 'blonde', name: 'Blonde', hex: '#e8c766' },
-  { id: 'white', name: 'White', hex: '#efeae2' },
-  { id: 'silver', name: 'Silver', hex: '#c8ccd6' },
-  { id: 'lavender', name: 'Lavender', hex: '#b49ede' },
-  { id: 'blue', name: 'Blue', hex: '#4a7bd4' },
-  { id: 'orange', name: 'Orange', hex: '#e2762f' },
-  { id: 'red', name: 'Red', hex: '#b8342c' },
-  { id: 'green', name: 'Green', hex: '#4c9e63' },
-  { id: 'pink', name: 'Pink', hex: '#e58fb4' },
-];
-
-const EYE_SHAPES = [
-  { id: 'sharp', name: 'Sharp' },
-  { id: 'round', name: 'Round' },
-  { id: 'narrow', name: 'Narrow' },
-  { id: 'heavy', name: 'Heavy-lidded' },
-  { id: 'wide', name: 'Wide' },
-];
-
-const EYE_COLOURS = [
-  { id: 'black', name: 'Black', hex: '#1a1620' },
-  { id: 'brown', name: 'Brown', hex: '#5b3a1e' },
-  { id: 'green', name: 'Green', hex: '#3f8f5c' },
-  { id: 'blue', name: 'Blue', hex: '#3f7fc4' },
-  { id: 'grey', name: 'Grey', hex: '#8a8f9c' },
-  { id: 'gold', name: 'Gold', hex: '#d6a83c' },
-  { id: 'red', name: 'Red', hex: '#b8342c' },
-  { id: 'violet', name: 'Violet', hex: '#8b6bd6' },
-];
-
-const SKIN_TONES = [
-  { id: 'pale', name: 'Pale', hex: '#f0d3bc' },
-  { id: 'light', name: 'Light', hex: '#e5bb99' },
-  { id: 'tan', name: 'Tan', hex: '#c99266' },
-  { id: 'brown', name: 'Brown', hex: '#95633c' },
-  { id: 'deep', name: 'Deep', hex: '#5f3a24' },
-  { id: 'green', name: 'Namekian green', hex: '#5d9b52' },
-  { id: 'pink', name: 'Majin pink', hex: '#e79ec0' },
-  { id: 'white', name: 'Chitin white', hex: '#eae6dd' },
-  { id: 'blue', name: 'Cold blue', hex: '#8fb2cc' },
-  { id: 'grey', name: 'Ash grey', hex: '#9aa0a6' },
-  { id: 'purple', name: 'Kai violet', hex: '#a884c4' },
-];
-
-const FACE_SHAPES = [
-  { id: 'square', name: 'Square' },
-  { id: 'round', name: 'Round' },
-  { id: 'angular', name: 'Angular' },
-  { id: 'long', name: 'Long' },
-];
-
-const OUTFITS = [
-  { id: 'gi_orange', name: 'Orange gi', main: '#e2762f', trim: '#2c4d9e' },
-  { id: 'gi_blue', name: 'Blue gi', main: '#2f5bb7', trim: '#e8e2d6' },
-  { id: 'gi_black', name: 'Black gi', main: '#25222e', trim: '#c0392b' },
-  { id: 'armour_saiyan', name: 'Saiyan battle armour', main: '#3a4250', trim: '#c9a227' },
-  { id: 'armour_frieza', name: 'Frieza Force armour', main: '#4b3f6b', trim: '#d8dde6' },
-  { id: 'namek_robe', name: 'Namekian robes', main: '#6d4aa0', trim: '#d8d2c4' },
-  { id: 'casual', name: 'Ordinary clothes', main: '#6d7280', trim: '#e8e2d6' },
-  { id: 'coat', name: 'Long coat', main: '#3c3229', trim: '#8a6f4a' },
-  { id: 'lab', name: 'Lab issue', main: '#dfe3e8', trim: '#5b6470' },
-  { id: 'kai', name: 'Kai vestments', main: '#3f7a6d', trim: '#e2c96a' },
-  { id: 'none', name: 'Bare-chested', main: null, trim: null },
-];
-
-const STANCES = [
-  { id: 'turtle', name: 'Turtle School' },
-  { id: 'crane', name: 'Crane School' },
-  { id: 'saiyan', name: 'Saiyan brawler' },
-  { id: 'namek', name: 'Namekian guard' },
-  { id: 'demon', name: 'Demon style' },
-  { id: 'formless', name: 'No style at all' },
-  { id: 'custom', name: 'Something of your own' },
-];
-
-const BUILD_SHAPES = ['small', 'wiry', 'lean', 'balanced', 'stocky', 'massive'];
-
-// Marks are things that happened to a body: scars, burns, what is missing, what
-// was inked on. A character can carry any number, chosen at creation or
-// earned in play, and each one is drawn.
-const MARK_PRESETS = [
-  { id: 'scar_cheek', name: 'Scar across the cheek', where: 'face' },
-  { id: 'scar_eye', name: 'Scar through one eye', where: 'face' },
-  { id: 'scar_brow', name: 'Split eyebrow', where: 'face' },
-  { id: 'scar_chest', name: 'Scar across the chest', where: 'body' },
-  { id: 'scar_arm', name: 'Old cut down the arm', where: 'body' },
-  { id: 'burn_arm', name: 'Burn scars, forearms', where: 'body' },
-  { id: 'burn_face', name: 'Burn along the jaw', where: 'face' },
-  { id: 'missing_eye', name: 'Missing eye', where: 'face' },
-  { id: 'missing_ear', name: 'Missing ear', where: 'face' },
-  { id: 'missing_arm', name: 'Missing arm', where: 'body' },
-  { id: 'cyber_eye', name: 'Mechanical eye', where: 'face' },
-  { id: 'cyber_arm', name: 'Mechanical arm', where: 'body' },
-  { id: 'dots', name: 'Forehead dots', where: 'face' },
-  { id: 'thirdeye', name: 'Third eye', where: 'face' },
-  { id: 'tattoo_face', name: 'Face tattoo', where: 'face' },
-  { id: 'tattoo_arm', name: 'Arm tattoo', where: 'body' },
-  { id: 'crack_tooth', name: 'Cracked tooth', where: 'face' },
-  { id: 'birthmark', name: 'Birthmark', where: 'face' },
-  { id: 'custom', name: 'Something else', where: 'body' },
-];
-
-// Accessories are things a body wears. Some you can pick at the start; others
-// arrive with the items you own, the titles you win, and the state you are in
-// (the dead wear a halo whether they like it or not).
-const ACCESSORY_PRESETS = [
-  { id: 'headband', name: 'Headband', starter: true },
-  { id: 'bandana', name: 'Bandana', starter: true },
-  { id: 'glasses', name: 'Glasses', starter: true },
-  { id: 'sunglasses', name: 'Sunglasses', starter: true },
-  { id: 'earring', name: 'Single earring', starter: true },
-  { id: 'earrings', name: 'Earrings', starter: true },
-  { id: 'necklace', name: 'Necklace', starter: true },
-  { id: 'wristbands', name: 'Wristbands', starter: true },
-  { id: 'cape', name: 'Cape', starter: true },
-  { id: 'turban', name: 'Turban', starter: true },
-  { id: 'hat', name: 'Wide hat', starter: true },
-  { id: 'eyepatch', name: 'Eyepatch', starter: true },
-  { id: 'scarf', name: 'Scarf', starter: true },
-  { id: 'scouter', name: 'Scouter', starter: false, item: 'scouter' },
-  { id: 'potara', name: 'Potara earrings', starter: false, item: 'potara' },
-  { id: 'sword', name: 'Sword on the back', starter: false, item: 'z_sword' },
-  { id: 'pole', name: 'Power Pole', starter: false, item: 'power_pole' },
-  { id: 'belt', name: 'Championship belt', starter: false, item: 'championship_belt' },
-  { id: 'shell', name: 'Turtle shell', starter: false, item: 'turtle_shell' },
-  { id: 'halo', name: 'Halo', starter: false },
-  { id: 'custom', name: 'Something else', starter: true },
-];
-
-/** Every accessory the character is wearing right now, from all sources. */
-function wornAccessories(character) {
-  const a = character.appearance || {};
-  const out = new Set(a.accessories || []);
-  const items = character.items || [];
-  for (const acc of ACCESSORY_PRESETS) {
-    if (acc.item && items.includes(acc.item)) out.add(acc.id);
-  }
-  // Shop accessories carry the id of what they put on you.
-  for (const id of items) {
-    if (id.startsWith('acc_')) out.add(id.slice(4));
-  }
-  if (items.includes('cyber_eye')) out.add('cyber_eye');
-  if (character.inAfterlife && !character.keptBody) out.add('halo');
-  // Missing an eye without a patch is a choice; the default is the patch.
-  const marks = allMarks(character);
-  if (marks.includes('missing_eye') && !out.has('cyber_eye')) out.add('eyepatch');
-  return [...out];
-}
-
-/** Marks from creation plus everything the life has left on the body. */
-function allMarks(character) {
-  const a = character.appearance || {};
-  const list = (a.marks || []).slice();
-  // Legacy single marking from older saves.
-  if (a.marking && a.marking !== 'none' && !list.length) {
-    list.push(a.marking === 'scar' ? 'scar_cheek' : a.marking);
-  }
-  for (const sc of character.scars || []) if (sc.mark && !list.includes(sc.mark)) list.push(sc.mark);
-  return list;
-}
-
-function look(list, id, fallback) {
-  return list.find((x) => x.id === id) || list.find((x) => x.id === fallback) || list[0];
-}
-
-/**
- * Hair comes in two layers: anything that hangs down (a braid, a ponytail,
- * long hair) is drawn behind the head, and the cap and fringe are drawn over
- * it. Drawing them together is what puts a plait down somebody's face.
- */
-function hairBackPath(style, headTop, cx, headR) {
-  const crown = headTop - 12;
-  const brow = headTop + 16;
-  const L = cx - headR - 2;
-  const R = cx + headR + 2;
-  switch (style) {
-    case 'long':
-      return `M${L - 2} ${brow} Q${cx} ${crown - 6} ${R + 2} ${brow}
-        L${R + 8} ${brow + 112} L${R - 12} ${brow + 106}
-        L${R - 12} ${brow + 30} L${L + 12} ${brow + 30}
-        L${L + 12} ${brow + 106} L${L - 8} ${brow + 112} Z`;
-    case 'ponytail':
-      return `M${R - 10} ${brow - 6} L${R + 14} ${brow + 6} L${R + 22} ${brow + 70}
-        L${R + 4} ${brow + 72} L${R - 8} ${brow + 14} Z`;
-    case 'braid':
-      return `M${cx - 8} ${brow + 4} L${cx + 8} ${brow + 4}
-        L${cx + 6} ${brow + 104} L${cx - 6} ${brow + 104} Z`;
-    default:
-      return '';
-  }
-}
-
-function hairPath(style, headTop, cx, headR) {
-  const crown = headTop - 12;          // top of the skull
-  const L = cx - headR - 2;            // just outside the left temple
-  const R = cx + headR + 2;
-  const brow = headTop + 16;           // where the hairline meets the face
-  // A filled dome: up over the crown, then back along the hairline.
-  const cap = `M${L} ${brow + 2} Q${cx} ${crown - 14} ${R} ${brow + 2}
-    Q${cx} ${brow + 12} ${L} ${brow + 2} Z`;
-
-  switch (style) {
-    case 'spiked':
-      return `M${L} ${brow + 8}
-        L${L - 6} ${crown - 26} L${cx - headR * 0.55} ${crown - 4}
-        L${cx - headR * 0.3} ${crown - 40} L${cx - 4} ${crown - 6}
-        L${cx + headR * 0.15} ${crown - 44} L${cx + headR * 0.45} ${crown - 6}
-        L${cx + headR * 0.7} ${crown - 30} L${R + 6} ${crown - 4}
-        L${R} ${brow + 8}
-        Q${cx} ${brow + 16} ${L} ${brow + 8} Z`;
-    case 'wild':
-      return `M${L} ${brow + 10}
-        C${L - 12} ${crown - 8} ${cx - headR * 0.6} ${crown - 26} ${cx - headR * 0.5} ${crown - 2}
-        C${cx - headR * 0.3} ${crown - 32} ${cx - 2} ${crown - 30} ${cx - 2} ${crown - 2}
-        C${cx + headR * 0.25} ${crown - 28} ${cx + headR * 0.7} ${crown - 22} ${cx + headR * 0.55} ${crown}
-        C${R + 8} ${crown - 12} ${R + 14} ${crown + 16} ${R} ${brow + 10}
-        Q${cx} ${brow + 18} ${L} ${brow + 10} Z`;
-    case 'long':
-    case 'ponytail':
-    case 'braid':
-      return cap;
-    case 'bob':
-      return `M${L - 4} ${brow + 44} Q${L - 6} ${crown - 14} ${cx} ${crown - 16}
-        Q${R + 6} ${crown - 14} ${R + 4} ${brow + 44}
-        L${R - 8} ${brow + 40} Q${R - 10} ${brow + 6} ${cx} ${brow + 4}
-        Q${L + 10} ${brow + 6} ${L + 8} ${brow + 40} Z`;
-    case 'cropped':
-      return `M${L} ${brow - 2} Q${cx} ${crown - 8} ${R} ${brow - 2}
-        Q${cx} ${brow + 8} ${L} ${brow - 2} Z`;
-    case 'mohawk':
-      return `M${cx - 10} ${brow} C${cx - 13} ${crown - 34} ${cx + 13} ${crown - 34} ${cx + 10} ${brow}
-        Q${cx} ${brow + 8} ${cx - 10} ${brow} Z`;
-    case 'topknot':
-      return `${cap}
-        M${cx - 12} ${crown - 2} C${cx - 14} ${crown - 26} ${cx + 14} ${crown - 26} ${cx + 12} ${crown - 2} Z`;
-    default:
-      return '';
-  }
-}
-
-function eyeShape(shape, x, y, colour) {
-  switch (shape) {
-    case 'narrow':
-      return `<rect x="${x - 9}" y="${y - 2}" width="18" height="5" rx="2.5" fill="${colour}"/>`;
-    case 'round':
-      return `<circle cx="${x}" cy="${y}" r="6" fill="${colour}"/>`;
-    case 'wide':
-      return `<ellipse cx="${x}" cy="${y}" rx="8.5" ry="7" fill="${colour}"/>`;
-    case 'heavy':
-      return `<path d="M${x - 9} ${y} q9 -8 18 0 q-9 6 -18 0 Z" fill="${colour}"/>`;
-    default: // sharp
-      return `<path d="M${x - 10} ${y + 3} L${x + 10} ${y - 4} L${x + 9} ${y + 3} Z" fill="${colour}"/>`;
-  }
-}
-
-/**
- * Build the portrait. `character` is the live character object; `opts.form`
- * adds the aura and hair changes of an active transformation.
- */
-function portraitSvg(character, opts = {}) {
-  const a = character.appearance || {};
-  const skin = look(SKIN_TONES, a.skin, 'light').hex;
-  const hairColour = look(HAIR_COLOURS, a.hairColour, 'black').hex;
-  const eyeColour = look(EYE_COLOURS, a.eyeColour, 'black').hex;
-  const outfit = look(OUTFITS, a.outfit, 'gi_orange');
-  const style = a.hairStyle || 'spiked';
-  const face = a.face || 'square';
-  const build = a.buildShape || 'balanced';
-  const race = character.raceId;
-
-  const W = 220;
-  const H = 260;
-  const cx = W / 2;
-  const headTop = 44;
-  const headR = face === 'round' ? 40 : face === 'long' ? 36 : 38;
-  const headH = face === 'long' ? 52 : face === 'round' ? 42 : 46;
-  const chin = headTop + headH + 18;
-
-  const shoulderWidth = { small: 44, wiry: 50, lean: 56, balanced: 62, stocky: 70, massive: 80 }[build] || 62;
-  const neckWidth = { small: 11, wiry: 12, lean: 13, balanced: 15, stocky: 18, massive: 21 }[build] || 15;
-
-  const goldHair = opts.form && /Super Saiyan|Golden/.test(opts.form.name);
-  const finalHair = goldHair ? '#f2cf4a' : hairColour;
-  const auraColour = !opts.form ? null
-    : /Blue/.test(opts.form.name) ? '#4fa8ff'
-      : /God|Ultra Ego/.test(opts.form.name) ? '#ff5f7a'
-        : /Ultra Instinct|Mastered/.test(opts.form.name) ? '#dfe7ef'
-          : goldHair ? '#ffd24a' : '#b98cff';
-
-  const parts = [];
-
-  parts.push(`<defs>
-    <radialGradient id="pg-bg" cx="50%" cy="34%" r="72%">
-      <stop offset="0%" stop-color="var(--surface-2)"/>
-      <stop offset="100%" stop-color="var(--ground)"/>
-    </radialGradient>
-    <radialGradient id="pg-aura" cx="50%" cy="55%" r="55%">
-      <stop offset="0%" stop-color="${auraColour || '#000'}" stop-opacity="0.55"/>
-      <stop offset="100%" stop-color="${auraColour || '#000'}" stop-opacity="0"/>
-    </radialGradient>
-  </defs>`);
-  parts.push(`<rect width="${W}" height="${H}" fill="url(#pg-bg)"/>`);
-  if (auraColour) parts.push(`<rect width="${W}" height="${H}" fill="url(#pg-aura)"/>`);
-
-  // Saiyan tail, behind the body.
-  if (character.tail) {
-    parts.push(`<path d="M${cx + shoulderWidth - 6} ${H - 10} C${cx + shoulderWidth + 34} ${H - 60}
-      ${cx + shoulderWidth + 10} ${H - 108} ${cx + shoulderWidth - 16} ${H - 96}"
-      fill="none" stroke="#7a4a24" stroke-width="9" stroke-linecap="round"/>`);
-  }
-
-  // Hair that hangs down goes behind everything else.
-  const hasHair = !['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(race) && style !== 'bald';
-  if (hasHair) {
-    const back = hairBackPath(style, headTop, cx, headR);
-    if (back) parts.push(`<path d="${back.replace(/\s+/g, ' ')}" fill="${finalHair}" opacity="0.92"/>`);
-  }
-
-  // Torso and clothing.
-  parts.push(`<path d="M${cx - shoulderWidth} ${H} L${cx - shoulderWidth + 6} ${chin + 26}
-    Q${cx} ${chin + 2} ${cx + shoulderWidth - 6} ${chin + 26} L${cx + shoulderWidth} ${H} Z"
-    fill="${outfit.main || skin}"/>`);
-  if (outfit.main) {
-    parts.push(`<path d="M${cx - 16} ${chin + 14} L${cx} ${chin + 44} L${cx + 16} ${chin + 14}
-      L${cx + 26} ${chin + 22} L${cx} ${H} L${cx - 26} ${chin + 22} Z" fill="${outfit.trim}" opacity="0.9"/>`);
-    if (outfit.id.startsWith('armour')) {
-      parts.push(`<path d="M${cx - shoulderWidth + 2} ${chin + 34} q${shoulderWidth} -22 ${shoulderWidth * 2 - 4} 0"
-        fill="none" stroke="${outfit.trim}" stroke-width="6"/>`);
-    }
-  }
-
-  // Neck and head.
-  parts.push(`<rect x="${cx - neckWidth / 2}" y="${chin - 14}" width="${neckWidth}" height="26" fill="${skin}"/>`);
-  parts.push(`<path d="M${cx - headR} ${headTop + 18}
-    Q${cx - headR} ${headTop - 12} ${cx} ${headTop - 12}
-    Q${cx + headR} ${headTop - 12} ${cx + headR} ${headTop + 18}
-    L${cx + headR - 4} ${headTop + headH}
-    Q${cx} ${chin + 6} ${cx - headR + 4} ${headTop + headH} Z" fill="${skin}"/>`);
-
-  // Ears, or whatever this species has instead.
-  if (race === 'namekian') {
-    parts.push(`<path d="M${cx - headR + 2} ${headTop + 34} l-16 -6 l16 12 Z" fill="${skin}"/>`);
-    parts.push(`<path d="M${cx + headR - 2} ${headTop + 34} l16 -6 l-16 12 Z" fill="${skin}"/>`);
-    parts.push(`<path d="M${cx - 12} ${headTop - 6} q2 -22 -8 -30" fill="none" stroke="${skin}" stroke-width="5" stroke-linecap="round"/>`);
-    parts.push(`<path d="M${cx + 12} ${headTop - 6} q-2 -22 8 -30" fill="none" stroke="${skin}" stroke-width="5" stroke-linecap="round"/>`);
-  } else if (race === 'frostdemon') {
-    parts.push(`<path d="M${cx - headR + 6} ${headTop + 6} l-20 -14 l6 20 Z" fill="#c8b8d8"/>`);
-    parts.push(`<path d="M${cx + headR - 6} ${headTop + 6} l20 -14 l-6 20 Z" fill="#c8b8d8"/>`);
-    parts.push(`<ellipse cx="${cx}" cy="${headTop + 4}" rx="${headR - 8}" ry="14" fill="#b7a6cc" opacity="0.85"/>`);
-  } else if (race === 'majin') {
-    parts.push(`<path d="M${cx + 6} ${headTop - 8} c14 -18 34 -8 26 12 c-6 14 -22 12 -26 2"
-      fill="none" stroke="${skin}" stroke-width="9" stroke-linecap="round"/>`);
-  } else if (race === 'shinjin') {
-    parts.push(`<circle cx="${cx - headR + 2}" cy="${headTop + 38}" r="4" fill="#e2c96a"/>`);
-    parts.push(`<circle cx="${cx + headR - 2}" cy="${headTop + 38}" r="4" fill="#e2c96a"/>`);
-  } else {
-    parts.push(`<ellipse cx="${cx - headR + 1}" cy="${headTop + 32}" rx="5" ry="8" fill="${skin}"/>`);
-    parts.push(`<ellipse cx="${cx + headR - 1}" cy="${headTop + 32}" rx="5" ry="8" fill="${skin}"/>`);
-  }
-
-  // Hair.
-  if (hasHair) {
-    const d = hairPath(style, headTop, cx, headR);
-    if (d) parts.push(`<path d="${d.replace(/\s+/g, ' ')}" fill="${finalHair}"/>`);
-  }
-
-  // Face.
-  const eyeY = headTop + 30;
-  parts.push(eyeShape(a.eyeShape || 'sharp', cx - 15, eyeY, eyeColour));
-  parts.push(eyeShape(a.eyeShape || 'sharp', cx + 15, eyeY, eyeColour));
-  const browColour = hasHair ? finalHair : 'rgba(0,0,0,.32)';
-  parts.push(`<path d="M${cx - 20} ${eyeY - 11} l14 -4" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
-  parts.push(`<path d="M${cx + 20} ${eyeY - 11} l-14 -4" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
-  parts.push(`<path d="M${cx - 7} ${headTop + 52} q7 5 14 0" fill="none" stroke="rgba(0,0,0,.42)" stroke-width="2.4" stroke-linecap="round"/>`);
-
-  drawMarks(parts, character, { cx, headTop, headH, headR, chin, eyeY, eyeColour, skin, shoulderWidth, H });
-  drawAccessories(parts, character, { cx, headTop, headH, headR, chin, eyeY, skin, shoulderWidth, H, hasHair, hairColour: finalHair, outfit });
-
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" role="img" aria-label="Character portrait" xmlns="http://www.w3.org/2000/svg">${parts.join('')}</svg>`;
-}
-
-const SCAR = 'rgba(60,20,20,.55)';
-const INK = 'rgba(20,20,40,.55)';
-const METAL = '#9aa3b2';
-
-function drawMarks(parts, character, g) {
-  const { cx, headTop, headH, headR, chin, eyeY, eyeColour, shoulderWidth, H } = g;
-  const marks = allMarks(character);
-  for (const m of marks) {
-    switch (m) {
-      case 'scar_cheek':
-        parts.push(`<path d="M${cx + 10} ${headTop + 14} l7 30" stroke="${SCAR}" stroke-width="2.6" stroke-linecap="round"/>`);
-        break;
-      case 'scar_eye':
-        parts.push(`<path d="M${cx - 21} ${eyeY - 16} l12 34" stroke="${SCAR}" stroke-width="2.6" stroke-linecap="round"/>`);
-        break;
-      case 'scar_brow':
-        parts.push(`<path d="M${cx + 13} ${eyeY - 18} l3 10" stroke="${SCAR}" stroke-width="2.8" stroke-linecap="round"/>`);
-        break;
-      case 'scar_chest':
-        parts.push(`<path d="M${cx - 18} ${chin + 30} l36 26" stroke="${SCAR}" stroke-width="3" stroke-linecap="round"/>`);
-        break;
-      case 'scar_arm':
-        parts.push(`<path d="M${cx + shoulderWidth - 12} ${chin + 44} l4 40" stroke="${SCAR}" stroke-width="2.6" stroke-linecap="round"/>`);
-        break;
-      case 'burn_arm':
-        for (let i = 0; i < 4; i++) {
-          parts.push(`<ellipse cx="${cx - shoulderWidth + 12 + (i % 2) * 6}" cy="${chin + 50 + i * 12}" rx="5" ry="3.5" fill="rgba(120,40,30,.4)"/>`);
-        }
-        break;
-      case 'burn_face':
-        parts.push(`<path d="M${cx - headR + 6} ${headTop + headH - 6} q10 12 26 10" stroke="rgba(120,40,30,.45)" stroke-width="7" stroke-linecap="round" fill="none"/>`);
-        break;
-      case 'missing_eye':
-        // The eye itself is gone; the patch (or the mechanical eye) is drawn
-        // over it by the accessory pass.
-        parts.push(`<path d="M${cx + 8} ${eyeY} q7 -3 14 0" stroke="rgba(0,0,0,.45)" stroke-width="2.4" fill="none"/>`);
-        break;
-      case 'missing_ear':
-        parts.push(`<path d="M${cx + headR - 4} ${headTop + 26} l4 12" stroke="${SCAR}" stroke-width="3" stroke-linecap="round"/>`);
-        break;
-      case 'missing_arm':
-        parts.push(`<path d="M${cx - shoulderWidth - 2} ${chin + 40} L${cx - shoulderWidth + 14} ${chin + 40} L${cx - shoulderWidth + 10} ${H} L${cx - shoulderWidth - 6} ${H} Z" fill="var(--ground)"/>`);
-        parts.push(`<path d="M${cx - shoulderWidth} ${chin + 42} q8 -6 14 0" stroke="${SCAR}" stroke-width="3" fill="none"/>`);
-        break;
-      case 'cyber_eye':
-        parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="7" fill="${METAL}"/>`);
-        parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="3" fill="#d1322a"/>`);
-        break;
-      case 'cyber_arm':
-        parts.push(`<path d="M${cx + shoulderWidth - 20} ${chin + 40} L${cx + shoulderWidth + 2} ${chin + 36} L${cx + shoulderWidth} ${H} L${cx + shoulderWidth - 18} ${H} Z" fill="${METAL}"/>`);
-        parts.push(`<path d="M${cx + shoulderWidth - 16} ${chin + 60} h14 M${cx + shoulderWidth - 15} ${chin + 80} h14" stroke="#5e6673" stroke-width="2"/>`);
-        break;
-      case 'dots':
-        for (let i = 0; i < 3; i++) parts.push(`<circle cx="${cx - 10 + i * 10}" cy="${headTop + 8}" r="2.2" fill="rgba(0,0,0,.4)"/>`);
-        break;
-      case 'thirdeye':
-        parts.push(eyeShape('round', cx, headTop + 12, eyeColour));
-        break;
-      case 'tattoo_face':
-        parts.push(`<path d="M${cx - headR + 8} ${eyeY + 6} q6 10 0 20 M${cx - headR + 12} ${eyeY + 2} q10 14 2 28" stroke="${INK}" stroke-width="2" fill="none"/>`);
-        break;
-      case 'tattoo_arm':
-        parts.push(`<path d="M${cx + shoulderWidth - 16} ${chin + 46} q10 8 0 18 q-10 8 0 18 q10 8 0 18" stroke="${INK}" stroke-width="2.4" fill="none"/>`);
-        break;
-      case 'crack_tooth':
-        parts.push(`<path d="M${cx - 2} ${headTop + 53} l1 4" stroke="rgba(255,255,255,.8)" stroke-width="2"/>`);
-        break;
-      case 'birthmark':
-        parts.push(`<ellipse cx="${cx - 12}" cy="${headTop + 46}" rx="4" ry="3" fill="rgba(90,40,30,.45)"/>`);
-        break;
-      case 'custom':
-        // Something the player described; we cannot draw it faithfully, so it
-        // is a mark, placed where a mark would be.
-        parts.push(`<path d="M${cx - 6} ${chin + 34} l12 14 M${cx + 6} ${chin + 34} l-12 14" stroke="${SCAR}" stroke-width="2.4" stroke-linecap="round"/>`);
-        break;
-      default:
-        break;
-    }
-  }
-}
-
-function drawAccessories(parts, character, g) {
-  const { cx, headTop, headH, headR, chin, eyeY, shoulderWidth, H, hairColour, outfit } = g;
-  const worn = wornAccessories(character);
-  const trim = (outfit && outfit.trim) || '#c9a227';
-  for (const acc of worn) {
-    switch (acc) {
-      case 'headband':
-        parts.push(`<path d="M${cx - headR + 2} ${headTop + 6} Q${cx} ${headTop - 2} ${cx + headR - 2} ${headTop + 6}" stroke="#c0392b" stroke-width="7" fill="none"/>`);
-        break;
-      case 'bandana':
-        parts.push(`<path d="M${cx - headR} ${headTop + 8} Q${cx} ${headTop - 20} ${cx + headR} ${headTop + 8} Q${cx} ${headTop + 2} ${cx - headR} ${headTop + 8} Z" fill="#2f5bb7"/>`);
-        parts.push(`<path d="M${cx + headR - 4} ${headTop + 8} l16 14 l-6 -14" fill="#2f5bb7"/>`);
-        break;
-      case 'turban':
-        parts.push(`<ellipse cx="${cx}" cy="${headTop - 2}" rx="${headR + 4}" ry="20" fill="#e8e2d6"/>`);
-        parts.push(`<path d="M${cx - headR} ${headTop + 2} Q${cx} ${headTop - 18} ${cx + headR} ${headTop + 2}" stroke="#d8cdb9" stroke-width="3" fill="none"/>`);
-        break;
-      case 'hat':
-        parts.push(`<ellipse cx="${cx}" cy="${headTop + 2}" rx="${headR + 26}" ry="8" fill="#3c3229"/>`);
-        parts.push(`<path d="M${cx - headR + 4} ${headTop + 2} Q${cx} ${headTop - 34} ${cx + headR - 4} ${headTop + 2} Z" fill="#4a3d32"/>`);
-        break;
-      case 'glasses':
-        parts.push(`<circle cx="${cx - 15}" cy="${eyeY}" r="9" stroke="#2a2a30" stroke-width="2" fill="none"/>`);
-        parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="9" stroke="#2a2a30" stroke-width="2" fill="none"/>`);
-        parts.push(`<path d="M${cx - 6} ${eyeY} h12" stroke="#2a2a30" stroke-width="2"/>`);
-        break;
-      case 'sunglasses':
-        parts.push(`<rect x="${cx - 25}" y="${eyeY - 7}" width="20" height="13" rx="4" fill="#1a1620"/>`);
-        parts.push(`<rect x="${cx + 5}" y="${eyeY - 7}" width="20" height="13" rx="4" fill="#1a1620"/>`);
-        parts.push(`<path d="M${cx - 5} ${eyeY - 2} h10" stroke="#1a1620" stroke-width="2"/>`);
-        break;
-      case 'eyepatch':
-        parts.push(`<path d="M${cx + 6} ${eyeY - 9} h18 v16 h-18 Z" fill="#1a1620"/>`);
-        parts.push(`<path d="M${cx - headR} ${headTop + 22} L${cx + 24} ${eyeY - 8} M${cx + 24} ${eyeY - 8} L${cx + headR} ${headTop + 16}" stroke="#1a1620" stroke-width="2" fill="none"/>`);
-        break;
-      case 'scouter':
-        parts.push(`<path d="M${cx + headR - 2} ${headTop + 30} l-6 -14 l-26 4" stroke="#3a3a44" stroke-width="3" fill="none"/>`);
-        parts.push(`<rect x="${cx + 4}" y="${eyeY - 9}" width="20" height="15" rx="3" fill="#3fd6a4" opacity="0.8"/>`);
-        break;
-      case 'cyber_eye':
-        break;
-      case 'earring':
-        parts.push(`<circle cx="${cx + headR + 1}" cy="${headTop + 41}" r="3" fill="${trim}"/>`);
-        break;
-      case 'earrings':
-        parts.push(`<circle cx="${cx + headR + 1}" cy="${headTop + 41}" r="3" fill="${trim}"/>`);
-        parts.push(`<circle cx="${cx - headR - 1}" cy="${headTop + 41}" r="3" fill="${trim}"/>`);
-        break;
-      case 'potara':
-        parts.push(`<circle cx="${cx + headR + 2}" cy="${headTop + 42}" r="5" fill="#3fa46a"/>`);
-        parts.push(`<circle cx="${cx - headR - 2}" cy="${headTop + 42}" r="5" fill="#3fa46a"/>`);
-        break;
-      case 'necklace':
-        parts.push(`<path d="M${cx - 16} ${chin + 12} Q${cx} ${chin + 34} ${cx + 16} ${chin + 12}" stroke="${trim}" stroke-width="2.4" fill="none"/>`);
-        parts.push(`<circle cx="${cx}" cy="${chin + 33}" r="3.5" fill="${trim}"/>`);
-        break;
-      case 'scarf':
-        parts.push(`<path d="M${cx - 20} ${chin + 6} Q${cx} ${chin + 22} ${cx + 20} ${chin + 6} L${cx + 22} ${chin + 18} Q${cx} ${chin + 34} ${cx - 22} ${chin + 18} Z" fill="#c0392b"/>`);
-        parts.push(`<path d="M${cx + 8} ${chin + 24} l6 40 l10 -4 l-8 -38 Z" fill="#c0392b"/>`);
-        break;
-      case 'wristbands':
-        parts.push(`<rect x="${cx - shoulderWidth - 2}" y="${H - 34}" width="18" height="10" rx="2" fill="#2f5bb7"/>`);
-        parts.push(`<rect x="${cx + shoulderWidth - 16}" y="${H - 34}" width="18" height="10" rx="2" fill="#2f5bb7"/>`);
-        break;
-      case 'cape':
-        parts.push(`<path d="M${cx - shoulderWidth + 2} ${chin + 24} L${cx - shoulderWidth - 14} ${H} L${cx - shoulderWidth + 8} ${H} Z" fill="#e8e2d6" opacity="0.95"/>`);
-        parts.push(`<path d="M${cx + shoulderWidth - 2} ${chin + 24} L${cx + shoulderWidth + 14} ${H} L${cx + shoulderWidth - 8} ${H} Z" fill="#e8e2d6" opacity="0.95"/>`);
-        parts.push(`<path d="M${cx - shoulderWidth + 4} ${chin + 26} q${shoulderWidth - 4} -14 ${shoulderWidth * 2 - 8} 0" stroke="#e8e2d6" stroke-width="7" fill="none"/>`);
-        break;
-      case 'belt':
-        parts.push(`<rect x="${cx - 30}" y="${H - 22}" width="60" height="14" rx="3" fill="#3a2a10"/>`);
-        parts.push(`<rect x="${cx - 14}" y="${H - 24}" width="28" height="18" rx="4" fill="#f5c451"/>`);
-        break;
-      case 'shell':
-        parts.push(`<path d="M${cx - shoulderWidth - 8} ${chin + 40} q${shoulderWidth + 8} -18 ${(shoulderWidth + 8) * 2} 0 L${cx + shoulderWidth + 4} ${chin + 60} L${cx - shoulderWidth - 4} ${chin + 60} Z" fill="#6b5a3a" opacity="0.9"/>`);
-        parts.push(`<path d="M${cx - shoulderWidth + 6} ${chin + 30} L${cx + shoulderWidth - 6} ${chin + 30}" stroke="#6b5a3a" stroke-width="5"/>`);
-        break;
-      case 'sword':
-        parts.push(`<path d="M${cx + shoulderWidth - 30} ${chin + 20} l-16 -50" stroke="#5a4a3a" stroke-width="6" stroke-linecap="round"/>`);
-        parts.push(`<path d="M${cx + shoulderWidth - 40} ${chin - 20} l-12 -6 M${cx + shoulderWidth - 44} ${chin - 32} l12 -3" stroke="#c9a227" stroke-width="4" stroke-linecap="round"/>`);
-        parts.push(`<path d="M${cx - shoulderWidth + 6} ${chin + 26} L${cx + shoulderWidth - 6} ${H - 30}" stroke="#5a4a3a" stroke-width="4"/>`);
-        break;
-      case 'pole':
-        parts.push(`<path d="M${cx - shoulderWidth + 20} ${chin - 40} L${cx + shoulderWidth - 20} ${H}" stroke="#c0392b" stroke-width="5" stroke-linecap="round"/>`);
-        break;
-      case 'halo':
-        parts.push(`<ellipse cx="${cx}" cy="${headTop - 30}" rx="24" ry="6" stroke="#f5c451" stroke-width="4" fill="none" opacity="0.95"/>`);
-        break;
-      case 'custom': {
-        // A described accessory gets a small, neutral badge at the collar so it
-        // is at least visibly there.
-        parts.push(`<rect x="${cx + 18}" y="${chin + 14}" width="10" height="10" rx="2" fill="${trim}"/>`);
-        break;
-      }
-      default:
-        break;
-    }
-  }
-}
-
-/** Sensible defaults for a species, used when randomising. */
-function defaultAppearance(rng, raceId) {
-  const skinByRace = {
-    namekian: 'green', majin: 'pink', frostdemon: 'white', shinjin: 'purple',
-    bioandroid: 'green', android: 'light', tuffle: 'grey',
-  };
-  const outfitByRace = {
-    saiyan: 'armour_saiyan', halfsaiyan: 'gi_orange', namekian: 'namek_robe',
-    frostdemon: 'armour_frieza', android: 'casual', bioandroid: 'none',
-    shinjin: 'kai', majin: 'none', tuffle: 'lab', yardratian: 'namek_robe',
-    cerealian: 'coat', earthling: 'gi_orange',
-  };
-  return {
-    hairStyle: rng.pick(HAIR_STYLES).id,
-    hairColour: rng.pick(HAIR_COLOURS).id,
-    eyeShape: rng.pick(EYE_SHAPES).id,
-    eyeColour: rng.pick(EYE_COLOURS).id,
-    skin: skinByRace[raceId] || rng.pick(SKIN_TONES.slice(0, 5)).id,
-    face: rng.pick(FACE_SHAPES).id,
-    outfit: outfitByRace[raceId] || 'casual',
-    marks: rng.chance(0.4) ? [rng.pick(['scar_cheek', 'scar_brow', 'dots', 'thirdeye', 'birthmark', 'tattoo_arm', 'scar_chest'])] : [],
-    customMark: '',
-    accessories: rng.chance(0.35) ? [rng.pick(ACCESSORY_PRESETS.filter((x) => x.starter && x.id !== 'custom')).id] : [],
-    customAccessory: '',
-    buildShape: 'balanced',
-    heightCm: rng.int(150, 200),
-    weightKg: rng.int(48, 110),
-    stance: rng.pick(STANCES).id,
-    stanceName: '',
-  };
-}
-  return { HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS, SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES, BUILD_SHAPES, MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks, portraitSvg, defaultAppearance };
+  return { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort, initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish, PRESETS, save, load, listSaves, clearSlot, exportString, importString, allTemplates, ladderStatus, nearbyForms, unlockableForms, Rng, ACTIONS, availableActions, runAction, actionOptions };
 })();
 
 /* ==== engine/social.js ==== */
@@ -16113,7 +17613,7 @@ const { STAT_KEYS, STAT_LABELS, combatPower, powerTier } = __mod_engine_stats_js
 const { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } = __mod_engine_npc_js;
 const { npcActions, runNpcAction } = __mod_engine_social_js;
 const { scoreReplyLocally, applyReply, impressionLabel } = __mod_engine_dialogue_js;
-const { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint } = __mod_engine_ai_js;
+const { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } = __mod_engine_ai_js;
 const { numberish, zeni } = __mod_engine_text_js;
 const { getRng, saveRng } = __mod_engine_state_js;
 const { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } = __mod_engine_battle_js;
@@ -16192,17 +17692,6 @@ function fillSelect(node, values, selected, labelFn) {
   }
 }
 
-let CREATE_TAB = 'face';
-
-const CREATE_TABS = [
-  { id: 'face', label: 'Face' },
-  { id: 'hair', label: 'Hair' },
-  { id: 'body', label: 'Body' },
-  { id: 'clothes', label: 'Clothes' },
-  { id: 'marks', label: 'Marks' },
-  { id: 'self', label: 'Self' },
-  { id: 'origin', label: 'Origin' },
-];
 
 function swatchRow(container, list, selectedId, onPick) {
   const wrap = el('div', 'swatches');
@@ -16224,13 +17713,9 @@ function labelled(container, text) {
 
 function renderCreation() {
   const race = getRace(DRAFT.raceId);
-  if (!DRAFT.look) DRAFT.look = defaultAppearance(new Rng(Date.now()), DRAFT.raceId);
 
   optionRow($('opt-race'), RACES.map((r) => ({ id: r.id, name: r.short })), DRAFT.raceId, (id) => {
     DRAFT.raceId = id;
-    const r = getRace(id);
-    DRAFT.placeId = r.homeworlds[0];
-    DRAFT.look = defaultAppearance(new Rng(Date.now() ^ 7), id);
     if (!DRAFT.nameTouched) DRAFT.name = generateFullName(new Rng(Date.now()), id);
     renderCreation();
   });
@@ -16242,228 +17727,40 @@ function renderCreation() {
   card.appendChild(el('div', 'race-note', race.notes));
 
   $('in-name').value = DRAFT.name;
-  renderPortraitPreview();
 
-  const tabs = $('create-tabs');
-  tabs.innerHTML = '';
-  for (const tab of CREATE_TABS) {
-    const b = el('button', 'ctab' + (CREATE_TAB === tab.id ? ' active' : ''), tab.label);
-    b.type = 'button';
-    b.addEventListener('click', () => { CREATE_TAB = tab.id; renderCreation(); });
-    tabs.appendChild(b);
-  }
-
-  const panel = $('create-panel');
-  panel.innerHTML = '';
-  const look = DRAFT.look;
-  const set = (key, value) => { look[key] = value; renderCreation(); };
-
-  if (CREATE_TAB === 'face') {
-    labelled(panel, 'Skin');
-    swatchRow(panel, SKIN_TONES, look.skin, (v) => set('skin', v));
-    labelled(panel, 'Face shape');
-    const faces = el('div', 'opts');
-    for (const f of FACE_SHAPES) {
-      const b = el('button', 'opt' + (look.face === f.id ? ' on' : ''), f.name);
-      b.type = 'button';
-      b.addEventListener('click', () => set('face', f.id));
-      faces.appendChild(b);
-    }
-    panel.appendChild(faces);
-    labelled(panel, 'Eye shape');
-    const eyes = el('div', 'opts');
-    for (const e2 of EYE_SHAPES) {
-      const b = el('button', 'opt' + (look.eyeShape === e2.id ? ' on' : ''), e2.name);
-      b.type = 'button';
-      b.addEventListener('click', () => set('eyeShape', e2.id));
-      eyes.appendChild(b);
-    }
-    panel.appendChild(eyes);
-    labelled(panel, 'Eye colour');
-    swatchRow(panel, EYE_COLOURS, look.eyeColour, (v) => set('eyeColour', v));
-  } else if (CREATE_TAB === 'hair') {
-    labelled(panel, 'Style');
-    const styles = el('div', 'opts');
-    for (const st of HAIR_STYLES) {
-      const b = el('button', 'opt' + (look.hairStyle === st.id ? ' on' : ''), st.name);
-      b.type = 'button';
-      b.addEventListener('click', () => set('hairStyle', st.id));
-      styles.appendChild(b);
-    }
-    panel.appendChild(styles);
-    labelled(panel, 'Colour');
-    swatchRow(panel, HAIR_COLOURS, look.hairColour, (v) => set('hairColour', v));
-    if (['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(DRAFT.raceId)) {
-      panel.appendChild(el('p', 'hint-text', `${race.short}s do not grow hair. The style is ignored.`));
-    }
-  } else if (CREATE_TAB === 'body') {
-    labelled(panel, 'Build');
-    optionRow(panel.appendChild(el('div', 'opts')), BODY_TYPES, DRAFT.bodyId, (id) => {
-      DRAFT.bodyId = id;
-      look.buildShape = id;
-      renderCreation();
-    });
-    labelled(panel, 'Height');
-    const hRow = el('div', 'slider-row');
-    const hIn = el('input');
-    hIn.type = 'range'; hIn.min = '110'; hIn.max = '260'; hIn.value = String(look.heightCm);
-    hIn.addEventListener('input', () => {
-      look.heightCm = Number(hIn.value);
-      $('create-sub-echo').textContent = describeBody();
-      hVal.textContent = look.heightCm + ' cm';
-    });
-    const hVal = el('div', 'slider-val', look.heightCm + ' cm');
-    hRow.appendChild(hIn); hRow.appendChild(hVal);
-    panel.appendChild(hRow);
-
-    labelled(panel, 'Weight');
-    const wRow = el('div', 'slider-row');
-    const wIn = el('input');
-    wIn.type = 'range'; wIn.min = '30'; wIn.max = '260'; wIn.value = String(look.weightKg);
-    wIn.addEventListener('input', () => {
-      look.weightKg = Number(wIn.value);
-      $('create-sub-echo').textContent = describeBody();
-      wVal.textContent = look.weightKg + ' kg';
-    });
-    const wVal = el('div', 'slider-val', look.weightKg + ' kg');
-    wRow.appendChild(wIn); wRow.appendChild(wVal);
-    panel.appendChild(wRow);
-  } else if (CREATE_TAB === 'clothes') {
-    labelled(panel, 'What you wear');
-    const fits = el('div', 'opts');
-    for (const o of OUTFITS) {
-      const b = el('button', 'opt' + (look.outfit === o.id ? ' on' : ''), o.name);
-      b.type = 'button';
-      b.addEventListener('click', () => set('outfit', o.id));
-      fits.appendChild(b);
-    }
-    panel.appendChild(fits);
-  } else if (CREATE_TAB === 'marks') {
-    look.marks = look.marks || [];
-    look.accessories = look.accessories || [];
-    const toggle = (list, id) => {
-      const i = list.indexOf(id);
-      if (i > -1) list.splice(i, 1); else list.push(id);
-      renderCreation();
-    };
-
-    labelled(panel, 'Scars, injuries and marks');
-    panel.appendChild(el('p', 'row-note', 'Pick as many as the body has earned. More will arrive on their own.'));
-    const marks = el('div', 'opts');
-    for (const m of MARK_PRESETS) {
-      const b = el('button', 'opt' + (look.marks.includes(m.id) ? ' on' : ''), m.name);
-      b.type = 'button';
-      b.addEventListener('click', () => toggle(look.marks, m.id));
-      marks.appendChild(b);
-    }
-    panel.appendChild(marks);
-    if (look.marks.includes('custom')) {
-      const input = el('input', 'text-input');
-      input.placeholder = 'Describe it - "a bite mark from a Saibaman", "frost damage on the left hand"';
-      input.maxLength = 90;
-      input.value = look.customMark || '';
-      input.addEventListener('input', () => { look.customMark = input.value; });
-      panel.appendChild(input);
-    }
-
-    labelled(panel, 'Worn');
-    panel.appendChild(el('p', 'row-note', 'What you start with. Scouters, belts, halos and swords come with the life.'));
-    const accs = el('div', 'opts');
-    for (const a2 of ACCESSORY_PRESETS.filter((x) => x.starter)) {
-      const b = el('button', 'opt' + (look.accessories.includes(a2.id) ? ' on' : ''), a2.name);
-      b.type = 'button';
-      b.addEventListener('click', () => toggle(look.accessories, a2.id));
-      accs.appendChild(b);
-    }
-    panel.appendChild(accs);
-    if (look.accessories.includes('custom')) {
-      const input = el('input', 'text-input');
-      input.placeholder = 'Name it - "my father\'s dog tags", "a bell on a cord"';
-      input.maxLength = 60;
-      input.value = look.customAccessory || '';
-      input.addEventListener('input', () => { look.customAccessory = input.value; });
-      panel.appendChild(input);
-    }
-  } else if (CREATE_TAB === 'self') {
-    labelled(panel, 'Temperament');
-    optionRow(panel.appendChild(el('div', 'opts')), TEMPERAMENTS, DRAFT.temperamentId, (id) => {
-      DRAFT.temperamentId = id; renderCreation();
-    });
-    labelled(panel, 'Fighting stance');
-    const stances = el('div', 'opts');
-    for (const st of STANCE_LIST) {
-      const b = el('button', 'opt' + (look.stance === st.id ? ' on' : ''), st.name);
-      b.type = 'button';
-      b.addEventListener('click', () => set('stance', st.id));
-      stances.appendChild(b);
-    }
-    panel.appendChild(stances);
-    if (look.stance === 'custom') {
-      const input = el('input', 'text-input');
-      input.placeholder = 'Name your style';
-      input.maxLength = 32;
-      input.value = look.stanceName || '';
-      input.addEventListener('input', () => { look.stanceName = input.value; });
-      panel.appendChild(input);
-    }
-    labelled(panel, 'Gender');
-    const sexes = el('div', 'opts');
-    for (const sx of [['female', 'Female'], ['male', 'Male'], ['nonbinary', 'Non-binary']]) {
-      const b = el('button', 'opt' + (DRAFT.sex === sx[0] ? ' on' : ''), sx[1]);
-      b.type = 'button';
-      b.addEventListener('click', () => { DRAFT.sex = sx[0]; renderCreation(); });
-      sexes.appendChild(b);
-    }
-    panel.appendChild(sexes);
-  } else {
-    labelled(panel, 'Born into');
-    optionRow(panel.appendChild(el('div', 'opts')), UPBRINGINGS, DRAFT.upbringingId, (id) => {
-      DRAFT.upbringingId = id; renderCreation();
-    });
-    const up = UPBRINGINGS.find((u) => u.id === DRAFT.upbringingId);
-    panel.appendChild(el('p', 'row-note', up ? up.blurb : ''));
-
-    labelled(panel, 'Born in');
-    const era = el('select', 'text-input');
+  const era = $('in-era');
+  if (!era.options.length) {
     fillSelect(era, ERAS.map((e2) => ({ value: String(e2.year), label: e2.label })), String(DRAFT.birthYear));
     era.addEventListener('change', () => { DRAFT.birthYear = Number(era.value); renderCreation(); });
-    panel.appendChild(era);
-    panel.appendChild(el('p', 'row-note',
-      `${eraName(DRAFT.birthYear)}. A serious fighter of this era is around ${numberish(worldPowerBaseline(DRAFT.birthYear))}.`));
-
-    labelled(panel, 'Homeworld');
-    const homes = race.homeworlds.map((h) => getPlace(h)).filter(Boolean);
-    const homeSel = el('select', 'text-input');
-    fillSelect(homeSel, (homes.length ? homes : PLACES.slice(0, 6)).map((p) => ({ value: p.id, label: p.name })), DRAFT.placeId);
-    homeSel.addEventListener('change', () => { DRAFT.placeId = homeSel.value; renderCreation(); });
-    panel.appendChild(homeSel);
-
-    labelled(panel, 'Seed (optional)');
-    const seed = el('input', 'text-input');
-    seed.id = 'in-seed';
-    seed.placeholder = 'leave blank for a random life';
-    seed.value = DRAFT.seed || '';
-    seed.addEventListener('input', () => { DRAFT.seed = seed.value; });
-    panel.appendChild(seed);
   }
+  era.value = String(DRAFT.birthYear);
+  $('era-note').textContent =
+    `${eraName(DRAFT.birthYear)}. A serious fighter of this era is around ${numberish(worldPowerBaseline(DRAFT.birthYear))}.`
+    + originHint(DRAFT.raceId, DRAFT.birthYear);
+
+  const sexes = $('opt-sex');
+  sexes.innerHTML = '';
+  for (const sx of [['female', 'Female'], ['male', 'Male'], ['nonbinary', 'Non-binary']]) {
+    const b = el('button', 'opt' + (DRAFT.sex === sx[0] ? ' on' : ''), sx[1]);
+    b.type = 'button';
+    b.addEventListener('click', () => { DRAFT.sex = sx[0]; renderCreation(); });
+    sexes.appendChild(b);
+  }
+
+  const seed = $('in-seed');
+  if (seed) seed.value = DRAFT.seed || '';
 }
 
-function describeBody() {
-  const look = DRAFT.look;
-  const build = BODY_TYPES.find((b) => b.id === DRAFT.bodyId);
-  const stance = STANCE_LIST.find((s2) => s2.id === look.stance);
-  const stanceName = look.stance === 'custom' && look.stanceName ? look.stanceName : (stance ? stance.name : '');
-  return `${getRace(DRAFT.raceId).short} - ${look.heightCm}cm, ${look.weightKg}kg - ${build ? build.name : ''}`
-    + (stanceName ? ` - ${stanceName}` : '');
-}
-
-function renderPortraitPreview() {
-  $('create-portrait').innerHTML = portraitSvg(
-    { raceId: DRAFT.raceId, tail: getRace(DRAFT.raceId).perks.includes('oozaru'), appearance: DRAFT.look },
-    {},
-  );
-  $('create-name-echo').textContent = DRAFT.name;
-  $('create-sub-echo').textContent = describeBody();
+/** A hint about what being this species in this century usually means. */
+function originHint(raceId, year) {
+  if (raceId === 'saiyan' && year < 737) return ' Planet Vegeta still stands, and it will not stand for long.';
+  if (raceId === 'saiyan' && year === 737) return ' You are born in the year Planet Vegeta falls. You will be very small when it happens.';
+  if (raceId === 'saiyan') return ' Your people are ash. You were not on the planet.';
+  if (raceId === 'namekian' && year < 763) return ' Namek is still there.';
+  if (raceId === 'cerealian') return ' The Saiyans came to Cereal. Most of you did not survive it.';
+  if (raceId === 'android' || raceId === 'bioandroid') return ' Somebody built you, and they had reasons.';
+  if (raceId === 'frostdemon') return ' You are born at a power most people die chasing.';
+  return '';
 }
 
 function readCreationInputs() {
@@ -16475,9 +17772,14 @@ function newDraft() {
   const d = defaultCreation(rng);
   d.birthYear = 737;
   d.nameTouched = false;
-  d.look = defaultAppearance(rng, d.raceId);
-  d.look.buildShape = d.bodyId;
   d.seed = '';
+  // Nothing about the body is chosen any more; createGame rolls it from the
+  // species and the century.
+  delete d.look;
+  delete d.upbringingId;
+  delete d.bodyId;
+  delete d.temperamentId;
+  delete d.placeId;
   return d;
 }
 
@@ -17218,6 +18520,104 @@ function panelPower() {
   openSheet('panel');
 }
 
+function panelAppearance() {
+  const c = GAME.character;
+  const a = c.appearance;
+  const { body } = sheetShell('Appearance', `${a.heightCm}cm - ${a.weightKg}kg - ${a.buildShape}`);
+  const redraw = () => { renderHud(); autosave(); panelAppearance(); };
+
+  const shot = el('div', 'portrait');
+  shot.style.margin = '0 auto 12px';
+  shot.style.maxWidth = '160px';
+  shot.innerHTML = portraitSvg(c, { form: bestOwnedForm(c) });
+  body.appendChild(shot);
+
+  body.appendChild(el('p', 'row-note',
+    'Height, build and face are what you were born with. Training and years change them on their own.'));
+
+  const hasHair = !['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(c.raceId);
+  if (hasHair) {
+    body.appendChild(el('div', 'group-label', 'Hair'));
+    const styles = el('div', 'opts');
+    for (const st of HAIR_STYLES) {
+      const b = el('button', 'opt' + (a.hairStyle === st.id ? ' on' : ''), st.name);
+      b.type = 'button';
+      b.addEventListener('click', () => { a.hairStyle = st.id; redraw(); });
+      styles.appendChild(b);
+    }
+    body.appendChild(styles);
+    const sw = el('div', 'swatches');
+    for (const col of HAIR_COLOURS) {
+      const b = el('button', 'swatch' + (a.hairColour === col.id ? ' on' : ''));
+      b.type = 'button';
+      b.style.background = col.hex;
+      b.title = col.name;
+      b.setAttribute('aria-label', col.name);
+      b.addEventListener('click', () => { a.hairColour = col.id; redraw(); });
+      sw.appendChild(b);
+    }
+    body.appendChild(sw);
+  }
+
+  body.appendChild(el('div', 'group-label', 'What you wear'));
+  const fits = el('div', 'opts');
+  for (const o of OUTFITS) {
+    const b = el('button', 'opt' + (a.outfit === o.id ? ' on' : ''), o.name);
+    b.type = 'button';
+    b.addEventListener('click', () => { a.outfit = o.id; redraw(); });
+    fits.appendChild(b);
+  }
+  body.appendChild(fits);
+
+  // Only accessories you own or were born wearing.
+  const ownable = ACCESSORY_PRESETS.filter((x) => x.starter);
+  body.appendChild(el('div', 'group-label', 'Worn'));
+  a.accessories = a.accessories || [];
+  const accs = el('div', 'opts');
+  for (const acc of ownable) {
+    const owned = !acc.item || c.items.includes(acc.item);
+    const b = el('button', 'opt' + (a.accessories.includes(acc.id) ? ' on' : ''), acc.name);
+    b.type = 'button';
+    b.disabled = !owned;
+    b.addEventListener('click', () => {
+      const i = a.accessories.indexOf(acc.id);
+      if (i > -1) a.accessories.splice(i, 1); else a.accessories.push(acc.id);
+      redraw();
+    });
+    accs.appendChild(b);
+  }
+  body.appendChild(accs);
+  const automatic = wornAccessories(c).filter((id) => !a.accessories.includes(id));
+  if (automatic.length) {
+    body.appendChild(el('p', 'row-note', `Also on you, whether you like it or not: ${automatic
+      .map((id) => (ACCESSORY_PRESETS.find((x) => x.id === id) || { name: id }).name).join(', ').toLowerCase()}.`));
+  }
+
+  body.appendChild(el('div', 'group-label', 'How you stand'));
+  const stances = el('div', 'opts');
+  for (const st of STANCE_LIST) {
+    const b = el('button', 'opt' + (a.stance === st.id ? ' on' : ''), st.name);
+    b.type = 'button';
+    b.addEventListener('click', () => { a.stance = st.id; redraw(); });
+    stances.appendChild(b);
+  }
+  body.appendChild(stances);
+  if (a.stance === 'custom') {
+    const input = el('input', 'text-input');
+    input.placeholder = 'Name your style';
+    input.maxLength = 32;
+    input.value = a.stanceName || '';
+    input.addEventListener('input', () => { a.stanceName = input.value; });
+    body.appendChild(input);
+  }
+
+  const back = el('button', 'ghost-btn', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', panelRecords);
+  body.appendChild(back);
+  openSheet('panel');
+}
+
 function panelRecords() {
   const { body } = sheetShell('Life', `Age ${GAME.character.age}`);
   const c = GAME.character;
@@ -17250,6 +18650,17 @@ function panelRecords() {
       body.appendChild(el('div', 'memo', `Age ${d.year}: ${d.event.replace(/_/g, ' ')} - ${d.how}`));
     }
   }
+
+  body.appendChild(el('div', 'group-label', 'Appearance'));
+  const lookRow = el('button', 'row');
+  lookRow.type = 'button';
+  const lookMain = el('div', 'row-main');
+  lookMain.appendChild(el('div', 'row-title', 'How you look'));
+  lookMain.appendChild(el('div', 'row-note',
+    `${c.appearance.heightCm}cm, ${c.appearance.weightKg}kg, ${c.appearance.buildShape}. Change your hair, clothes and stance.`));
+  lookRow.appendChild(lookMain);
+  lookRow.addEventListener('click', panelAppearance);
+  body.appendChild(lookRow);
 
   const marks = allMarks(c);
   const worn = wornAccessories(c);
@@ -17295,7 +18706,8 @@ function panelRecords() {
   aiMain.appendChild(el('div', 'row-note',
     backendName() === 'sample' ? 'Claude is available here and writes events during your life.'
       : backendName() === 'api' ? 'Using your own Anthropic API key.'
-        : 'Not connected. The game generates its own events, which is the default way to play.'));
+        : backendName() === 'custom' ? `Writing through ${backendLabel()}.`
+          : 'Not connected. The game generates its own events, which is the default way to play.'));
   aiRow.appendChild(aiMain);
   body.appendChild(aiRow);
 
@@ -17337,9 +18749,28 @@ function panelRecords() {
   }
 
   if (cfg.provider === 'custom') {
+    // One-click setups for the local servers people actually run, so nobody
+    // has to remember KoboldCpp's port.
+    body.appendChild(el('span', 'field-label', 'Preset'));
+    const presets = el('div', 'opts');
+    for (const [id, preset] of Object.entries(PRESETS)) {
+      const active = cfg.baseUrl === preset.baseUrl && cfg.format === preset.format && !!preset.baseUrl;
+      const b = el('button', 'opt' + (active ? ' on' : ''), preset.label);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        setAiConfig({
+          baseUrl: preset.baseUrl, model: preset.model, key: preset.key, format: preset.format,
+        });
+        flash(preset.hint, 6000);
+        panelRecords();
+      });
+      presets.appendChild(b);
+    }
+    body.appendChild(presets);
+
     const fields = [
-      ['baseUrl', 'Endpoint URL', 'https://your-model/v1/chat/completions', 'text'],
-      ['model', 'Model name', 'the model id your endpoint expects', 'text'],
+      ['baseUrl', 'Endpoint URL', 'http://localhost:5001/api/v1/generate', 'text'],
+      ['model', cfg.format === 'kobold' ? 'Model name (Kobold ignores this)' : 'Model name', 'the model id your endpoint expects', 'text'],
       ['key', 'API key (optional)', 'sent in the auth header', 'password'],
     ];
     for (const [key, label, placeholder, type] of fields) {
@@ -17353,13 +18784,36 @@ function panelRecords() {
     }
     body.appendChild(el('span', 'field-label', 'Request shape'));
     const shapes = el('div', 'opts');
-    for (const [id, label] of [['openai', 'OpenAI-compatible'], ['anthropic', 'Anthropic Messages']]) {
+    for (const [id, label] of [['kobold', 'KoboldAI native'], ['openai', 'OpenAI-compatible'], ['anthropic', 'Anthropic Messages']]) {
       const b = el('button', 'opt' + (cfg.format === id ? ' on' : ''), label);
       b.type = 'button';
       b.addEventListener('click', () => { setAiConfig({ format: id }); panelRecords(); });
       shapes.appendChild(b);
     }
     body.appendChild(shapes);
+
+    // A local model needs its samplers where you can reach them.
+    body.appendChild(el('span', 'field-label', 'Sampling'));
+    const samplers = [
+      ['temperature', 'Temperature', 0, 2, 0.05],
+      ['topP', 'Top-p', 0.05, 1, 0.01],
+      ['maxTokens', 'Reply length', 200, 2000, 50],
+    ];
+    for (const [key, label, min, max, step] of samplers) {
+      const row = el('div', 'slider-row');
+      const input = el('input');
+      input.type = 'range';
+      input.min = String(min); input.max = String(max); input.step = String(step);
+      input.value = String(cfg[key]);
+      const val = el('div', 'slider-val', `${label} ${cfg[key]}`);
+      input.addEventListener('input', () => {
+        val.textContent = `${label} ${input.value}`;
+        setAiConfig({ [key]: Number(input.value) });
+      });
+      row.appendChild(input);
+      row.appendChild(val);
+      body.appendChild(row);
+    }
 
     const test = el('button', 'ghost-btn', 'Test the connection');
     test.type = 'button';
@@ -17373,7 +18827,11 @@ function panelRecords() {
     });
     body.appendChild(test);
     body.appendChild(el('p', 'hint-text',
-      'Anything that answers on either shape works. Settings stay in this browser and are sent only to the endpoint you name.'));
+      cfg.format === 'kobold'
+        ? 'KoboldAI and KoboldCpp both answer on the native route. The page is served from a file or from claude.ai, '
+          + 'so start Kobold with --host so it accepts the request, or run it behind a reverse proxy that sets CORS headers. '
+          + 'Settings stay in this browser and are sent only to the address you give.'
+        : 'Anything that answers on either shape works. Settings stay in this browser and are sent only to the endpoint you name.'));
   }
 
   body.appendChild(el('div', 'group-label', 'Save'));
@@ -18025,12 +19483,6 @@ function startGame() {
 
 function wire() {
   $('btn-begin').addEventListener('click', startGame);
-  $('btn-random-all').addEventListener('click', () => { DRAFT = newDraft(); renderCreation(); });
-  $('btn-random-look').addEventListener('click', () => {
-    DRAFT.look = defaultAppearance(new Rng(Date.now() ^ Math.floor(Math.random() * 1e9)), DRAFT.raceId);
-    DRAFT.look.buildShape = DRAFT.bodyId;
-    renderCreation();
-  });
   $('btn-reroll-name').addEventListener('click', () => {
     DRAFT.name = generateFullName(new Rng(Date.now() ^ Math.floor(Math.random() * 1e9)), DRAFT.raceId);
     DRAFT.nameTouched = false;
@@ -18039,8 +19491,8 @@ function wire() {
   $('in-name').addEventListener('input', () => {
     DRAFT.nameTouched = true;
     DRAFT.name = $('in-name').value;
-    $('create-name-echo').textContent = DRAFT.name;
   });
+  $('in-seed').addEventListener('input', () => { DRAFT.seed = $('in-seed').value; });
 
   $('btn-age').addEventListener('click', ageUp);
   $('scrim').addEventListener('click', () => { if (SHEET_MODE !== 'event') closeSheet(); });

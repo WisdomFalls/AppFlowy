@@ -25,7 +25,7 @@ import { STAT_KEYS, STAT_LABELS, combatPower, powerTier } from '../engine/stats.
 import { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } from '../engine/npc.js';
 import { npcActions, runNpcAction } from '../engine/social.js';
 import { scoreReplyLocally, applyReply, impressionLabel } from '../engine/dialogue.js';
-import { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint } from '../engine/ai.js';
+import { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } from '../engine/ai.js';
 import { numberish, zeni } from '../engine/text.js';
 import { getRng, saveRng } from '../engine/state.js';
 import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } from '../engine/battle.js';
@@ -108,17 +108,6 @@ function fillSelect(node, values, selected, labelFn) {
   }
 }
 
-let CREATE_TAB = 'face';
-
-const CREATE_TABS = [
-  { id: 'face', label: 'Face' },
-  { id: 'hair', label: 'Hair' },
-  { id: 'body', label: 'Body' },
-  { id: 'clothes', label: 'Clothes' },
-  { id: 'marks', label: 'Marks' },
-  { id: 'self', label: 'Self' },
-  { id: 'origin', label: 'Origin' },
-];
 
 function swatchRow(container, list, selectedId, onPick) {
   const wrap = el('div', 'swatches');
@@ -140,13 +129,9 @@ function labelled(container, text) {
 
 function renderCreation() {
   const race = getRace(DRAFT.raceId);
-  if (!DRAFT.look) DRAFT.look = defaultAppearance(new Rng(Date.now()), DRAFT.raceId);
 
   optionRow($('opt-race'), RACES.map((r) => ({ id: r.id, name: r.short })), DRAFT.raceId, (id) => {
     DRAFT.raceId = id;
-    const r = getRace(id);
-    DRAFT.placeId = r.homeworlds[0];
-    DRAFT.look = defaultAppearance(new Rng(Date.now() ^ 7), id);
     if (!DRAFT.nameTouched) DRAFT.name = generateFullName(new Rng(Date.now()), id);
     renderCreation();
   });
@@ -158,228 +143,40 @@ function renderCreation() {
   card.appendChild(el('div', 'race-note', race.notes));
 
   $('in-name').value = DRAFT.name;
-  renderPortraitPreview();
 
-  const tabs = $('create-tabs');
-  tabs.innerHTML = '';
-  for (const tab of CREATE_TABS) {
-    const b = el('button', 'ctab' + (CREATE_TAB === tab.id ? ' active' : ''), tab.label);
-    b.type = 'button';
-    b.addEventListener('click', () => { CREATE_TAB = tab.id; renderCreation(); });
-    tabs.appendChild(b);
-  }
-
-  const panel = $('create-panel');
-  panel.innerHTML = '';
-  const look = DRAFT.look;
-  const set = (key, value) => { look[key] = value; renderCreation(); };
-
-  if (CREATE_TAB === 'face') {
-    labelled(panel, 'Skin');
-    swatchRow(panel, SKIN_TONES, look.skin, (v) => set('skin', v));
-    labelled(panel, 'Face shape');
-    const faces = el('div', 'opts');
-    for (const f of FACE_SHAPES) {
-      const b = el('button', 'opt' + (look.face === f.id ? ' on' : ''), f.name);
-      b.type = 'button';
-      b.addEventListener('click', () => set('face', f.id));
-      faces.appendChild(b);
-    }
-    panel.appendChild(faces);
-    labelled(panel, 'Eye shape');
-    const eyes = el('div', 'opts');
-    for (const e2 of EYE_SHAPES) {
-      const b = el('button', 'opt' + (look.eyeShape === e2.id ? ' on' : ''), e2.name);
-      b.type = 'button';
-      b.addEventListener('click', () => set('eyeShape', e2.id));
-      eyes.appendChild(b);
-    }
-    panel.appendChild(eyes);
-    labelled(panel, 'Eye colour');
-    swatchRow(panel, EYE_COLOURS, look.eyeColour, (v) => set('eyeColour', v));
-  } else if (CREATE_TAB === 'hair') {
-    labelled(panel, 'Style');
-    const styles = el('div', 'opts');
-    for (const st of HAIR_STYLES) {
-      const b = el('button', 'opt' + (look.hairStyle === st.id ? ' on' : ''), st.name);
-      b.type = 'button';
-      b.addEventListener('click', () => set('hairStyle', st.id));
-      styles.appendChild(b);
-    }
-    panel.appendChild(styles);
-    labelled(panel, 'Colour');
-    swatchRow(panel, HAIR_COLOURS, look.hairColour, (v) => set('hairColour', v));
-    if (['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(DRAFT.raceId)) {
-      panel.appendChild(el('p', 'hint-text', `${race.short}s do not grow hair. The style is ignored.`));
-    }
-  } else if (CREATE_TAB === 'body') {
-    labelled(panel, 'Build');
-    optionRow(panel.appendChild(el('div', 'opts')), BODY_TYPES, DRAFT.bodyId, (id) => {
-      DRAFT.bodyId = id;
-      look.buildShape = id;
-      renderCreation();
-    });
-    labelled(panel, 'Height');
-    const hRow = el('div', 'slider-row');
-    const hIn = el('input');
-    hIn.type = 'range'; hIn.min = '110'; hIn.max = '260'; hIn.value = String(look.heightCm);
-    hIn.addEventListener('input', () => {
-      look.heightCm = Number(hIn.value);
-      $('create-sub-echo').textContent = describeBody();
-      hVal.textContent = look.heightCm + ' cm';
-    });
-    const hVal = el('div', 'slider-val', look.heightCm + ' cm');
-    hRow.appendChild(hIn); hRow.appendChild(hVal);
-    panel.appendChild(hRow);
-
-    labelled(panel, 'Weight');
-    const wRow = el('div', 'slider-row');
-    const wIn = el('input');
-    wIn.type = 'range'; wIn.min = '30'; wIn.max = '260'; wIn.value = String(look.weightKg);
-    wIn.addEventListener('input', () => {
-      look.weightKg = Number(wIn.value);
-      $('create-sub-echo').textContent = describeBody();
-      wVal.textContent = look.weightKg + ' kg';
-    });
-    const wVal = el('div', 'slider-val', look.weightKg + ' kg');
-    wRow.appendChild(wIn); wRow.appendChild(wVal);
-    panel.appendChild(wRow);
-  } else if (CREATE_TAB === 'clothes') {
-    labelled(panel, 'What you wear');
-    const fits = el('div', 'opts');
-    for (const o of OUTFITS) {
-      const b = el('button', 'opt' + (look.outfit === o.id ? ' on' : ''), o.name);
-      b.type = 'button';
-      b.addEventListener('click', () => set('outfit', o.id));
-      fits.appendChild(b);
-    }
-    panel.appendChild(fits);
-  } else if (CREATE_TAB === 'marks') {
-    look.marks = look.marks || [];
-    look.accessories = look.accessories || [];
-    const toggle = (list, id) => {
-      const i = list.indexOf(id);
-      if (i > -1) list.splice(i, 1); else list.push(id);
-      renderCreation();
-    };
-
-    labelled(panel, 'Scars, injuries and marks');
-    panel.appendChild(el('p', 'row-note', 'Pick as many as the body has earned. More will arrive on their own.'));
-    const marks = el('div', 'opts');
-    for (const m of MARK_PRESETS) {
-      const b = el('button', 'opt' + (look.marks.includes(m.id) ? ' on' : ''), m.name);
-      b.type = 'button';
-      b.addEventListener('click', () => toggle(look.marks, m.id));
-      marks.appendChild(b);
-    }
-    panel.appendChild(marks);
-    if (look.marks.includes('custom')) {
-      const input = el('input', 'text-input');
-      input.placeholder = 'Describe it - "a bite mark from a Saibaman", "frost damage on the left hand"';
-      input.maxLength = 90;
-      input.value = look.customMark || '';
-      input.addEventListener('input', () => { look.customMark = input.value; });
-      panel.appendChild(input);
-    }
-
-    labelled(panel, 'Worn');
-    panel.appendChild(el('p', 'row-note', 'What you start with. Scouters, belts, halos and swords come with the life.'));
-    const accs = el('div', 'opts');
-    for (const a2 of ACCESSORY_PRESETS.filter((x) => x.starter)) {
-      const b = el('button', 'opt' + (look.accessories.includes(a2.id) ? ' on' : ''), a2.name);
-      b.type = 'button';
-      b.addEventListener('click', () => toggle(look.accessories, a2.id));
-      accs.appendChild(b);
-    }
-    panel.appendChild(accs);
-    if (look.accessories.includes('custom')) {
-      const input = el('input', 'text-input');
-      input.placeholder = 'Name it - "my father\'s dog tags", "a bell on a cord"';
-      input.maxLength = 60;
-      input.value = look.customAccessory || '';
-      input.addEventListener('input', () => { look.customAccessory = input.value; });
-      panel.appendChild(input);
-    }
-  } else if (CREATE_TAB === 'self') {
-    labelled(panel, 'Temperament');
-    optionRow(panel.appendChild(el('div', 'opts')), TEMPERAMENTS, DRAFT.temperamentId, (id) => {
-      DRAFT.temperamentId = id; renderCreation();
-    });
-    labelled(panel, 'Fighting stance');
-    const stances = el('div', 'opts');
-    for (const st of STANCE_LIST) {
-      const b = el('button', 'opt' + (look.stance === st.id ? ' on' : ''), st.name);
-      b.type = 'button';
-      b.addEventListener('click', () => set('stance', st.id));
-      stances.appendChild(b);
-    }
-    panel.appendChild(stances);
-    if (look.stance === 'custom') {
-      const input = el('input', 'text-input');
-      input.placeholder = 'Name your style';
-      input.maxLength = 32;
-      input.value = look.stanceName || '';
-      input.addEventListener('input', () => { look.stanceName = input.value; });
-      panel.appendChild(input);
-    }
-    labelled(panel, 'Gender');
-    const sexes = el('div', 'opts');
-    for (const sx of [['female', 'Female'], ['male', 'Male'], ['nonbinary', 'Non-binary']]) {
-      const b = el('button', 'opt' + (DRAFT.sex === sx[0] ? ' on' : ''), sx[1]);
-      b.type = 'button';
-      b.addEventListener('click', () => { DRAFT.sex = sx[0]; renderCreation(); });
-      sexes.appendChild(b);
-    }
-    panel.appendChild(sexes);
-  } else {
-    labelled(panel, 'Born into');
-    optionRow(panel.appendChild(el('div', 'opts')), UPBRINGINGS, DRAFT.upbringingId, (id) => {
-      DRAFT.upbringingId = id; renderCreation();
-    });
-    const up = UPBRINGINGS.find((u) => u.id === DRAFT.upbringingId);
-    panel.appendChild(el('p', 'row-note', up ? up.blurb : ''));
-
-    labelled(panel, 'Born in');
-    const era = el('select', 'text-input');
+  const era = $('in-era');
+  if (!era.options.length) {
     fillSelect(era, ERAS.map((e2) => ({ value: String(e2.year), label: e2.label })), String(DRAFT.birthYear));
     era.addEventListener('change', () => { DRAFT.birthYear = Number(era.value); renderCreation(); });
-    panel.appendChild(era);
-    panel.appendChild(el('p', 'row-note',
-      `${eraName(DRAFT.birthYear)}. A serious fighter of this era is around ${numberish(worldPowerBaseline(DRAFT.birthYear))}.`));
-
-    labelled(panel, 'Homeworld');
-    const homes = race.homeworlds.map((h) => getPlace(h)).filter(Boolean);
-    const homeSel = el('select', 'text-input');
-    fillSelect(homeSel, (homes.length ? homes : PLACES.slice(0, 6)).map((p) => ({ value: p.id, label: p.name })), DRAFT.placeId);
-    homeSel.addEventListener('change', () => { DRAFT.placeId = homeSel.value; renderCreation(); });
-    panel.appendChild(homeSel);
-
-    labelled(panel, 'Seed (optional)');
-    const seed = el('input', 'text-input');
-    seed.id = 'in-seed';
-    seed.placeholder = 'leave blank for a random life';
-    seed.value = DRAFT.seed || '';
-    seed.addEventListener('input', () => { DRAFT.seed = seed.value; });
-    panel.appendChild(seed);
   }
+  era.value = String(DRAFT.birthYear);
+  $('era-note').textContent =
+    `${eraName(DRAFT.birthYear)}. A serious fighter of this era is around ${numberish(worldPowerBaseline(DRAFT.birthYear))}.`
+    + originHint(DRAFT.raceId, DRAFT.birthYear);
+
+  const sexes = $('opt-sex');
+  sexes.innerHTML = '';
+  for (const sx of [['female', 'Female'], ['male', 'Male'], ['nonbinary', 'Non-binary']]) {
+    const b = el('button', 'opt' + (DRAFT.sex === sx[0] ? ' on' : ''), sx[1]);
+    b.type = 'button';
+    b.addEventListener('click', () => { DRAFT.sex = sx[0]; renderCreation(); });
+    sexes.appendChild(b);
+  }
+
+  const seed = $('in-seed');
+  if (seed) seed.value = DRAFT.seed || '';
 }
 
-function describeBody() {
-  const look = DRAFT.look;
-  const build = BODY_TYPES.find((b) => b.id === DRAFT.bodyId);
-  const stance = STANCE_LIST.find((s2) => s2.id === look.stance);
-  const stanceName = look.stance === 'custom' && look.stanceName ? look.stanceName : (stance ? stance.name : '');
-  return `${getRace(DRAFT.raceId).short} - ${look.heightCm}cm, ${look.weightKg}kg - ${build ? build.name : ''}`
-    + (stanceName ? ` - ${stanceName}` : '');
-}
-
-function renderPortraitPreview() {
-  $('create-portrait').innerHTML = portraitSvg(
-    { raceId: DRAFT.raceId, tail: getRace(DRAFT.raceId).perks.includes('oozaru'), appearance: DRAFT.look },
-    {},
-  );
-  $('create-name-echo').textContent = DRAFT.name;
-  $('create-sub-echo').textContent = describeBody();
+/** A hint about what being this species in this century usually means. */
+function originHint(raceId, year) {
+  if (raceId === 'saiyan' && year < 737) return ' Planet Vegeta still stands, and it will not stand for long.';
+  if (raceId === 'saiyan' && year === 737) return ' You are born in the year Planet Vegeta falls. You will be very small when it happens.';
+  if (raceId === 'saiyan') return ' Your people are ash. You were not on the planet.';
+  if (raceId === 'namekian' && year < 763) return ' Namek is still there.';
+  if (raceId === 'cerealian') return ' The Saiyans came to Cereal. Most of you did not survive it.';
+  if (raceId === 'android' || raceId === 'bioandroid') return ' Somebody built you, and they had reasons.';
+  if (raceId === 'frostdemon') return ' You are born at a power most people die chasing.';
+  return '';
 }
 
 function readCreationInputs() {
@@ -391,9 +188,14 @@ function newDraft() {
   const d = defaultCreation(rng);
   d.birthYear = 737;
   d.nameTouched = false;
-  d.look = defaultAppearance(rng, d.raceId);
-  d.look.buildShape = d.bodyId;
   d.seed = '';
+  // Nothing about the body is chosen any more; createGame rolls it from the
+  // species and the century.
+  delete d.look;
+  delete d.upbringingId;
+  delete d.bodyId;
+  delete d.temperamentId;
+  delete d.placeId;
   return d;
 }
 
@@ -1134,6 +936,104 @@ function panelPower() {
   openSheet('panel');
 }
 
+function panelAppearance() {
+  const c = GAME.character;
+  const a = c.appearance;
+  const { body } = sheetShell('Appearance', `${a.heightCm}cm - ${a.weightKg}kg - ${a.buildShape}`);
+  const redraw = () => { renderHud(); autosave(); panelAppearance(); };
+
+  const shot = el('div', 'portrait');
+  shot.style.margin = '0 auto 12px';
+  shot.style.maxWidth = '160px';
+  shot.innerHTML = portraitSvg(c, { form: bestOwnedForm(c) });
+  body.appendChild(shot);
+
+  body.appendChild(el('p', 'row-note',
+    'Height, build and face are what you were born with. Training and years change them on their own.'));
+
+  const hasHair = !['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(c.raceId);
+  if (hasHair) {
+    body.appendChild(el('div', 'group-label', 'Hair'));
+    const styles = el('div', 'opts');
+    for (const st of HAIR_STYLES) {
+      const b = el('button', 'opt' + (a.hairStyle === st.id ? ' on' : ''), st.name);
+      b.type = 'button';
+      b.addEventListener('click', () => { a.hairStyle = st.id; redraw(); });
+      styles.appendChild(b);
+    }
+    body.appendChild(styles);
+    const sw = el('div', 'swatches');
+    for (const col of HAIR_COLOURS) {
+      const b = el('button', 'swatch' + (a.hairColour === col.id ? ' on' : ''));
+      b.type = 'button';
+      b.style.background = col.hex;
+      b.title = col.name;
+      b.setAttribute('aria-label', col.name);
+      b.addEventListener('click', () => { a.hairColour = col.id; redraw(); });
+      sw.appendChild(b);
+    }
+    body.appendChild(sw);
+  }
+
+  body.appendChild(el('div', 'group-label', 'What you wear'));
+  const fits = el('div', 'opts');
+  for (const o of OUTFITS) {
+    const b = el('button', 'opt' + (a.outfit === o.id ? ' on' : ''), o.name);
+    b.type = 'button';
+    b.addEventListener('click', () => { a.outfit = o.id; redraw(); });
+    fits.appendChild(b);
+  }
+  body.appendChild(fits);
+
+  // Only accessories you own or were born wearing.
+  const ownable = ACCESSORY_PRESETS.filter((x) => x.starter);
+  body.appendChild(el('div', 'group-label', 'Worn'));
+  a.accessories = a.accessories || [];
+  const accs = el('div', 'opts');
+  for (const acc of ownable) {
+    const owned = !acc.item || c.items.includes(acc.item);
+    const b = el('button', 'opt' + (a.accessories.includes(acc.id) ? ' on' : ''), acc.name);
+    b.type = 'button';
+    b.disabled = !owned;
+    b.addEventListener('click', () => {
+      const i = a.accessories.indexOf(acc.id);
+      if (i > -1) a.accessories.splice(i, 1); else a.accessories.push(acc.id);
+      redraw();
+    });
+    accs.appendChild(b);
+  }
+  body.appendChild(accs);
+  const automatic = wornAccessories(c).filter((id) => !a.accessories.includes(id));
+  if (automatic.length) {
+    body.appendChild(el('p', 'row-note', `Also on you, whether you like it or not: ${automatic
+      .map((id) => (ACCESSORY_PRESETS.find((x) => x.id === id) || { name: id }).name).join(', ').toLowerCase()}.`));
+  }
+
+  body.appendChild(el('div', 'group-label', 'How you stand'));
+  const stances = el('div', 'opts');
+  for (const st of STANCE_LIST) {
+    const b = el('button', 'opt' + (a.stance === st.id ? ' on' : ''), st.name);
+    b.type = 'button';
+    b.addEventListener('click', () => { a.stance = st.id; redraw(); });
+    stances.appendChild(b);
+  }
+  body.appendChild(stances);
+  if (a.stance === 'custom') {
+    const input = el('input', 'text-input');
+    input.placeholder = 'Name your style';
+    input.maxLength = 32;
+    input.value = a.stanceName || '';
+    input.addEventListener('input', () => { a.stanceName = input.value; });
+    body.appendChild(input);
+  }
+
+  const back = el('button', 'ghost-btn', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', panelRecords);
+  body.appendChild(back);
+  openSheet('panel');
+}
+
 function panelRecords() {
   const { body } = sheetShell('Life', `Age ${GAME.character.age}`);
   const c = GAME.character;
@@ -1166,6 +1066,17 @@ function panelRecords() {
       body.appendChild(el('div', 'memo', `Age ${d.year}: ${d.event.replace(/_/g, ' ')} - ${d.how}`));
     }
   }
+
+  body.appendChild(el('div', 'group-label', 'Appearance'));
+  const lookRow = el('button', 'row');
+  lookRow.type = 'button';
+  const lookMain = el('div', 'row-main');
+  lookMain.appendChild(el('div', 'row-title', 'How you look'));
+  lookMain.appendChild(el('div', 'row-note',
+    `${c.appearance.heightCm}cm, ${c.appearance.weightKg}kg, ${c.appearance.buildShape}. Change your hair, clothes and stance.`));
+  lookRow.appendChild(lookMain);
+  lookRow.addEventListener('click', panelAppearance);
+  body.appendChild(lookRow);
 
   const marks = allMarks(c);
   const worn = wornAccessories(c);
@@ -1211,7 +1122,8 @@ function panelRecords() {
   aiMain.appendChild(el('div', 'row-note',
     backendName() === 'sample' ? 'Claude is available here and writes events during your life.'
       : backendName() === 'api' ? 'Using your own Anthropic API key.'
-        : 'Not connected. The game generates its own events, which is the default way to play.'));
+        : backendName() === 'custom' ? `Writing through ${backendLabel()}.`
+          : 'Not connected. The game generates its own events, which is the default way to play.'));
   aiRow.appendChild(aiMain);
   body.appendChild(aiRow);
 
@@ -1253,9 +1165,28 @@ function panelRecords() {
   }
 
   if (cfg.provider === 'custom') {
+    // One-click setups for the local servers people actually run, so nobody
+    // has to remember KoboldCpp's port.
+    body.appendChild(el('span', 'field-label', 'Preset'));
+    const presets = el('div', 'opts');
+    for (const [id, preset] of Object.entries(PRESETS)) {
+      const active = cfg.baseUrl === preset.baseUrl && cfg.format === preset.format && !!preset.baseUrl;
+      const b = el('button', 'opt' + (active ? ' on' : ''), preset.label);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        setAiConfig({
+          baseUrl: preset.baseUrl, model: preset.model, key: preset.key, format: preset.format,
+        });
+        flash(preset.hint, 6000);
+        panelRecords();
+      });
+      presets.appendChild(b);
+    }
+    body.appendChild(presets);
+
     const fields = [
-      ['baseUrl', 'Endpoint URL', 'https://your-model/v1/chat/completions', 'text'],
-      ['model', 'Model name', 'the model id your endpoint expects', 'text'],
+      ['baseUrl', 'Endpoint URL', 'http://localhost:5001/api/v1/generate', 'text'],
+      ['model', cfg.format === 'kobold' ? 'Model name (Kobold ignores this)' : 'Model name', 'the model id your endpoint expects', 'text'],
       ['key', 'API key (optional)', 'sent in the auth header', 'password'],
     ];
     for (const [key, label, placeholder, type] of fields) {
@@ -1269,13 +1200,36 @@ function panelRecords() {
     }
     body.appendChild(el('span', 'field-label', 'Request shape'));
     const shapes = el('div', 'opts');
-    for (const [id, label] of [['openai', 'OpenAI-compatible'], ['anthropic', 'Anthropic Messages']]) {
+    for (const [id, label] of [['kobold', 'KoboldAI native'], ['openai', 'OpenAI-compatible'], ['anthropic', 'Anthropic Messages']]) {
       const b = el('button', 'opt' + (cfg.format === id ? ' on' : ''), label);
       b.type = 'button';
       b.addEventListener('click', () => { setAiConfig({ format: id }); panelRecords(); });
       shapes.appendChild(b);
     }
     body.appendChild(shapes);
+
+    // A local model needs its samplers where you can reach them.
+    body.appendChild(el('span', 'field-label', 'Sampling'));
+    const samplers = [
+      ['temperature', 'Temperature', 0, 2, 0.05],
+      ['topP', 'Top-p', 0.05, 1, 0.01],
+      ['maxTokens', 'Reply length', 200, 2000, 50],
+    ];
+    for (const [key, label, min, max, step] of samplers) {
+      const row = el('div', 'slider-row');
+      const input = el('input');
+      input.type = 'range';
+      input.min = String(min); input.max = String(max); input.step = String(step);
+      input.value = String(cfg[key]);
+      const val = el('div', 'slider-val', `${label} ${cfg[key]}`);
+      input.addEventListener('input', () => {
+        val.textContent = `${label} ${input.value}`;
+        setAiConfig({ [key]: Number(input.value) });
+      });
+      row.appendChild(input);
+      row.appendChild(val);
+      body.appendChild(row);
+    }
 
     const test = el('button', 'ghost-btn', 'Test the connection');
     test.type = 'button';
@@ -1289,7 +1243,11 @@ function panelRecords() {
     });
     body.appendChild(test);
     body.appendChild(el('p', 'hint-text',
-      'Anything that answers on either shape works. Settings stay in this browser and are sent only to the endpoint you name.'));
+      cfg.format === 'kobold'
+        ? 'KoboldAI and KoboldCpp both answer on the native route. The page is served from a file or from claude.ai, '
+          + 'so start Kobold with --host so it accepts the request, or run it behind a reverse proxy that sets CORS headers. '
+          + 'Settings stay in this browser and are sent only to the address you give.'
+        : 'Anything that answers on either shape works. Settings stay in this browser and are sent only to the endpoint you name.'));
   }
 
   body.appendChild(el('div', 'group-label', 'Save'));
@@ -1941,12 +1899,6 @@ function startGame() {
 
 function wire() {
   $('btn-begin').addEventListener('click', startGame);
-  $('btn-random-all').addEventListener('click', () => { DRAFT = newDraft(); renderCreation(); });
-  $('btn-random-look').addEventListener('click', () => {
-    DRAFT.look = defaultAppearance(new Rng(Date.now() ^ Math.floor(Math.random() * 1e9)), DRAFT.raceId);
-    DRAFT.look.buildShape = DRAFT.bodyId;
-    renderCreation();
-  });
   $('btn-reroll-name').addEventListener('click', () => {
     DRAFT.name = generateFullName(new Rng(Date.now() ^ Math.floor(Math.random() * 1e9)), DRAFT.raceId);
     DRAFT.nameTouched = false;
@@ -1955,8 +1907,8 @@ function wire() {
   $('in-name').addEventListener('input', () => {
     DRAFT.nameTouched = true;
     DRAFT.name = $('in-name').value;
-    $('create-name-echo').textContent = DRAFT.name;
   });
+  $('in-seed').addEventListener('input', () => { DRAFT.seed = $('in-seed').value; });
 
   $('btn-age').addEventListener('click', ageUp);
   $('scrim').addEventListener('click', () => { if (SHEET_MODE !== 'event') closeSheet(); });

@@ -8,7 +8,7 @@ import { addFact, recallSummary } from './memory.js';
 import { relationshipTick, progressNpc, makeNpc, makeChild } from './npc.js';
 import { ladderFor } from '../data/transformations.js';
 import { TECHNIQUES } from '../data/techniques.js';
-import { getRace, hasPerk } from '../data/races.js';
+import { getRace, hasPerk, maturity } from '../data/races.js';
 import { getPlace } from '../data/places.js';
 import { TIMELINE, eraName, worldPowerBaseline } from '../data/timeline.js';
 import { agingDecay, naturalDeathChance, combatPower, powerTier, kiMaxFor, lifeExpectancy, zenkaiBoost, STAT_KEYS } from './stats.js';
@@ -18,6 +18,61 @@ import { resetYearBudget } from './economy.js';
 import { getItem } from '../data/items.js';
 
 const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
+
+const BUILD_ORDER = ['small', 'wiry', 'lean', 'balanced', 'stocky', 'massive'];
+
+/**
+ * The body changes because of what you did to it, not because you dragged a
+ * slider. Children grow, training thickens you, starvation and long illness
+ * strip you down, and after seventy everybody shrinks.
+ */
+function driftBody(state, rng) {
+  const c = state.character;
+  const a = c.appearance;
+  if (!a) return null;
+  const bio = maturity(c);
+  const race = getRace(c.raceId);
+  let note = null;
+
+  // Growing up. Adult height is reached around biological eighteen.
+  if (bio < 18) {
+    const adult = a.adultHeight || (a.adultHeight = a.heightCm);
+    const childScale = 0.34 + 0.66 * Math.min(1, bio / 18);
+    a.heightCm = Math.round(adult * childScale);
+    a.weightKg = Math.max(3, Math.round((a.adultWeight || (a.adultWeight = a.weightKg)) * Math.pow(childScale, 2.4)));
+  } else if (bio > 70 && rng.chance(0.35)) {
+    a.heightCm = Math.max(90, a.heightCm - 1);
+  }
+
+  // What the year was spent on shows up in the frame.
+  const idx = BUILD_ORDER.indexOf(a.buildShape);
+  if (idx >= 0 && bio >= 14) {
+    const trained = c.flags.trainedHardThisYear;
+    const starved = c.vitals.health < 35;
+    if (trained && c.stats.strength > 65 && idx < BUILD_ORDER.length - 1 && rng.chance(0.06)) {
+      a.buildShape = BUILD_ORDER[idx + 1];
+      a.weightKg = Math.round(a.weightKg * 1.06);
+      note = 'You have put on real muscle this year. Your clothes do not fit.';
+    } else if (starved && idx > 0 && rng.chance(0.12)) {
+      a.buildShape = BUILD_ORDER[idx - 1];
+      a.weightKg = Math.round(a.weightKg * 0.93);
+      note = 'You have lost weight you could not afford to lose.';
+    } else if (trained && rng.chance(0.25)) {
+      a.weightKg = Math.min(Math.round(a.weightKg * 1.01) + 1, 400);
+    } else if (!trained && bio > 40 && rng.chance(0.18)) {
+      a.weightKg = Math.round(a.weightKg * 1.012) + 1;
+    }
+  }
+
+  // Long lives go grey, unless the species does not.
+  if (!a.wentGrey && bio > 55 && race.agingRate >= 0.7 && rng.chance(0.08)
+    && !['white', 'silver'].includes(a.hairColour)) {
+    a.wentGrey = true;
+    a.hairColour = rng.chance(0.5) ? 'silver' : 'white';
+    note = 'You went grey this year, all at once, the way it happens.';
+  }
+  return note;
+}
 
 const DEATH_CAUSES = {
   age: ['Old age', 'The body simply stopped', 'Died in their sleep'],
@@ -50,6 +105,9 @@ export function startYear(state) {
   resetYearBudget(state);
 
   const entries = [];
+  // The body changes before anything else happens to it this year.
+  const bodyNote = driftBody(state, rng);
+  if (bodyNote) entries.push({ kind: 'body', text: bodyNote });
   entries.push(...passiveYear(state, rng));
 
   // Career bookkeeping

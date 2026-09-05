@@ -4,17 +4,8 @@
   <section class="screen active" id="screen-create">
     <div class="create">
       <h1 class="logo">Dragon Ball<em>Mortal Coil</em></h1>
-      <p class="tagline">One life, one year at a time. Pick a species, pick a century, and find out
-        how far you get before something stronger than you turns up.</p>
-
-      <div class="portrait-wrap">
-        <div class="portrait" id="create-portrait"></div>
-        <div class="portrait-meta">
-          <div class="portrait-name" id="create-name-echo">-</div>
-          <div class="portrait-sub" id="create-sub-echo">-</div>
-          <button class="ghost-btn" id="btn-random-look" style="margin-top:8px">Randomise look</button>
-        </div>
-      </div>
+      <p class="tagline">One life, one year at a time. Pick a species and a century. Everything
+        else is decided for you, the way it is for everybody.</p>
 
       <div class="field">
         <label class="field-label" for="in-name">Name</label>
@@ -30,11 +21,26 @@
         <div class="race-card" id="race-card"></div>
       </div>
 
-      <nav class="create-tabs" id="create-tabs"></nav>
-      <div id="create-panel"></div>
+      <div class="field">
+        <span class="field-label">Born in</span>
+        <select class="text-input" id="in-era"></select>
+        <p class="row-note" id="era-note" style="margin-top:6px"></p>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Sex</span>
+        <div class="opts" id="opt-sex"></div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="in-seed">Seed (optional)</label>
+        <input class="text-input" id="in-seed" placeholder="leave blank for a random life" autocomplete="off">
+      </div>
+
+      <p class="hint-text">Everything else — where you were born, who raised you, what you look
+        like, and what you were born capable of — is rolled for you. You find out by living it.</p>
 
       <button class="primary-btn" id="btn-begin">Begin a life</button>
-      <button class="ghost-btn" id="btn-random-all">Randomise everything</button>
       <button class="ghost-btn" id="btn-continue" hidden>Continue saved life</button>
       <p class="hint-text" id="create-ai-note"></p>
     </div>

@@ -180,6 +180,18 @@ export function allMarks(character) {
   return list;
 }
 
+/** Darken or lighten a hex colour, for brows and shadow detail. */
+function shade(hex, amount) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex));
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const mix = (c) => Math.max(0, Math.min(255, Math.round(c + (amount < 0 ? c * amount : (255 - c) * amount))));
+  const r = mix((n >> 16) & 255);
+  const g = mix((n >> 8) & 255);
+  const b = mix(n & 255);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
 function look(list, id, fallback) {
   return list.find((x) => x.id === id) || list.find((x) => x.id === fallback) || list[0];
 }
@@ -189,89 +201,236 @@ function look(list, id, fallback) {
  * long hair) is drawn behind the head, and the cap and fringe are drawn over
  * it. Drawing them together is what puts a plait down somebody's face.
  */
-function hairBackPath(style, headTop, cx, headR) {
-  const crown = headTop - 12;
-  const brow = headTop + 16;
-  const L = cx - headR - 2;
-  const R = cx + headR + 2;
-  switch (style) {
-    case 'long':
-      return `M${L - 2} ${brow} Q${cx} ${crown - 6} ${R + 2} ${brow}
-        L${R + 8} ${brow + 112} L${R - 12} ${brow + 106}
-        L${R - 12} ${brow + 30} L${L + 12} ${brow + 30}
-        L${L + 12} ${brow + 106} L${L - 8} ${brow + 112} Z`;
-    case 'ponytail':
-      return `M${R - 10} ${brow - 6} L${R + 14} ${brow + 6} L${R + 22} ${brow + 70}
-        L${R + 4} ${brow + 72} L${R - 8} ${brow + 14} Z`;
-    case 'braid':
-      return `M${cx - 8} ${brow + 4} L${cx + 8} ${brow + 4}
-        L${cx + 6} ${brow + 104} L${cx - 6} ${brow + 104} Z`;
-    default:
-      return '';
-  }
+/**
+ * The skull, as numbers. Hair used to guess at these and sat eight pixels
+ * below the crown, which put a band across the forehead and left the top of
+ * the head bare. Everything that has to sit on the head now reads from here.
+ */
+function skull(headTop, cx, headR, headH) {
+  return {
+    cx,
+    top: headTop - 12,           // the actual apex of the cranium
+    temple: headTop + 18,        // widest point, where the sides go vertical
+    brow: headTop + 1,           // hairline, high on the forehead
+    eyeLine: headTop + 30,       // nothing that is not a deliberate fringe goes below this
+    left: cx - headR,
+    right: cx + headR,
+    r: headR,
+    chin: headTop + headH + 18,
+  };
 }
 
-function hairPath(style, headTop, cx, headR) {
-  const crown = headTop - 12;          // top of the skull
-  const L = cx - headR - 2;            // just outside the left temple
-  const R = cx + headR + 2;
-  const brow = headTop + 16;           // where the hairline meets the face
-  // A filled dome: up over the crown, then back along the hairline.
-  const cap = `M${L} ${brow + 2} Q${cx} ${crown - 14} ${R} ${brow + 2}
-    Q${cx} ${brow + 12} ${L} ${brow + 2} Z`;
+/**
+ * The dome of the hair, following the skull outline with `lift` of clearance.
+ * Mirrors the head path exactly, so hair can never sit inside the scalp.
+ */
+function domePath(sk, lift = 3, dropL = 0, dropR = 0) {
+  const L = sk.left - lift * 0.4;
+  const R = sk.right + lift * 0.4;
+  const top = sk.top - lift;
+  return `M${L} ${sk.brow + dropL}
+    Q${L} ${top} ${sk.cx} ${top}
+    Q${R} ${top} ${R} ${sk.brow + dropR}
+    Q${sk.cx} ${sk.brow + 8} ${L} ${sk.brow + dropL} Z`;
+}
 
+/** A point on the dome, for hanging spikes and fringes off it. */
+function onDome(sk, t, lift = 3) {
+  // t: 0 at the left temple, 1 at the right.
+  const angle = Math.PI * (1 - t);
+  return {
+    x: sk.cx - Math.cos(angle) * (sk.r + lift * 0.4),
+    y: sk.temple - Math.sin(angle) * (sk.temple - (sk.top - lift)),
+  };
+}
+
+function hairBackPath(style, headTop, cx, headR, headH) {
+  const sk = skull(headTop, cx, headR, headH);
+  const L = sk.left - 2;
+  const R = sk.right + 2;
+  const y = sk.temple - 8;
   switch (style) {
-    case 'spiked':
-      return `M${L} ${brow + 8}
-        L${L - 6} ${crown - 26} L${cx - headR * 0.55} ${crown - 4}
-        L${cx - headR * 0.3} ${crown - 40} L${cx - 4} ${crown - 6}
-        L${cx + headR * 0.15} ${crown - 44} L${cx + headR * 0.45} ${crown - 6}
-        L${cx + headR * 0.7} ${crown - 30} L${R + 6} ${crown - 4}
-        L${R} ${brow + 8}
-        Q${cx} ${brow + 16} ${L} ${brow + 8} Z`;
-    case 'wild':
-      return `M${L} ${brow + 10}
-        C${L - 12} ${crown - 8} ${cx - headR * 0.6} ${crown - 26} ${cx - headR * 0.5} ${crown - 2}
-        C${cx - headR * 0.3} ${crown - 32} ${cx - 2} ${crown - 30} ${cx - 2} ${crown - 2}
-        C${cx + headR * 0.25} ${crown - 28} ${cx + headR * 0.7} ${crown - 22} ${cx + headR * 0.55} ${crown}
-        C${R + 8} ${crown - 12} ${R + 14} ${crown + 16} ${R} ${brow + 10}
-        Q${cx} ${brow + 18} ${L} ${brow + 10} Z`;
     case 'long':
+      return `M${L} ${y} Q${sk.cx} ${sk.top - 4} ${R} ${y}
+        L${R + 7} ${y + 108} L${R - 11} ${y + 102}
+        L${R - 11} ${y + 26} L${L + 11} ${y + 26}
+        L${L + 11} ${y + 102} L${L - 7} ${y + 108} Z`;
     case 'ponytail':
+      // Gathered at the back of the crown, falling behind the shoulder.
+      return `M${R - 12} ${sk.temple - 6} Q${R + 10} ${sk.temple - 2} ${R + 13} ${sk.temple + 18}
+        L${R + 19} ${sk.temple + 74} L${R + 3} ${sk.temple + 76}
+        L${R - 4} ${sk.temple + 20} Q${R - 14} ${sk.temple + 6} ${R - 12} ${sk.temple - 6} Z`;
     case 'braid':
-      return cap;
+      // Down the back of the neck, not the face.
+      return `M${sk.cx - 7} ${sk.chin - 6} L${sk.cx + 7} ${sk.chin - 6}
+        L${sk.cx + 6} ${sk.chin + 84} L${sk.cx - 6} ${sk.chin + 84} Z`;
     case 'bob':
-      return `M${L - 4} ${brow + 44} Q${L - 6} ${crown - 14} ${cx} ${crown - 16}
-        Q${R + 6} ${crown - 14} ${R + 4} ${brow + 44}
-        L${R - 8} ${brow + 40} Q${R - 10} ${brow + 6} ${cx} ${brow + 4}
-        Q${L + 10} ${brow + 6} ${L + 8} ${brow + 40} Z`;
-    case 'cropped':
-      return `M${L} ${brow - 2} Q${cx} ${crown - 8} ${R} ${brow - 2}
-        Q${cx} ${brow + 8} ${L} ${brow - 2} Z`;
-    case 'mohawk':
-      return `M${cx - 10} ${brow} C${cx - 13} ${crown - 34} ${cx + 13} ${crown - 34} ${cx + 10} ${brow}
-        Q${cx} ${brow + 8} ${cx - 10} ${brow} Z`;
-    case 'topknot':
-      return `${cap}
-        M${cx - 12} ${crown - 2} C${cx - 14} ${crown - 26} ${cx + 14} ${crown - 26} ${cx + 12} ${crown - 2} Z`;
+      return `M${L - 3} ${y} Q${sk.cx} ${sk.top - 4} ${R + 3} ${y}
+        L${R + 4} ${y + 40} L${L - 4} ${y + 40} Z`;
     default:
       return '';
   }
 }
 
-function eyeShape(shape, x, y, colour) {
+function hairPath(style, headTop, cx, headR, headH) {
+  const sk = skull(headTop, cx, headR, headH);
+  const dome = domePath(sk, 3);
+
+  switch (style) {
+    case 'spiked': {
+      // Spikes are raised off points on the dome, so every root is on the head.
+      const roots = [0.06, 0.22, 0.38, 0.5, 0.62, 0.78, 0.94];
+      const heights = [16, 30, 22, 34, 24, 29, 15];
+      let d = `M${sk.left - 1} ${sk.brow}`;
+      for (let i = 0; i < roots.length; i++) {
+        const a = onDome(sk, roots[i], 3);
+        const b = onDome(sk, Math.min(1, roots[i] + 0.08), 3);
+        const lean = (roots[i] - 0.5) * 22;
+        d += ` L${a.x + lean * 0.4} ${a.y - heights[i]} L${b.x} ${b.y}`;
+      }
+      d += ` L${sk.right + 1} ${sk.brow} Q${sk.cx} ${sk.brow + 9} ${sk.left - 1} ${sk.brow} Z`;
+      return d;
+    }
+    case 'wild': {
+      const roots = [0.08, 0.28, 0.5, 0.72, 0.92];
+      let d = `M${sk.left - 2} ${sk.brow + 4}`;
+      for (let i = 0; i < roots.length; i++) {
+        const a = onDome(sk, roots[i], 4);
+        const b = onDome(sk, Math.min(1, roots[i] + 0.12), 4);
+        const sway = (i % 2 ? 9 : -9);
+        d += ` C${a.x + sway} ${a.y - 26} ${b.x + sway} ${b.y - 30} ${b.x} ${b.y}`;
+      }
+      d += ` L${sk.right + 2} ${sk.brow + 2} Q${sk.cx} ${sk.brow + 10} ${sk.left - 2} ${sk.brow + 2} Z`;
+      return d;
+    }
+    case 'long':
+    case 'ponytail':
+      // A dome with a parted fringe, rather than a helmet.
+      return `${domePath(sk, 3, 4, 4)}
+        M${sk.left + 2} ${sk.brow + 2} Q${sk.cx - 6} ${sk.brow + 12} ${sk.cx + 6} ${sk.brow + 14}
+        Q${sk.cx - 10} ${sk.brow + 18} ${sk.left} ${sk.brow + 12} Z`;
+    case 'braid':
+      return domePath(sk, 3, 4, 4);
+    case 'bob':
+      return `${domePath(sk, 4)}
+        M${sk.left - 4} ${sk.brow + 6} L${sk.left - 5} ${sk.brow + 52} L${sk.left + 5} ${sk.brow + 52} L${sk.left + 4} ${sk.brow + 6} Z
+        M${sk.right + 4} ${sk.brow + 6} L${sk.right + 5} ${sk.brow + 52} L${sk.right - 5} ${sk.brow + 52} L${sk.right - 4} ${sk.brow + 6} Z`;
+    case 'cropped':
+      return domePath(sk, 1.5);
+    case 'mohawk': {
+      const crest = onDome(sk, 0.5, 2);
+      return `M${sk.cx - 11} ${sk.brow + 2}
+        C${sk.cx - 15} ${crest.y - 30} ${sk.cx + 15} ${crest.y - 30} ${sk.cx + 11} ${sk.brow + 2}
+        Q${sk.cx} ${sk.brow + 10} ${sk.cx - 11} ${sk.brow + 2} Z`;
+    }
+    case 'topknot': {
+      const crest = onDome(sk, 0.5, 3);
+      return `${domePath(sk, 3)}
+        M${sk.cx - 11} ${crest.y + 2} C${sk.cx - 14} ${crest.y - 22} ${sk.cx + 14} ${crest.y - 22} ${sk.cx + 11} ${crest.y + 2} Z`;
+    }
+    default:
+      return '';
+  }
+}
+
+export const EXPRESSIONS = [
+  { id: 'neutral', name: 'Neutral' },
+  { id: 'grin', name: 'Grinning' },
+  { id: 'scowl', name: 'Scowling' },
+  { id: 'focused', name: 'Focused' },
+  { id: 'tired', name: 'Exhausted' },
+  { id: 'sad', name: 'Grieving' },
+  { id: 'smug', name: 'Smug' },
+  { id: 'shock', name: 'Caught off guard' },
+  { id: 'rage', name: 'Furious' },
+  { id: 'serene', name: 'Serene' },
+];
+
+/**
+ * What the face is doing, read off the live character rather than chosen.
+ * Health first, because a body at ten per cent does not smirk.
+ */
+export function expressionFor(character, opts = {}) {
+  if (opts.expression) return opts.expression;
+  const v = character.vitals || {};
+  const f = character.flags || {};
+  if (opts.form) return 'rage';
+  if (v.health !== undefined && v.health < 25) return 'tired';
+  if (f.fury || f.humiliated) return 'rage';
+  if (f.brink_of_death) return 'shock';
+  if (v.happiness !== undefined && v.happiness < 25) return 'sad';
+  if (v.happiness !== undefined && v.happiness > 82) return 'grin';
+  if ((character.karma || 0) < -40) return 'smug';
+  if ((character.stats && character.stats.discipline) > 75) return 'serene';
+  if (v.happiness !== undefined && v.happiness > 62) return 'focused';
+  return 'neutral';
+}
+
+function eyeShape(shape, x, y, colour, mood = 'neutral', flip = 1) {
+  // Expression narrows, widens or closes the eye before its shape is drawn.
+  const squint = { scowl: 0.55, focused: 0.7, tired: 0.4, rage: 0.5, smug: 0.6, serene: 0.25, grin: 0.55 }[mood] || 1;
+  const grow = { shock: 1.35, sad: 1.1 }[mood] || 1;
+  const k = squint * grow;
+  const out = [];
+  if (mood === 'serene' || (mood === 'grin' && shape !== 'wide')) {
+    // Eyes closed, curving the way the mouth does.
+    out.push(`<path d="M${x - 9} ${y + 1} q9 ${mood === 'serene' ? 4 : -6} 18 0" fill="none" stroke="${colour}" stroke-width="2.6" stroke-linecap="round"/>`);
+    return out.join('');
+  }
   switch (shape) {
     case 'narrow':
-      return `<rect x="${x - 9}" y="${y - 2}" width="18" height="5" rx="2.5" fill="${colour}"/>`;
+      out.push(`<rect x="${x - 9}" y="${y - 2 * k}" width="18" height="${Math.max(2, 5 * k)}" rx="2.5" fill="${colour}"/>`);
+      break;
     case 'round':
-      return `<circle cx="${x}" cy="${y}" r="6" fill="${colour}"/>`;
+      out.push(`<ellipse cx="${x}" cy="${y}" rx="6" ry="${Math.max(1.6, 6 * k)}" fill="${colour}"/>`);
+      break;
     case 'wide':
-      return `<ellipse cx="${x}" cy="${y}" rx="8.5" ry="7" fill="${colour}"/>`;
+      out.push(`<ellipse cx="${x}" cy="${y}" rx="8.5" ry="${Math.max(2, 7 * k)}" fill="${colour}"/>`);
+      break;
     case 'heavy':
-      return `<path d="M${x - 9} ${y} q9 -8 18 0 q-9 6 -18 0 Z" fill="${colour}"/>`;
+      out.push(`<path d="M${x - 9} ${y} q9 ${-8 * k} 18 0 q-9 ${6 * k} -18 0 Z" fill="${colour}"/>`);
+      break;
     default: // sharp
-      return `<path d="M${x - 10} ${y + 3} L${x + 10} ${y - 4} L${x + 9} ${y + 3} Z" fill="${colour}"/>`;
+      out.push(`<path d="M${x - 10 * flip} ${y + 3 * k} L${x + 10 * flip} ${y - 4 * k} L${x + 9 * flip} ${y + 3 * k} Z" fill="${colour}"/>`);
   }
+  if (mood === 'tired') {
+    out.push(`<path d="M${x - 8} ${y + 7} q8 3 16 0" fill="none" stroke="rgba(0,0,0,.22)" stroke-width="1.8" stroke-linecap="round"/>`);
+  }
+  return out.join('');
+}
+
+/** Brow angle and mouth shape, which is most of what an expression is. */
+function faceExpression(mood, cx, eyeY, mouthY, browColour) {
+  const parts = [];
+  const brows = {
+    neutral: [-4, -4], grin: [-6, -6], scowl: [5, 5], focused: [2, 2],
+    tired: [-2, -2], sad: [-7, -7], smug: [-8, 3], shock: [-9, -9],
+    rage: [8, 8], serene: [-3, -3],
+  }[mood] || [-4, -4];
+  parts.push(`<path d="M${cx - 21} ${eyeY - 11 + brows[0]} l15 ${-brows[0] * 0.9 - 3}" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
+  parts.push(`<path d="M${cx + 21} ${eyeY - 11 + brows[1]} l-15 ${-brows[1] * 0.9 - 3}" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
+
+  const ink = 'rgba(0,0,0,.45)';
+  const mouths = {
+    neutral: `M${cx - 7} ${mouthY} q7 4 14 0`,
+    grin: `M${cx - 11} ${mouthY - 2} q11 12 22 0`,
+    scowl: `M${cx - 8} ${mouthY + 3} q8 -6 16 0`,
+    focused: `M${cx - 8} ${mouthY} l16 0`,
+    tired: `M${cx - 7} ${mouthY + 2} q7 2 14 -1`,
+    sad: `M${cx - 9} ${mouthY + 4} q9 -8 18 0`,
+    smug: `M${cx - 8} ${mouthY + 1} q10 -6 17 -4`,
+    shock: null,
+    rage: `M${cx - 11} ${mouthY - 1} q11 10 22 0 q-11 -3 -22 0`,
+    serene: `M${cx - 7} ${mouthY} q7 3 14 0`,
+  };
+  if (mood === 'shock') {
+    parts.push(`<ellipse cx="${cx}" cy="${mouthY + 2}" rx="5" ry="7" fill="${ink}"/>`);
+  } else if (mood === 'rage') {
+    parts.push(`<path d="${mouths.rage}" fill="${ink}"/>`);
+  } else {
+    parts.push(`<path d="${mouths[mood] || mouths.neutral}" fill="none" stroke="${ink}" stroke-width="2.4" stroke-linecap="round"/>`);
+  }
+  return parts.join('');
 }
 
 /**
@@ -297,8 +456,16 @@ export function portraitSvg(character, opts = {}) {
   const headH = face === 'long' ? 52 : face === 'round' ? 42 : 46;
   const chin = headTop + headH + 18;
 
-  const shoulderWidth = { small: 44, wiry: 50, lean: 56, balanced: 62, stocky: 70, massive: 80 }[build] || 62;
-  const neckWidth = { small: 11, wiry: 12, lean: 13, balanced: 15, stocky: 18, massive: 21 }[build] || 15;
+  // Frame differs by sex as well as build: narrower shoulders and neck, a
+  // softer jaw, a waist that comes in rather than going straight down.
+  const fem = character.sex === 'female';
+  const enby = character.sex === 'nonbinary';
+  const sexScale = fem ? 0.84 : enby ? 0.93 : 1;
+  const shoulderWidth = Math.round(({ small: 44, wiry: 50, lean: 56, balanced: 62, stocky: 70, massive: 80 }[build] || 62) * sexScale);
+  const neckWidth = Math.round(({ small: 11, wiry: 12, lean: 13, balanced: 15, stocky: 18, massive: 21 }[build] || 15) * (fem ? 0.82 : enby ? 0.92 : 1));
+  const waist = Math.round(shoulderWidth * (fem ? 0.82 : enby ? 0.9 : 0.96));
+  const jawTaper = fem ? 8 : enby ? 6 : 4;
+  const mood = expressionFor(character, opts);
 
   const goldHair = opts.form && /Super Saiyan|Golden/.test(opts.form.name);
   const finalHair = goldHair ? '#f2cf4a' : hairColour;
@@ -333,13 +500,15 @@ export function portraitSvg(character, opts = {}) {
   // Hair that hangs down goes behind everything else.
   const hasHair = !['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(race) && style !== 'bald';
   if (hasHair) {
-    const back = hairBackPath(style, headTop, cx, headR);
+    const back = hairBackPath(style, headTop, cx, headR, headH);
     if (back) parts.push(`<path d="${back.replace(/\s+/g, ' ')}" fill="${finalHair}" opacity="0.92"/>`);
   }
 
   // Torso and clothing.
-  parts.push(`<path d="M${cx - shoulderWidth} ${H} L${cx - shoulderWidth + 6} ${chin + 26}
-    Q${cx} ${chin + 2} ${cx + shoulderWidth - 6} ${chin + 26} L${cx + shoulderWidth} ${H} Z"
+  parts.push(`<path d="M${cx - waist} ${H}
+    C${cx - waist - 3} ${H - 40} ${cx - shoulderWidth} ${chin + 46} ${cx - shoulderWidth + 6} ${chin + 26}
+    Q${cx} ${chin + 2} ${cx + shoulderWidth - 6} ${chin + 26}
+    C${cx + shoulderWidth} ${chin + 46} ${cx + waist + 3} ${H - 40} ${cx + waist} ${H} Z"
     fill="${outfit.main || skin}"/>`);
   if (outfit.main) {
     parts.push(`<path d="M${cx - 16} ${chin + 14} L${cx} ${chin + 44} L${cx + 16} ${chin + 14}
@@ -355,8 +524,8 @@ export function portraitSvg(character, opts = {}) {
   parts.push(`<path d="M${cx - headR} ${headTop + 18}
     Q${cx - headR} ${headTop - 12} ${cx} ${headTop - 12}
     Q${cx + headR} ${headTop - 12} ${cx + headR} ${headTop + 18}
-    L${cx + headR - 4} ${headTop + headH}
-    Q${cx} ${chin + 6} ${cx - headR + 4} ${headTop + headH} Z" fill="${skin}"/>`);
+    L${cx + headR - jawTaper} ${headTop + headH}
+    Q${cx} ${chin + 6} ${cx - headR + jawTaper} ${headTop + headH} Z" fill="${skin}"/>`);
 
   // Ears, or whatever this species has instead.
   if (race === 'namekian') {
@@ -381,18 +550,25 @@ export function portraitSvg(character, opts = {}) {
 
   // Hair.
   if (hasHair) {
-    const d = hairPath(style, headTop, cx, headR);
-    if (d) parts.push(`<path d="${d.replace(/\s+/g, ' ')}" fill="${finalHair}"/>`);
+    const d = hairPath(style, headTop, cx, headR, headH);
+    if (d) {
+      parts.push(`<path d="${d.replace(/\s+/g, ' ')}" fill="${finalHair}" stroke="${shade(finalHair, 0.22)}" stroke-width="1"/>`);
+    }
   }
 
-  // Face.
+  // Face. The expression is read off the character, not chosen.
   const eyeY = headTop + 30;
-  parts.push(eyeShape(a.eyeShape || 'sharp', cx - 15, eyeY, eyeColour));
-  parts.push(eyeShape(a.eyeShape || 'sharp', cx + 15, eyeY, eyeColour));
-  const browColour = hasHair ? finalHair : 'rgba(0,0,0,.32)';
-  parts.push(`<path d="M${cx - 20} ${eyeY - 11} l14 -4" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
-  parts.push(`<path d="M${cx + 20} ${eyeY - 11} l-14 -4" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
-  parts.push(`<path d="M${cx - 7} ${headTop + 52} q7 5 14 0" fill="none" stroke="rgba(0,0,0,.42)" stroke-width="2.4" stroke-linecap="round"/>`);
+  const eyeGap = fem ? 14 : 15;
+  parts.push(eyeShape(a.eyeShape || 'sharp', cx - eyeGap, eyeY, eyeColour, mood, -1));
+  parts.push(eyeShape(a.eyeShape || 'sharp', cx + eyeGap, eyeY, eyeColour, mood, 1));
+  if (fem) {
+    // Lashes at the outer corner, which is most of the visual difference at
+    // this scale without leaning on anything sillier.
+    parts.push(`<path d="M${cx - eyeGap - 9} ${eyeY - 3} l-5 -3 M${cx + eyeGap + 9} ${eyeY - 3} l5 -3" stroke="rgba(0,0,0,.5)" stroke-width="2" stroke-linecap="round"/>`);
+  }
+  // A shade off the hair, so the brows do not merge into the hairline.
+  const browColour = hasHair ? shade(finalHair, -0.25) : 'rgba(0,0,0,.32)';
+  parts.push(faceExpression(mood, cx, eyeY, headTop + 52, browColour));
 
   drawMarks(parts, character, { cx, headTop, headH, headR, chin, eyeY, eyeColour, skin, shoulderWidth, H });
   drawAccessories(parts, character, { cx, headTop, headH, headR, chin, eyeY, skin, shoulderWidth, H, hasHair, hairColour: finalHair, outfit });
@@ -593,9 +769,20 @@ export function defaultAppearance(rng, raceId) {
     shinjin: 'kai', majin: 'none', tuffle: 'lab', yardratian: 'namek_robe',
     cerealian: 'coat', earthling: 'gi_orange',
   };
+  // Saiyans are black-haired; Namekians have none. A species that has a colour
+  // gets it, and everybody else gets the full spread.
+  const hairByRace = {
+    saiyan: ['black', 'black', 'black', 'darkbrown'],
+    halfsaiyan: ['black', 'black', 'darkbrown', 'lavender'],
+    frostdemon: ['white'], majin: ['pink'], namekian: ['black'], bioandroid: ['black'],
+    shinjin: ['white', 'silver'], tuffle: ['brown', 'darkbrown'],
+    yardratian: ['white', 'silver', 'black'], cerealian: ['white', 'silver', 'brown'],
+    android: ['black', 'blonde', 'darkbrown', 'brown', 'white'],
+  };
+  const palette = hairByRace[raceId] || HAIR_COLOURS.map((h) => h.id);
   return {
     hairStyle: rng.pick(HAIR_STYLES).id,
-    hairColour: rng.pick(HAIR_COLOURS).id,
+    hairColour: rng.pick(palette),
     eyeShape: rng.pick(EYE_SHAPES).id,
     eyeColour: rng.pick(EYE_COLOURS).id,
     skin: skinByRace[raceId] || rng.pick(SKIN_TONES.slice(0, 5)).id,

@@ -24,6 +24,48 @@ const LANDING_WORLDS = [
   { placeId: 'sadala', weight: 3, blurb: 'Saiyans, everywhere, and none of them conquerors.' },
 ];
 
+/**
+ * A pod is aimed. Which coordinates you set - or which your parents set for
+ * you - changes what you land in, and how long you are in there.
+ */
+export const POD_HEADINGS = [
+  {
+    id: 'nearest', name: 'The nearest habitable world',
+    hint: 'Days, not years. Whatever is close is close for a reason.',
+    years: 0,
+    worlds: ['planet_frieza_79', 'wastes', 'sadala'],
+    danger: 0.35,
+  },
+  {
+    id: 'far', name: 'As far from the Frieza Force as the fuel allows',
+    hint: 'Years asleep. Nobody will come looking.',
+    years: 3,
+    worlds: ['paozu', 'east_city', 'west_city', 'penguin_village'],
+    danger: 0.05,
+  },
+  {
+    id: 'weak', name: 'A world too weak to fight back',
+    hint: 'What a Saiyan pod is normally aimed at. You will not be welcome.',
+    years: 1,
+    worlds: ['paozu', 'wastes', 'cereal', 'east_city'],
+    danger: 0.15,
+  },
+  {
+    id: 'allies', name: 'Somewhere the Saiyans had friends',
+    hint: 'There were not many. The coordinates may be years out of date.',
+    years: 2,
+    worlds: ['yardrat', 'namek', 'sadala'],
+    danger: 0.2,
+  },
+  {
+    id: 'blind', name: 'Do not set them at all',
+    hint: 'Launch and let the pod decide. It has done this before.',
+    years: 2,
+    worlds: null,
+    danger: 0.25,
+  },
+];
+
 const FINDERS = [
   {
     id: 'kind_family', weight: 26, karma: 6,
@@ -69,6 +111,88 @@ const FINDERS = [
   },
 ];
 
+/**
+ * Launching. The heading decides where you come down and how long you are
+ * under; whether anyone comes with you depends on whether they had any warning
+ * and any standing, which is to say on the life you have had up to now.
+ */
+function podLaunch(c2, sl, heading) {
+  const c = c2.character;
+  c.flags.vegeta_resolved = true;
+  c.flags.in_pod = true;
+  c.flags.homeworld_destroyed = true;
+  c.flags.grief = true;
+  c.flags.pod_heading = heading.id;
+  c2.state.world.resolved.push('saiyan_purge');
+
+  // Anyone who did not get off the planet did not get off the planet.
+  const kin = Object.values(c2.state.npcs).filter((n) => n.alive
+    && ['parent', 'sibling', 'mentor'].includes(n.relation));
+
+  // Did your family get out? They needed warning, a second pod, and a reason
+  // to spend it on you rather than on themselves.
+  const warned = c.flags.warned_of_frieza || c.flags.bardock_warning;
+  const standing = (c.upbringingId === 'royal' ? 0.28 : 0)
+    + (c.upbringingId === 'warrior_clan' ? 0.14 : 0)
+    + Math.min(0.25, (c.fame || 0) / 240);
+  const closeness = kin.length ? Math.max(...kin.map((n) => n.closeness || 0)) / 100 : 0;
+  const chance = Math.min(0.75, (warned ? 0.42 : 0.08) + standing + closeness * 0.22);
+  const escaped = kin.length ? c2.rng.chance(chance) : false;
+  const survivors = escaped ? c2.rng.sample(kin, Math.min(kin.length, c2.rng.int(1, 2))) : [];
+
+  for (const npc of Object.values(c2.state.npcs)) {
+    if (survivors.includes(npc)) continue;
+    if (npc.placeId === 'planet_vegeta' && npc.alive) {
+      npc.alive = false;
+      npc.deadSince = 737;
+      npc.causeOfDeath = 'Planet Vegeta';
+    }
+  }
+  if (survivors.length) {
+    c.flags.kin_escaped = true;
+    for (const npc of survivors) {
+      npc.closeness = Math.min(100, (npc.closeness || 0) + 20);
+      npc.history.push({ year: 737, note: 'Got off Planet Vegeta.' });
+    }
+    fact(c2, `${survivors.map((n) => n.name).join(' and ')} got a pod out too.`,
+      { type: 'origin', weight: 10, tags: ['origin', 'family', 'saiyan'] });
+  } else {
+    fact(c2, 'Was put in a pod hours before Planet Vegeta was destroyed.',
+      { type: 'origin', weight: 10, tags: ['origin', 'loss', 'saiyan'] });
+  }
+
+  // A long crossing costs you years, and a bad heading costs you more.
+  const hurt = c2.rng.chance(heading.danger);
+  const changes = apply(c2, {
+    happiness: survivors.length ? -14 : -30,
+    health: hurt ? -18 : 0,
+    stats: { discipline: 4, durability: 3 },
+  });
+  const lines = [];
+  lines.push(c2.rng.pick([
+    'The hatch closes and you cannot hear anything after that.',
+    'There is no time to say goodbye properly, so nobody does.',
+    'You are asleep before the atmosphere.',
+  ]));
+  if (heading.years) lines.push(`You are under for ${heading.years} year${heading.years > 1 ? 's' : ''}.`);
+  lines.push(c2.rng.pick([
+    'Somewhere behind you a light goes on and stays on.',
+    'You do not see it happen.',
+    'The whole thing takes about four seconds.',
+  ]));
+  if (survivors.length) {
+    lines.push(`${survivors.map((n) => n.name).join(' and ')} made it into a second pod. You do not know that yet.`);
+  }
+  if (hurt) lines.push('Something in the launch goes wrong and you come round wrong.');
+
+  // A crossing costs what it costs. You come out of the pod older.
+  if (heading.years) {
+    c.age += heading.years;
+    c.flags.pod_years = heading.years;
+  }
+  return { text: lines.join(' '), changes };
+}
+
 registerEvents([
   {
     id: 'vegeta_last_day', noFatigue: true, tags: ['world', 'origin', 'threat'], weight: 900,
@@ -88,8 +212,17 @@ registerEvents([
     : 'There is a pod. There is one pod, and there is not much time to decide anything about it.'}`,
     choices: (ctx, s) => {
       const list = [];
+      // A pod is aimed. Which way changes everything that comes after it.
+      for (const heading of POD_HEADINGS) {
+        list.push({
+          id: 'pod_' + heading.id,
+          label: `Pod: ${heading.name.toLowerCase()}`,
+          hint: heading.hint,
+          effect: (c2, sl) => podLaunch(c2, sl, heading),
+        });
+      }
       list.push({
-        id: 'pod', label: 'Get in the pod',
+        id: 'pod', hidden: true, label: 'Get in the pod',
         hint: 'You will land somewhere else entirely, and be raised by whoever finds you.',
         effect: (c2, sl) => {
           c2.character.flags.vegeta_resolved = true;
@@ -185,15 +318,25 @@ registerEvents([
     id: 'pod_landing', noFatigue: true, tags: ['origin', 'travel'], weight: 900,
     when: (ctx) => ctx.flag('in_pod'),
     slots: (ctx) => {
-      const world = ctx.rng.weighted(LANDING_WORLDS, (w) => w.weight);
-      const finder = ctx.rng.weighted(FINDERS, (f) => f.weight);
+      const heading = POD_HEADINGS.find((h) => h.id === ctx.character.flags.pod_heading);
+      const pool = heading && heading.worlds
+        ? LANDING_WORLDS.filter((w) => heading.worlds.includes(w.placeId))
+        : LANDING_WORLDS;
+      const world = ctx.rng.weighted(pool.length ? pool : LANDING_WORLDS, (w) => w.weight);
+      // Parents who got a pod of their own are waiting when yours opens.
+      const withKin = !!ctx.character.flags.kin_escaped;
+      const finder = withKin
+        ? { id: 'own_kin', name: 'your own family', text: '', upbringing: 'warrior_clan', closeness: 85, respect: 55, relation: 'parent', karma: 4 }
+        : ctx.rng.weighted(FINDERS, (f) => f.weight);
       return {
         placeId: world.placeId,
         placeName: getPlace(world.placeId).name,
         landing: world.blurb,
         finderId: finder.id,
         finderName: finder.name,
-        finderText: finder.text,
+        finderText: withKin
+          ? 'A second pod is already open beside yours, and somebody is sitting on it waiting for you to wake up.'
+          : finder.text,
       };
     },
     title: 'The Pod Comes Down',
@@ -201,7 +344,8 @@ registerEvents([
       [placeName]. [landing] [finderText]`,
     choices: (ctx, s) => [
       { id: 'accept', label: `Be raised by ${s.finderName}`, effect: (c2, sl) => {
-        const finder = FINDERS.find((f) => f.id === sl.finderId);
+        const finder = FINDERS.find((f) => f.id === sl.finderId)
+          || { id: 'own_kin', upbringing: 'warrior_clan', closeness: 85, respect: 55, relation: 'parent', karma: 4 };
         c2.character.flags.in_pod = false;
         moveTo(c2, sl.placeId);
         c2.character.upbringingId = finder.upbringing;

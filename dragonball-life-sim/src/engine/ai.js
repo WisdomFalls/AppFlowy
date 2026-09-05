@@ -34,9 +34,63 @@ export const DEFAULT_CONFIG = {
   baseUrl: '',
   model: '',
   key: '',
-  format: 'openai',        // openai | anthropic
+  format: 'openai',        // openai | anthropic | kobold
   headerName: 'Authorization',
   headerPrefix: 'Bearer ',
+  // KoboldAI / KoboldCpp sampler settings. They are exposed because a local
+  // model needs different handling from a hosted one: too much temperature and
+  // the JSON comes back malformed, too little and every event reads the same.
+  temperature: 0.8,
+  topP: 0.92,
+  maxTokens: 700,
+};
+
+/**
+ * One-click presets for the endpoints people actually run. KoboldCpp serves
+ * both its own API and an OpenAI-compatible one; the native route is the
+ * default because it works on plain KoboldAI too.
+ */
+export const PRESETS = {
+  kobold: {
+    label: 'KoboldAI / KoboldCpp',
+    baseUrl: 'http://localhost:5001/api/v1/generate',
+    format: 'kobold',
+    model: 'kobold',
+    key: '',
+    hint: 'Start Kobold with --host and the default port. No key needed. If you run it elsewhere, replace localhost.',
+  },
+  kobold_openai: {
+    label: 'KoboldCpp (OpenAI route)',
+    baseUrl: 'http://localhost:5001/v1/chat/completions',
+    format: 'openai',
+    model: 'koboldcpp',
+    key: '',
+    hint: 'KoboldCpp only. Use this if the native route gives you trouble.',
+  },
+  ollama: {
+    label: 'Ollama',
+    baseUrl: 'http://localhost:11434/v1/chat/completions',
+    format: 'openai',
+    model: 'llama3.1',
+    key: 'ollama',
+    hint: 'Set the model to whatever you have pulled.',
+  },
+  lmstudio: {
+    label: 'LM Studio',
+    baseUrl: 'http://localhost:1234/v1/chat/completions',
+    format: 'openai',
+    model: 'local-model',
+    key: '',
+    hint: 'Start the local server from the LM Studio developer tab.',
+  },
+  openai_compat: {
+    label: 'Any OpenAI-compatible endpoint',
+    baseUrl: '',
+    format: 'openai',
+    model: '',
+    key: '',
+    hint: 'Point at a /v1/chat/completions URL.',
+  },
 };
 
 export function getAiConfig() {
@@ -95,12 +149,14 @@ export function setApiKey(key) {
 export function backendName() {
   const cfg = getAiConfig();
   if (cfg.provider === 'off') return 'none';
-  if (cfg.provider === 'custom' && cfg.baseUrl && cfg.model) return 'custom';
+  // KoboldAI needs no model name and no key, so "configured" is just a URL.
+  const customReady = !!cfg.baseUrl && (cfg.format === 'kobold' || !!cfg.model);
+  if (cfg.provider === 'custom' && customReady) return 'custom';
   if (cfg.provider === 'anthropic' && getApiKey()) return 'api';
   if (cfg.provider === 'auto') {
     if (sampleFn) return 'sample';
     if (getApiKey()) return 'api';
-    if (cfg.baseUrl && cfg.model) return 'custom';
+    if (customReady) return 'custom';
   }
   return 'none';
 }
@@ -111,7 +167,9 @@ export function backendLabel() {
   switch (name) {
     case 'sample': return 'Claude, through this page';
     case 'api': return 'Claude, on your own API key';
-    case 'custom': return `${cfg.model || 'custom model'} at ${shortHost(cfg.baseUrl)}`;
+    case 'custom': return cfg.format === 'kobold'
+      ? `KoboldAI at ${shortHost(cfg.baseUrl)}`
+      : `${cfg.model || 'custom model'} at ${shortHost(cfg.baseUrl)}`;
     default: return 'Not connected';
   }
 }
@@ -294,20 +352,44 @@ async function callApi(prompt, opts = {}) {
  */
 async function callCustom(prompt, opts = {}) {
   const cfg = getAiConfig();
-  if (!cfg.baseUrl || !cfg.model) throw Object.assign(new Error('no endpoint configured'), { code: 'not_granted' });
+  const needsModel = cfg.format !== 'kobold';
+  if (!cfg.baseUrl || (needsModel && !cfg.model)) {
+    throw Object.assign(new Error('no endpoint configured'), { code: 'not_granted' });
+  }
 
   const headers = { 'content-type': 'application/json' };
   if (cfg.key) headers[cfg.headerName || 'Authorization'] = (cfg.headerPrefix || '') + cfg.key;
 
+  const maxTokens = Math.max(120, Math.min(4000, Number(cfg.maxTokens) || 700));
+  const temperature = Math.max(0, Math.min(2, Number(cfg.temperature ?? 0.8)));
+  const topP = Math.max(0.01, Math.min(1, Number(cfg.topP ?? 0.92)));
+
   let body;
-  if (cfg.format === 'anthropic') {
+  if (cfg.format === 'kobold') {
+    // KoboldAI's native generate route: one prompt string, samplers alongside.
+    // It has no chat roles, so the instruction goes in the prompt and we stop
+    // on the tokens a local model most often runs on with.
+    body = {
+      prompt,
+      max_context_length: 4096,
+      max_length: maxTokens,
+      temperature,
+      top_p: topP,
+      rep_pen: 1.07,
+      rep_pen_range: 320,
+      trim_stop: true,
+      stop_sequence: ['\n\n\n', '</s>', '<|im_end|>', '<|eot_id|>', 'USER:', 'ASSISTANT:'],
+    };
+  } else if (cfg.format === 'anthropic') {
     headers['anthropic-version'] = '2023-06-01';
     headers['anthropic-dangerous-direct-browser-access'] = 'true';
-    body = { model: cfg.model, max_tokens: 2000, messages: [{ role: 'user', content: prompt }] };
+    body = { model: cfg.model, max_tokens: maxTokens, temperature, messages: [{ role: 'user', content: prompt }] };
   } else {
     body = {
       model: cfg.model,
-      max_tokens: 2000,
+      max_tokens: maxTokens,
+      temperature,
+      top_p: topP,
       messages: [{ role: 'user', content: prompt }],
     };
   }
@@ -331,8 +413,14 @@ async function callCustom(prompt, opts = {}) {
     const choice = data.choices[0];
     return (choice.message && choice.message.content) || choice.text || '';
   }
+  // KoboldAI: { results: [ { text } ] }
+  if (Array.isArray(data.results) && data.results.length) {
+    const r = data.results[0];
+    return (r && (r.text || r.generated_text)) || '';
+  }
   if (typeof data.response === 'string') return data.response;
   if (typeof data.output === 'string') return data.output;
+  if (typeof data.text === 'string') return data.text;
   return '';
 }
 
