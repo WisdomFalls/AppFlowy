@@ -90,6 +90,10 @@ export function relate(ctx, npc, changes = {}) {
   if (changes.respect) npc.respect = clamp(npc.respect + changes.respect, 0, 100);
   if (changes.tension) npc.tension = clamp(npc.tension + changes.tension, 0, 100);
   if (changes.romance) npc.romance = clamp(npc.romance + changes.romance, 0, 100);
+  // Trust is a real field on every NPC and callers have been passing it for a
+  // while; it was silently dropped here.
+  if (changes.trust) npc.trust = clamp((npc.trust ?? 30) + changes.trust, 0, 100);
+  if (changes.knowledge) npc.knowledge = Math.min(4, (npc.knowledge || 0) + changes.knowledge);
   if (changes.relation) npc.relation = changes.relation;
   if (changes.power) npc.power = Math.max(1, Math.round(npc.power * changes.power));
   if (changes.note) npc.history.push({ year: ctx.year, note: changes.note });

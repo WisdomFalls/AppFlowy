@@ -56,9 +56,11 @@ but it cannot change the rules.
 | Canon characters | 75, era-gated by birth and death year, with power interpolated across the sagas so Goku in Age 762 is not Goku in Age 780 |
 | Places | 34 across 10 worlds, each with its own training multiplier and danger |
 | Timeline | 21 canon events from the fall of Planet Vegeta to the Tournament of Power. They fire on their year whether you want them to or not, and you play them rather than read them |
-| Events | 88 templates plus unlimited model-authored ones |
+| Events | 98 templates plus unlimited model-authored ones |
 | Careers | 15 with promotion ladders, from martial arts instructor to Frieza Force sector commander |
 | Social verbs | 20 direct interactions per person, from teaching and healing to extortion and a duel to the death |
+| Universes | 8 besides your own, with their gods, their angels and their fighters at tournament strength |
+| Wishes | 27 across five categories, and three dragons with different limits on what they will do |
 
 Also: relationships that decay if you neglect them, romance and marriage and children who
 inherit your potential, the Dragon Balls and twelve wishes with real costs, tournaments,
@@ -82,6 +84,28 @@ on the same drill produces diminishing returns rather than an exploit.
 Maturity and ageing are separate rates. A Namekian is an adult in four years but lives
 three hundred; a Kai ages so slowly they are still a child at twelve. The budget follows
 maturity, the lifespan follows ageing.
+
+## Tournaments
+
+A tournament is a bracket you fight, not a placement you are told. The field is
+seeded from whoever is actually alive and fighting in that year, so a draw has
+names in it. Your match opens on the battle screen; everyone else's resolves
+around you, round by round, and you watch the half of the draw you are not in
+thin out while you wait.
+
+Each format has its own rules and its own idea of who turns up. Frieza does not
+enter the World Martial Arts Tournament. The dead fight in the Other World and
+cannot die of it. Ring-out is a real move: throwing somebody out is how most
+tournaments end, it works on people you could never knock down, and they will
+do it to you. Killing under tournament rules ends your tournament.
+
+The canon tournaments run through the same bracket. Winning the World Martial
+Arts Tournament gets you the belt, and you wear it. Winning the Tournament of
+Power saves Universe 7 and hands you the Super Dragon Balls; losing it can
+erase you along with everything else.
+
+You can also hold your own. Put up a purse, decide what calibre of field you
+are trying to attract, and find out who answers.
 
 ## Fighting
 
@@ -132,6 +156,14 @@ your own from it, name it, and teach it to other people.
 Transformations still want an emotional trigger, but they are no longer hostage to one:
 enough raw power (25× the requirement) breaks through without the story beat.
 
+## The other universes
+
+Eight universes besides your own, each with its God of Destruction, its angel,
+its Kai, and its fighters at the strength they held for the Tournament of
+Power. They seed the Tournament of Destroyers and the Tournament of Power, so
+the draw contains Hit and Ribrianne and Jiren rather than invented names, and
+beating one of them is remembered as beating them.
+
 ## Worlds
 
 Ten worlds, each with its own inhabitants, flora, defenders, law and alignment. Travel
@@ -145,6 +177,24 @@ its living defenders after you — turn evil on Earth and the Z Fighters come to
 by name, at the power they have in that year. Higher up, Beerus and Whis notice, and
 noticing goes three ways: they end you, they spare you, or they decide you are
 interesting enough to train.
+
+## Wishes
+
+Twenty-seven wishes across five categories, and three dragons that differ in
+what they will do. Shenron grants one thing and cannot exceed the power of the
+one who made him. Porunga grants three, one soul at a time, and stays uncoiled
+across the sky between them. Super Shenron does whatever is asked, once.
+
+A wish that needs a target asks you to name it, from the people you actually
+know and the tyrants who are actually alive. You can bring back one person or
+everyone, undo every death you caused, become a different species, hand a
+friend the strength to stand beside you, spend it on what somebody else has
+been chasing, or ask for a really nice pair of underwear.
+
+You can also just say what you want. Where a model is connected it reads the
+wish as the dragon would; without one the dragon takes you literally, which is
+in character. Asking for something beyond the dragon costs you the wish and
+gets you a refusal.
 
 ## People
 
@@ -169,13 +219,29 @@ trust, romance and tension separately.
 Non-canon people are not scenery. They train, hit walls, break through them, unlock forms,
 have children, and those children grow into interests of their own.
 
+The canon cast keeps living too. Between the sagas and after the timeline runs
+out, they break through walls, take students, retire and hand you their school,
+have children, grow up and come looking for a fight, and eventually die of
+nothing but time. Old villains are seen somewhere they should not be, and you
+can go and deal with it, warn the people who need warning, or go and offer to
+work for them.
+
 ## Looking like someone
 
-Character creation is tabbed: race and era, body (height, weight, build), face (shape, eye
-shape, eye colour, skin), hair (style and colour), presentation (clothing, stance
-including one you describe yourself, presence), and outlook (morality). It draws as you
+Character creation is tabbed: face, hair, body, clothes, marks and self. It draws as you
 edit — a parametric layered SVG portrait, back hair behind the torso, front hair over the
 head, race features on top, and an aura and gold hair when a form is active.
+
+Marks are open rather than a single dropdown: scars in several places, burns, a missing
+eye, ear or arm, mechanical replacements, tattoos, and a free-text one you describe
+yourself. Take as many as the body has earned. More arrive on their own — a fight that
+nearly kills you leaves something behind, and losing an eye to something lethal is a
+real outcome the record attributes to whoever did it.
+
+Accessories work the same way. Headbands, capes, eyepatches, glasses and the rest can be
+chosen at the start or bought later, and some arrive with the life: a scouter you own, a
+belt you won, a sword you were given, a halo you did not ask for. Everything worn is
+drawn.
 
 ## Death, and after
 
@@ -191,7 +257,8 @@ alive again in the same session, in the world as it now stands.
 ```
 src/
   data/         content: races, techniques, transformations, canon, places,
-                planets, timeline, jobs, items, names, the phrasing lexicon
+                planets, universes, timeline, jobs, items and wishes, names,
+                the phrasing lexicon
   engine/
     rng.js          seeded PRNG - every life replays from its seed
     text.js         the grammar
@@ -211,7 +278,8 @@ src/
     npc.js          NPC interiors and their own life progression
     aieffects.js    the referee for model-authored events
     ai.js           pluggable model backends and prompts
-    events/         88 event templates in eight themed packs
+    tournament.js   brackets, formats, seeding, cross-universe fields
+    events/         98 event templates in ten themed packs
   ui/           mobile-first interface, vanilla DOM
     portrait.js     the parametric SVG character
     trialui.js      the minigame screens
@@ -248,13 +316,14 @@ age 95:
 
 ```
 crashes         : none
-survived to cap : 55/150
-age at end      : median 75, range 9-95
-final power     : median 61,648,364, max 261,474,349,901,359,420
-events per life : median 191
+survived to cap : 40/80
+age at end      : median 95, range 8-95
+final power     : median 967,743,305, max 33,473,428,157,970,576
+events per life : median 216
 forms unlocked  : median 1, max 6
-techniques      : median 7
-people met      : median 19
+techniques      : median 8
+people met      : median 25
 ```
 
 Deaths are meant to be earned: the largest cause is fights you chose, not attrition.
+No single event title is more than about 3% of everything that happens.

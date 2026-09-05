@@ -9,6 +9,7 @@ import './engine/events/social.js';
 import './engine/events/conflict.js';
 import './engine/events/world.js';
 import './engine/events/wishes.js';
+import './engine/events/canonlife.js';
 import './engine/events/afterlife.js';
 import './engine/events/actions.js';
 
