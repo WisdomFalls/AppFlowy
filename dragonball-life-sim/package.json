@@ -1,0 +1,15 @@
+{
+  "name": "dragonball-life-sim",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Dragon Ball: Mortal Coil - a procedurally generated Dragon Ball life simulator",
+  "scripts": {
+    "build": "node build/bundle.mjs",
+    "test": "node --test test/*.test.mjs",
+    "sim": "node tools/soak.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.49.1"
+  }
+}

@@ -1,0 +1,136 @@
+<div id="app">
+
+  <!-- ============================================ character creation -->
+  <section class="screen active" id="screen-create">
+    <div class="create">
+      <h1 class="logo">Dragon Ball<em>Mortal Coil</em></h1>
+      <p class="tagline">One life, one year at a time. Pick a species, pick a century, and find out
+        how far you get before something stronger than you turns up.</p>
+
+      <div class="field">
+        <label class="field-label" for="in-name">Name</label>
+        <div style="display:flex;gap:7px">
+          <input class="text-input" id="in-name" maxlength="24" placeholder="Kakarot" autocomplete="off">
+          <button class="ghost-btn" id="btn-reroll-name" style="width:auto;margin:0;padding:10px 14px">Roll</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Species</span>
+        <div class="opts" id="opt-race"></div>
+        <div class="race-card" id="race-card"></div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Born into</span>
+        <div class="opts" id="opt-upbringing"></div>
+        <p class="row-note" id="upbringing-note" style="margin-top:6px"></p>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Temperament</span>
+        <div class="opts" id="opt-temperament"></div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Build</span>
+        <div class="opts" id="opt-body"></div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Appearance</span>
+        <div style="display:grid;gap:7px">
+          <select class="text-input" id="in-hair"></select>
+          <select class="text-input" id="in-eyes"></select>
+          <select class="text-input" id="in-marking"></select>
+          <select class="text-input" id="in-sex"></select>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Born in</span>
+        <select class="text-input" id="in-era"></select>
+        <p class="row-note" id="era-note" style="margin-top:6px"></p>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Homeworld</span>
+        <select class="text-input" id="in-home"></select>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="in-seed">Seed (optional)</label>
+        <input class="text-input" id="in-seed" placeholder="leave blank for a random life" autocomplete="off">
+      </div>
+
+      <button class="primary-btn" id="btn-begin">Begin a life</button>
+      <button class="ghost-btn" id="btn-random-all">Randomise everything</button>
+      <button class="ghost-btn" id="btn-continue" hidden>Continue saved life</button>
+      <p class="hint-text" id="create-ai-note"></p>
+    </div>
+  </section>
+
+  <!-- ========================================================== play -->
+  <section class="screen" id="screen-play">
+    <header class="hud">
+      <div class="hud-top">
+        <div>
+          <div class="hud-name" id="hud-name">-</div>
+          <div class="hud-sub" id="hud-sub">-</div>
+        </div>
+        <div class="hud-spacer"></div>
+        <div class="hud-age" id="hud-age">0<small>years</small></div>
+      </div>
+
+      <div class="scouter">
+        <span class="scouter-label">PWR</span>
+        <span class="scouter-value" id="hud-power">0</span>
+        <span class="scouter-tier" id="hud-tier">-</span>
+      </div>
+
+      <div class="bars">
+        <div class="bar bar-health">
+          <div class="bar-label"><span>Health</span><span id="v-health">100</span></div>
+          <div class="bar-track"><div class="bar-fill" id="f-health" style="width:100%"></div></div>
+        </div>
+        <div class="bar bar-happy">
+          <div class="bar-label"><span>Mood</span><span id="v-happy">65</span></div>
+          <div class="bar-track"><div class="bar-fill" id="f-happy" style="width:65%"></div></div>
+        </div>
+        <div class="bar bar-ki">
+          <div class="bar-label"><span>Ki</span><span id="v-ki">40</span></div>
+          <div class="bar-track"><div class="bar-fill" id="f-ki" style="width:60%"></div></div>
+        </div>
+      </div>
+
+      <div class="pills" id="hud-pills"></div>
+    </header>
+
+    <div class="feed" id="feed"></div>
+
+    <nav class="dock">
+      <button class="age-btn" id="btn-age">Age up</button>
+      <div class="tabs">
+        <button class="tab-btn" data-panel="activities"><span>&#9876;</span>Do</button>
+        <button class="tab-btn" data-panel="people"><span>&#9788;</span>People</button>
+        <button class="tab-btn" data-panel="power"><span>&#9889;</span>Power</button>
+        <button class="tab-btn" data-panel="records"><span>&#9635;</span>Life</button>
+      </div>
+    </nav>
+  </section>
+
+  <!-- ======================================================== epitaph -->
+  <section class="screen" id="screen-death">
+    <div class="epitaph" id="epitaph"></div>
+  </section>
+
+</div>
+
+<div class="sheet-scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-heading">
+  <div class="sheet-grab"></div>
+  <div class="sheet-body" id="sheet-body"></div>
+  <div class="sheet-foot" id="sheet-foot"></div>
+</div>
+
+<div class="toast" id="toast"></div>
