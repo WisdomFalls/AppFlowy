@@ -188,8 +188,63 @@ export function pingSquare(state, hunt, rng, x, y) {
 }
 
 /** Once you have all seven you can call the dragon. */
+import { DRAGONS } from '../data/items.js';
+
+/** Which dragon answers this set, and what it can do. */
+export function dragonFor(state) {
+  if (state.world.summon && state.world.summon.dragon) return DRAGONS[state.world.summon.dragon];
+  if (state.world.flags.super_dragon_balls && ballsHeld(state) < 7) return DRAGONS.super;
+  const set = state.world.ballSet;
+  return set && set.dragon === 'Porunga' ? DRAGONS.porunga : DRAGONS.shenron;
+}
+
+/** Can a dragon be called right now: seven balls, a summon in progress, or the super set. */
 export function summonReady(state) {
+  if (state.world.summon && state.world.summon.remaining > 0) return true;
+  if (state.world.flags.super_dragon_balls) return true;
   return ballsHeld(state) >= 7;
+}
+
+export function summonActive(state) {
+  return !!(state.world.summon && state.world.summon.remaining > 0);
+}
+
+/** Call the dragon up. Porunga stays for three wishes; the others for one. */
+export function beginSummon(state) {
+  if (summonActive(state)) return state.world.summon;
+  const dragon = dragonFor(state);
+  state.world.summon = { dragon: dragon.id, remaining: dragon.wishes, used: [], group: null };
+  return state.world.summon;
+}
+
+/**
+ * One wish spoken and granted. When the dragon has nothing left to give it
+ * goes, the balls scatter and turn to stone for a year - or, for the super
+ * set, are simply spent.
+ */
+export function wishGranted(state, rng, wishId) {
+  const summon = state.world.summon || beginSummon(state);
+  summon.remaining -= 1;
+  summon.used.push(wishId);
+  state.world.wishesUsed.push(wishId);
+  if (summon.remaining <= 0) {
+    if (summon.dragon === 'super') {
+      state.world.flags.super_dragon_balls = false;
+    } else {
+      scatterAfterWish(state, rng);
+    }
+    state.world.summon = null;
+    return { remaining: 0, gone: true };
+  }
+  return { remaining: summon.remaining, gone: false };
+}
+
+/** The dragon leaves without granting anything more. */
+export function dismissDragon(state, rng) {
+  const summon = state.world.summon;
+  state.world.summon = null;
+  if (summon && summon.dragon !== 'super' && ballsHeld(state) >= 7) scatterAfterWish(state, rng);
+  else if (summon && summon.dragon === 'super') state.world.flags.super_dragon_balls = false;
 }
 
 /** Wishes scatter them again, and they go inert for a year. */

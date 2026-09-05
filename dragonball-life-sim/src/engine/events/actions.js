@@ -17,8 +17,9 @@ import { getRace, hasPerk } from '../../data/races.js';
 import { actionBlocked, chargeAction, grantTrainingPower, costLabel, slotsLeft } from '../economy.js';
 import { makeNpc, bondScore, relationLabel } from '../npc.js';
 import { canonAvailable, canonPower } from '../../data/canon.js';
-import { ensureBallSet, ballsHeld, startHunt, surveyPlanet, ballsAreInert } from '../dragonballs.js';
+import { ensureBallSet, ballsHeld, startHunt, surveyPlanet, ballsAreInert, summonReady } from '../dragonballs.js';
 import { startTrial, STAT_TRIALS, TRIAL_KINDS, getMastery, masteryEffect, inventForm } from '../trials.js';
+import { createTournament, autoRunTournament, settle } from '../tournament.js';
 import { travelOptions, travelTo, actOnWorld, standingOn } from '../worlds.js';
 import { getPlanet, PLANETS } from '../../data/planets.js';
 import { generateFullName, generateSignatureName } from '../../data/names.js';
@@ -518,8 +519,8 @@ export const ACTIONS = [
   {
     id: 'summon_dragon_action', slots: 0, name: 'Summon the dragon', cat: 'world', cost: 'A moment',
     desc: 'You have all seven.',
-    available: (s) => ballsHeld(s) >= 7,
-    run: (s, rng) => ({ text: 'Seven in a circle. The sky is already going dark. Age up to make the wish.', forceEvent: 'summon_dragon' }),
+    available: (s) => summonReady(s),
+    run: (s, rng) => ({ text: 'Seven in a circle. The sky is already going dark.', forceEvent: 'summon_dragon' }),
   },
   {
     id: 'seek_challenge', slots: 2, maxPerYear: 2, name: 'Go looking for a fight', cat: 'world',
@@ -549,6 +550,52 @@ export const ACTIONS = [
         text: `${foe.name}. ${foe.intro} ${describeGap(combatPower(s.character), foe.power)}`,
         battle: { foe, reason: 'challenge', stakes: scope === 'universe' ? 'lethal' : 'serious' },
       };
+    },
+  },
+  {
+    id: 'hold_tournament', slots: 3, maxPerYear: 1, name: 'Hold a tournament', cat: 'world',
+    desc: 'Put up a purse, send out word, and see who turns up. Your rules.',
+    available: (s) => s.character.age >= 14 && !s.character.inAfterlife && s.character.zeni >= 50000,
+    options: (s) => {
+      const c = s.character;
+      const tiers = [
+        { id: 'local', label: 'A local card', hint: '50,000 Zeni. Whoever hears about it.', cost: 50000, spread: 4, canon: false },
+        { id: 'open', label: 'An open invitational', hint: '400,000 Zeni. Word gets around.', cost: 400000, spread: 12, canon: true },
+        { id: 'callout', label: 'Call out the strongest alive', hint: '2,000,000 Zeni. You are asking for it.', cost: 2000000, spread: 45, canon: true },
+      ];
+      return tiers.map((t) => ({
+        ...t,
+        disabled: c.zeni < t.cost || (t.canon && c.fame < (t.id === 'callout' ? 45 : 12)),
+        hint: c.zeni < t.cost ? `You cannot cover the ${zeni(t.cost)} purse.`
+          : (t.canon && c.fame < (t.id === 'callout' ? 45 : 12))
+            ? 'Nobody worth fighting has heard of you yet.'
+            : t.hint,
+      }));
+    },
+    run: (s, rng, params) => {
+      const tier = (params && params.option) || 'local';
+      const spec = {
+        local: { cost: 50000, spread: 4, canon: false, size: 8 },
+        open: { cost: 400000, spread: 12, canon: true, size: 8 },
+        callout: { cost: 2000000, spread: 45, canon: true, size: 8 },
+      }[tier];
+      s.character.zeni -= spec.cost;
+      const t = createTournament(s, rng, {
+        formatId: 'invitational',
+        purse: spec.cost,
+        spread: spec.spread,
+        canon: spec.canon,
+        size: spec.size,
+        name: `${s.character.name}'s Invitational`,
+        placeId: s.character.placeId,
+      });
+      const opener = render(`{You put the money up and the word out|You pay for the ring, the officials and the posters|`
+        + `You book a stretch of ground and tell people what the prize is}. `
+        + `{They come|More of them turn up than you expected|The draw fills in a week}.`, {}, rng);
+      if (!s.autoBattle) return { text: opener, tournament: t };
+      autoRunTournament(s, rng, t);
+      const out = settle(s, t, rng);
+      return { text: `${opener} ${out.text}` };
     },
   },
 ];

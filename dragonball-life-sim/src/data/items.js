@@ -50,6 +50,25 @@ export const ITEMS = [
     desc: 'Forbidden to everyone below Supreme Kai. Rings on the finger of anyone who breaks time.' },
   { id: 'sacred_water', name: 'Ultra Divine Water', cat: 'consumable', cost: 0, use: { unlockPotential: 0.5, deathRisk: 0.35 },
     desc: 'Drink it and either your latent power comes out or you do not.' },
+  // Worn things. Cheap, cosmetic, and drawn on you.
+  { id: 'acc_headband', name: 'Headband', cat: 'accessory', cost: 1200, wear: 'headband', desc: 'Keeps the hair out of your eyes and the sweat out of the fight.' },
+  { id: 'acc_bandana', name: 'Bandana', cat: 'accessory', cost: 900, wear: 'bandana', desc: 'Blue, knotted at the back, faintly piratical.' },
+  { id: 'acc_glasses', name: 'Glasses', cat: 'accessory', cost: 6000, wear: 'glasses', desc: 'You did not need them until you started reading technique diagrams by candlelight.' },
+  { id: 'acc_sunglasses', name: 'Sunglasses', cat: 'accessory', cost: 4000, wear: 'sunglasses', desc: 'For the Solar Flare, allegedly.' },
+  { id: 'acc_earrings', name: 'Earrings', cat: 'accessory', cost: 15000, wear: 'earrings', desc: 'Not Potara. People will still ask.' },
+  { id: 'acc_necklace', name: 'Necklace', cat: 'accessory', cost: 22000, wear: 'necklace', desc: 'A pendant on a chain. Somebody gave it to you, or you tell people somebody did.' },
+  { id: 'acc_cape', name: 'Cape', cat: 'accessory', cost: 30000, wear: 'cape', desc: 'Weighted, if you want it weighted. Dramatic either way.' },
+  { id: 'acc_scarf', name: 'Red scarf', cat: 'accessory', cost: 3500, wear: 'scarf', desc: 'Long enough to catch the wind when you land.' },
+  { id: 'acc_wristbands', name: 'Wristbands', cat: 'accessory', cost: 2500, wear: 'wristbands', desc: 'Blue, thick, and heavier than they look.' },
+  { id: 'acc_hat', name: 'Wide hat', cat: 'accessory', cost: 5000, wear: 'hat', desc: 'Shade in the wastelands and a target everywhere else.' },
+
+  // Things you cannot buy. They arrive when you earn them.
+  { id: 'championship_belt', name: 'World Championship Belt', cat: 'trophy', cost: 0, wear: 'belt', passive: { fame: 6 },
+    desc: 'Heavy, gold, and yours until somebody takes it.' },
+  { id: 'turtle_shell', name: 'Turtle Shell', cat: 'gear', cost: 0, wear: 'shell', passive: { trainMult: 1.3, speedPenalty: 6 },
+    desc: 'Twenty kilos of shell strapped to your back. Master Roshi says you will thank him.' },
+  { id: 'cyber_eye', name: 'Mechanical Eye', cat: 'gear', cost: 400000, passive: { senseBonus: 0.3 },
+    desc: 'Built to replace the one you lost. It reads power levels, badly.' },
   { id: 'fruit_of_might', name: 'Fruit of the Tree of Might', cat: 'consumable', cost: 0, use: { powerMult: 1.6, karma: -10 },
     desc: 'A whole world\'s life energy in one piece of fruit. It tastes of everything that died.' },
 ];
@@ -63,6 +82,8 @@ export function getItem(id) {
 export function shopStock(placeTags) {
   return ITEMS.filter((i) => {
     if (i.cost === 0) return false;
+    if (i.cat === 'accessory' && !placeTags.includes('civilised') && !placeTags.includes('urban') && !placeTags.includes('tournament')) return false;
+    if (i.id === 'cyber_eye' && !placeTags.includes('lab') && !placeTags.includes('tech')) return false;
     if (i.cat === 'property' && !placeTags.includes('civilised') && !placeTags.includes('urban')) return false;
     if ((i.id === 'scouter' || i.id === 'battle_armour') && !placeTags.includes('imperial') && !placeTags.includes('tech')) return false;
     if ((i.id === 'gravity_chamber' || i.id === 'spaceship' || i.id === 'gravity_capsule') && !placeTags.includes('tech')) return false;
@@ -70,19 +91,119 @@ export function shopStock(placeTags) {
   });
 }
 
-// Wishes the Dragon Balls can grant. `power` is what the summoned dragon can
-// actually manage; Shenron cannot exceed his creator.
+// Wishes the Dragon Balls can grant. `power` is what a dragon has to be able
+// to manage: Shenron cannot exceed his creator, Porunga is stronger and speaks
+// three times, and Super Shenron does whatever is asked without comment.
+export const DRAGONS = {
+  shenron: { id: 'shenron', name: 'Shenron', power: 3, wishes: 1, voice: 'a voice like a landslide', desc: 'Earth\'s dragon. One wish, within the power of the one who made him.' },
+  porunga: { id: 'porunga', name: 'Porunga', power: 4, wishes: 3, voice: 'a voice that is mostly chest', desc: 'Namek\'s dragon. Three wishes, one soul at a time, in the Namekian tongue.' },
+  super: { id: 'super', name: 'Super Shenron', power: 6, wishes: 1, voice: 'no voice at all, only the wish coming true', desc: 'The dragon of the Super Dragon Balls. Anything. Once.' },
+};
+
+export const WISH_GROUPS = ['Life and death', 'Yourself', 'The world', 'Other people', 'Small things'];
+
 export const WISHES = [
-  { id: 'revive_one', name: 'Revive one person', power: 2, karma: 6, desc: 'Name them. They come back exactly as they were.' },
-  { id: 'revive_many', name: 'Revive everyone killed by one thing', power: 4, karma: 15, desc: 'A whole planet, if the dragon is strong enough.' },
-  { id: 'wealth', name: 'Unimaginable wealth', power: 1, karma: -2, desc: 'Vulgar, but it works.' },
-  { id: 'immortality', name: 'Eternal life', power: 5, karma: -8, desc: 'You will not age and you cannot die of it. Everything else still applies.' },
-  { id: 'power_up', name: 'Make me the strongest in the universe', power: 5, karma: -6, cost: 'years', desc: 'The dragon will take the years off the end to pay for it.' },
-  { id: 'unlock_potential', name: 'Unlock all my latent potential', power: 4, karma: 0, desc: 'Everything you could ever have been, available now.' },
-  { id: 'restore_planet', name: 'Restore a destroyed world', power: 5, karma: 20, desc: 'Rock, water, air. The people are a separate wish.' },
-  { id: 'youth', name: 'Restore my youth', power: 3, karma: 0, desc: 'Twenty years back on the clock.' },
-  { id: 'knowledge', name: 'Teach me a technique', power: 2, karma: 0, desc: 'The dragon can put anything anyone has ever known into your head.' },
-  { id: 'erase_memory', name: 'Erase all memory of me', power: 3, karma: -4, desc: 'Nobody will remember what you did. Nobody at all.' },
-  { id: 'tail_back', name: 'Give me back my tail', power: 1, karma: 0, race: ['saiyan', 'halfsaiyan'], desc: 'It grows back stronger, apparently.' },
-  { id: 'better_underwear', name: 'A really nice pair of underwear', power: 1, karma: 0, desc: 'Someone genuinely did this once. Shenron granted it without comment.' },
+  // ------------------------------------------------------ life and death
+  { id: 'revive_named', group: 'Life and death', name: 'Bring back someone by name', power: 2, karma: 6,
+    desc: 'Say the name. They come back exactly as they were, minus the dying.', pick: 'dead' },
+  { id: 'revive_many', group: 'Life and death', name: 'Revive everyone killed by one thing', power: 4, karma: 15,
+    desc: 'A whole planet, if the dragon is strong enough. Porunga will not; Shenron might.' },
+  { id: 'revive_all', group: 'Life and death', name: 'Undo every death you have caused', power: 4, karma: 30,
+    desc: 'Everyone you killed. All of them. The dragon does not ask why.', needs: 'kills' },
+  { id: 'immortality', group: 'Life and death', name: 'Eternal life', power: 5, karma: -8,
+    desc: 'You will not age and you cannot die of it. Everything else still applies, and the gods notice.' },
+  { id: 'youth', group: 'Life and death', name: 'Twenty years back', power: 3, karma: 0,
+    desc: 'Twenty years off the clock, with everything you learned still in there.' },
+  { id: 'cure', group: 'Life and death', name: 'Make me whole', power: 2, karma: 0,
+    desc: 'Every scar, every old injury, every lost piece. Gone, as though it never happened.', needs: 'scars' },
+
+  // ------------------------------------------------------------ yourself
+  { id: 'power_up', group: 'Yourself', name: 'Make me the strongest in the universe', power: 5, karma: -6,
+    desc: 'The dragon takes the years off the end to pay for it.' },
+  { id: 'unlock_potential', group: 'Yourself', name: 'Unlock all my latent potential', power: 4, karma: 0,
+    desc: 'Everything you could ever have been, available now.' },
+  { id: 'next_form', group: 'Yourself', name: 'Give me the next transformation', power: 3, karma: -2,
+    desc: 'The form you are reaching for, handed over. It will feel unearned because it is.' },
+  { id: 'knowledge', group: 'Yourself', name: 'Teach me a technique', power: 2, karma: 0,
+    desc: 'The dragon can put anything anyone has ever known into your head.' },
+  { id: 'change_race', group: 'Yourself', name: 'Make me a different species', power: 5, karma: -3,
+    desc: 'Saiyan, Namekian, whatever you have envied. Your body reorganises. Your memories stay.', pick: 'race' },
+  { id: 'know_everyone', group: 'Yourself', name: 'Let me see everyone as they are', power: 3, karma: -4,
+    desc: 'Every person you know, fully understood. Their strength, their secrets, what they want. It is a violation and it works.' },
+  { id: 'tail_back', group: 'Yourself', name: 'Give me back my tail', power: 1, karma: 0, race: ['saiyan', 'halfsaiyan'],
+    desc: 'It grows back stronger, apparently.' },
+  { id: 'erase_memory', group: 'Yourself', name: 'Erase all memory of me', power: 3, karma: -4,
+    desc: 'Nobody will remember what you did. Nobody at all.' },
+
+  // ----------------------------------------------------------- the world
+  { id: 'restore_planet', group: 'The world', name: 'Restore a destroyed world', power: 5, karma: 20,
+    desc: 'Rock, water, air. The people are a separate wish.' },
+  { id: 'restore_people', group: 'The world', name: 'Bring back a dead world\'s people', power: 5, karma: 25,
+    desc: 'Everyone who was on it when it went. Porunga did this once. Shenron cannot.', needs: 'planet_restored' },
+  { id: 'remove_threat', group: 'The world', name: 'Send a tyrant somewhere they cannot come back from', power: 5, karma: 12,
+    desc: 'Name the one you mean. If they are stronger than the dragon\'s maker, the dragon says so and waits.', pick: 'threat' },
+  { id: 'peace', group: 'The world', name: 'Peace on this world', power: 4, karma: 18,
+    desc: 'The wars stop. The tyrants find they no longer want to. It lasts a generation, then people are people again.' },
+  { id: 'own_world', group: 'The world', name: 'A world of my own', power: 4, karma: -2,
+    desc: 'Empty, habitable, and yours. Nobody to rule, unless you bring them.' },
+  { id: 'wealth', group: 'The world', name: 'Unimaginable wealth', power: 1, karma: -2,
+    desc: 'Vulgar, but it works.' },
+
+  // -------------------------------------------------------- other people
+  { id: 'for_someone', group: 'Other people', name: 'Grant what someone else wants', power: 3, karma: 14,
+    desc: 'You know what they have been chasing. Give it to them instead of yourself.', pick: 'living' },
+  { id: 'partner', group: 'Other people', name: 'Someone to love me', power: 3, karma: -10,
+    desc: 'The dragon will make somebody. They will love you and they will know why, and so will you.' },
+  { id: 'strengthen_ally', group: 'Other people', name: 'Make a friend strong enough to stand beside me', power: 4, karma: 4,
+    desc: 'Pick them. They wake up a hundred times what they were and have to learn to live in it.', pick: 'living' },
+
+  // -------------------------------------------------------- small things
+  { id: 'feast', group: 'Small things', name: 'The best meal of my life', power: 1, karma: 0,
+    desc: 'Forty courses. Somebody will be furious you spent it on this.' },
+  { id: 'better_underwear', group: 'Small things', name: 'A really nice pair of underwear', power: 1, karma: 0,
+    desc: 'Someone genuinely did this once. Shenron granted it without comment.' },
+  { id: 'speak', group: 'Small things', name: 'Say it in your own words', power: 0, karma: 0, freeText: true,
+    desc: 'Speak the wish aloud. The dragon will interpret, and dragons are literal.' },
 ];
+
+export const WISH_BY_ID = Object.fromEntries(WISHES.map((w) => [w.id, w]));
+
+/**
+ * Map a spoken wish onto the nearest thing a dragon can do. This is the
+ * fallback when no model is connected; a dragon is a literal creature, so
+ * keyword matching is honestly not far from the source material.
+ */
+export function interpretWishLocally(text) {
+  const t = String(text || '').toLowerCase();
+  const rules = [
+    [/\bbring\b[\s\S]{0,30}\bback\b|\brevive\b|\bresurrect|\balive again\b|\bback to life\b|\bundo\b[\s\S]{0,20}\bdeath\b|\bnot be dead\b/, 'revive_named'],
+    [/\beveryone\b[\s\S]{0,30}\b(back|alive)\b|\ball of them\b|\bevery(one| person) (who|that) died\b/, 'revive_many'],
+    [/\bimmortal|\bnever die\b|\blive forever\b|\beternal life\b/, 'immortality'],
+    [/\byoung|\byouth|\byears back\b|\bage\b.*\bback/, 'youth'],
+    [/\bheal|\bscar|\bwhole again\b|\bmy eye\b|\bmy arm\b|\binjur/, 'cure'],
+    [/\bstrongest\b|\bmost powerful\b|\bpower level\b|\bstronger\b/, 'power_up'],
+    [/\bpotential\b/, 'unlock_potential'],
+    [/\btransform|\bsuper saiyan\b|\bform\b/, 'next_form'],
+    [/\bteach|\btechnique|\bkamehameha|\binstant transmission\b|\blearn\b/, 'knowledge'],
+    [/\bmake me (a|an) (saiyan|namekian|human|earthling|android|majin|frost|kai)|\bturn me into\b|\bdifferent species\b|\bbecome a\b/, 'change_race'],
+    [/\bknow everything\b|\bsecrets\b|\bsee everyone\b|\btruth about\b/, 'know_everyone'],
+    [/\btail\b/, 'tail_back'],
+    [/\bforget me\b|\bforgotten\b|\bnobody remember/, 'erase_memory'],
+    [/\brestore\b.*\b(planet|world)|\bplanet\b.*\bback\b|\bnamek\b.*\bback\b|\bvegeta\b.*\bback\b/, 'restore_planet'],
+    [/\bpeople of\b|\bpopulation\b|\bthe namekians\b|\bthe saiyans back\b/, 'restore_people'],
+    [/\bkill\b|\bdestroy\b|\bget rid of\b|\bbanish|\bfrieza\b|\bcell\b|\bbuu\b|\bsend .* away\b/, 'remove_threat'],
+    [/\bpeace\b|\bend (the )?war|\bno more fighting\b/, 'peace'],
+    [/\bplanet of my own\b|\bmy own (planet|world)\b|\ba world\b/, 'own_world'],
+    [/\brich\b|\bmoney\b|\bzeni\b|\bwealth|\bgold\b/, 'wealth'],
+    [/\blove me\b|\bsomeone to love\b|\bwife\b|\bhusband\b|\bpartner\b|\bgirlfriend\b|\bboyfriend\b/, 'partner'],
+    [/\bmake .* strong|\bfor (my|him|her|them)\b.*\bstrong/, 'strengthen_ally'],
+    [/\bfor (him|her|them|my)\b|\bwhat (he|she|they) want/, 'for_someone'],
+    [/\bfood\b|\beat\b|\bmeal\b|\bfeast\b|\bhungry\b/, 'feast'],
+    [/\bunderwear\b|\bpanties\b|\bpants\b/, 'better_underwear'],
+  ];
+  // "everyone" beats "bring back one", so the broader rules are checked first.
+  const broad = rules.filter(([, id]) => id === 'revive_many' || id === 'revive_all');
+  for (const [re, id] of broad) if (re.test(t)) return id;
+  for (const [re, id] of rules) if (re.test(t)) return id;
+  return null;
+}

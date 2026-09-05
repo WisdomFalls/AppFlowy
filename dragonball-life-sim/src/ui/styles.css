@@ -658,3 +658,58 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
 .trial-readout .big { font-family: var(--font-display); font-size: 34px; color: var(--gi); display: block; line-height: 1.1; }
 .push-meter { font-family: var(--font-mono); font-size: 13px; color: var(--ink-2); text-align: center; }
 .push-risk { color: var(--blood); }
+
+/* ----------------------------------------------------------- tournament */
+
+.tourney-head { padding: 15px 16px 11px; border-bottom: 1px solid var(--line-soft); background: var(--ground-2); flex: none; }
+.tourney-kicker { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--gold); }
+.tourney-title { font-family: var(--font-display); font-size: 25px; text-transform: uppercase; line-height: 1.02; margin: 6px 0 6px; text-wrap: balance; }
+.tourney-sub { font-size: 14.5px; color: var(--ink-2); }
+.tourney-rules {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3);
+  margin-top: 9px; line-height: 1.5; padding-top: 8px; border-top: 1px solid var(--line-soft);
+}
+
+.tourney-body { flex: 1; overflow-y: auto; padding: 14px 16px 18px; min-height: 0; }
+.tourney-foot { flex: none; padding: 12px 14px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line-soft); display: grid; gap: 8px; }
+
+.round-block { margin-bottom: 16px; }
+.round-name {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--ink-3); padding-bottom: 5px; border-bottom: 1px solid var(--line-soft); margin-bottom: 7px;
+}
+.round-block.now .round-name { color: var(--gi); border-bottom-color: color-mix(in srgb, var(--gi) 40%, var(--line)); }
+.round-line { font-size: 14.5px; color: var(--ink-2); padding: 3px 0; }
+.round-line.mine { color: var(--ink); font-weight: 600; }
+
+.draw-card {
+  margin: 4px 0 12px; padding: 12px 13px; border-radius: var(--radius-s);
+  border: 1px solid color-mix(in srgb, var(--gi) 45%, var(--line)); background: var(--surface);
+}
+.draw-label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--gi); }
+.draw-name { font-family: var(--font-display); font-size: 24px; text-transform: uppercase; line-height: 1.05; margin: 4px 0 2px; }
+.draw-power { font-family: var(--font-mono); font-size: 12px; color: var(--ki); font-variant-numeric: tabular-nums; }
+.draw-flavour { font-size: 14px; color: var(--ink-2); margin-top: 6px; }
+
+.field-row {
+  display: flex; align-items: baseline; gap: 8px; padding: 5px 0;
+  border-bottom: 1px solid var(--line-soft); font-size: 14.5px;
+}
+.field-row:last-child { border-bottom: none; }
+.field-row .fname { flex: 1; min-width: 0; }
+.field-row .fpow { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.field-row.out { opacity: .42; text-decoration: line-through; }
+.field-row.you .fname { color: var(--gi); font-weight: 600; }
+.field-row .ftag { font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
+
+.tourney-verdict {
+  margin: 2px 0 14px; padding: 10px 12px; border-radius: var(--radius-s);
+  background: var(--ground-2); border: 1px solid var(--line-soft);
+  font-size: 14.5px; color: var(--ink-2);
+}
+.tourney-result { font-family: var(--font-display); font-size: 30px; text-transform: uppercase; color: var(--gold); line-height: 1.05; margin-bottom: 8px; }
+
+.choice.speak { border-style: dashed; border-color: color-mix(in srgb, var(--gold) 50%, var(--line)); }
+.choice.speak .choice-label { color: var(--gold); }
+.speak-box { margin-top: 12px; }
+.speak-box textarea { resize: vertical; }

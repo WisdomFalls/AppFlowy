@@ -662,6 +662,61 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
 .push-meter { font-family: var(--font-mono); font-size: 13px; color: var(--ink-2); text-align: center; }
 .push-risk { color: var(--blood); }
 
+/* ----------------------------------------------------------- tournament */
+
+.tourney-head { padding: 15px 16px 11px; border-bottom: 1px solid var(--line-soft); background: var(--ground-2); flex: none; }
+.tourney-kicker { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--gold); }
+.tourney-title { font-family: var(--font-display); font-size: 25px; text-transform: uppercase; line-height: 1.02; margin: 6px 0 6px; text-wrap: balance; }
+.tourney-sub { font-size: 14.5px; color: var(--ink-2); }
+.tourney-rules {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3);
+  margin-top: 9px; line-height: 1.5; padding-top: 8px; border-top: 1px solid var(--line-soft);
+}
+
+.tourney-body { flex: 1; overflow-y: auto; padding: 14px 16px 18px; min-height: 0; }
+.tourney-foot { flex: none; padding: 12px 14px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line-soft); display: grid; gap: 8px; }
+
+.round-block { margin-bottom: 16px; }
+.round-name {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--ink-3); padding-bottom: 5px; border-bottom: 1px solid var(--line-soft); margin-bottom: 7px;
+}
+.round-block.now .round-name { color: var(--gi); border-bottom-color: color-mix(in srgb, var(--gi) 40%, var(--line)); }
+.round-line { font-size: 14.5px; color: var(--ink-2); padding: 3px 0; }
+.round-line.mine { color: var(--ink); font-weight: 600; }
+
+.draw-card {
+  margin: 4px 0 12px; padding: 12px 13px; border-radius: var(--radius-s);
+  border: 1px solid color-mix(in srgb, var(--gi) 45%, var(--line)); background: var(--surface);
+}
+.draw-label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--gi); }
+.draw-name { font-family: var(--font-display); font-size: 24px; text-transform: uppercase; line-height: 1.05; margin: 4px 0 2px; }
+.draw-power { font-family: var(--font-mono); font-size: 12px; color: var(--ki); font-variant-numeric: tabular-nums; }
+.draw-flavour { font-size: 14px; color: var(--ink-2); margin-top: 6px; }
+
+.field-row {
+  display: flex; align-items: baseline; gap: 8px; padding: 5px 0;
+  border-bottom: 1px solid var(--line-soft); font-size: 14.5px;
+}
+.field-row:last-child { border-bottom: none; }
+.field-row .fname { flex: 1; min-width: 0; }
+.field-row .fpow { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.field-row.out { opacity: .42; text-decoration: line-through; }
+.field-row.you .fname { color: var(--gi); font-weight: 600; }
+.field-row .ftag { font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
+
+.tourney-verdict {
+  margin: 2px 0 14px; padding: 10px 12px; border-radius: var(--radius-s);
+  background: var(--ground-2); border: 1px solid var(--line-soft);
+  font-size: 14.5px; color: var(--ink-2);
+}
+.tourney-result { font-family: var(--font-display); font-size: 30px; text-transform: uppercase; color: var(--gold); line-height: 1.05; margin-bottom: 8px; }
+
+.choice.speak { border-style: dashed; border-color: color-mix(in srgb, var(--gold) 50%, var(--line)); }
+.choice.speak .choice-label { color: var(--gold); }
+.speak-box { margin-top: 12px; }
+.speak-box textarea { resize: vertical; }
+
 </style>
 <div id="app">
 
@@ -813,6 +868,18 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
     <div class="hunt-grid" id="hunt-grid"></div>
     <div class="hunt-readout" id="hunt-readout"></div>
     <div class="hunt-foot" id="hunt-foot"></div>
+  </section>
+
+  <!-- ===================================================== tournament -->
+  <section class="screen" id="screen-tourney">
+    <header class="tourney-head">
+      <div class="tourney-kicker" id="tourney-kicker">Tournament</div>
+      <div class="tourney-title" id="tourney-title">-</div>
+      <div class="tourney-sub" id="tourney-sub">-</div>
+      <div class="tourney-rules" id="tourney-rules">-</div>
+    </header>
+    <div class="tourney-body" id="tourney-body"></div>
+    <div class="tourney-foot" id="tourney-foot"></div>
   </section>
 
   <!-- ======================================================== epitaph -->
@@ -3922,9 +3989,13 @@ function createGame(creation, seedInput) {
       buildShape: body.id,
       hairStyle: 'spiked', hairColour: 'black',
       eyeShape: 'sharp', eyeColour: 'black',
-      skin: 'light', face: 'square', outfit: 'casual', marking: 'none',
+      skin: 'light', face: 'square', outfit: 'casual',
+      marks: [], customMark: '', accessories: [], customAccessory: '',
       heightCm: 175, weightKg: 70, stance: 'formless', stanceName: '',
     }, creation.look || {}),
+    // What the life leaves on the body. Each entry is drawn on the portrait
+    // and listed in the record, with who or what did it.
+    scars: [],
     upbringingId: upbringing.id,
     temperamentId: temperament.id,
     bodyId: body.id,
@@ -4475,6 +4546,9 @@ function materialise(ctx, template, slots) {
       danger: ch.danger || false,
       locked: ch.locked || false,
       lockReason: ch.lockReason || null,
+      freeText: !!ch.freeText,
+      placeholder: ch.placeholder || null,
+      interpret: ch.interpret || null,
     }));
 
   return {
@@ -4511,6 +4585,8 @@ function forceEvent(state, rng, templateId, extra = {}) {
   if (!template) return null;
   const ctx = buildContext(state, rng);
   if (extra.evId) ctx.forceEvId = extra.evId;
+  // Whatever the caller wants the forced card to know about itself.
+  ctx.forceSlots = extra;
   let slots;
   try { slots = template.slots ? template.slots(ctx) : {}; } catch (err) { return null; }
   if (slots === null || slots === undefined) return null;
@@ -4529,7 +4605,7 @@ function generateEvent(state, rng, opts = {}) {
 }
 
 /** Apply a chosen option. Returns the outcome block for the log. */
-function resolveChoice(state, rng, event, choiceId) {
+function resolveChoice(state, rng, event, choiceId, params = null) {
   // Model-authored events carry their outcomes inline so that they survive a
   // save/load cycle without needing anything in the template registry.
   if (event.ai) {
@@ -4546,6 +4622,9 @@ function resolveChoice(state, rng, event, choiceId) {
   const template = REGISTRY.get(event.templateId);
   if (!template) return { text: 'The moment passes.', changes: {} };
   const ctx = buildContext(state, rng);
+  // Anything the player typed or picked alongside the choice travels with it.
+  ctx.params = params || {};
+  ctx.forceSlots = event.slots || {};
   const choices = (template.choices ? template.choices(ctx, event.slots) : []) || [];
   const choice = choices.find((c, i) => (c.id || `c${i}`) === choiceId) || choices[0];
   if (!choice || !choice.effect) {
@@ -4579,6 +4658,8 @@ function resolveChoice(state, rng, event, choiceId) {
     aiHint: result.aiHint || null,
     outcome: result.outcome || null,
     battle: result.battle || null,
+    tournament: result.tournament || null,
+    followUpSlots: result.followUpSlots || null,
   };
 }
 
@@ -4745,6 +4826,10 @@ function createBattle(state, rng, opts = {}) {
     fled: false,
     surrendered: false,
     protecting: !!opts.protecting,
+    // Tournament rules. A ring changes what winning means: you do not have to
+    // put somebody down, you have to put them outside.
+    ringOut: !!(opts.context && opts.context.ringOut),
+    noKilling: !!(opts.context && opts.context.noKilling),
     context: opts.context || { reason: opts.reason || 'fight' },
   };
 }
@@ -4848,6 +4933,20 @@ function battleActions(state, battle) {
     out.push({ id: 'senzu', kind: 'item', label: 'Eat a senzu bean', hint: `Full heal - ${c.senzu} left` });
   }
 
+  if (battle.ringOut) {
+    // Throwing somebody out of the ring is a real option against a fighter
+    // you could never knock down, and it is how most tournaments end.
+    const off = them_off_balance(battle);
+    out.push({
+      id: 'ringout',
+      kind: 'move',
+      label: 'Throw them out of the ring',
+      hint: off ? 'They are off balance. Take the chance.' : 'Needs them staggered, hurt, or blinded first.',
+      disabled: !off,
+      reason: off ? null : 'They are still set',
+    });
+  }
+
   if (battle.civilians && !battle.relocated && c.techniques.includes('instant_transmission')) {
     out.push({
       id: 'relocate', kind: 'move', label: 'Take it somewhere empty',
@@ -4863,6 +4962,12 @@ function battleActions(state, battle) {
   }
 
   return out;
+}
+
+/** Is the opponent in a state where a throw could actually put them out? */
+function them_off_balance(battle) {
+  const them = battle.them;
+  return !!(them.staggered > 0 || them.blinded > 0 || them.hp <= them.hpMax * 0.45);
 }
 
 // ------------------------------------------------------------------- turn
@@ -4973,6 +5078,24 @@ function foeTurn(state, battle, rng) {
     }
   }
 
+  // In a ring, they will take the same shortcut you can.
+  if (battle.ringOut && !battle.over) {
+    const meOff = me.staggered > 0 || me.blinded > 0 || me.hp <= me.hpMax * 0.45;
+    if (meOff && rng.chance(0.42)) {
+      const chance = clamp(0.3 + Math.pow(ratioOf(them, me), 0.3) * 0.28
+        + (me.staggered ? 0.18 : 0) + (1 - me.hp / me.hpMax) * 0.22, 0.1, 0.9);
+      if (rng.chance(chance)) {
+        lines.push(`${them.name} gets under you and puts you over the edge. You land outside the ring.`);
+        battle.byRingOut = true;
+        battle.foeRingOut = true;
+        finish(state, battle, rng, 'lost');
+        return lines;
+      }
+      lines.push(`${them.name} tries to throw you out and you break the grip.`);
+      return lines;
+    }
+  }
+
   if (hurt < 0.35 && rng.chance(0.35)) {
     them.stance = 'defensive';
   } else if (losing && rng.chance(0.4)) {
@@ -5062,6 +5185,23 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
         if (them.hp / them.hpMax > 0.5) lines.push(`${them.name} ${rng.pick(['takes a step back', 'stops smiling', 'says nothing', 'looks at you differently'])}.`);
       }
     }
+  } else if (actionId === 'ringout') {
+    // Strength and technique against their weight and whatever balance they
+    // have left. Failing it puts you in a bad spot, which is the trade.
+    const ratio = ratioOf(me, them);
+    const chance = clamp(0.32 + Math.pow(ratio, 0.3) * 0.28
+      + (them.staggered ? 0.18 : 0) + (them.blinded ? 0.14 : 0)
+      + (1 - them.hp / them.hpMax) * 0.25, 0.1, 0.94);
+    me.stamina = Math.max(0, me.stamina - (me.infiniteStamina ? 0 : 18));
+    if (rng.chance(chance)) {
+      lines.push(render(`{You get under them and put them over the edge|You take their balance and throw|You lift them off the stone and let go}. `
+        + `{They land outside|Both feet outside the ring|Out}.`, {}, rng));
+      battle.byRingOut = true;
+      return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
+    }
+    lines.push(render(`{They plant and you cannot move them|The throw does not come off|You get a grip and they break it}. `
+      + `{You are wide open now|That cost you the position|You have given them the inside}.`, {}, rng));
+    freeSwing = true;
   } else if (actionId.startsWith('phys:')) {
     const move = PHYSICAL.find((m) => m.id === actionId.slice(5));
     if (move) {
@@ -5157,6 +5297,8 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
   if (!skipFoe) {
     if (freeSwing) lines.push(`${them.name} does not wait for you to finish.`);
     lines.push(...foeTurn(state, battle, rng));
+    // Their turn can end the fight outright (a ring-out).
+    if (battle.over) return { lines, over: true, outcome: battle.outcome };
   }
 
   if (me.hp <= 0) {
@@ -5230,6 +5372,11 @@ function battleAftermath(state, rng, battle, opts = {}) {
     lines.push(`Your body rebuilds heavier than it was. Power level up ${numberish(battle.zenkai)}.`);
   }
 
+  // What the fight leaves on you. Regeneration closes almost everything; a
+  // body that does not regenerate keeps a record of the fights it nearly lost.
+  const scarred = markBody(state, rng, battle);
+  if (scarred) lines.push(scarred);
+
   // Collateral. Fighting over a city is a choice, and it is remembered.
   if (battle.civilians && battle.destruction > 25) {
     const severity = battle.destruction > 70 ? 'most of a district' : 'several streets';
@@ -5289,6 +5436,38 @@ function battleAftermath(state, rng, battle, opts = {}) {
   }
 
   return { lines, text: lines.join(' ') };
+}
+
+const SCAR_MARKS = ['scar_cheek', 'scar_brow', 'scar_chest', 'scar_arm', 'scar_eye', 'burn_arm', 'burn_face'];
+
+function markBody(state, rng, battle) {
+  const c = state.character;
+  if (hasPerk(c, 'regeneration') || c.raceId === 'android') return null;
+  const nearDeath = battle.me.hp <= 12 && battle.outcome !== 'fled';
+  if (!nearDeath) return null;
+  c.scars = c.scars || [];
+  const have = new Set(c.scars.map((s) => s.mark));
+  const from = battle.them.name;
+  const year = c.birthYear + c.age;
+
+  // Losing badly to something lethal can cost more than skin.
+  if (battle.stakes === 'lethal' && battle.outcome === 'lost' && !have.has('missing_eye') && rng.chance(0.12)) {
+    c.scars.push({ year, mark: 'missing_eye', from, text: `Lost an eye to ${from}.` });
+    c.stats.speed = Math.max(1, c.stats.speed - 3);
+    return `You lose the eye. ${from} does not even notice.`;
+  }
+  if (rng.chance(0.45)) {
+    const open = SCAR_MARKS.filter((m) => !have.has(m));
+    if (!open.length) return null;
+    const mark = rng.pick(open);
+    c.scars.push({ year, mark, from, text: `A scar from ${from}.` });
+    return rng.pick([
+      `It heals badly. You will carry ${from} on your skin for the rest of your life.`,
+      `The cut does not close properly. A scar, then, and a story to go with it.`,
+      `Something in that fight is going to show for good.`,
+    ]);
+  }
+  return null;
 }
 
 /** Headless resolution, for the soak harness and for background fights. */
@@ -6435,6 +6614,25 @@ const ITEMS = [
     desc: 'Forbidden to everyone below Supreme Kai. Rings on the finger of anyone who breaks time.' },
   { id: 'sacred_water', name: 'Ultra Divine Water', cat: 'consumable', cost: 0, use: { unlockPotential: 0.5, deathRisk: 0.35 },
     desc: 'Drink it and either your latent power comes out or you do not.' },
+  // Worn things. Cheap, cosmetic, and drawn on you.
+  { id: 'acc_headband', name: 'Headband', cat: 'accessory', cost: 1200, wear: 'headband', desc: 'Keeps the hair out of your eyes and the sweat out of the fight.' },
+  { id: 'acc_bandana', name: 'Bandana', cat: 'accessory', cost: 900, wear: 'bandana', desc: 'Blue, knotted at the back, faintly piratical.' },
+  { id: 'acc_glasses', name: 'Glasses', cat: 'accessory', cost: 6000, wear: 'glasses', desc: 'You did not need them until you started reading technique diagrams by candlelight.' },
+  { id: 'acc_sunglasses', name: 'Sunglasses', cat: 'accessory', cost: 4000, wear: 'sunglasses', desc: 'For the Solar Flare, allegedly.' },
+  { id: 'acc_earrings', name: 'Earrings', cat: 'accessory', cost: 15000, wear: 'earrings', desc: 'Not Potara. People will still ask.' },
+  { id: 'acc_necklace', name: 'Necklace', cat: 'accessory', cost: 22000, wear: 'necklace', desc: 'A pendant on a chain. Somebody gave it to you, or you tell people somebody did.' },
+  { id: 'acc_cape', name: 'Cape', cat: 'accessory', cost: 30000, wear: 'cape', desc: 'Weighted, if you want it weighted. Dramatic either way.' },
+  { id: 'acc_scarf', name: 'Red scarf', cat: 'accessory', cost: 3500, wear: 'scarf', desc: 'Long enough to catch the wind when you land.' },
+  { id: 'acc_wristbands', name: 'Wristbands', cat: 'accessory', cost: 2500, wear: 'wristbands', desc: 'Blue, thick, and heavier than they look.' },
+  { id: 'acc_hat', name: 'Wide hat', cat: 'accessory', cost: 5000, wear: 'hat', desc: 'Shade in the wastelands and a target everywhere else.' },
+
+  // Things you cannot buy. They arrive when you earn them.
+  { id: 'championship_belt', name: 'World Championship Belt', cat: 'trophy', cost: 0, wear: 'belt', passive: { fame: 6 },
+    desc: 'Heavy, gold, and yours until somebody takes it.' },
+  { id: 'turtle_shell', name: 'Turtle Shell', cat: 'gear', cost: 0, wear: 'shell', passive: { trainMult: 1.3, speedPenalty: 6 },
+    desc: 'Twenty kilos of shell strapped to your back. Master Roshi says you will thank him.' },
+  { id: 'cyber_eye', name: 'Mechanical Eye', cat: 'gear', cost: 400000, passive: { senseBonus: 0.3 },
+    desc: 'Built to replace the one you lost. It reads power levels, badly.' },
   { id: 'fruit_of_might', name: 'Fruit of the Tree of Might', cat: 'consumable', cost: 0, use: { powerMult: 1.6, karma: -10 },
     desc: 'A whole world\'s life energy in one piece of fruit. It tastes of everything that died.' },
 ];
@@ -6448,6 +6646,8 @@ function getItem(id) {
 function shopStock(placeTags) {
   return ITEMS.filter((i) => {
     if (i.cost === 0) return false;
+    if (i.cat === 'accessory' && !placeTags.includes('civilised') && !placeTags.includes('urban') && !placeTags.includes('tournament')) return false;
+    if (i.id === 'cyber_eye' && !placeTags.includes('lab') && !placeTags.includes('tech')) return false;
     if (i.cat === 'property' && !placeTags.includes('civilised') && !placeTags.includes('urban')) return false;
     if ((i.id === 'scouter' || i.id === 'battle_armour') && !placeTags.includes('imperial') && !placeTags.includes('tech')) return false;
     if ((i.id === 'gravity_chamber' || i.id === 'spaceship' || i.id === 'gravity_capsule') && !placeTags.includes('tech')) return false;
@@ -6455,23 +6655,123 @@ function shopStock(placeTags) {
   });
 }
 
-// Wishes the Dragon Balls can grant. `power` is what the summoned dragon can
-// actually manage; Shenron cannot exceed his creator.
+// Wishes the Dragon Balls can grant. `power` is what a dragon has to be able
+// to manage: Shenron cannot exceed his creator, Porunga is stronger and speaks
+// three times, and Super Shenron does whatever is asked without comment.
+const DRAGONS = {
+  shenron: { id: 'shenron', name: 'Shenron', power: 3, wishes: 1, voice: 'a voice like a landslide', desc: 'Earth\'s dragon. One wish, within the power of the one who made him.' },
+  porunga: { id: 'porunga', name: 'Porunga', power: 4, wishes: 3, voice: 'a voice that is mostly chest', desc: 'Namek\'s dragon. Three wishes, one soul at a time, in the Namekian tongue.' },
+  super: { id: 'super', name: 'Super Shenron', power: 6, wishes: 1, voice: 'no voice at all, only the wish coming true', desc: 'The dragon of the Super Dragon Balls. Anything. Once.' },
+};
+
+const WISH_GROUPS = ['Life and death', 'Yourself', 'The world', 'Other people', 'Small things'];
+
 const WISHES = [
-  { id: 'revive_one', name: 'Revive one person', power: 2, karma: 6, desc: 'Name them. They come back exactly as they were.' },
-  { id: 'revive_many', name: 'Revive everyone killed by one thing', power: 4, karma: 15, desc: 'A whole planet, if the dragon is strong enough.' },
-  { id: 'wealth', name: 'Unimaginable wealth', power: 1, karma: -2, desc: 'Vulgar, but it works.' },
-  { id: 'immortality', name: 'Eternal life', power: 5, karma: -8, desc: 'You will not age and you cannot die of it. Everything else still applies.' },
-  { id: 'power_up', name: 'Make me the strongest in the universe', power: 5, karma: -6, cost: 'years', desc: 'The dragon will take the years off the end to pay for it.' },
-  { id: 'unlock_potential', name: 'Unlock all my latent potential', power: 4, karma: 0, desc: 'Everything you could ever have been, available now.' },
-  { id: 'restore_planet', name: 'Restore a destroyed world', power: 5, karma: 20, desc: 'Rock, water, air. The people are a separate wish.' },
-  { id: 'youth', name: 'Restore my youth', power: 3, karma: 0, desc: 'Twenty years back on the clock.' },
-  { id: 'knowledge', name: 'Teach me a technique', power: 2, karma: 0, desc: 'The dragon can put anything anyone has ever known into your head.' },
-  { id: 'erase_memory', name: 'Erase all memory of me', power: 3, karma: -4, desc: 'Nobody will remember what you did. Nobody at all.' },
-  { id: 'tail_back', name: 'Give me back my tail', power: 1, karma: 0, race: ['saiyan', 'halfsaiyan'], desc: 'It grows back stronger, apparently.' },
-  { id: 'better_underwear', name: 'A really nice pair of underwear', power: 1, karma: 0, desc: 'Someone genuinely did this once. Shenron granted it without comment.' },
+  // ------------------------------------------------------ life and death
+  { id: 'revive_named', group: 'Life and death', name: 'Bring back someone by name', power: 2, karma: 6,
+    desc: 'Say the name. They come back exactly as they were, minus the dying.', pick: 'dead' },
+  { id: 'revive_many', group: 'Life and death', name: 'Revive everyone killed by one thing', power: 4, karma: 15,
+    desc: 'A whole planet, if the dragon is strong enough. Porunga will not; Shenron might.' },
+  { id: 'revive_all', group: 'Life and death', name: 'Undo every death you have caused', power: 4, karma: 30,
+    desc: 'Everyone you killed. All of them. The dragon does not ask why.', needs: 'kills' },
+  { id: 'immortality', group: 'Life and death', name: 'Eternal life', power: 5, karma: -8,
+    desc: 'You will not age and you cannot die of it. Everything else still applies, and the gods notice.' },
+  { id: 'youth', group: 'Life and death', name: 'Twenty years back', power: 3, karma: 0,
+    desc: 'Twenty years off the clock, with everything you learned still in there.' },
+  { id: 'cure', group: 'Life and death', name: 'Make me whole', power: 2, karma: 0,
+    desc: 'Every scar, every old injury, every lost piece. Gone, as though it never happened.', needs: 'scars' },
+
+  // ------------------------------------------------------------ yourself
+  { id: 'power_up', group: 'Yourself', name: 'Make me the strongest in the universe', power: 5, karma: -6,
+    desc: 'The dragon takes the years off the end to pay for it.' },
+  { id: 'unlock_potential', group: 'Yourself', name: 'Unlock all my latent potential', power: 4, karma: 0,
+    desc: 'Everything you could ever have been, available now.' },
+  { id: 'next_form', group: 'Yourself', name: 'Give me the next transformation', power: 3, karma: -2,
+    desc: 'The form you are reaching for, handed over. It will feel unearned because it is.' },
+  { id: 'knowledge', group: 'Yourself', name: 'Teach me a technique', power: 2, karma: 0,
+    desc: 'The dragon can put anything anyone has ever known into your head.' },
+  { id: 'change_race', group: 'Yourself', name: 'Make me a different species', power: 5, karma: -3,
+    desc: 'Saiyan, Namekian, whatever you have envied. Your body reorganises. Your memories stay.', pick: 'race' },
+  { id: 'know_everyone', group: 'Yourself', name: 'Let me see everyone as they are', power: 3, karma: -4,
+    desc: 'Every person you know, fully understood. Their strength, their secrets, what they want. It is a violation and it works.' },
+  { id: 'tail_back', group: 'Yourself', name: 'Give me back my tail', power: 1, karma: 0, race: ['saiyan', 'halfsaiyan'],
+    desc: 'It grows back stronger, apparently.' },
+  { id: 'erase_memory', group: 'Yourself', name: 'Erase all memory of me', power: 3, karma: -4,
+    desc: 'Nobody will remember what you did. Nobody at all.' },
+
+  // ----------------------------------------------------------- the world
+  { id: 'restore_planet', group: 'The world', name: 'Restore a destroyed world', power: 5, karma: 20,
+    desc: 'Rock, water, air. The people are a separate wish.' },
+  { id: 'restore_people', group: 'The world', name: 'Bring back a dead world\'s people', power: 5, karma: 25,
+    desc: 'Everyone who was on it when it went. Porunga did this once. Shenron cannot.', needs: 'planet_restored' },
+  { id: 'remove_threat', group: 'The world', name: 'Send a tyrant somewhere they cannot come back from', power: 5, karma: 12,
+    desc: 'Name the one you mean. If they are stronger than the dragon\'s maker, the dragon says so and waits.', pick: 'threat' },
+  { id: 'peace', group: 'The world', name: 'Peace on this world', power: 4, karma: 18,
+    desc: 'The wars stop. The tyrants find they no longer want to. It lasts a generation, then people are people again.' },
+  { id: 'own_world', group: 'The world', name: 'A world of my own', power: 4, karma: -2,
+    desc: 'Empty, habitable, and yours. Nobody to rule, unless you bring them.' },
+  { id: 'wealth', group: 'The world', name: 'Unimaginable wealth', power: 1, karma: -2,
+    desc: 'Vulgar, but it works.' },
+
+  // -------------------------------------------------------- other people
+  { id: 'for_someone', group: 'Other people', name: 'Grant what someone else wants', power: 3, karma: 14,
+    desc: 'You know what they have been chasing. Give it to them instead of yourself.', pick: 'living' },
+  { id: 'partner', group: 'Other people', name: 'Someone to love me', power: 3, karma: -10,
+    desc: 'The dragon will make somebody. They will love you and they will know why, and so will you.' },
+  { id: 'strengthen_ally', group: 'Other people', name: 'Make a friend strong enough to stand beside me', power: 4, karma: 4,
+    desc: 'Pick them. They wake up a hundred times what they were and have to learn to live in it.', pick: 'living' },
+
+  // -------------------------------------------------------- small things
+  { id: 'feast', group: 'Small things', name: 'The best meal of my life', power: 1, karma: 0,
+    desc: 'Forty courses. Somebody will be furious you spent it on this.' },
+  { id: 'better_underwear', group: 'Small things', name: 'A really nice pair of underwear', power: 1, karma: 0,
+    desc: 'Someone genuinely did this once. Shenron granted it without comment.' },
+  { id: 'speak', group: 'Small things', name: 'Say it in your own words', power: 0, karma: 0, freeText: true,
+    desc: 'Speak the wish aloud. The dragon will interpret, and dragons are literal.' },
 ];
-  return { ITEMS, ITEM_BY_ID, getItem, shopStock, WISHES };
+
+const WISH_BY_ID = Object.fromEntries(WISHES.map((w) => [w.id, w]));
+
+/**
+ * Map a spoken wish onto the nearest thing a dragon can do. This is the
+ * fallback when no model is connected; a dragon is a literal creature, so
+ * keyword matching is honestly not far from the source material.
+ */
+function interpretWishLocally(text) {
+  const t = String(text || '').toLowerCase();
+  const rules = [
+    [/\bbring\b[\s\S]{0,30}\bback\b|\brevive\b|\bresurrect|\balive again\b|\bback to life\b|\bundo\b[\s\S]{0,20}\bdeath\b|\bnot be dead\b/, 'revive_named'],
+    [/\beveryone\b[\s\S]{0,30}\b(back|alive)\b|\ball of them\b|\bevery(one| person) (who|that) died\b/, 'revive_many'],
+    [/\bimmortal|\bnever die\b|\blive forever\b|\beternal life\b/, 'immortality'],
+    [/\byoung|\byouth|\byears back\b|\bage\b.*\bback/, 'youth'],
+    [/\bheal|\bscar|\bwhole again\b|\bmy eye\b|\bmy arm\b|\binjur/, 'cure'],
+    [/\bstrongest\b|\bmost powerful\b|\bpower level\b|\bstronger\b/, 'power_up'],
+    [/\bpotential\b/, 'unlock_potential'],
+    [/\btransform|\bsuper saiyan\b|\bform\b/, 'next_form'],
+    [/\bteach|\btechnique|\bkamehameha|\binstant transmission\b|\blearn\b/, 'knowledge'],
+    [/\bmake me (a|an) (saiyan|namekian|human|earthling|android|majin|frost|kai)|\bturn me into\b|\bdifferent species\b|\bbecome a\b/, 'change_race'],
+    [/\bknow everything\b|\bsecrets\b|\bsee everyone\b|\btruth about\b/, 'know_everyone'],
+    [/\btail\b/, 'tail_back'],
+    [/\bforget me\b|\bforgotten\b|\bnobody remember/, 'erase_memory'],
+    [/\brestore\b.*\b(planet|world)|\bplanet\b.*\bback\b|\bnamek\b.*\bback\b|\bvegeta\b.*\bback\b/, 'restore_planet'],
+    [/\bpeople of\b|\bpopulation\b|\bthe namekians\b|\bthe saiyans back\b/, 'restore_people'],
+    [/\bkill\b|\bdestroy\b|\bget rid of\b|\bbanish|\bfrieza\b|\bcell\b|\bbuu\b|\bsend .* away\b/, 'remove_threat'],
+    [/\bpeace\b|\bend (the )?war|\bno more fighting\b/, 'peace'],
+    [/\bplanet of my own\b|\bmy own (planet|world)\b|\ba world\b/, 'own_world'],
+    [/\brich\b|\bmoney\b|\bzeni\b|\bwealth|\bgold\b/, 'wealth'],
+    [/\blove me\b|\bsomeone to love\b|\bwife\b|\bhusband\b|\bpartner\b|\bgirlfriend\b|\bboyfriend\b/, 'partner'],
+    [/\bmake .* strong|\bfor (my|him|her|them)\b.*\bstrong/, 'strengthen_ally'],
+    [/\bfor (him|her|them|my)\b|\bwhat (he|she|they) want/, 'for_someone'],
+    [/\bfood\b|\beat\b|\bmeal\b|\bfeast\b|\bhungry\b/, 'feast'],
+    [/\bunderwear\b|\bpanties\b|\bpants\b/, 'better_underwear'],
+  ];
+  // "everyone" beats "bring back one", so the broader rules are checked first.
+  const broad = rules.filter(([, id]) => id === 'revive_many' || id === 'revive_all');
+  for (const [re, id] of broad) if (re.test(t)) return id;
+  for (const [re, id] of rules) if (re.test(t)) return id;
+  return null;
+}
+  return { ITEMS, ITEM_BY_ID, getItem, shopStock, DRAGONS, WISH_GROUPS, WISHES, WISH_BY_ID, interpretWishLocally };
 })();
 
 /* ==== engine/events/life.js ==== */
@@ -8990,8 +9290,63 @@ function pingSquare(state, hunt, rng, x, y) {
 }
 
 /** Once you have all seven you can call the dragon. */
+const { DRAGONS } = __mod_data_items_js;
+
+/** Which dragon answers this set, and what it can do. */
+function dragonFor(state) {
+  if (state.world.summon && state.world.summon.dragon) return DRAGONS[state.world.summon.dragon];
+  if (state.world.flags.super_dragon_balls && ballsHeld(state) < 7) return DRAGONS.super;
+  const set = state.world.ballSet;
+  return set && set.dragon === 'Porunga' ? DRAGONS.porunga : DRAGONS.shenron;
+}
+
+/** Can a dragon be called right now: seven balls, a summon in progress, or the super set. */
 function summonReady(state) {
+  if (state.world.summon && state.world.summon.remaining > 0) return true;
+  if (state.world.flags.super_dragon_balls) return true;
   return ballsHeld(state) >= 7;
+}
+
+function summonActive(state) {
+  return !!(state.world.summon && state.world.summon.remaining > 0);
+}
+
+/** Call the dragon up. Porunga stays for three wishes; the others for one. */
+function beginSummon(state) {
+  if (summonActive(state)) return state.world.summon;
+  const dragon = dragonFor(state);
+  state.world.summon = { dragon: dragon.id, remaining: dragon.wishes, used: [], group: null };
+  return state.world.summon;
+}
+
+/**
+ * One wish spoken and granted. When the dragon has nothing left to give it
+ * goes, the balls scatter and turn to stone for a year - or, for the super
+ * set, are simply spent.
+ */
+function wishGranted(state, rng, wishId) {
+  const summon = state.world.summon || beginSummon(state);
+  summon.remaining -= 1;
+  summon.used.push(wishId);
+  state.world.wishesUsed.push(wishId);
+  if (summon.remaining <= 0) {
+    if (summon.dragon === 'super') {
+      state.world.flags.super_dragon_balls = false;
+    } else {
+      scatterAfterWish(state, rng);
+    }
+    state.world.summon = null;
+    return { remaining: 0, gone: true };
+  }
+  return { remaining: summon.remaining, gone: false };
+}
+
+/** The dragon leaves without granting anything more. */
+function dismissDragon(state, rng) {
+  const summon = state.world.summon;
+  state.world.summon = null;
+  if (summon && summon.dragon !== 'super' && ballsHeld(state) >= 7) scatterAfterWish(state, rng);
+  else if (summon && summon.dragon === 'super') state.world.flags.super_dragon_balls = false;
 }
 
 /** Wishes scatter them again, and they go inert for a year. */
@@ -9016,7 +9371,800 @@ function ballManifest(state) {
     where: b.found ? 'In your hands' : (b.surveyed ? `${getPlace(b.placeId).name} - ${b.region}` : 'Somewhere'),
   }));
 }
-  return { GRID, scatterBalls, ensureBallSet, ballsHeld, ballsOn, surveyPlanet, startHunt, pingSquare, summonReady, scatterAfterWish, ballsAreInert, ballManifest };
+  return { GRID, scatterBalls, ensureBallSet, ballsHeld, ballsOn, surveyPlanet, startHunt, pingSquare, dragonFor, summonReady, summonActive, beginSummon, wishGranted, dismissDragon, scatterAfterWish, ballsAreInert, ballManifest };
+})();
+
+/* ==== data/universes.js ==== */
+const __mod_data_universes_js = (function () {
+// The other eleven universes.
+//
+// Universe 7 is the one every other file assumes, so this is everything that
+// is not it: the gods who run each universe, the fighters they send, and how
+// the place feels if you ever get there. Powers are given for Age 780, the
+// year of the Tournament of Power, and scaled from there like everything else.
+
+const UNIVERSES = [
+  {
+    id: 'u1', number: 1, name: 'Universe 1', epithet: 'the untouchable',
+    mortalLevel: 'highest', erased: false, competed: false,
+    destroyer: 'Iwan', angel: 'Awamo', kai: 'Anato',
+    flavour: 'A universe so far above the mortal average it was excused from the tournament entirely. Nobody from here has any reason to talk to you.',
+    fighters: [],
+  },
+  {
+    id: 'u2', number: 2, name: 'Universe 2', epithet: 'the universe of love',
+    mortalLevel: 'low', erased: true, competed: true,
+    destroyer: 'Heles', angel: 'Sour', kai: 'Pell',
+    flavour: 'Everything here is beauty as a doctrine, which sounds harmless right up until they transform.',
+    fighters: [
+      { name: 'Ribrianne', power: 2.4e12, race: 'other', note: 'Turns love into mass and throws it at you.' },
+      { name: 'Kakunsa', power: 1.1e12, race: 'other', note: 'Fights on all fours and enjoys it.' },
+      { name: 'Rozie', power: 1.0e12, race: 'other', note: 'Fast, small, and completely fearless.' },
+      { name: 'Jimizu', power: 9e11, race: 'other', note: 'Teleports every time you are about to land one.' },
+    ],
+  },
+  {
+    id: 'u3', number: 3, name: 'Universe 3', epithet: 'the machine universe',
+    mortalLevel: 'low', erased: true, competed: true,
+    destroyer: 'Mosco', angel: 'Camparri', kai: 'Ea',
+    flavour: 'A universe that solved fighting with engineering, then kept going long after it should have stopped.',
+    fighters: [
+      { name: 'Paparoni', power: 1.6e12, race: 'android', note: 'Designed every other fighter here.' },
+      { name: 'Koitsukai', power: 8e11, race: 'android', note: 'Three machines that combine into one worse machine.' },
+      { name: 'Maji-Kayo', power: 7e11, race: 'other', note: 'Liquid. Punching it accomplishes nothing.' },
+    ],
+  },
+  {
+    id: 'u4', number: 4, name: 'Universe 4', epithet: 'the invisible universe',
+    mortalLevel: 'low', erased: true, competed: true,
+    destroyer: 'Quitela', angel: 'Cognac', kai: 'Cus',
+    flavour: 'Cheats openly, and its god is a rat who finds the whole thing funny.',
+    fighters: [
+      { name: 'Gamisalas', power: 6e11, race: 'other', note: 'Invisible, and not in a way you can sense.' },
+      { name: 'Damon', power: 9e11, race: 'other', note: 'So small nobody could find him for most of the tournament.' },
+      { name: 'Shantza', power: 5e11, race: 'other', note: 'Illusions, and the patience to use them properly.' },
+    ],
+  },
+  {
+    id: 'u6', number: 6, name: 'Universe 6', epithet: 'the twin universe',
+    mortalLevel: 'mid', erased: false, competed: true,
+    destroyer: 'Champa', angel: 'Vados', kai: 'Fuwa',
+    flavour: 'Universe 7 with the pieces rearranged: the same planets, a different history, and a Saiyan homeworld that never fell.',
+    fighters: [
+      { name: 'Hit', power: 3.5e13, race: 'other', note: 'Time-skip, and the professionalism to use it once.' },
+      { name: 'Cabba', power: 2e12, race: 'saiyan', note: 'Polite, quick, and improving faster than anyone expects.' },
+      { name: 'Frost', power: 1.2e12, race: 'frostdemon', note: 'Frieza with better public relations.' },
+      { name: 'Botamo', power: 8e11, race: 'other', note: 'Rubber. Physical damage simply does not register.' },
+      { name: 'Magetta', power: 1.4e12, race: 'other', note: 'A metal man from a volcano who fights by throwing magma.' },
+      { name: 'Kale', power: 2.8e13, race: 'saiyan', note: 'Shy until she is not, and then a Legendary Super Saiyan.' },
+      { name: 'Caulifla', power: 8e12, race: 'saiyan', note: 'Learned Super Saiyan in an afternoon out of sheer arrogance.' },
+    ],
+  },
+  {
+    id: 'u9', number: 9, name: 'Universe 9', epithet: 'the trio of danger',
+    mortalLevel: 'lowest', erased: true, competed: true,
+    destroyer: 'Sidra', angel: 'Mojito', kai: 'Roh',
+    flavour: 'The lowest mortal level of any universe that competed, and everyone there knew what that meant.',
+    fighters: [
+      { name: 'Bergamo', power: 9e11, race: 'other', note: 'Grows in proportion to whatever is hitting him.' },
+      { name: 'Basil', power: 7e11, race: 'other', note: 'All legs, all the time.' },
+      { name: 'Lavender', power: 7e11, race: 'other', note: 'Poison in the air around him.' },
+    ],
+  },
+  {
+    id: 'u10', number: 10, name: 'Universe 10', epithet: 'the universe of muscle',
+    mortalLevel: 'low', erased: true, competed: true,
+    destroyer: 'Rumsshi', angel: 'Cukatail', kai: 'Gowasu',
+    flavour: 'A god who believes in bodies, and a universe built to agree with him.',
+    fighters: [
+      { name: 'Obni', power: 1.5e12, race: 'other', note: 'Reads your movements a second before you make them.' },
+      { name: 'Jilcol', power: 6e11, race: 'other', note: 'Enormous, and does not tire.' },
+      { name: 'Zircor', power: 7e11, race: 'other', note: 'Fights with a discipline nobody else there has.' },
+    ],
+  },
+  {
+    id: 'u11', number: 11, name: 'Universe 11', epithet: 'the universe of justice',
+    mortalLevel: 'high', erased: false, competed: true,
+    destroyer: 'Vermoud', angel: 'Marcarita', kai: 'Khai',
+    flavour: 'The Pride Troopers, a doctrine of justice they mean literally, and the strongest mortal in the twelve universes standing quietly behind them.',
+    fighters: [
+      { name: 'Jiren', power: 9e13, race: 'other', note: 'Strength past a God of Destruction, and a reason for it he will not discuss.' },
+      { name: 'Toppo', power: 4e13, race: 'other', note: 'A Pride Trooper who becomes a God of Destruction candidate mid-fight.' },
+      { name: 'Dyspo', power: 6e12, race: 'other', note: 'Faster than anything else in the ring.' },
+      { name: 'Kahseral', power: 2e12, race: 'other', note: 'Leads by standing in front of people.' },
+    ],
+  },
+];
+
+const UNIVERSE_BY_ID = Object.fromEntries(UNIVERSES.map((u) => [u.id, u]));
+
+function getUniverse(id) {
+  return UNIVERSE_BY_ID[id];
+}
+
+/** Universes you could plausibly reach or meet, excluding your own. */
+function otherUniverses() {
+  return UNIVERSES.filter((u) => u.fighters.length > 0);
+}
+
+/**
+ * Fighters from a universe, scaled from their Age 780 figures. The rest of the
+ * game interpolates power across the sagas; these people only appear in one
+ * era, so the scale is a straight multiplier on how far off 780 you are.
+ */
+function universeFighters(universeId, year = 780) {
+  const u = getUniverse(universeId);
+  if (!u) return [];
+  const drift = Math.pow(1.12, year - 780);
+  return u.fighters.map((f) => ({
+    name: f.name,
+    power: Math.max(1, Math.round(f.power * drift)),
+    raceId: f.race,
+    universe: u.number,
+    flavour: f.note,
+  }));
+}
+
+/** Everyone from every competing universe, for a multiverse draw. */
+function multiverseField(year = 780, exclude = []) {
+  const out = [];
+  for (const u of UNIVERSES) {
+    if (!u.competed || exclude.includes(u.id)) continue;
+    out.push(...universeFighters(u.id, year));
+  }
+  return out;
+}
+  return { UNIVERSES, UNIVERSE_BY_ID, getUniverse, otherUniverses, universeFighters, multiverseField };
+})();
+
+/* ==== engine/tournament.js ==== */
+const __mod_engine_tournament_js = (function () {
+// Tournaments as brackets you actually fight.
+//
+// The old version rolled a placement and printed it. A tournament is supposed
+// to be the one place in this setting where you find out exactly where you sit
+// against named people, so it now runs as a real bracket: seeded entrants,
+// round by round, your match played on the battle screen and everyone else's
+// resolved against them. You can watch the field thin out around you, and the
+// people who beat you are people you can go and find afterwards.
+
+const { clamp } = __mod_engine_rng_js;
+const { render, numberish, ordinal } = __mod_engine_text_js;
+const { combatPower, winChance, powerTier } = __mod_engine_stats_js;
+const { CANON, canonAlive, canonPower, getCanon } = __mod_data_canon_js;
+const { generateFullName } = __mod_data_names_js;
+const { getRace } = __mod_data_races_js;
+const { universeFighters, multiverseField } = __mod_data_universes_js;
+
+// ------------------------------------------------------------------ formats
+
+const FORMATS = {
+  wmat: {
+    id: 'wmat',
+    name: 'World Martial Arts Tournament',
+    where: 'papaya',
+    size: 8,
+    stakes: 'serious',
+    rules: {
+      ringOut: true,
+      noKilling: true,
+      note: 'Ring-out or knockout. Killing gets you disqualified and arrested.',
+    },
+    flavour: 'The ring is stone, the crowd is enormous, and the announcer has been doing this for thirty years.',
+    spread: 14,
+    // Who turns up to a public martial arts tournament on Earth. Emperors,
+    // gods and things that eat planets have better things to do, and the
+    // draw reads as nonsense the moment Frieza is in it.
+    enters: (ch) => ch.tags.some((t) => ['ally', 'rival', 'mentor', 'human', 'saiyan', 'prodigy', 'crane', 'antihero', 'majin', 'namekian', 'comic'].includes(t))
+      && !ch.tags.some((t) => ['divine', 'imperial', 'emperor', 'destroyer', 'angel', 'omniking', 'threat', 'dragon', 'wish', 'judge', 'spirit'].includes(t))
+      && (ch.power ? Object.keys(ch.power).length > 1 : true),
+  },
+  otherworld: {
+    id: 'otherworld',
+    name: 'Other World Tournament',
+    where: 'otherworld_arena',
+    size: 8,
+    stakes: 'serious',
+    rules: {
+      ringOut: true,
+      noKilling: false,
+      note: 'Everybody here is already dead. Ring-out only; you cannot kill a ghost twice.',
+    },
+    flavour: 'Grand Kai\'s planet, and the best fighters of seven galaxies, all of them past the point of dying.',
+    spread: 30,
+    // The dead, and only the dead.
+    enters: (ch, year) => ch.years[1] !== null && year > ch.years[1]
+      && !ch.tags.some((t) => ['destroyer', 'angel', 'omniking', 'dragon', 'wish'].includes(t)),
+  },
+  cell_games: {
+    id: 'cell_games',
+    name: 'The Cell Games',
+    where: 'wastes',
+    size: 4,
+    stakes: 'lethal',
+    rules: {
+      ringOut: false,
+      noKilling: false,
+      note: 'One at a time, against him, until somebody stops. Nobody agreed to any rules.',
+    },
+    flavour: 'A ring cut into the plateau and a broadcast going out to a planet that expects to die.',
+    spread: 60,
+    enters: (ch) => ch.tags.some((t) => ['ally', 'rival', 'hero', 'saiyan', 'threat'].includes(t))
+      && !ch.tags.some((t) => ['divine', 'angel', 'omniking', 'dragon'].includes(t)),
+  },
+  invitational: {
+    id: 'invitational',
+    name: 'Invitational',
+    where: null,
+    size: 8,
+    stakes: 'serious',
+    rules: {
+      ringOut: false,
+      noKilling: true,
+      note: 'Your tournament, your rules.',
+    },
+    flavour: 'Your name on the poster, which means the result is yours whichever way it goes.',
+    spread: 20,
+    // Your tournament. Whether the big names come depends on your standing,
+    // which the caller decides by passing a filter.
+    enters: (ch) => !ch.tags.some((t) => ['destroyer', 'angel', 'omniking', 'dragon', 'wish', 'judge'].includes(t)),
+  },
+  destroyers: {
+    id: 'destroyers',
+    name: 'Tournament of Destroyers',
+    where: 'tournament_u6',
+    size: 6,
+    stakes: 'serious',
+    spread: 40,
+    rules: {
+      ringOut: true,
+      noKilling: true,
+      note: 'Ring-out or knockout. Two gods are in the stands and neither of them is patient.',
+    },
+    flavour: 'A neutral ring between two universes, with Beerus and Champa arguing over the seating.',
+    universe: 6,
+    enters: (ch) => ch.tags.some((t) => ['u6', 'rival', 'ally', 'saiyan', 'threat'].includes(t))
+      && !ch.tags.some((t) => ['destroyer', 'angel', 'omniking', 'dragon', 'wish', 'judge', 'emperor'].includes(t)),
+  },
+  top: {
+    id: 'top',
+    name: 'Tournament of Power',
+    where: 'top_arena',
+    size: 12,
+    stakes: 'serious',
+    rules: {
+      ringOut: true,
+      noKilling: true,
+      teams: true,
+      note: 'Ring-out only, no killing, no flight, forty-eight minutes. The losing universes are erased.',
+    },
+    flavour: 'A flat world with no sky, and every fighter from ten universes standing on it at once.',
+    spread: 25,
+    enters: (ch) => !ch.tags.some((t) => ['destroyer', 'angel', 'omniking', 'dragon', 'wish', 'judge'].includes(t)),
+  },
+};
+
+// ------------------------------------------------------------------ seeding
+
+const FIGHT_TAGS = ['hero', 'rival', 'antihero', 'villain', 'warrior', 'mentor', 'saiyan', 'threat', 'emperor'];
+
+function canonFighters(state, year, band, format) {
+  const out = [];
+  const enters = (format && format.enters) || (() => true);
+  const wantsDead = format && format.id === 'otherworld';
+  for (const ch of CANON) {
+    if (canonAlive(ch, year) === wantsDead) continue;
+    if (!ch.tags.some((t) => FIGHT_TAGS.includes(t))) continue;
+    if (ch.tags.includes('omniking') || ch.tags.includes('destroyer') || ch.tags.includes('angel')) continue;
+    if (!enters(ch, year)) continue;
+    const npc = state.npcs['canon_' + ch.id];
+    if (npc && npc.alive === false) continue;
+    const power = Math.max(1, canonPower(ch, wantsDead ? ch.years[1] : year));
+    if (power < band.min || power > band.max) continue;
+    out.push({
+      id: 'canon_' + ch.id,
+      canonId: ch.id,
+      name: ch.name,
+      power,
+      raceId: ch.race,
+      isCanon: true,
+      flavour: ch.quirk || ch.personality || '',
+    });
+  }
+  return out;
+}
+
+// Written to follow "They ", so everything here is third-person plural.
+const FILLER_QUIRKS = [
+  'fight out of a stance nobody teaches any more',
+  'have not lost in eleven years and say so before the bell',
+  'are here because the prize money is the only way out of a debt',
+  'wear the colours of a school that burned down',
+  'have an entire village in the stands',
+  'refuse to give a name to the officials',
+  'are visibly older than everyone else in the draw',
+  'trained alone, badly, and got frighteningly good anyway',
+  'came second last time and have thought about nothing else since',
+  'are not from this planet and have not been asked',
+  'have never fought anyone they did not put in hospital',
+  'bow to the ring before they bow to you',
+];
+
+function filler(rng, power, raceHint) {
+  const raceId = raceHint || rng.weighted(
+    ['earthling', 'earthling', 'earthling', 'namekian', 'saiyan', 'other', 'android'],
+    () => 1,
+  );
+  return {
+    id: 'field_' + Math.floor(rng.next() * 1e9).toString(36),
+    canonId: null,
+    name: generateFullName(rng, raceId === 'other' ? 'earthling' : raceId),
+    power: Math.max(1, Math.round(power)),
+    raceId,
+    isCanon: false,
+    flavour: rng.pick(FILLER_QUIRKS),
+  };
+}
+
+/**
+ * Build a field around the player. Canon fighters in the right band get first
+ * call, because being drawn against a name is the point of entering; the rest
+ * is filled with people invented for this draw, spread either side of you so
+ * the bracket has somebody you should beat and somebody you should not.
+ */
+function buildEntrants(state, rng, format, opts = {}) {
+  const c = state.character;
+  const year = opts.year ?? (c.birthYear + c.age);
+  const mine = combatPower(c);
+  const size = opts.size || format.size;
+  const spread = opts.spread ?? format.spread ?? 20;
+
+  const band = { min: mine / spread, max: mine * spread };
+  let pool = opts.canon === false ? [] : canonFighters(state, year, band, format);
+  if (opts.canonFilter) pool = pool.filter((e) => opts.canonFilter(e));
+
+  // The other universes send their own people. They are not in the canon file
+  // because they only exist for one era, but they are named, and beating one
+  // of them is remembered.
+  if (format.universe || format.id === 'top') {
+    const visitors = (format.id === 'top' ? multiverseField(year, ['u7']) : universeFighters('u' + format.universe, year))
+      .filter((f) => f.power >= band.min / 3 && f.power <= band.max * 3)
+      .map((f) => ({
+        id: 'universe_' + f.name.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+        canonId: null,
+        name: f.name,
+        power: f.power,
+        raceId: f.raceId,
+        isCanon: true,           // a known name, for the standings tag
+        universe: f.universe,
+        flavour: f.flavour,
+      }));
+    // Universe 7 gets its share of the draw; the visitors take the rest.
+    const visitorShare = format.id === 'top' ? 0.7 : 0.5;
+    const visitorSlots = Math.max(1, Math.round((size - 1) * visitorShare));
+    pool = pool.slice(0, Math.max(0, size - 1 - visitorSlots))
+      .concat(visitors.sort(() => rng.next() - 0.5).slice(0, visitorSlots));
+  }
+  // Keep the marquee names, not the first eight alphabetically.
+  pool = pool.sort(() => rng.next() - 0.5).slice(0, Math.max(0, Math.floor((size - 1) * 0.55)));
+
+  const entrants = pool.slice();
+  const spots = size - 1 - entrants.length;
+  // Somebody nobody has ever heard of should not out-power Goku in his own
+  // era. Invented entrants are capped under the best name in the draw.
+  const bestCanon = entrants.reduce((m, e) => Math.max(m, e.power), 0);
+  const ceiling = bestCanon ? Math.max(mine * 2.5, bestCanon * 0.92) : mine * spread;
+  for (let i = 0; i < spots; i++) {
+    // Half the invented field sits below you and half above, on a log spread,
+    // so a bracket is never all cannon fodder or all executioners.
+    const t = (i + 0.5) / Math.max(1, spots);
+    const exponent = (t - 0.5) * 2 * Math.log(spread * 0.5);
+    const power = Math.min(ceiling, mine * Math.exp(exponent) * rng.float(0.7, 1.4));
+    entrants.push(filler(rng, power, opts.raceHint));
+  }
+
+  entrants.push({
+    id: 'player',
+    canonId: null,
+    name: c.name,
+    power: mine,
+    raceId: c.raceId,
+    isCanon: false,
+    isPlayer: true,
+    flavour: '',
+  });
+
+  return entrants;
+}
+
+// ------------------------------------------------------------------ bracket
+
+function seedBracket(rng, entrants) {
+  // Seed by power the way a real draw does - strongest apart - then shuffle
+  // inside the halves so the same field does not produce the same bracket.
+  const sorted = entrants.slice().sort((a, b) => b.power - a.power);
+  const slots = [];
+  let lo = 0;
+  let hi = sorted.length - 1;
+  while (lo <= hi) {
+    slots.push(sorted[lo++]);
+    if (lo <= hi) slots.push(sorted[hi--]);
+  }
+  const pairs = [];
+  for (let i = 0; i < slots.length; i += 2) {
+    const a = slots[i];
+    const b = slots[i + 1] || null;
+    pairs.push(rng.chance(0.5) ? { a, b } : { a: b || a, b: b ? a : null });
+  }
+  return pairs.map((p, i) => ({ index: i, a: p.a, b: p.b, winner: null, line: '' }));
+}
+
+function createTournament(state, rng, opts = {}) {
+  const format = FORMATS[opts.formatId] || FORMATS.wmat;
+  const c = state.character;
+  const year = opts.year ?? (c.birthYear + c.age);
+  const entrants = opts.entrants || buildEntrants(state, rng, format, opts);
+  const size = entrants.length;
+
+  const t = {
+    formatId: format.id,
+    name: opts.name || format.name,
+    edition: opts.edition || null,
+    year,
+    size,
+    purse: opts.purse ?? 0,
+    stakes: opts.stakes || format.stakes,
+    placeId: opts.placeId || format.where || c.placeId,
+    rules: { ...format.rules, ...(opts.rules || {}) },
+    entrants,
+    rounds: [seedBracket(rng, entrants)],
+    roundIndex: 0,
+    finished: false,
+    placement: null,
+    eliminatedBy: null,
+    beat: [],
+    disqualified: false,
+    history: [],
+  };
+  return t;
+}
+
+function roundName(t, roundIndex = t.roundIndex) {
+  const left = t.rounds[roundIndex] ? t.rounds[roundIndex].length * 2 : 0;
+  if (left <= 2) return 'The final';
+  if (left <= 4) return 'The semi-finals';
+  if (left <= 8) return 'The quarter-finals';
+  return `Round ${roundIndex + 1}`;
+}
+
+function playerMatch(t) {
+  const round = t.rounds[t.roundIndex];
+  if (!round) return null;
+  return round.find((m) => !m.winner && ((m.a && m.a.isPlayer) || (m.b && m.b.isPlayer))) || null;
+}
+
+function playerOpponent(t) {
+  const m = playerMatch(t);
+  if (!m) return null;
+  return m.a && m.a.isPlayer ? m.b : m.a;
+}
+
+/** Resolve every match in the current round that is not the player's. */
+function resolveOtherMatches(state, rng, t) {
+  const round = t.rounds[t.roundIndex];
+  const lines = [];
+  for (const m of round) {
+    if (m.winner) continue;
+    if ((m.a && m.a.isPlayer) || (m.b && m.b.isPlayer)) continue;
+    if (!m.b) { m.winner = m.a; m.line = `${m.a.name} has a bye.`; lines.push(m.line); continue; }
+    const p = winChance(m.a.power, m.b.power);
+    const aWins = rng.chance(p);
+    m.winner = aWins ? m.a : m.b;
+    const loser = aWins ? m.b : m.a;
+    m.line = describeOtherMatch(rng, m.winner, loser, t);
+    lines.push(m.line);
+    if (t.rules.noKilling !== true && t.stakes === 'lethal' && rng.chance(0.35)) {
+      loser.dead = true;
+      if (loser.canonId) {
+        const npc = state.npcs['canon_' + loser.canonId];
+        if (npc) { npc.alive = false; npc.causeOfDeath = `Killed at the ${t.name}`; }
+      }
+      lines.push(`${loser.name} does not get up.`);
+    }
+  }
+  return lines;
+}
+
+function describeOtherMatch(rng, winner, loser, t) {
+  const gap = winner.power / Math.max(1, loser.power);
+  const shape = gap > 12
+    ? `{[w] ends it in one exchange|[l] is out before the crowd has settled|[w] does not appear to try}`
+    : gap > 2.5
+      ? `{[w] takes [l] apart methodically|[w] wins it comfortably|[l] never finds a way in}`
+      : `{[w] beats [l] by about a second|[w] and [l] go the distance and [w] takes it|[l] loses it on a mistake nobody else sees}`;
+  const out = render(shape, {}, rng)
+    .replace(/\[w\]/g, winner.name)
+    .replace(/\[l\]/g, loser.name);
+  const ringOut = t.rules.ringOut && rng.chance(0.35) ? ' Ring-out.' : '';
+  return out + '.' + ringOut;
+}
+
+/** Record the result of the player's match and advance the bracket. */
+function recordPlayerResult(state, rng, t, won, opts = {}) {
+  const m = playerMatch(t);
+  if (!m) return { finished: t.finished };
+  const me = m.a && m.a.isPlayer ? m.a : m.b;
+  const foe = m.a && m.a.isPlayer ? m.b : m.a;
+
+  if (!foe) {
+    m.winner = me;
+  } else if (won) {
+    m.winner = me;
+    t.beat.push(foe.name);
+  } else {
+    m.winner = foe;
+    t.eliminatedBy = foe.name;
+  }
+  m.line = foe
+    ? (won ? `You beat ${foe.name}.` : `${foe.name} beats you.`)
+    : 'You have a bye.';
+
+  if (opts.disqualified) {
+    t.disqualified = true;
+    m.winner = foe || me;
+    t.eliminatedBy = foe ? foe.name : 'the officials';
+  }
+
+  return advanceRound(state, rng, t);
+}
+
+/** Build the next round from this round's winners, or finish. */
+function advanceRound(state, rng, t) {
+  const round = t.rounds[t.roundIndex];
+  if (round.some((m) => !m.winner)) return { finished: false, waiting: true };
+
+  t.history.push({
+    name: roundName(t),
+    lines: round.map((m) => m.line).filter(Boolean),
+  });
+
+  const winners = round.map((m) => m.winner).filter(Boolean);
+  const stillIn = winners.some((w) => w.isPlayer);
+
+  if (winners.length <= 1) {
+    t.finished = true;
+    t.placement = stillIn ? 1 : placementFor(t);
+    return { finished: true, champion: winners[0] || null };
+  }
+
+  if (!stillIn && !t.finished) {
+    // You are out. The rest of the draw still happens; you get to watch it,
+    // because knowing who won the thing you lost is part of the sting.
+    const rest = simulateRest(rng, winners, t);
+    t.finished = true;
+    t.placement = placementFor(t);
+    t.champion = rest.champion;
+    t.restLines = rest.lines;
+    return { finished: true, champion: rest.champion, eliminated: true };
+  }
+
+  const pairs = [];
+  for (let i = 0; i < winners.length; i += 2) {
+    pairs.push({ index: i / 2, a: winners[i], b: winners[i + 1] || null, winner: null, line: '' });
+  }
+  t.rounds.push(pairs);
+  t.roundIndex += 1;
+  return { finished: false, nextRound: roundName(t) };
+}
+
+function placementFor(t) {
+  // Losing in a round of N leaves you tied for Nth; report the honest figure.
+  const roundSize = t.rounds[t.roundIndex].length * 2;
+  return Math.min(t.size, Math.max(2, roundSize / 2 + 1));
+}
+
+function simulateRest(rng, winners, t) {
+  let field = winners.filter((w) => !w.isPlayer);
+  const lines = [];
+  while (field.length > 1) {
+    const next = [];
+    for (let i = 0; i < field.length; i += 2) {
+      const a = field[i];
+      const b = field[i + 1];
+      if (!b) { next.push(a); continue; }
+      const aWins = rng.chance(winChance(a.power, b.power));
+      const w = aWins ? a : b;
+      next.push(w);
+      lines.push(describeOtherMatch(rng, w, aWins ? b : a, t));
+    }
+    field = next;
+  }
+  return { champion: field[0] || null, lines };
+}
+
+/** Everyone still standing, for the standings panel. */
+function standings(t) {
+  const round = t.rounds[t.roundIndex] || [];
+  const live = [];
+  for (const m of round) {
+    if (m.a) live.push(m.a);
+    if (m.b) live.push(m.b);
+  }
+  return live.sort((a, b) => b.power - a.power);
+}
+
+function bracketSummary(t) {
+  const out = [];
+  for (const h of t.history) {
+    out.push({ title: h.name, lines: h.lines });
+  }
+  if (!t.finished) {
+    const foe = playerOpponent(t);
+    out.push({
+      title: roundName(t),
+      lines: foe ? [`You are drawn against ${foe.name} (${numberish(foe.power)}).`] : ['You have a bye.'],
+    });
+  }
+  if (t.restLines && t.restLines.length) {
+    out.push({ title: 'Without you', lines: t.restLines });
+  }
+  return out;
+}
+
+/** What the whole thing was worth. Returns changes for the caller to apply. */
+function payout(state, t) {
+  const placement = t.placement || t.size;
+  const won = placement === 1;
+  const share = won ? 1 : placement <= 2 ? 0.32 : placement <= 4 ? 0.12 : 0.04;
+  const beatCanon = t.beat.length;
+
+  return {
+    won,
+    placement,
+    zeni: Math.round((t.purse || 0) * share),
+    fame: won ? 24 : Math.max(1, Math.round(14 - placement)),
+    happiness: won ? 22 : placement <= 4 ? 2 : -6,
+    beat: t.beat.slice(),
+    champion: t.champion ? t.champion.name : (won ? state.character.name : null),
+    beatCount: beatCanon,
+  };
+}
+
+/** One-line description of where you finished. */
+function placementLine(t) {
+  if (t.disqualified) return 'Disqualified.';
+  if (t.placement === 1) return 'Champion.';
+  if (t.placement === 2) return 'Runner-up.';
+  return `${ordinal(t.placement || t.size)} place. ${t.eliminatedBy ? t.eliminatedBy + ' put you out.' : ''}`.trim();
+}
+
+/** Battle spec for the player's current match. */
+function matchBattleSpec(state, t) {
+  const foe = playerOpponent(t);
+  if (!foe) return null;
+  const canon = foe.canonId ? getCanon(foe.canonId) : null;
+  return {
+    foe: {
+      name: foe.name,
+      power: foe.power,
+      raceId: foe.raceId,
+      canonId: foe.canonId,
+      techniques: canon && canon.teaches ? canon.teaches.slice(0, 4) : [],
+    },
+    stakes: t.stakes,
+    reason: 'tournament',
+    placeId: t.placeId || state.character.placeId,
+    context: {
+      reason: 'tournament',
+      canonId: foe.canonId,
+      tournament: t.formatId,
+      ringOut: !!t.rules.ringOut,
+      noKilling: !!t.rules.noKilling,
+    },
+    intro: `${roundName(t)}. ${foe.name}, ${numberish(foe.power)}.`
+      + (foe.flavour ? (foe.universe ? ` ${foe.flavour}` : ` They ${foe.flavour}.`) : '')
+      + (t.rules.note ? ` ${t.rules.note}` : ''),
+  };
+}
+
+/** How strong a field the player is walking into, in plain words. */
+function describeField(state, t) {
+  const mine = combatPower(state.character);
+  const powers = t.entrants.filter((e) => !e.isPlayer).map((e) => e.power).sort((a, b) => b - a);
+  const top = powers[0] || 1;
+  const median = powers[Math.floor(powers.length / 2)] || 1;
+  const strongest = t.entrants.find((e) => e.power === top);
+  const rel = mine / Math.max(1, top);
+  const verdict = rel > 4 ? 'You are the strongest thing in this draw by a distance.'
+    : rel > 1.2 ? 'You should win this, if nothing goes wrong.'
+      : rel > 0.5 ? 'You can win this. You will have to be right about a few things.'
+        : rel > 0.08 ? 'Somebody in this draw is out of your class.'
+          : 'You have no business being in this draw.';
+  return {
+    verdict,
+    top,
+    median,
+    strongestName: strongest ? strongest.name : 'somebody',
+    line: `Field of ${t.size}. Strongest entrant ${strongest ? strongest.name : 'unknown'} at ${numberish(top)}; `
+      + `middle of the draw around ${numberish(median)}. ${verdict}`,
+  };
+}
+
+/**
+ * Run a whole bracket headlessly, for the soak harness and for tournaments
+ * happening somewhere you are not. Uses the same odds as everyone else's
+ * matches, so a run without the UI is not a different game.
+ */
+function autoRunTournament(state, rng, t) {
+  let guard = 0;
+  while (!t.finished && guard++ < 24) {
+    resolveOtherMatches(state, rng, t);
+    const foe = playerOpponent(t);
+    if (!foe) { recordPlayerResult(state, rng, t, true); continue; }
+    const p = winChance(combatPower(state.character), foe.power);
+    const won = rng.chance(p);
+    if (won) {
+      // Winning a round costs you something; you do not arrive at the final fresh.
+      state.character.vitals.health = clamp(state.character.vitals.health - rng.int(6, 18), 1, 100);
+    } else {
+      state.character.vitals.health = clamp(state.character.vitals.health - rng.int(12, 30), 1, 100);
+    }
+    recordPlayerResult(state, rng, t, won);
+  }
+  if (!t.finished) { t.finished = true; t.placement = t.placement || t.size; }
+  return t;
+}
+
+/**
+ * What the Tournament of Power was actually for. If the champion came from
+ * Universe 7 - you, or one of yours - the universe stands. Otherwise the
+ * winning universe's wish decides it, and in the story that wish put every
+ * erased universe back; here it is a roll, weighted by who won.
+ */
+function topConsequence(state, rng, t) {
+  if (t.formatId !== 'top') return null;
+  const champ = t.champion || (t.placement === 1 ? { isPlayer: true } : null);
+  const ours = !champ || champ.isPlayer || !champ.universe;
+  if (ours) {
+    state.world.flags.universe_saved = true;
+    if (champ && champ.isPlayer) {
+      // The winner gets the Super Dragon Balls. One wish, and it can be anything.
+      state.world.flags.super_dragon_balls = true;
+      return 'Universe 7 stands, and the Super Dragon Balls are yours. One wish, on a scale nothing else in this setting can match.';
+    }
+    return 'Universe 7 stands. The Omni-Kings look faintly disappointed and go home.';
+  }
+  const restored = rng.chance(champ.universe === 11 ? 0.8 : 0.35);
+  if (restored) {
+    state.world.flags.universe_saved = true;
+    return `Universe ${champ.universe} takes it, and their fighter spends the wish putting the erased universes back. Yours included. You did not earn that and you know it.`;
+  }
+  state.world.flags.universe_erased = true;
+  return `Universe ${champ.universe} takes it. The Omni-Kings raise a hand each and everything you have ever known stops existing.`;
+}
+
+/** Apply a finished tournament's payout to the character. Returns a summary. */
+function settle(state, t, rng = null) {
+  const result = payout(state, t);
+  const c = state.character;
+  c.zeni += result.zeni;
+  c.fame = clamp(c.fame + result.fame, 0, 100);
+  c.vitals.happiness = clamp(c.vitals.happiness + result.happiness, 0, 100);
+  if (result.won) state.world.tournamentWins = (state.world.tournamentWins || 0) + 1;
+  const bits = [placementLine(t)];
+  if (result.beat.length) bits.push(`You went through ${result.beat.join(', ')}.`);
+  if (result.zeni) bits.push(`${Math.round(result.zeni).toLocaleString('en-US')} Zeni.`);
+  if (!result.won && result.champion) bits.push(`${result.champion} took it.`);
+  if (t.formatId === 'wmat' && result.won && !c.items.includes('championship_belt')) {
+    // The belt is a thing you own now, and it shows.
+    c.items.push('championship_belt');
+    bits.push('They put the belt on you.');
+  }
+  const fate = rng ? topConsequence(state, rng, t) : null;
+  if (fate) bits.push(fate);
+  return { ...result, text: bits.join(' '), erased: !!(fate && /stops existing/.test(fate)) };
+}
+  return { FORMATS, buildEntrants, createTournament, roundName, playerMatch, playerOpponent, resolveOtherMatches, recordPlayerResult, advanceRound, standings, bracketSummary, payout, placementLine, matchBattleSpec, describeField, autoRunTournament, topConsequence, settle };
 })();
 
 /* ==== engine/events/world.js ==== */
@@ -9032,11 +10180,40 @@ const { combatPower, powerTier } = __mod_engine_stats_js;
 const { TIMELINE, isTournamentYear, worldPowerBaseline, eraName } = __mod_data_timeline_js;
 const { canonAvailable } = __mod_data_canon_js;
 const { ensureBallSet, ballsHeld, ballsOn, ballManifest, scatterAfterWish, ballsAreInert } = __mod_engine_dragonballs_js;
-const { WISHES, getItem } = __mod_data_items_js;
+const { getItem } = __mod_data_items_js;
 const { getPlace, PLACES } = __mod_data_places_js;
 const { generateFullName } = __mod_data_names_js;
 const { getTechnique, TECHNIQUES } = __mod_data_techniques_js;
 const { numberish, zeni, ordinal } = __mod_engine_text_js;
+const { createTournament, autoRunTournament, settle } = __mod_engine_tournament_js;
+
+
+/**
+ * The canon tournaments are tournaments, not disasters. Walking into the 23rd
+ * World Martial Arts Tournament should put you in the draw, not in a lethal
+ * fight with an unnamed finalist.
+ */
+const TIMELINE_TOURNAMENTS = {
+  tournament_23: { formatId: 'wmat', purse: 500000, placeId: 'papaya' },
+  tournament_25: { formatId: 'wmat', purse: 900000, placeId: 'papaya' },
+  cell_games: { formatId: 'cell_games', purse: 0, placeId: 'wastes', size: 4 },
+  u6_tournament: {
+    formatId: 'invitational', purse: 0, placeId: 'tournament_u6', size: 6,
+    name: 'The Tournament of Destroyers',
+    // Universe 6 against Universe 7, chosen by two gods on a whim.
+    canonFilter: (e) => true,
+  },
+  tournament_of_power: { formatId: 'top', purse: 0, placeId: 'top_arena', size: 12 },
+};
+
+function timelineTournament(c2, ev) {
+  const spec = TIMELINE_TOURNAMENTS[ev.id];
+  if (!spec) return null;
+  return createTournament(c2.state, c2.rng, {
+    name: spec.name || ev.name,
+    ...spec,
+  });
+}
 
 /** Hand over N of the still-hidden balls, no searching required. */
 function claimBalls(state, rng, count) {
@@ -9115,12 +10292,27 @@ registerEvents([
       }
       if (s.reachable) {
         list.push({
-          id: 'intervene', label: 'Go. Put yourself in the middle of it.', danger: true,
-          hint: describeGap(combatPower(ctx.character), s.evThreat),
+          id: 'intervene',
+          label: TIMELINE_TOURNAMENTS[s.evId] ? 'Enter it' : 'Go. Put yourself in the middle of it.',
+          danger: !TIMELINE_TOURNAMENTS[s.evId],
+          hint: TIMELINE_TOURNAMENTS[s.evId]
+            ? 'Fight the draw, round by round.'
+            : describeGap(combatPower(ctx.character), s.evThreat),
           effect: (c2, sl) => {
             const ev = TIMELINE.find((t) => t.id === sl.evId);
             c2.state.world.resolved.push(ev.id);
             fact(c2, `Walked into ${ev.name}.`, { type: 'history', weight: 6, tags: ['witness'] });
+
+            const bracket = timelineTournament(c2, ev);
+            if (bracket) {
+              const opener = `${ev.blurb} You put your name in.`;
+              if (!c2.state.autoBattle) return { text: opener, tournament: bracket };
+              autoRunTournament(c2.state, c2.rng, bracket);
+              const out = settle(c2.state, bracket, c2.rng);
+              if (out.erased) return { text: `${opener} ${out.text}`, outcome: { death: 'Erased with Universe 7' } };
+              return { text: `${opener} ${out.text}` };
+            }
+
             // A warlord with tanks does not open with a Kamehameha.
             const kit = ev.threat > 1e8 ? ['ki_blast', 'death_beam', 'death_ball']
               : ev.threat > 1e4 ? ['ki_blast', 'galick_gun']
@@ -9188,27 +10380,28 @@ registerEvents([
     text: `{The posters go up in spring|It comes round again|Papaya Island, same as always}.
       {Everyone who thinks they are somebody will be there|The prize is [purse] Zeni|Somebody non-human always enters and pretends otherwise}.`,
     choices: (ctx, s) => [
-      { id: 'enter', label: 'Enter', effect: (c2, sl) => {
-        const baseline = Math.max(60, worldPowerBaseline(c2.year) * 0.02, combatPower(c2.character) * 0.25);
-        const field = buildField(c2.rng, (power, i) => ({
-          name: generateFullName(c2.rng, c2.rng.pick(['earthling', 'earthling', 'namekian', 'saiyan', 'other'])),
-          power: Math.round(power),
-        }), 4, baseline);
-        const result = runTournament(c2.state, c2.rng, field, { lethality: 0.03 });
-        const lines = result.record.map((r) =>
-          `Round ${r.round}: ${r.foe} (${numberish(r.foePower)}). ${r.won ? 'You take it.' : 'You do not.'}`);
-        if (result.won) {
-          c2.state.world.tournamentWins++;
-          const changes = apply(c2, { zeni: sl.purse, fame: 22, happiness: 22, health: -20 });
-          fact(c2, `Won the ${ordinal(sl.num)} World Martial Arts Tournament.`, { type: 'tournament', weight: 8, tags: ['fame', 'milestone'] });
-          return { text: `${lines.join(' ')} {They put a belt on you|The crowd is enormous|Somebody who has never met you cries}. World Champion.`, changes };
-        }
-        const changes = apply(c2, {
-          zeni: result.placement <= 2 ? Math.round(sl.purse * 0.3) : 20000,
-          fame: Math.max(2, 12 - result.placement * 2), happiness: -4, health: -14,
+      { id: 'enter', label: 'Enter', hint: 'Fight the draw yourself', effect: (c2, sl) => {
+        // A real bracket, seeded from who is alive and fighting in this year.
+        // The UI takes over from here and hands the year back afterwards.
+        const t = createTournament(c2.state, c2.rng, {
+          formatId: 'wmat',
+          purse: sl.purse,
+          edition: sl.num,
+          name: `The ${ordinal(sl.num)} World Martial Arts Tournament`,
+          placeId: 'papaya',
         });
-        fact(c2, `Placed ${ordinal(result.placement)} at the ${ordinal(sl.num)} tournament.`, { type: 'tournament', weight: 3, tags: ['fame'] });
-        return { text: `${lines.join(' ')} ${ordinal(result.placement)} place. #aftermath#`, changes };
+        const opener = `{You put your name down|You sign the sheet|They spell it wrong on the board and you let them}. `
+          + `The draw goes up an hour later.`;
+        if (!c2.state.autoBattle) return { text: opener, tournament: t };
+        // Headless: run the same bracket, same odds, no screen.
+        autoRunTournament(c2.state, c2.rng, t);
+        const out = settle(c2.state, t, c2.rng);
+        if (out.won) {
+          fact(c2, `Won the ${ordinal(sl.num)} World Martial Arts Tournament.`, { type: 'tournament', weight: 8, tags: ['fame', 'milestone'] });
+        } else {
+          fact(c2, `${out.placement === 2 ? 'Runner-up' : ordinal(out.placement) + ' place'} at the ${ordinal(sl.num)} tournament.`, { type: 'tournament', weight: 3, tags: ['fame'] });
+        }
+        return { text: `${opener} ${out.text}`, changes: [] };
       } },
       { id: 'watch', label: 'Watch from the stands', effect: (c2) => {
         const changes = apply(c2, { happiness: 6, stats: { technique: 3, intellect: 2 } });
@@ -9251,119 +10444,6 @@ registerEvents([
         changes: apply(c2, { karma: 3 }),
       }) },
     ],
-  },
-
-  {
-    id: 'summon_dragon', noFatigue: true, tags: ['world', 'dragonball', 'revival'], weight: 400,
-    when: (ctx) => ballsHeld(ctx.state) >= 7,
-    slots: (ctx) => ({ dragon: (ctx.state.world.ballSet && ctx.state.world.ballSet.dragon) || 'Shenron' }),
-    title: 'Summoning',
-    text: `Seven balls in a circle, and {the sky goes black|the sun goes out|the clouds come apart}.
-      [dragon] {rises|uncoils|fills the sky}. {"State your wish"|"Speak. I will grant one wish"|"You have summoned me. Make it quick"}.`,
-    choices: (ctx, s) => {
-      const c = ctx.character;
-      const usable = WISHES.filter((w) => !w.race || w.race.includes(c.raceId));
-      return ctx.rng.sample(usable, 4).map((w) => ({
-        id: w.id,
-        label: w.name,
-        hint: w.desc,
-        effect: (c2) => {
-          scatterAfterWish(c2.state, c2.rng);
-          c2.state.world.wishesUsed.push(w.id);
-          fact(c2, `Wished: ${w.name}.`, { type: 'wish', weight: 7, tags: ['dragonball', 'wish'] });
-          switch (w.id) {
-            case 'revive_one': {
-              const dead = Object.values(c2.state.npcs).filter((n) => !n.alive);
-              if (dead.length) {
-                const back = c2.rng.pick(dead);
-                back.alive = true;
-                back.deadSince = null;
-                const changes = apply(c2, { happiness: 25, karma: 8 });
-                fact(c2, `Brought ${back.name} back.`, { type: 'revival', weight: 8, subject: back.id, tags: ['wish'] });
-                return { text: `You say the name. {The dragon's eyes flare|It is done before you finish speaking|"It is done"}. ${back.name} {is standing there|opens their eyes somewhere and starts walking home|does not understand yet}.`, changes };
-              }
-              return { text: `{Nobody you love is dead yet|The dragon waits|"There is no one"}. You waste it on something small.`, changes: apply(c2, { happiness: -4 }) };
-            }
-            case 'immortality': {
-              c2.character.flags.immortal = true;
-              c2.character.lifeExpectancy = 99999;
-              const changes = apply(c2, { karma: -8, happiness: 10 });
-              fact(c2, 'Became immortal. Cannot die of age.', { type: 'wish', weight: 10, tags: ['wish', 'immortal'] });
-              return { text: `{"It is done"|The dragon looks at you for a long moment first|Nothing feels different, which is the frightening part}. You will not age out of this. {Everything else can still kill you|That was not the same as invulnerable and you knew it|You have all the time there is}.`, changes };
-            }
-            case 'power_up': {
-              const mult = c2.rng.float(6, 22);
-              const yearsLost = c2.rng.int(8, 25);
-              c2.character.lifeExpectancy = Math.max(c2.character.age + 3, c2.character.lifeExpectancy - yearsLost);
-              c2.character.flags.wished_power = true;
-              const changes = apply(c2, { powerMult: mult, happiness: 12, karma: -6 });
-              fact(c2, `Wished for power and paid ${yearsLost} years for it.`, { type: 'wish', weight: 9, tags: ['wish', 'power'] });
-              return { text: `{It arrives all at once and it hurts|Your whole body reorganises|You can feel it come in}. Power multiplied ${mult.toFixed(1)} times. {The dragon takes the payment from the far end of your life|"The years were the price"|You are ${yearsLost} years shorter now and you did not feel it go}.`, changes };
-            }
-            case 'unlock_potential': {
-              c2.character.flags.potential_unlocked = true;
-              c2.character.flags.wish_potential = true;
-              const changes = apply(c2, { powerMult: c2.rng.float(3, 7), happiness: 15,
-                stats: { kiControl: 8, technique: 6, discipline: 4 } });
-              fact(c2, 'Had every drop of latent potential unlocked by the dragon.', { type: 'wish', weight: 9, tags: ['wish', 'power'] });
-              return { text: `{Nothing visible happens|There is no glow, no shout|You feel the ceiling come off}. Everything you could ever have been is available now, and you have to go and take it.`, changes };
-            }
-            case 'wealth': {
-              const changes = apply(c2, { zeni: c2.rng.int(50000000, 900000000), happiness: 12, karma: -3 });
-              return { text: `{It is vulgar and it works|Money appears in accounts you do not have|Somebody delivers a case}. {You are rich|Obscenely rich|Rich enough that it stops being a number}.`, changes };
-            }
-            case 'youth': {
-              c2.character.age = Math.max(16, c2.character.age - 20);
-              const changes = apply(c2, { health: 40, happiness: 18 });
-              fact(c2, 'Wished twenty years back onto the clock.', { type: 'wish', weight: 8, tags: ['wish'] });
-              return { text: `{Twenty years come off|You feel it in your knees first|Your hands look wrong for a week}. You are ${c2.character.age} again, with everything you learned still in there.`, changes };
-            }
-            case 'knowledge': {
-              const pool = TECHNIQUES.filter((t) => !c2.character.techniques.includes(t.id)
-                && (!t.races || t.races.includes(c2.character.raceId)));
-              if (pool.length) {
-                const t = c2.rng.weighted(pool, (x) => x.tier);
-                c2.character.techniques.push(t.id);
-                c2.state.stats.techniquesLearned++;
-                const changes = apply(c2, { stats: { technique: 5, kiControl: 4 }, happiness: 10 });
-                fact(c2, `The dragon put the ${t.name} into their head.`, { type: 'technique', weight: 6, tags: ['wish', 'technique'] });
-                return { text: `{It arrives as memory, not learning|You simply know it, the way you know your own name|There is no practice and no wonder}. The ${t.name}. {It feels like cheating|You did not earn it|It works perfectly}.`, changes };
-              }
-              return { text: `You already know everything the dragon can teach.`, changes: [] };
-            }
-            case 'restore_planet': {
-              setWorldFlag(c2.state, 'planet_restored');
-              const changes = apply(c2, { karma: 25, happiness: 25, fame: 12 });
-              fact(c2, 'Asked the dragon to put a dead world back.', { type: 'wish', weight: 10, tags: ['wish', 'hero'] });
-              return { text: `{Rock, water, air, in that order|It takes eleven seconds|The dragon says it is done and it is done}. {The people are a separate wish and you do not have another|Somewhere a world is spinning again|It is empty and it is there}.`, changes };
-            }
-            case 'tail_back': {
-              c2.character.tail = true;
-              const changes = apply(c2, { happiness: 10, powerMult: 1.3 });
-              return { text: `{It grows back overnight|You wake up and it is there|It is stronger than the old one}. {You had forgotten what balance felt like|The moon is interesting again|Do not let anyone grab it}.`, changes };
-            }
-            case 'revive_many': {
-              const dead = Object.values(c2.state.npcs).filter((n) => !n.alive);
-              dead.forEach((n) => { n.alive = true; n.deadSince = null; });
-              const changes = apply(c2, { happiness: 30, karma: 20, fame: 10 });
-              fact(c2, `Brought back everyone who had died. All ${dead.length} of them.`, { type: 'revival', weight: 10, tags: ['wish', 'hero'] });
-              return { text: `{You ask for all of them|"All of them"|You do not ask for anything for yourself}. ${dead.length ? `${dead.length} people wake up somewhere and do not know why.` : `Nobody is dead. The dragon waits, then leaves.`}`, changes };
-            }
-            case 'erase_memory': {
-              c2.character.fame = 0;
-              Object.values(c2.state.npcs).forEach((n) => { n.closeness = Math.round(n.closeness * 0.2); n.respect = 0; });
-              const changes = apply(c2, { happiness: -10, karma: -4 });
-              fact(c2, 'Wished to be forgotten by everyone.', { type: 'wish', weight: 9, tags: ['wish'] });
-              return { text: `{It works immediately|Nobody looks up when you walk past|Somebody you love calls you "excuse me"}. {You are nobody|It is exactly what you asked for|You did not think about what it would feel like}.`, changes };
-            }
-            default: {
-              const changes = apply(c2, { happiness: 8 });
-              return { text: `{The dragon grants it without comment|"It is done"|It takes about four seconds}. {The sky comes back|The balls scatter across the world|They will be stone for a year}.`, changes };
-            }
-          }
-        },
-      }));
-    },
   },
 
   {
@@ -9523,6 +10603,649 @@ registerEvents([
         return { text: `${zeni(cost)} for one bean. {It is robbery|You pay it|The seller does not tell you where it came from and you do not ask}.`, changes };
       } },
     ],
+  },
+]);
+})();
+
+/* ==== data/planets.js ==== */
+const __mod_data_planets_js = (function () {
+// Worlds, as places with politics rather than backdrops. Each has people on it,
+// a law, somebody who defends it, and a distance from everywhere else.
+
+const PLANETS = [
+  {
+    id: 'earth', name: 'Earth', distance: 0,
+    inhabitants: 'Humans, mostly, plus a handful of things that are not',
+    population: 'billions', tech: 'capsule-age', alignment: 'peaceful',
+    law: 'Evil is feared and answered. Someone always comes.',
+    defenders: ['goku', 'piccolo', 'vegeta', 'gohan', 'android_18', 'krillin'],
+    flora: 'Forests, oceans, and dinosaurs nobody got round to removing.',
+    strength: 'A handful of fighters here can destroy the planet. The rest cannot fight at all.',
+  },
+  {
+    id: 'planet_vegeta', name: 'Planet Vegeta', distance: 8,
+    inhabitants: 'Saiyans, and the Tuffles they replaced',
+    population: 'thousands', tech: 'imperial vassal', alignment: 'conquering',
+    law: 'Strength decides. There is no second rule.',
+    defenders: ['nappa', 'bardock'],
+    flora: 'Red grass, hard ground, and nothing that has not learned to fight back.',
+    strength: 'Everyone can fight. Most of them are worse at it than they believe.',
+  },
+  {
+    id: 'sadala', name: 'Planet Sadala', distance: 40,
+    inhabitants: 'Saiyans who never became conquerors',
+    population: 'millions', tech: 'modern', alignment: 'proud',
+    law: 'Honour duels, formally supervised.',
+    defenders: ['cabba', 'caulifla', 'kale'],
+    flora: 'Farmland, mountains, and stadiums.',
+    strength: 'A warrior culture with rules, which makes it more dangerous, not less.',
+  },
+  {
+    id: 'namek', name: 'Planet Namek', distance: 12,
+    inhabitants: 'Namekians, in villages of a hundred or so',
+    population: 'thousands', tech: 'none to speak of', alignment: 'peaceful',
+    law: 'Elders decide. Violence is close to unthinkable.',
+    defenders: ['nail', 'moori'],
+    flora: 'Blue grass, three suns, and no night at all.',
+    strength: 'Warrior-types are formidable. There are very few of them.',
+  },
+  {
+    id: 'new_namek', name: 'New Namek', distance: 14, inhabitants: 'Namekians, rebuilding',
+    population: 'thousands', tech: 'none to speak of', alignment: 'peaceful',
+    law: 'Elders decide, and this time they keep a watch posted.',
+    defenders: ['moori'], flora: 'The same blue grass, grown from seed.',
+    strength: 'They have learned to be careful.',
+  },
+  {
+    id: 'yardrat', name: 'Planet Yardrat', distance: 22,
+    inhabitants: 'Yardratians, small and unhurried',
+    population: 'millions', tech: 'spiritual', alignment: 'pacifist',
+    law: 'Nobody is made to do anything.',
+    defenders: ['yardrat_elder'],
+    flora: 'Low domes, terraces, and gardens grown for the shape of them.',
+    strength: 'Almost no muscle. Techniques nobody else in the universe has.',
+  },
+  {
+    id: 'cereal', name: 'Planet Cereal', distance: 30,
+    inhabitants: 'Two Cerealians, and the ruins of everyone else',
+    population: 'a handful', tech: 'scavenged', alignment: 'grieving',
+    law: 'There is nobody left to make one.',
+    defenders: [], flora: 'Dust, wind, and the outlines of towns.',
+    strength: 'One survivor with a grudge and a dragon of his own.',
+  },
+  {
+    id: 'frieza_79', name: 'Planet Frieza 79', distance: 18,
+    inhabitants: 'Frieza Force garrison, various species',
+    population: 'tens of thousands', tech: 'imperial', alignment: 'imperial',
+    law: 'Rank. Anything a superior wants is legal.',
+    defenders: ['zarbon', 'dodoria'],
+    flora: 'Nothing grows. Everything is shipped in.',
+    strength: 'Individually unimpressive. There are a great many of them.',
+  },
+  {
+    id: 'void', name: 'Deep Space', distance: 25, inhabitants: 'Whoever is passing through',
+    population: 'none', tech: 'none', alignment: 'indifferent',
+    law: 'None whatsoever.', defenders: [], flora: 'Nothing.',
+    strength: 'Empty, until it is not.',
+  },
+  {
+    id: 'otherworld', name: 'The Other World', distance: 100, inhabitants: 'The dead',
+    population: 'uncountable', tech: 'divine', alignment: 'divine',
+    law: 'King Yemma decides, and there is no appeal.', defenders: ['king_kai', 'supreme_kai'],
+    flora: 'Cloud, mostly.', strength: 'Everyone here has already died once.',
+  },
+];
+
+const PLANET_BY_ID = Object.fromEntries(PLANETS.map((p) => [p.id, p]));
+
+function getPlanet(id) {
+  return PLANET_BY_ID[id] || PLANET_BY_ID.earth;
+}
+
+/** Rough travel years between two worlds, by method. */
+function travelYears(fromId, toId, method) {
+  const a = getPlanet(fromId);
+  const b = getPlanet(toId);
+  const gap = Math.abs((a.distance || 0) - (b.distance || 0)) + (a.id === b.id ? 0 : 6);
+  switch (method) {
+    case 'instant': return 0;
+    case 'ship': return Math.max(0, Math.round(gap / 12));
+    case 'pod': return Math.max(1, Math.round(gap / 7));
+    case 'flight': return Math.max(2, Math.round(gap / 3));
+    default: return Math.max(1, Math.round(gap / 8));
+  }
+}
+
+const TRAVEL_METHODS = [
+  {
+    id: 'instant', name: 'Instant Transmission', needs: 'the technique',
+    blurb: 'Lock onto a signature and be there. No time passes at all.',
+  },
+  {
+    id: 'ship', name: 'Capsule spaceship', needs: 'a ship',
+    blurb: 'Months, sometimes a year. There is a kitchen and a gravity setting.',
+  },
+  {
+    id: 'pod', name: 'Attack pod', needs: 'a pod',
+    blurb: 'You sleep through it. Years go past while you do.',
+  },
+  {
+    id: 'flight', name: 'Fly there yourself', needs: 'enormous speed',
+    blurb: 'It can be done. It takes a very long time and you arrive hungry.',
+  },
+];
+  return { PLANETS, PLANET_BY_ID, getPlanet, travelYears, TRAVEL_METHODS };
+})();
+
+/* ==== engine/events/wishes.js ==== */
+const __mod_engine_events_wishes_js = (function () {
+// The dragon, and what you ask it for.
+//
+// A wish used to be one of a dozen buttons. It is the largest single decision
+// in this setting - people spend whole sagas gathering the balls - so it now
+// runs as a conversation: the dragon comes up, you pick a category, you pick a
+// wish, and for some of them you pick who or what it lands on. Porunga grants
+// three and stays in the sky between them. You can also just say what you want
+// out loud, and a dragon is a literal creature about that.
+
+const { registerEvents } = __mod_engine_generator_js;
+const { apply, fact, setWorldFlag, relate } = __mod_engine_events_helpers_js;
+const { WISHES, WISH_GROUPS, DRAGONS, interpretWishLocally, WISH_BY_ID } = __mod_data_items_js;
+const { dragonFor, beginSummon, wishGranted, dismissDragon, summonActive, ballsHeld } = __mod_engine_dragonballs_js;
+const { TECHNIQUES, getTechnique } = __mod_data_techniques_js;
+const { RACES, getRace } = __mod_data_races_js;
+const { PLANETS } = __mod_data_planets_js;
+const { CANON, canonAlive, canonPower } = __mod_data_canon_js;
+const { nearbyForms } = __mod_engine_progression_js;
+const { getTransformation } = __mod_data_transformations_js;
+const { combatPower } = __mod_engine_stats_js;
+const { makeNpc } = __mod_engine_npc_js;
+const { numberish, zeni } = __mod_engine_text_js;
+const { clamp } = __mod_engine_rng_js;
+
+/** Wishes this dragon can actually manage, for this character, right now. */
+function usableWishes(state, dragon) {
+  const c = state.character;
+  const used = (state.world.summon && state.world.summon.used) || [];
+  return WISHES.filter((w) => {
+    if (w.race && !w.race.includes(c.raceId)) return false;
+    if (used.includes(w.id)) return false;
+    if (w.power > dragon.power) return false;
+    if (w.needs === 'kills' && !state.stats.kills) return false;
+    if (w.needs === 'scars' && !(c.scars || []).length && !(c.appearance.marks || []).length) return false;
+    if (w.needs === 'planet_restored' && !state.world.flags.planet_restored) return false;
+    if ((w.id === 'revive_named' || w.id === 'revive_many') && !Object.values(state.npcs).some((n) => !n.alive)) return false;
+    if ((w.id === 'for_someone' || w.id === 'strengthen_ally') && !Object.values(state.npcs).some((n) => n.alive)) return false;
+    if (w.id === 'next_form' && !nearbyForms(state, 1).length) return false;
+    if (w.id === 'partner' && Object.values(state.npcs).some((n) => n.alive && n.relation === 'spouse')) return false;
+    return true;
+  });
+}
+
+/** People, worlds and threats a wish can be pointed at. */
+function targetsFor(state, wish) {
+  const npcs = Object.values(state.npcs);
+  if (wish.pick === 'dead') {
+    return npcs.filter((n) => !n.alive)
+      .sort((a, b) => (b.closeness || 0) - (a.closeness || 0))
+      .slice(0, 8)
+      .map((n) => ({ id: n.id, label: n.name, hint: `${n.relation}${n.causeOfDeath ? ' - ' + n.causeOfDeath : ''}` }));
+  }
+  if (wish.pick === 'living') {
+    return npcs.filter((n) => n.alive)
+      .sort((a, b) => (b.closeness || 0) - (a.closeness || 0))
+      .slice(0, 8)
+      .map((n) => ({ id: n.id, label: n.name, hint: `${n.relation} - ${n.goal || 'wants something'}` }));
+  }
+  if (wish.pick === 'race') {
+    return RACES.filter((r) => r.id !== state.character.raceId)
+      .map((r) => ({ id: r.id, label: r.name, hint: r.notes || r.blurb }));
+  }
+  if (wish.pick === 'threat') {
+    const year = state.character.birthYear + state.character.age;
+    return CANON.filter((ch) => canonAlive(ch, year)
+      && ch.tags.some((t) => ['threat', 'emperor', 'villain'].includes(t))
+      && !ch.tags.some((t) => ['omniking', 'destroyer', 'angel'].includes(t)))
+      .slice(0, 8)
+      .map((ch) => ({ id: ch.id, label: ch.name, hint: `${numberish(canonPower(ch, year))} - ${ch.quirk || ''}`.slice(0, 90) }));
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------- the grants
+
+function grant(ctx, wish, targetId) {
+  const c2 = ctx;
+  const c = ctx.character;
+  const rng = ctx.rng;
+  const npc = targetId ? c2.state.npcs[targetId] : null;
+
+  switch (wish.id) {
+    case 'revive_named': {
+      const back = npc || Object.values(c2.state.npcs).filter((n) => !n.alive)[0];
+      if (!back) return { text: `Nobody you love is dead. The dragon waits, and you waste it on something small.`, changes: apply(c2, { happiness: -4 }) };
+      back.alive = true;
+      back.deadSince = null;
+      back.causeOfDeath = null;
+      back.closeness = clamp((back.closeness || 0) + 20, 0, 100);
+      fact(c2, `Brought ${back.name} back from the dead.`, { type: 'revival', weight: 9, subject: back.id, tags: ['wish'] });
+      return { text: `You say the name and nothing else. {The dragon's eyes flare|It is done before you finish speaking|"It is done"}. `
+        + `${back.name} {is standing there, filthy and confused|opens their eyes somewhere and starts walking home|does not understand yet, and will not for a while}.`,
+      changes: apply(c2, { happiness: 25, karma: 8 }) };
+    }
+    case 'revive_many': {
+      const dead = Object.values(c2.state.npcs).filter((n) => !n.alive);
+      dead.forEach((n) => { n.alive = true; n.deadSince = null; });
+      fact(c2, `Brought back everyone who had died. All ${dead.length} of them.`, { type: 'revival', weight: 10, tags: ['wish', 'hero'] });
+      return { text: `{You ask for all of them|"All of them"|You do not ask for anything for yourself}. `
+        + (dead.length ? `${dead.length} people wake up somewhere and do not know why.` : `Nobody is dead. The dragon waits, then goes.`),
+      changes: apply(c2, { happiness: 30, karma: 20, fame: 10 }) };
+    }
+    case 'revive_all': {
+      const killed = c2.state.stats.kills;
+      Object.values(c2.state.npcs).forEach((n) => {
+        if (!n.alive && /you killed/i.test(n.causeOfDeath || '')) { n.alive = true; n.deadSince = null; n.tension = 100; }
+      });
+      c2.state.stats.kills = 0;
+      fact(c2, `Undid every death they had caused. ${killed} of them.`, { type: 'revival', weight: 10, tags: ['wish', 'atonement'] });
+      return { text: `{You list them|You do not remember all the names and the dragon does|"Everyone I killed"}. `
+        + `${killed} people come back. {Most of them are looking for you|None of them are grateful|Some of them are already coming}.`,
+      changes: apply(c2, { karma: 30, happiness: -6, fame: 8 }) };
+    }
+    case 'immortality': {
+      c.flags.immortal = true;
+      c.lifeExpectancy = 99999;
+      fact(c2, 'Became immortal. Cannot die of age.', { type: 'wish', weight: 10, tags: ['wish', 'immortal'] });
+      return { text: `{"It is done"|The dragon looks at you for a long moment first|Nothing feels different, which is the frightening part}. `
+        + `You will not age out of this. {Everything else can still kill you|Somewhere, a god makes a note|You have all the time there is}.`,
+      changes: apply(c2, { karma: -8, happiness: 10 }) };
+    }
+    case 'youth': {
+      c.age = Math.max(16, c.age - 20);
+      fact(c2, 'Wished twenty years back onto the clock.', { type: 'wish', weight: 8, tags: ['wish'] });
+      return { text: `{Twenty years come off|You feel it in your knees first|Your hands look wrong for a week}. `
+        + `You are ${c.age} again, with everything you learned still in there.`, changes: apply(c2, { health: 40, happiness: 18 }) };
+    }
+    case 'cure': {
+      const had = (c.scars || []).length + (c.appearance.marks || []).length;
+      c.scars = [];
+      c.appearance.marks = [];
+      fact(c2, 'Asked the dragon to undo everything that had been done to their body.', { type: 'wish', weight: 6, tags: ['wish'] });
+      return { text: `{Every mark goes at once|You watch the old ones fade|It takes about a second}. `
+        + `${had} things that happened to you no longer show. {You are not sure you wanted that|It feels like losing an argument|Your hands are somebody else's}.`,
+      changes: apply(c2, { health: 45, happiness: 8 }) };
+    }
+    case 'power_up': {
+      const mult = rng.float(6, 22);
+      const yearsLost = rng.int(8, 25);
+      c.lifeExpectancy = Math.max(c.age + 3, c.lifeExpectancy - yearsLost);
+      c.flags.wished_power = true;
+      fact(c2, `Wished for power and paid ${yearsLost} years for it.`, { type: 'wish', weight: 9, tags: ['wish', 'power'] });
+      return { text: `{It arrives all at once and it hurts|Your whole body reorganises|You can feel it come in}. `
+        + `Power multiplied ${mult.toFixed(1)} times. {The dragon takes the payment from the far end of your life|"The years were the price"|You are ${yearsLost} years shorter and you did not feel it go}.`,
+      changes: apply(c2, { powerMult: mult, happiness: 12, karma: -6 }) };
+    }
+    case 'unlock_potential': {
+      c.flags.potential_unlocked = true;
+      c.flags.wish_potential = true;
+      fact(c2, 'Had every drop of latent potential unlocked by the dragon.', { type: 'wish', weight: 9, tags: ['wish', 'power'] });
+      return { text: `{Nothing visible happens|There is no glow, no shout|You feel the ceiling come off}. `
+        + `Everything you could ever have been is available now, and you have to go and take it.`,
+      changes: apply(c2, { powerMult: rng.float(3, 7), happiness: 15, stats: { kiControl: 8, technique: 6, discipline: 4 } }) };
+    }
+    case 'next_form': {
+      const near = nearbyForms(c2.state, 1)[0];
+      if (!near) return { text: 'There is nothing above you to give. The dragon says so.', changes: [] };
+      const form = near.form;
+      c.transformations.push(form.id);
+      c.flags.wished_form = true;
+      fact(c2, `The dragon handed them ${form.name}.`, { type: 'transformation', weight: 8, tags: ['wish', 'power'] });
+      return { text: `{The change goes through you standing still|It is not like earning it|There is no shout and no crater}. `
+        + `${form.name}. ${form.desc} {It fits badly|Your body knows the shape and not the reason|You will spend years catching up to it}.`,
+      changes: apply(c2, { happiness: 14, karma: -2 }) };
+    }
+    case 'knowledge': {
+      const pool = TECHNIQUES.filter((t) => !c.techniques.includes(t.id) && (!t.races || t.races.includes(c.raceId)));
+      if (!pool.length) return { text: 'You already know everything the dragon can teach.', changes: [] };
+      const t = rng.weighted(pool, (x) => x.tier);
+      c.techniques.push(t.id);
+      c2.state.stats.techniquesLearned++;
+      fact(c2, `The dragon put the ${t.name} into their head.`, { type: 'technique', weight: 6, tags: ['wish', 'technique'] });
+      return { text: `{It arrives as memory, not learning|You simply know it, the way you know your own name|There is no practice and no wonder}. `
+        + `The ${t.name}. {It feels like cheating|You did not earn it|It works perfectly}.`,
+      changes: apply(c2, { stats: { technique: 5, kiControl: 4 }, happiness: 10 }) };
+    }
+    case 'change_race': {
+      const race = getRace(targetId) || RACES.find((r) => r.id !== c.raceId);
+      const old = getRace(c.raceId);
+      c.raceId = race.id;
+      c.tail = race.perks.includes('oozaru');
+      c.transformations = c.transformations.filter((id) => {
+        const f = getTransformation(id);
+        return f && (!f.races || f.races.includes(race.id));
+      });
+      c.appearance.skin = { namekian: 'green', majin: 'pink', frostdemon: 'white', shinjin: 'purple' }[race.id] || c.appearance.skin;
+      fact(c2, `Stopped being a ${old.short} and became a ${race.short}.`, { type: 'wish', weight: 10, tags: ['wish', 'identity'] });
+      return { text: `{The dragon does not ask why|"It is done"|It takes eleven seconds and it is the longest eleven seconds of your life}. `
+        + `You are a ${race.short} now. ${race.notes || race.blurb} {Everything you learned as a ${old.short} is still in there and most of it no longer applies|Your own hands are unfamiliar|Nobody who knew you will take this well}.`,
+      changes: apply(c2, { happiness: 6, karma: -3, stats: { discipline: -4 } }) };
+    }
+    case 'know_everyone': {
+      const all = Object.values(c2.state.npcs);
+      all.forEach((n) => { n.knowledge = 4; });
+      fact(c2, `Had the dragon show them the truth about all ${all.length} people they knew.`, { type: 'wish', weight: 8, tags: ['wish'] });
+      return { text: `{It comes in all at once|You did not think about what this would feel like|Every person you know, opened up}. `
+        + `${all.length} people, fully understood. {Some of them you wish you had not seen|You know what your friends actually think|It is a violation and it worked}.`,
+      changes: apply(c2, { happiness: -8, stats: { intellect: 6, charisma: -3 } }) };
+    }
+    case 'tail_back': {
+      c.tail = true;
+      return { text: `{It grows back overnight|You wake up and it is there|It is stronger than the old one}. `
+        + `{You had forgotten what balance felt like|The moon is interesting again|Do not let anyone grab it}.`,
+      changes: apply(c2, { happiness: 10, powerMult: 1.3 }) };
+    }
+    case 'erase_memory': {
+      c.fame = 0;
+      Object.values(c2.state.npcs).forEach((n) => { n.closeness = Math.round(n.closeness * 0.2); n.respect = 0; });
+      fact(c2, 'Wished to be forgotten by everyone.', { type: 'wish', weight: 9, tags: ['wish'] });
+      return { text: `{It works immediately|Nobody looks up when you walk past|Somebody you love calls you "excuse me"}. `
+        + `{You are nobody|It is exactly what you asked for|You did not think about what it would feel like}.`,
+      changes: apply(c2, { happiness: -10, karma: -4 }) };
+    }
+    case 'restore_planet': {
+      setWorldFlag(c2.state, 'planet_restored');
+      fact(c2, 'Asked the dragon to put a dead world back.', { type: 'wish', weight: 10, tags: ['wish', 'hero'] });
+      return { text: `{Rock, water, air, in that order|It takes eleven seconds|The dragon says it is done and it is done}. `
+        + `{The people are a separate wish|Somewhere a world is spinning again|It is empty and it is there}.`,
+      changes: apply(c2, { karma: 25, happiness: 25, fame: 12 }) };
+    }
+    case 'restore_people': {
+      setWorldFlag(c2.state, 'people_restored');
+      for (let i = 0; i < 3; i++) {
+        const n = makeNpc(rng, { year: c2.year, placeId: c.placeId, relation: 'acquaintance' });
+        n.closeness = 60;
+        n.respect = 80;
+        c2.state.npcs[n.id] = n;
+      }
+      fact(c2, 'Put a dead world\'s people back on it.', { type: 'wish', weight: 10, tags: ['wish', 'hero', 'legend'] });
+      return { text: `{Everyone who was standing on it when it went|The dragon does not count them and neither can you|"They are returned"}. `
+        + `{A world that was quiet is not quiet|Three of them find you within the year|They will build a statue and you will hate it}.`,
+      changes: apply(c2, { karma: 35, happiness: 28, fame: 25 }) };
+    }
+    case 'remove_threat': {
+      const ch = CANON.find((x) => x.id === targetId);
+      const year = c2.year;
+      const theirs = ch ? canonPower(ch, year) : 1;
+      const dragon = dragonFor(c2.state);
+      // A dragon cannot exceed the one who made it. Shenron will not touch Frieza.
+      const ceiling = dragon.id === 'super' ? Infinity : dragon.id === 'porunga' ? 1e9 : 1e6;
+      if (theirs > ceiling) {
+        return { text: `{The dragon is quiet for a long time|"That one is beyond me"|The sky flickers}. `
+          + `${ch ? ch.name : 'They'} {are stronger than the one who made this dragon|is outside what can be asked|does not fall to a wish}. You get nothing, and you have spent it.`,
+        changes: apply(c2, { happiness: -12 }) };
+      }
+      const npcRef = c2.state.npcs['canon_' + targetId];
+      if (npcRef) { npcRef.alive = false; npcRef.causeOfDeath = 'Wished away'; }
+      setWorldFlag(c2.state, ch && ch.id === 'frieza' ? 'frieza_erased' : 'threat_wished_away');
+      fact(c2, `Wished ${ch ? ch.name : 'a tyrant'} out of the universe.`, { type: 'wish', weight: 10, tags: ['wish', 'history'] });
+      return { text: `{You name them and the sky answers|"It is done"|There is no flash and no body}. `
+        + `${ch ? ch.name : 'They'} {is simply not anywhere any more|stops having been a problem|is gone, and a hundred worlds will never know why}.`,
+      changes: apply(c2, { karma: 12, fame: 18, happiness: 15 }) };
+    }
+    case 'peace': {
+      setWorldFlag(c2.state, 'wished_peace');
+      Object.values(c2.state.npcs).forEach((n) => { n.tension = Math.round((n.tension || 0) * 0.2); });
+      fact(c2, 'Wished for peace, and got a generation of it.', { type: 'wish', weight: 9, tags: ['wish', 'hero'] });
+      return { text: `{The wars stop|The tyrants find they no longer want to|It is quiet in a way that takes a week to notice}. `
+        + `{It will hold for a generation|People are people, and it will not last|Nobody knows it was you}.`,
+      changes: apply(c2, { karma: 25, happiness: 20 }) };
+    }
+    case 'own_world': {
+      const world = rng.pick(PLANETS.filter((p) => p.id !== 'earth'));
+      c.flags.owns_world = true;
+      c2.state.world.ownWorld = world.id;
+      fact(c2, `The dragon gave them a world. Empty, habitable, theirs.`, { type: 'wish', weight: 8, tags: ['wish', 'property'] });
+      return { text: `{It is out past everything|You see it from orbit before you land on it|Blue water, no cities, nobody}. `
+        + `Yours. {There is nobody to rule unless you bring them|It is very quiet|You could put anything here}.`,
+      changes: apply(c2, { happiness: 20, fame: 6 }) };
+    }
+    case 'wealth': {
+      return { text: `{It is vulgar and it works|Money appears in accounts you do not have|Somebody delivers a case and does not explain}. `
+        + `{You are rich|Obscenely rich|Rich enough that it stops being a number}.`,
+      changes: apply(c2, { zeni: rng.int(50000000, 900000000), happiness: 12, karma: -3 }) };
+    }
+    case 'for_someone': {
+      const who = npc || Object.values(c2.state.npcs).find((n) => n.alive);
+      if (!who) return { text: 'There is nobody to give it to.', changes: [] };
+      who.goalAchieved = true;
+      relate(c2, who, { closeness: 30, respect: 25, trust: 30 });
+      fact(c2, `Spent a wish on ${who.name} instead of themselves.`, { type: 'wish', weight: 9, subject: who.id, tags: ['wish', 'selfless'] });
+      return { text: `{You give them the thing they have been chasing|"Not for me"|You do not even tell them it was you}. `
+        + `${who.name} {gets what they wanted|will spend the rest of their life not understanding how|finds out eventually, and it changes everything between you}.`,
+      changes: apply(c2, { karma: 20, happiness: 16 }) };
+    }
+    case 'partner': {
+      const made = makeNpc(rng, { year: c2.year, placeId: c.placeId, relation: 'lover', minAge: Math.max(18, c.age - 8), maxAge: c.age + 8 });
+      made.closeness = 92;
+      made.trust = 90;
+      made.romance = 95;
+      made.respect = 70;
+      made.madeByWish = true;
+      c2.state.npcs[made.id] = made;
+      c.flags.wished_love = true;
+      fact(c2, `Wished for somebody to love them. The dragon made ${made.name}.`, { type: 'wish', weight: 9, subject: made.id, tags: ['wish'] });
+      return { text: `{The dragon does not comment|"It is done"|There is a person standing there who was not there}. `
+        + `${made.name}. {They love you and they know exactly why|It is real and it is manufactured and both of those are true|You will never be able to ask them if it is real}.`,
+      changes: apply(c2, { happiness: 22, karma: -10 }) };
+    }
+    case 'strengthen_ally': {
+      const who = npc || Object.values(c2.state.npcs).find((n) => n.alive);
+      if (!who) return { text: 'There is nobody standing beside you to strengthen.', changes: [] };
+      who.power = Math.max(who.power * 40, combatPower(c) * 0.7);
+      who.knowledge = Math.max(who.knowledge || 0, 2);
+      relate(c2, who, { closeness: 18, respect: 30 });
+      fact(c2, `Made ${who.name} strong enough to stand beside them.`, { type: 'wish', weight: 8, subject: who.id, tags: ['wish'] });
+      return { text: `{They drop to one knee when it lands|It goes into them and they shout|You watch somebody you love become dangerous}. `
+        + `${who.name} is ${numberish(Math.round(who.power))} now. {They have to learn to live in it|Nobody asked them first|They will be useful and they will be frightened}.`,
+      changes: apply(c2, { karma: 4, happiness: 12 }) };
+    }
+    case 'feast': {
+      return { text: `{Forty courses|It arrives on tables that were not there|The dragon watches you eat, which is unsettling}. `
+        + `{Somebody will be furious you spent it on this|It is the best meal of your life|You regret nothing until later}.`,
+      changes: apply(c2, { happiness: 20, health: 10 }) };
+    }
+    case 'better_underwear': {
+      fact(c2, 'Wished for a really nice pair of underwear.', { type: 'wish', weight: 4, tags: ['wish', 'comic'] });
+      return { text: `{The dragon grants it without comment|"It is done"|It takes about four seconds}. `
+        + `{They are extremely comfortable|Somebody will find out and never let it go|It was, on balance, worth it}.`,
+      changes: apply(c2, { happiness: 14, fame: -2 }) };
+    }
+    default:
+      return { text: `{The dragon grants it without comment|"It is done"|It takes about four seconds}.`, changes: apply(c2, { happiness: 8 }) };
+  }
+}
+
+// ------------------------------------------------------------------- events
+
+registerEvents([
+  {
+    id: 'summon_dragon', noFatigue: true, tags: ['world', 'dragonball', 'wish'], weight: 500,
+    when: (ctx) => ballsHeld(ctx.state) >= 7 || !!(ctx.state.world.summon && ctx.state.world.summon.remaining > 0),
+    slots: (ctx) => {
+      const dragon = dragonFor(ctx.state);
+      const summon = ctx.state.world.summon;
+      return {
+        dragon: dragon.name,
+        voice: dragon.voice,
+        already: summon ? summon.used.length : 0,
+        left: summon ? summon.remaining : dragon.wishes,
+      };
+    },
+    title: (ctx, s) => (s.already ? `[dragon] Is Still Here` : 'Summoning'),
+    text: (ctx, s) => (s.already
+      ? `[dragon] {has not gone|is still uncoiled across the sky|waits}. {[left] wishes left|You have [left] more|Two more, and then stone}.
+         ${s.voice ? `You speak into [voice].` : ''}`
+      : `Seven balls in a circle, and {the sky goes black|the sun goes out|the clouds come apart}.
+         [dragon] {rises|uncoils|fills the sky}, and there is [voice].
+         {"State your wish"|"Speak. I will grant [left]"|"You have summoned me. Make it quick"}.`),
+    choices: (ctx, s) => {
+      const dragon = dragonFor(ctx.state);
+      const pool = usableWishes(ctx.state, dragon);
+      const groups = WISH_GROUPS.filter((g) => pool.some((w) => w.group === g));
+      const list = groups.map((g) => ({
+        id: 'group:' + g,
+        label: g,
+        hint: pool.filter((w) => w.group === g).slice(0, 3).map((w) => w.name).join('. '),
+        effect: (c2) => ({
+          text: `{You think about it|The dragon does not hurry you|Nobody in the circle says anything}.`,
+          followUp: 'wish_menu',
+          followUpSlots: { group: g },
+        }),
+      }));
+      list.push({
+        id: 'speak',
+        label: 'Say it in your own words',
+        hint: 'Speak the wish aloud. The dragon will interpret, and dragons are literal.',
+        freeText: true,
+        placeholder: 'Bring my brother back. Make me stronger than Frieza. Anything.',
+        interpret: pool.map((w) => ({ id: w.id, name: w.name, desc: w.desc })),
+        effect: (c2) => {
+          const said = String((c2.params && c2.params.text) || '').trim();
+          if (!said) return { text: `You open your mouth and nothing comes out. The dragon waits.` };
+          // A connected model reads the wish before this runs and hands the
+          // id back in params; without one, the dragon reads it literally.
+          const chosen = c2.params && c2.params.wishId;
+          const id = chosen || interpretWishLocally(said);
+          const wish = id ? WISH_BY_ID[id] : null;
+          const reading = c2.params && c2.params.reading;
+          const dragonNow = dragonFor(c2.state);
+          if (!wish || wish.power > dragonNow.power) {
+            wishGranted(c2.state, c2.rng, 'misheard');
+            return { text: `You say: "${said.slice(0, 160)}". `
+              + `{The dragon considers it|There is a long silence|The sky does not change}. `
+              + `${wish ? `"That is beyond me," it says, and goes.` : `"I do not understand what you are asking," it says, and goes anyway.`}`,
+            changes: apply(c2, { happiness: -10 }) };
+          }
+          // A spoken wish that needs a target picks the most obvious one.
+          let target = null;
+          const options = targetsFor(c2.state, wish);
+          if (options.length) {
+            const named = options.find((o) => said.toLowerCase().includes(String(o.label).toLowerCase().split(' ')[0]));
+            target = (named || options[0]).id;
+          }
+          const out = grant(c2, wish, target);
+          const left = wishGranted(c2.state, c2.rng, wish.id);
+          fact(c2, `Wished aloud: "${said.slice(0, 70)}".`, { type: 'wish', weight: 7, tags: ['dragonball', 'wish'] });
+          return {
+            text: `You say: "${said.slice(0, 160)}". `
+              + (reading ? `${reading} ` : `{The dragon takes that to mean|It hears it as|Interpreted as}: ${wish.name.toLowerCase()}. `)
+              + out.text
+              + (left.gone ? ` {The sky comes back|The balls scatter|They will be stone for a year}.` : ` ${dragonNow.name} does not leave.`),
+            changes: out.changes,
+            followUp: left.gone ? null : 'summon_dragon',
+          };
+        },
+      });
+      list.push({
+        id: 'nothing',
+        label: 'Send it away',
+        hint: 'Ask for nothing. The balls scatter anyway.',
+        effect: (c2) => {
+          dismissDragon(c2.state, c2.rng);
+          fact(c2, 'Called the dragon and asked it for nothing.', { type: 'wish', weight: 6, tags: ['wish'] });
+          return { text: `{"Nothing," you say|You look at it and you cannot think of one thing|"I do not need anything"}. `
+            + `{The dragon considers you|It is the first time anyone has done that|"Very well"}. {The sky comes back|It goes|The balls scatter across the world and turn to stone}.`,
+          changes: apply(c2, { karma: 8, happiness: -4, stats: { discipline: 4 } }) };
+        },
+      });
+      return list;
+    },
+  },
+
+  {
+    id: 'wish_menu', noFatigue: true, tags: ['world', 'dragonball', 'wish'], weight: 0,
+    when: () => false,
+    slots: (ctx) => ({
+      group: ctx.forceSlots && ctx.forceSlots.group ? ctx.forceSlots.group : 'Yourself',
+      dragon: dragonFor(ctx.state).name,
+    }),
+    title: (ctx, s) => s.group,
+    text: `[dragon] {waits|has not moved|holds the sky open}. {Be specific|Dragons are literal|Say exactly what you mean}.`,
+    choices: (ctx, s) => {
+      const dragon = dragonFor(ctx.state);
+      const pool = usableWishes(ctx.state, dragon).filter((w) => w.group === s.group && !w.freeText);
+      const list = pool.map((w) => ({
+        id: w.id,
+        label: w.name,
+        hint: w.desc,
+        danger: w.karma < -5,
+        effect: (c2) => {
+          const options = targetsFor(c2.state, w);
+          if (options.length && !(c2.params && c2.params.option)) {
+            return {
+              text: `{"Name it"|The dragon waits|"Be specific"}.`,
+              followUp: 'wish_target',
+              followUpSlots: { wishId: w.id },
+            };
+          }
+          const out = grant(c2, w, c2.params ? c2.params.option : null);
+          const left = wishGranted(c2.state, c2.rng, w.id);
+          fact(c2, `Wished: ${w.name}.`, { type: 'wish', weight: 7, tags: ['dragonball', 'wish'] });
+          return {
+            text: out.text + (left.gone
+              ? ` {The sky comes back|The balls scatter across the world|They will be stone for a year}.`
+              : ` ${dragon.name} does not leave. ${left.remaining} ${left.remaining === 1 ? 'wish' : 'wishes'} left.`),
+            changes: out.changes,
+            followUp: left.gone ? null : 'summon_dragon',
+          };
+        },
+      }));
+      list.push({
+        id: 'back',
+        label: 'Ask for something else',
+        effect: () => ({ text: `{You change your mind|"Wait"|The dragon does not sigh, but it is close}.`, followUp: 'summon_dragon' }),
+      });
+      return list;
+    },
+  },
+
+  {
+    id: 'wish_target', noFatigue: true, tags: ['world', 'dragonball', 'wish'], weight: 0,
+    when: () => false,
+    slots: (ctx) => ({
+      wishId: (ctx.forceSlots && ctx.forceSlots.wishId) || 'revive_named',
+      dragon: dragonFor(ctx.state).name,
+    }),
+    title: (ctx, s) => (WISH_BY_ID[s.wishId] || {}).name || 'Name it',
+    text: `{"Name it"|[dragon] waits|"Be specific. I will take you at your word"}.`,
+    choices: (ctx, s) => {
+      const wish = WISH_BY_ID[s.wishId];
+      if (!wish) return [{ id: 'back', label: 'Never mind', effect: () => ({ text: 'You change your mind.', followUp: 'summon_dragon' }) }];
+      const dragon = dragonFor(ctx.state);
+      const list = targetsFor(ctx.state, wish).map((o) => ({
+        id: o.id,
+        label: o.label,
+        hint: o.hint,
+        effect: (c2) => {
+          const out = grant(c2, wish, o.id);
+          const left = wishGranted(c2.state, c2.rng, wish.id);
+          fact(c2, `Wished: ${wish.name} - ${o.label}.`, { type: 'wish', weight: 7, tags: ['dragonball', 'wish'] });
+          return {
+            text: out.text + (left.gone
+              ? ` {The sky comes back|The balls scatter|They will be stone for a year}.`
+              : ` ${dragon.name} does not leave. ${left.remaining} left.`),
+            changes: out.changes,
+            followUp: left.gone ? null : 'summon_dragon',
+          };
+        },
+      }));
+      list.push({
+        id: 'back',
+        label: 'Ask for something else instead',
+        effect: () => ({ text: `{You change your mind|"Wait"|The dragon waits}.`, followUp: 'summon_dragon' }),
+      });
+      return list;
+    },
   },
 ]);
 })();
@@ -9860,7 +11583,7 @@ function currentEvent(state) {
 }
 
 /** Answer the current event. Returns the next event, or null when the year ends. */
-function choose(state, choiceId) {
+function choose(state, choiceId, params = null) {
   const t = state.turn;
   if (!t || t.done) return null;
   const event = t.queue[t.index];
@@ -9871,7 +11594,17 @@ function choose(state, choiceId) {
   }
 
   const rng = getRng(state);
-  const result = resolveChoice(state, rng, event, choiceId);
+  const result = resolveChoice(state, rng, event, choiceId, params);
+
+  // A choice can call the next card directly - a dragon that is still in the
+  // sky, a menu that needs a second step. It goes in right behind this one.
+  if (result.followUp) {
+    const next = forceEvent(state, rng, result.followUp, result.followUpSlots || {});
+    if (next) {
+      t.queue.splice(t.index + 1, 0, next);
+      t.count += 1;
+    }
+  }
   saveRng(state, rng);
 
   t.entries.push({
@@ -9886,6 +11619,9 @@ function choose(state, choiceId) {
   // A choice that starts a fight parks the spec here; the UI picks it up and
   // hands control to the battle screen before the year continues.
   if (result.battle) t.pendingBattle = result.battle;
+  // A tournament is the same handover, one level up: the bracket takes over
+  // and gives the year back when the draw is done with you.
+  if (result.tournament) t.pendingTournament = result.tournament;
 
   for (const f of result.facts || []) {
     addFact(state.memory, { type: f.type || 'event', text: f.text, year: state.character.age, weight: f.weight ?? 1, tags: f.tags || [] });
@@ -10275,6 +12011,7 @@ const { combatPower } = __mod_engine_stats_js;
 const { canonAlive } = __mod_data_canon_js;
 const { generateFullName } = __mod_data_names_js;
 const { numberish } = __mod_engine_text_js;
+const { createTournament, autoRunTournament, settle } = __mod_engine_tournament_js;
 
 function canonAliveNow(ctx, c) {
   return canonAlive(c, ctx.year);
@@ -10640,21 +12377,18 @@ registerEvents([
     text: `{Every so often the Kais hold one|The dead fight each other for something to do|Four quadrants, one ring}.
       {Nobody can die here, which changes everything|There are no rules worth the name|Some of these fighters have been dead for ten thousand years}.`,
     choices: (ctx) => [
-      { id: 'enter', label: 'Enter', effect: (c2) => {
-        const baseline = combatPower(c2.character) * 0.4;
-        const field = buildField(c2.rng, (power) => ({
-          name: generateFullName(c2.rng, c2.rng.pick(['other', 'saiyan', 'namekian', 'frostdemon'])),
-          power: Math.round(power),
-        }), 4, baseline);
-        const result = runTournament(c2.state, c2.rng, field, { lethality: 0 });
-        const lines = result.record.map((r) => `${r.foe}: ${r.won ? 'beaten' : 'not beaten'}.`);
-        if (result.won) {
-          const changes = apply(c2, { happiness: 20, fame: 10, stats: { technique: 4 } });
-          fact(c2, 'Won the Other World Tournament.', { type: 'tournament', weight: 7, tags: ['death', 'fame'] });
-          return { text: `${lines.join(' ')} {You win it|The Grand Kai says something complimentary|The dead applaud, which sounds strange}.`, changes };
-        }
-        const changes = apply(c2, { happiness: 4, stats: { technique: 3, discipline: 2 } });
-        return { text: `${lines.join(' ')} {You lose to somebody who has been practising for a millennium|It is the best fight you have ever had|Nobody bleeds and it still hurts}.`, changes };
+      { id: 'enter', label: 'Enter', hint: 'Fight the draw. Nobody here can die of it.', effect: (c2) => {
+        const t = createTournament(c2.state, c2.rng, {
+          formatId: 'otherworld',
+          purse: 0,
+          placeId: 'otherworld_arena',
+        });
+        const opener = `{The Grand Kai reads the draw off a scrap of paper|A dead announcer with a live microphone|Four quadrants, one ring}. Your name is on it.`;
+        if (!c2.state.autoBattle) return { text: opener, tournament: t };
+        autoRunTournament(c2.state, c2.rng, t);
+        const out = settle(c2.state, t, c2.rng);
+        if (out.won) fact(c2, 'Won the Other World Tournament.', { type: 'tournament', weight: 7, tags: ['death', 'fame'] });
+        return { text: `${opener} ${out.text}`, changes: apply(c2, { stats: { technique: 3 } }) };
       } },
       { id: 'skip', label: 'Train instead', effect: (c2) => {
         const t = trainYear(c2, { intensity: 1.4, placeMult: 2.0 });
@@ -10906,136 +12640,6 @@ function inventForm(state, rng, baseFormId, name) {
   return { TRIAL_KINDS, STAT_TRIALS, startTrial, gradeTrial, resolveTrial, getMastery, setMastery, masteryEffect, inventForm };
 })();
 
-/* ==== data/planets.js ==== */
-const __mod_data_planets_js = (function () {
-// Worlds, as places with politics rather than backdrops. Each has people on it,
-// a law, somebody who defends it, and a distance from everywhere else.
-
-const PLANETS = [
-  {
-    id: 'earth', name: 'Earth', distance: 0,
-    inhabitants: 'Humans, mostly, plus a handful of things that are not',
-    population: 'billions', tech: 'capsule-age', alignment: 'peaceful',
-    law: 'Evil is feared and answered. Someone always comes.',
-    defenders: ['goku', 'piccolo', 'vegeta', 'gohan', 'android_18', 'krillin'],
-    flora: 'Forests, oceans, and dinosaurs nobody got round to removing.',
-    strength: 'A handful of fighters here can destroy the planet. The rest cannot fight at all.',
-  },
-  {
-    id: 'planet_vegeta', name: 'Planet Vegeta', distance: 8,
-    inhabitants: 'Saiyans, and the Tuffles they replaced',
-    population: 'thousands', tech: 'imperial vassal', alignment: 'conquering',
-    law: 'Strength decides. There is no second rule.',
-    defenders: ['nappa', 'bardock'],
-    flora: 'Red grass, hard ground, and nothing that has not learned to fight back.',
-    strength: 'Everyone can fight. Most of them are worse at it than they believe.',
-  },
-  {
-    id: 'sadala', name: 'Planet Sadala', distance: 40,
-    inhabitants: 'Saiyans who never became conquerors',
-    population: 'millions', tech: 'modern', alignment: 'proud',
-    law: 'Honour duels, formally supervised.',
-    defenders: ['cabba', 'caulifla', 'kale'],
-    flora: 'Farmland, mountains, and stadiums.',
-    strength: 'A warrior culture with rules, which makes it more dangerous, not less.',
-  },
-  {
-    id: 'namek', name: 'Planet Namek', distance: 12,
-    inhabitants: 'Namekians, in villages of a hundred or so',
-    population: 'thousands', tech: 'none to speak of', alignment: 'peaceful',
-    law: 'Elders decide. Violence is close to unthinkable.',
-    defenders: ['nail', 'moori'],
-    flora: 'Blue grass, three suns, and no night at all.',
-    strength: 'Warrior-types are formidable. There are very few of them.',
-  },
-  {
-    id: 'new_namek', name: 'New Namek', distance: 14, inhabitants: 'Namekians, rebuilding',
-    population: 'thousands', tech: 'none to speak of', alignment: 'peaceful',
-    law: 'Elders decide, and this time they keep a watch posted.',
-    defenders: ['moori'], flora: 'The same blue grass, grown from seed.',
-    strength: 'They have learned to be careful.',
-  },
-  {
-    id: 'yardrat', name: 'Planet Yardrat', distance: 22,
-    inhabitants: 'Yardratians, small and unhurried',
-    population: 'millions', tech: 'spiritual', alignment: 'pacifist',
-    law: 'Nobody is made to do anything.',
-    defenders: ['yardrat_elder'],
-    flora: 'Low domes, terraces, and gardens grown for the shape of them.',
-    strength: 'Almost no muscle. Techniques nobody else in the universe has.',
-  },
-  {
-    id: 'cereal', name: 'Planet Cereal', distance: 30,
-    inhabitants: 'Two Cerealians, and the ruins of everyone else',
-    population: 'a handful', tech: 'scavenged', alignment: 'grieving',
-    law: 'There is nobody left to make one.',
-    defenders: [], flora: 'Dust, wind, and the outlines of towns.',
-    strength: 'One survivor with a grudge and a dragon of his own.',
-  },
-  {
-    id: 'frieza_79', name: 'Planet Frieza 79', distance: 18,
-    inhabitants: 'Frieza Force garrison, various species',
-    population: 'tens of thousands', tech: 'imperial', alignment: 'imperial',
-    law: 'Rank. Anything a superior wants is legal.',
-    defenders: ['zarbon', 'dodoria'],
-    flora: 'Nothing grows. Everything is shipped in.',
-    strength: 'Individually unimpressive. There are a great many of them.',
-  },
-  {
-    id: 'void', name: 'Deep Space', distance: 25, inhabitants: 'Whoever is passing through',
-    population: 'none', tech: 'none', alignment: 'indifferent',
-    law: 'None whatsoever.', defenders: [], flora: 'Nothing.',
-    strength: 'Empty, until it is not.',
-  },
-  {
-    id: 'otherworld', name: 'The Other World', distance: 100, inhabitants: 'The dead',
-    population: 'uncountable', tech: 'divine', alignment: 'divine',
-    law: 'King Yemma decides, and there is no appeal.', defenders: ['king_kai', 'supreme_kai'],
-    flora: 'Cloud, mostly.', strength: 'Everyone here has already died once.',
-  },
-];
-
-const PLANET_BY_ID = Object.fromEntries(PLANETS.map((p) => [p.id, p]));
-
-function getPlanet(id) {
-  return PLANET_BY_ID[id] || PLANET_BY_ID.earth;
-}
-
-/** Rough travel years between two worlds, by method. */
-function travelYears(fromId, toId, method) {
-  const a = getPlanet(fromId);
-  const b = getPlanet(toId);
-  const gap = Math.abs((a.distance || 0) - (b.distance || 0)) + (a.id === b.id ? 0 : 6);
-  switch (method) {
-    case 'instant': return 0;
-    case 'ship': return Math.max(0, Math.round(gap / 12));
-    case 'pod': return Math.max(1, Math.round(gap / 7));
-    case 'flight': return Math.max(2, Math.round(gap / 3));
-    default: return Math.max(1, Math.round(gap / 8));
-  }
-}
-
-const TRAVEL_METHODS = [
-  {
-    id: 'instant', name: 'Instant Transmission', needs: 'the technique',
-    blurb: 'Lock onto a signature and be there. No time passes at all.',
-  },
-  {
-    id: 'ship', name: 'Capsule spaceship', needs: 'a ship',
-    blurb: 'Months, sometimes a year. There is a kitchen and a gravity setting.',
-  },
-  {
-    id: 'pod', name: 'Attack pod', needs: 'a pod',
-    blurb: 'You sleep through it. Years go past while you do.',
-  },
-  {
-    id: 'flight', name: 'Fly there yourself', needs: 'enormous speed',
-    blurb: 'It can be done. It takes a very long time and you arrive hungry.',
-  },
-];
-  return { PLANETS, PLANET_BY_ID, getPlanet, travelYears, TRAVEL_METHODS };
-})();
-
 /* ==== engine/worlds.js ==== */
 const __mod_engine_worlds_js = (function () {
 // Standing on a world: what you have done there, what it thinks of you, and
@@ -11225,8 +12829,9 @@ const { getRace, hasPerk } = __mod_data_races_js;
 const { actionBlocked, chargeAction, grantTrainingPower, costLabel, slotsLeft } = __mod_engine_economy_js;
 const { makeNpc, bondScore, relationLabel } = __mod_engine_npc_js;
 const { canonAvailable, canonPower } = __mod_data_canon_js;
-const { ensureBallSet, ballsHeld, startHunt, surveyPlanet, ballsAreInert } = __mod_engine_dragonballs_js;
+const { ensureBallSet, ballsHeld, startHunt, surveyPlanet, ballsAreInert, summonReady } = __mod_engine_dragonballs_js;
 const { startTrial, STAT_TRIALS, TRIAL_KINDS, getMastery, masteryEffect, inventForm } = __mod_engine_trials_js;
+const { createTournament, autoRunTournament, settle } = __mod_engine_tournament_js;
 const { travelOptions, travelTo, actOnWorld, standingOn } = __mod_engine_worlds_js;
 const { getPlanet, PLANETS } = __mod_data_planets_js;
 const { generateFullName, generateSignatureName } = __mod_data_names_js;
@@ -11726,8 +13331,8 @@ const ACTIONS = [
   {
     id: 'summon_dragon_action', slots: 0, name: 'Summon the dragon', cat: 'world', cost: 'A moment',
     desc: 'You have all seven.',
-    available: (s) => ballsHeld(s) >= 7,
-    run: (s, rng) => ({ text: 'Seven in a circle. The sky is already going dark. Age up to make the wish.', forceEvent: 'summon_dragon' }),
+    available: (s) => summonReady(s),
+    run: (s, rng) => ({ text: 'Seven in a circle. The sky is already going dark.', forceEvent: 'summon_dragon' }),
   },
   {
     id: 'seek_challenge', slots: 2, maxPerYear: 2, name: 'Go looking for a fight', cat: 'world',
@@ -11757,6 +13362,52 @@ const ACTIONS = [
         text: `${foe.name}. ${foe.intro} ${describeGap(combatPower(s.character), foe.power)}`,
         battle: { foe, reason: 'challenge', stakes: scope === 'universe' ? 'lethal' : 'serious' },
       };
+    },
+  },
+  {
+    id: 'hold_tournament', slots: 3, maxPerYear: 1, name: 'Hold a tournament', cat: 'world',
+    desc: 'Put up a purse, send out word, and see who turns up. Your rules.',
+    available: (s) => s.character.age >= 14 && !s.character.inAfterlife && s.character.zeni >= 50000,
+    options: (s) => {
+      const c = s.character;
+      const tiers = [
+        { id: 'local', label: 'A local card', hint: '50,000 Zeni. Whoever hears about it.', cost: 50000, spread: 4, canon: false },
+        { id: 'open', label: 'An open invitational', hint: '400,000 Zeni. Word gets around.', cost: 400000, spread: 12, canon: true },
+        { id: 'callout', label: 'Call out the strongest alive', hint: '2,000,000 Zeni. You are asking for it.', cost: 2000000, spread: 45, canon: true },
+      ];
+      return tiers.map((t) => ({
+        ...t,
+        disabled: c.zeni < t.cost || (t.canon && c.fame < (t.id === 'callout' ? 45 : 12)),
+        hint: c.zeni < t.cost ? `You cannot cover the ${zeni(t.cost)} purse.`
+          : (t.canon && c.fame < (t.id === 'callout' ? 45 : 12))
+            ? 'Nobody worth fighting has heard of you yet.'
+            : t.hint,
+      }));
+    },
+    run: (s, rng, params) => {
+      const tier = (params && params.option) || 'local';
+      const spec = {
+        local: { cost: 50000, spread: 4, canon: false, size: 8 },
+        open: { cost: 400000, spread: 12, canon: true, size: 8 },
+        callout: { cost: 2000000, spread: 45, canon: true, size: 8 },
+      }[tier];
+      s.character.zeni -= spec.cost;
+      const t = createTournament(s, rng, {
+        formatId: 'invitational',
+        purse: spec.cost,
+        spread: spec.spread,
+        canon: spec.canon,
+        size: spec.size,
+        name: `${s.character.name}'s Invitational`,
+        placeId: s.character.placeId,
+      });
+      const opener = render(`{You put the money up and the word out|You pay for the ring, the officials and the posters|`
+        + `You book a stretch of ground and tell people what the prize is}. `
+        + `{They come|More of them turn up than you expected|The draw fills in a week}.`, {}, rng);
+      if (!s.autoBattle) return { text: opener, tournament: t };
+      autoRunTournament(s, rng, t);
+      const out = settle(s, t, rng);
+      return { text: `${opener} ${out.text}` };
     },
   },
 ];
@@ -12341,12 +13992,54 @@ flattery on somebody grieving. Reply with ONLY a JSON object:
   }
 }
 
+/**
+ * Map a spoken wish onto one the engine can actually grant. A dragon is a
+ * literal creature, so the model is asked to interpret rather than be generous:
+ * it picks the nearest legal wish, or says the wish cannot be granted.
+ */
+async function interpretWish(state, spoken, catalogue, opts = {}) {
+  const backend = backendName();
+  if (backend === 'none') return null;
+  const ctx = aiContext(state);
+  const menu = catalogue.map((w) => `${w.id}: ${w.name} - ${w.desc}`).join('\n');
+  const prompt = `A Dragon Ball life simulator. A player has summoned the dragon and spoken a wish aloud.
+Map it onto exactly one wish from the list, or refuse.
+
+${STYLE}
+
+WHO IS WISHING: ${ctx.name}, ${ctx.race}, age ${ctx.age}, ${ctx.tier}, karma ${ctx.karma}.
+WHAT THEY SAID: "${String(spoken).slice(0, 300)}"
+
+WISHES THIS DRAGON CAN GRANT:
+${menu}
+
+Dragons are literal and slightly petty. Pick the closest wish even if the phrasing is
+loose, but refuse outright if they asked for something no wish on the list covers.
+Reply with ONLY a JSON object:
+{"wishId": "the id, or null if nothing fits", "reading": "how the dragon takes it, 8-25 words"}`;
+
+  try {
+    let raw;
+    if (backend === 'sample') raw = await callSampleJson(prompt, opts);
+    else if (backend === 'custom') raw = parseJsonLoosely(await callCustom(prompt, opts));
+    else raw = parseJsonLoosely(await callApi(prompt, opts));
+    if (!raw || typeof raw !== 'object') return null;
+    const id = typeof raw.wishId === 'string' ? raw.wishId.trim() : null;
+    return {
+      wishId: catalogue.some((w) => w.id === id) ? id : null,
+      reading: sanitiseText(raw.reading, 200),
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
 function clampNum(v, lo, hi) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
   return Math.max(lo, Math.min(hi, Math.round(n)));
 }
-  return { MODEL, DEFAULT_CONFIG, getAiConfig, setAiConfig, initSampling, getApiKey, setApiKey, backendName, backendLabel, aiAvailable, buildEventPrompt, buildNarrationPrompt, testAiEndpoint, improviseEvent, narrateOutcome, errorCopy, judgeReply };
+  return { MODEL, DEFAULT_CONFIG, getAiConfig, setAiConfig, initSampling, getApiKey, setApiKey, backendName, backendLabel, aiAvailable, buildEventPrompt, buildNarrationPrompt, testAiEndpoint, improviseEvent, narrateOutcome, errorCopy, judgeReply, interpretWish };
 })();
 
 /* ==== engine/save.js ==== */
@@ -12497,15 +14190,16 @@ const __mod_game_js = (function () {
 
 
 
+
 const { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext } = __mod_engine_state_js;
 const { startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort } = __mod_engine_lifecycle_js;
-const { initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy } = __mod_engine_ai_js;
+const { initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish } = __mod_engine_ai_js;
 const { save, load, listSaves, clearSlot, exportString, importString } = __mod_engine_save_js;
 const { allTemplates } = __mod_engine_generator_js;
 const { ladderStatus, nearbyForms, unlockableForms } = __mod_engine_progression_js;
 const { Rng, Rng: RngClass } = __mod_engine_rng_js;
 const { ACTIONS, availableActions, runAction, actionOptions } = __mod_engine_events_actions_js;
-  return { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort, initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, save, load, listSaves, clearSlot, exportString, importString, allTemplates, ladderStatus, nearbyForms, unlockableForms, Rng, ACTIONS, availableActions, runAction, actionOptions };
+  return { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort, initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish, save, load, listSaves, clearSlot, exportString, importString, allTemplates, ladderStatus, nearbyForms, unlockableForms, Rng, ACTIONS, availableActions, runAction, actionOptions };
 })();
 
 /* ==== ui/portrait.js ==== */
@@ -12607,6 +14301,90 @@ const STANCES = [
 ];
 
 const BUILD_SHAPES = ['small', 'wiry', 'lean', 'balanced', 'stocky', 'massive'];
+
+// Marks are things that happened to a body: scars, burns, what is missing, what
+// was inked on. A character can carry any number, chosen at creation or
+// earned in play, and each one is drawn.
+const MARK_PRESETS = [
+  { id: 'scar_cheek', name: 'Scar across the cheek', where: 'face' },
+  { id: 'scar_eye', name: 'Scar through one eye', where: 'face' },
+  { id: 'scar_brow', name: 'Split eyebrow', where: 'face' },
+  { id: 'scar_chest', name: 'Scar across the chest', where: 'body' },
+  { id: 'scar_arm', name: 'Old cut down the arm', where: 'body' },
+  { id: 'burn_arm', name: 'Burn scars, forearms', where: 'body' },
+  { id: 'burn_face', name: 'Burn along the jaw', where: 'face' },
+  { id: 'missing_eye', name: 'Missing eye', where: 'face' },
+  { id: 'missing_ear', name: 'Missing ear', where: 'face' },
+  { id: 'missing_arm', name: 'Missing arm', where: 'body' },
+  { id: 'cyber_eye', name: 'Mechanical eye', where: 'face' },
+  { id: 'cyber_arm', name: 'Mechanical arm', where: 'body' },
+  { id: 'dots', name: 'Forehead dots', where: 'face' },
+  { id: 'thirdeye', name: 'Third eye', where: 'face' },
+  { id: 'tattoo_face', name: 'Face tattoo', where: 'face' },
+  { id: 'tattoo_arm', name: 'Arm tattoo', where: 'body' },
+  { id: 'crack_tooth', name: 'Cracked tooth', where: 'face' },
+  { id: 'birthmark', name: 'Birthmark', where: 'face' },
+  { id: 'custom', name: 'Something else', where: 'body' },
+];
+
+// Accessories are things a body wears. Some you can pick at the start; others
+// arrive with the items you own, the titles you win, and the state you are in
+// (the dead wear a halo whether they like it or not).
+const ACCESSORY_PRESETS = [
+  { id: 'headband', name: 'Headband', starter: true },
+  { id: 'bandana', name: 'Bandana', starter: true },
+  { id: 'glasses', name: 'Glasses', starter: true },
+  { id: 'sunglasses', name: 'Sunglasses', starter: true },
+  { id: 'earring', name: 'Single earring', starter: true },
+  { id: 'earrings', name: 'Earrings', starter: true },
+  { id: 'necklace', name: 'Necklace', starter: true },
+  { id: 'wristbands', name: 'Wristbands', starter: true },
+  { id: 'cape', name: 'Cape', starter: true },
+  { id: 'turban', name: 'Turban', starter: true },
+  { id: 'hat', name: 'Wide hat', starter: true },
+  { id: 'eyepatch', name: 'Eyepatch', starter: true },
+  { id: 'scarf', name: 'Scarf', starter: true },
+  { id: 'scouter', name: 'Scouter', starter: false, item: 'scouter' },
+  { id: 'potara', name: 'Potara earrings', starter: false, item: 'potara' },
+  { id: 'sword', name: 'Sword on the back', starter: false, item: 'z_sword' },
+  { id: 'pole', name: 'Power Pole', starter: false, item: 'power_pole' },
+  { id: 'belt', name: 'Championship belt', starter: false, item: 'championship_belt' },
+  { id: 'shell', name: 'Turtle shell', starter: false, item: 'turtle_shell' },
+  { id: 'halo', name: 'Halo', starter: false },
+  { id: 'custom', name: 'Something else', starter: true },
+];
+
+/** Every accessory the character is wearing right now, from all sources. */
+function wornAccessories(character) {
+  const a = character.appearance || {};
+  const out = new Set(a.accessories || []);
+  const items = character.items || [];
+  for (const acc of ACCESSORY_PRESETS) {
+    if (acc.item && items.includes(acc.item)) out.add(acc.id);
+  }
+  // Shop accessories carry the id of what they put on you.
+  for (const id of items) {
+    if (id.startsWith('acc_')) out.add(id.slice(4));
+  }
+  if (items.includes('cyber_eye')) out.add('cyber_eye');
+  if (character.inAfterlife && !character.keptBody) out.add('halo');
+  // Missing an eye without a patch is a choice; the default is the patch.
+  const marks = allMarks(character);
+  if (marks.includes('missing_eye') && !out.has('cyber_eye')) out.add('eyepatch');
+  return [...out];
+}
+
+/** Marks from creation plus everything the life has left on the body. */
+function allMarks(character) {
+  const a = character.appearance || {};
+  const list = (a.marks || []).slice();
+  // Legacy single marking from older saves.
+  if (a.marking && a.marking !== 'none' && !list.length) {
+    list.push(a.marking === 'scar' ? 'scar_cheek' : a.marking);
+  }
+  for (const sc of character.scars || []) if (sc.mark && !list.includes(sc.mark)) list.push(sc.mark);
+  return list;
+}
 
 function look(list, id, fallback) {
   return list.find((x) => x.id === id) || list.find((x) => x.id === fallback) || list[0];
@@ -12822,17 +14600,191 @@ function portraitSvg(character, opts = {}) {
   parts.push(`<path d="M${cx + 20} ${eyeY - 11} l-14 -4" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
   parts.push(`<path d="M${cx - 7} ${headTop + 52} q7 5 14 0" fill="none" stroke="rgba(0,0,0,.42)" stroke-width="2.4" stroke-linecap="round"/>`);
 
-  if (a.marking === 'scar') {
-    parts.push(`<path d="M${cx + 10} ${headTop + 12} l6 30" stroke="rgba(0,0,0,.35)" stroke-width="2.5" stroke-linecap="round"/>`);
-  } else if (a.marking === 'dots') {
-    for (let i = 0; i < 3; i++) {
-      parts.push(`<circle cx="${cx - 10 + i * 10}" cy="${headTop + 8}" r="2.2" fill="rgba(0,0,0,.4)"/>`);
-    }
-  } else if (a.marking === 'thirdeye') {
-    parts.push(eyeShape('round', cx, headTop + 12, eyeColour));
-  }
+  drawMarks(parts, character, { cx, headTop, headH, headR, chin, eyeY, eyeColour, skin, shoulderWidth, H });
+  drawAccessories(parts, character, { cx, headTop, headH, headR, chin, eyeY, skin, shoulderWidth, H, hasHair, hairColour: finalHair, outfit });
 
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" role="img" aria-label="Character portrait" xmlns="http://www.w3.org/2000/svg">${parts.join('')}</svg>`;
+}
+
+const SCAR = 'rgba(60,20,20,.55)';
+const INK = 'rgba(20,20,40,.55)';
+const METAL = '#9aa3b2';
+
+function drawMarks(parts, character, g) {
+  const { cx, headTop, headH, headR, chin, eyeY, eyeColour, shoulderWidth, H } = g;
+  const marks = allMarks(character);
+  for (const m of marks) {
+    switch (m) {
+      case 'scar_cheek':
+        parts.push(`<path d="M${cx + 10} ${headTop + 14} l7 30" stroke="${SCAR}" stroke-width="2.6" stroke-linecap="round"/>`);
+        break;
+      case 'scar_eye':
+        parts.push(`<path d="M${cx - 21} ${eyeY - 16} l12 34" stroke="${SCAR}" stroke-width="2.6" stroke-linecap="round"/>`);
+        break;
+      case 'scar_brow':
+        parts.push(`<path d="M${cx + 13} ${eyeY - 18} l3 10" stroke="${SCAR}" stroke-width="2.8" stroke-linecap="round"/>`);
+        break;
+      case 'scar_chest':
+        parts.push(`<path d="M${cx - 18} ${chin + 30} l36 26" stroke="${SCAR}" stroke-width="3" stroke-linecap="round"/>`);
+        break;
+      case 'scar_arm':
+        parts.push(`<path d="M${cx + shoulderWidth - 12} ${chin + 44} l4 40" stroke="${SCAR}" stroke-width="2.6" stroke-linecap="round"/>`);
+        break;
+      case 'burn_arm':
+        for (let i = 0; i < 4; i++) {
+          parts.push(`<ellipse cx="${cx - shoulderWidth + 12 + (i % 2) * 6}" cy="${chin + 50 + i * 12}" rx="5" ry="3.5" fill="rgba(120,40,30,.4)"/>`);
+        }
+        break;
+      case 'burn_face':
+        parts.push(`<path d="M${cx - headR + 6} ${headTop + headH - 6} q10 12 26 10" stroke="rgba(120,40,30,.45)" stroke-width="7" stroke-linecap="round" fill="none"/>`);
+        break;
+      case 'missing_eye':
+        // The eye itself is gone; the patch (or the mechanical eye) is drawn
+        // over it by the accessory pass.
+        parts.push(`<path d="M${cx + 8} ${eyeY} q7 -3 14 0" stroke="rgba(0,0,0,.45)" stroke-width="2.4" fill="none"/>`);
+        break;
+      case 'missing_ear':
+        parts.push(`<path d="M${cx + headR - 4} ${headTop + 26} l4 12" stroke="${SCAR}" stroke-width="3" stroke-linecap="round"/>`);
+        break;
+      case 'missing_arm':
+        parts.push(`<path d="M${cx - shoulderWidth - 2} ${chin + 40} L${cx - shoulderWidth + 14} ${chin + 40} L${cx - shoulderWidth + 10} ${H} L${cx - shoulderWidth - 6} ${H} Z" fill="var(--ground)"/>`);
+        parts.push(`<path d="M${cx - shoulderWidth} ${chin + 42} q8 -6 14 0" stroke="${SCAR}" stroke-width="3" fill="none"/>`);
+        break;
+      case 'cyber_eye':
+        parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="7" fill="${METAL}"/>`);
+        parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="3" fill="#d1322a"/>`);
+        break;
+      case 'cyber_arm':
+        parts.push(`<path d="M${cx + shoulderWidth - 20} ${chin + 40} L${cx + shoulderWidth + 2} ${chin + 36} L${cx + shoulderWidth} ${H} L${cx + shoulderWidth - 18} ${H} Z" fill="${METAL}"/>`);
+        parts.push(`<path d="M${cx + shoulderWidth - 16} ${chin + 60} h14 M${cx + shoulderWidth - 15} ${chin + 80} h14" stroke="#5e6673" stroke-width="2"/>`);
+        break;
+      case 'dots':
+        for (let i = 0; i < 3; i++) parts.push(`<circle cx="${cx - 10 + i * 10}" cy="${headTop + 8}" r="2.2" fill="rgba(0,0,0,.4)"/>`);
+        break;
+      case 'thirdeye':
+        parts.push(eyeShape('round', cx, headTop + 12, eyeColour));
+        break;
+      case 'tattoo_face':
+        parts.push(`<path d="M${cx - headR + 8} ${eyeY + 6} q6 10 0 20 M${cx - headR + 12} ${eyeY + 2} q10 14 2 28" stroke="${INK}" stroke-width="2" fill="none"/>`);
+        break;
+      case 'tattoo_arm':
+        parts.push(`<path d="M${cx + shoulderWidth - 16} ${chin + 46} q10 8 0 18 q-10 8 0 18 q10 8 0 18" stroke="${INK}" stroke-width="2.4" fill="none"/>`);
+        break;
+      case 'crack_tooth':
+        parts.push(`<path d="M${cx - 2} ${headTop + 53} l1 4" stroke="rgba(255,255,255,.8)" stroke-width="2"/>`);
+        break;
+      case 'birthmark':
+        parts.push(`<ellipse cx="${cx - 12}" cy="${headTop + 46}" rx="4" ry="3" fill="rgba(90,40,30,.45)"/>`);
+        break;
+      case 'custom':
+        // Something the player described; we cannot draw it faithfully, so it
+        // is a mark, placed where a mark would be.
+        parts.push(`<path d="M${cx - 6} ${chin + 34} l12 14 M${cx + 6} ${chin + 34} l-12 14" stroke="${SCAR}" stroke-width="2.4" stroke-linecap="round"/>`);
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+function drawAccessories(parts, character, g) {
+  const { cx, headTop, headH, headR, chin, eyeY, shoulderWidth, H, hairColour, outfit } = g;
+  const worn = wornAccessories(character);
+  const trim = (outfit && outfit.trim) || '#c9a227';
+  for (const acc of worn) {
+    switch (acc) {
+      case 'headband':
+        parts.push(`<path d="M${cx - headR + 2} ${headTop + 6} Q${cx} ${headTop - 2} ${cx + headR - 2} ${headTop + 6}" stroke="#c0392b" stroke-width="7" fill="none"/>`);
+        break;
+      case 'bandana':
+        parts.push(`<path d="M${cx - headR} ${headTop + 8} Q${cx} ${headTop - 20} ${cx + headR} ${headTop + 8} Q${cx} ${headTop + 2} ${cx - headR} ${headTop + 8} Z" fill="#2f5bb7"/>`);
+        parts.push(`<path d="M${cx + headR - 4} ${headTop + 8} l16 14 l-6 -14" fill="#2f5bb7"/>`);
+        break;
+      case 'turban':
+        parts.push(`<ellipse cx="${cx}" cy="${headTop - 2}" rx="${headR + 4}" ry="20" fill="#e8e2d6"/>`);
+        parts.push(`<path d="M${cx - headR} ${headTop + 2} Q${cx} ${headTop - 18} ${cx + headR} ${headTop + 2}" stroke="#d8cdb9" stroke-width="3" fill="none"/>`);
+        break;
+      case 'hat':
+        parts.push(`<ellipse cx="${cx}" cy="${headTop + 2}" rx="${headR + 26}" ry="8" fill="#3c3229"/>`);
+        parts.push(`<path d="M${cx - headR + 4} ${headTop + 2} Q${cx} ${headTop - 34} ${cx + headR - 4} ${headTop + 2} Z" fill="#4a3d32"/>`);
+        break;
+      case 'glasses':
+        parts.push(`<circle cx="${cx - 15}" cy="${eyeY}" r="9" stroke="#2a2a30" stroke-width="2" fill="none"/>`);
+        parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="9" stroke="#2a2a30" stroke-width="2" fill="none"/>`);
+        parts.push(`<path d="M${cx - 6} ${eyeY} h12" stroke="#2a2a30" stroke-width="2"/>`);
+        break;
+      case 'sunglasses':
+        parts.push(`<rect x="${cx - 25}" y="${eyeY - 7}" width="20" height="13" rx="4" fill="#1a1620"/>`);
+        parts.push(`<rect x="${cx + 5}" y="${eyeY - 7}" width="20" height="13" rx="4" fill="#1a1620"/>`);
+        parts.push(`<path d="M${cx - 5} ${eyeY - 2} h10" stroke="#1a1620" stroke-width="2"/>`);
+        break;
+      case 'eyepatch':
+        parts.push(`<path d="M${cx + 6} ${eyeY - 9} h18 v16 h-18 Z" fill="#1a1620"/>`);
+        parts.push(`<path d="M${cx - headR} ${headTop + 22} L${cx + 24} ${eyeY - 8} M${cx + 24} ${eyeY - 8} L${cx + headR} ${headTop + 16}" stroke="#1a1620" stroke-width="2" fill="none"/>`);
+        break;
+      case 'scouter':
+        parts.push(`<path d="M${cx + headR - 2} ${headTop + 30} l-6 -14 l-26 4" stroke="#3a3a44" stroke-width="3" fill="none"/>`);
+        parts.push(`<rect x="${cx + 4}" y="${eyeY - 9}" width="20" height="15" rx="3" fill="#3fd6a4" opacity="0.8"/>`);
+        break;
+      case 'cyber_eye':
+        break;
+      case 'earring':
+        parts.push(`<circle cx="${cx + headR + 1}" cy="${headTop + 41}" r="3" fill="${trim}"/>`);
+        break;
+      case 'earrings':
+        parts.push(`<circle cx="${cx + headR + 1}" cy="${headTop + 41}" r="3" fill="${trim}"/>`);
+        parts.push(`<circle cx="${cx - headR - 1}" cy="${headTop + 41}" r="3" fill="${trim}"/>`);
+        break;
+      case 'potara':
+        parts.push(`<circle cx="${cx + headR + 2}" cy="${headTop + 42}" r="5" fill="#3fa46a"/>`);
+        parts.push(`<circle cx="${cx - headR - 2}" cy="${headTop + 42}" r="5" fill="#3fa46a"/>`);
+        break;
+      case 'necklace':
+        parts.push(`<path d="M${cx - 16} ${chin + 12} Q${cx} ${chin + 34} ${cx + 16} ${chin + 12}" stroke="${trim}" stroke-width="2.4" fill="none"/>`);
+        parts.push(`<circle cx="${cx}" cy="${chin + 33}" r="3.5" fill="${trim}"/>`);
+        break;
+      case 'scarf':
+        parts.push(`<path d="M${cx - 20} ${chin + 6} Q${cx} ${chin + 22} ${cx + 20} ${chin + 6} L${cx + 22} ${chin + 18} Q${cx} ${chin + 34} ${cx - 22} ${chin + 18} Z" fill="#c0392b"/>`);
+        parts.push(`<path d="M${cx + 8} ${chin + 24} l6 40 l10 -4 l-8 -38 Z" fill="#c0392b"/>`);
+        break;
+      case 'wristbands':
+        parts.push(`<rect x="${cx - shoulderWidth - 2}" y="${H - 34}" width="18" height="10" rx="2" fill="#2f5bb7"/>`);
+        parts.push(`<rect x="${cx + shoulderWidth - 16}" y="${H - 34}" width="18" height="10" rx="2" fill="#2f5bb7"/>`);
+        break;
+      case 'cape':
+        parts.push(`<path d="M${cx - shoulderWidth + 2} ${chin + 24} L${cx - shoulderWidth - 14} ${H} L${cx - shoulderWidth + 8} ${H} Z" fill="#e8e2d6" opacity="0.95"/>`);
+        parts.push(`<path d="M${cx + shoulderWidth - 2} ${chin + 24} L${cx + shoulderWidth + 14} ${H} L${cx + shoulderWidth - 8} ${H} Z" fill="#e8e2d6" opacity="0.95"/>`);
+        parts.push(`<path d="M${cx - shoulderWidth + 4} ${chin + 26} q${shoulderWidth - 4} -14 ${shoulderWidth * 2 - 8} 0" stroke="#e8e2d6" stroke-width="7" fill="none"/>`);
+        break;
+      case 'belt':
+        parts.push(`<rect x="${cx - 30}" y="${H - 22}" width="60" height="14" rx="3" fill="#3a2a10"/>`);
+        parts.push(`<rect x="${cx - 14}" y="${H - 24}" width="28" height="18" rx="4" fill="#f5c451"/>`);
+        break;
+      case 'shell':
+        parts.push(`<path d="M${cx - shoulderWidth - 8} ${chin + 40} q${shoulderWidth + 8} -18 ${(shoulderWidth + 8) * 2} 0 L${cx + shoulderWidth + 4} ${chin + 60} L${cx - shoulderWidth - 4} ${chin + 60} Z" fill="#6b5a3a" opacity="0.9"/>`);
+        parts.push(`<path d="M${cx - shoulderWidth + 6} ${chin + 30} L${cx + shoulderWidth - 6} ${chin + 30}" stroke="#6b5a3a" stroke-width="5"/>`);
+        break;
+      case 'sword':
+        parts.push(`<path d="M${cx + shoulderWidth - 30} ${chin + 20} l-16 -50" stroke="#5a4a3a" stroke-width="6" stroke-linecap="round"/>`);
+        parts.push(`<path d="M${cx + shoulderWidth - 40} ${chin - 20} l-12 -6 M${cx + shoulderWidth - 44} ${chin - 32} l12 -3" stroke="#c9a227" stroke-width="4" stroke-linecap="round"/>`);
+        parts.push(`<path d="M${cx - shoulderWidth + 6} ${chin + 26} L${cx + shoulderWidth - 6} ${H - 30}" stroke="#5a4a3a" stroke-width="4"/>`);
+        break;
+      case 'pole':
+        parts.push(`<path d="M${cx - shoulderWidth + 20} ${chin - 40} L${cx + shoulderWidth - 20} ${H}" stroke="#c0392b" stroke-width="5" stroke-linecap="round"/>`);
+        break;
+      case 'halo':
+        parts.push(`<ellipse cx="${cx}" cy="${headTop - 30}" rx="24" ry="6" stroke="#f5c451" stroke-width="4" fill="none" opacity="0.95"/>`);
+        break;
+      case 'custom': {
+        // A described accessory gets a small, neutral badge at the collar so it
+        // is at least visibly there.
+        parts.push(`<rect x="${cx + 18}" y="${chin + 14}" width="10" height="10" rx="2" fill="${trim}"/>`);
+        break;
+      }
+      default:
+        break;
+    }
+  }
 }
 
 /** Sensible defaults for a species, used when randomising. */
@@ -12855,7 +14807,10 @@ function defaultAppearance(rng, raceId) {
     skin: skinByRace[raceId] || rng.pick(SKIN_TONES.slice(0, 5)).id,
     face: rng.pick(FACE_SHAPES).id,
     outfit: outfitByRace[raceId] || 'casual',
-    marking: rng.pick(['none', 'none', 'scar', 'dots', 'thirdeye']),
+    marks: rng.chance(0.4) ? [rng.pick(['scar_cheek', 'scar_brow', 'dots', 'thirdeye', 'birthmark', 'tattoo_arm', 'scar_chest'])] : [],
+    customMark: '',
+    accessories: rng.chance(0.35) ? [rng.pick(ACCESSORY_PRESETS.filter((x) => x.starter && x.id !== 'custom')).id] : [],
+    customAccessory: '',
     buildShape: 'balanced',
     heightCm: rng.int(150, 200),
     weightKg: rng.int(48, 110),
@@ -12863,7 +14818,7 @@ function defaultAppearance(rng, raceId) {
     stanceName: '',
   };
 }
-  return { HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS, SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES, BUILD_SHAPES, portraitSvg, defaultAppearance };
+  return { HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS, SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES, BUILD_SHAPES, MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks, portraitSvg, defaultAppearance };
 })();
 
 /* ==== engine/social.js ==== */
@@ -13649,11 +15604,11 @@ const __mod_ui_app_js = (function () {
 // UI controller. Vanilla DOM, one render pass per change - the simulation is
 // the interesting part, so the interface stays boring on purpose.
 
-const { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, insertEvent, renarrateLast, skipRemaining, ladderStatus, nearbyForms, availableActions, runAction, actionOptions, Rng, initSampling, improviseEvent, narrateOutcome, backendName, getApiKey, setApiKey, errorCopy, eventsRemaining, save, load, listSaves, clearSlot, exportString, importString } = __mod_game_js;
+const { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, insertEvent, renarrateLast, skipRemaining, ladderStatus, nearbyForms, availableActions, runAction, actionOptions, Rng, initSampling, improviseEvent, narrateOutcome, backendName, getApiKey, setApiKey, errorCopy, interpretWish, eventsRemaining, save, load, listSaves, clearSlot, exportString, importString } = __mod_game_js;
 const { RACES, getRace, UPBRINGINGS, TEMPERAMENTS, BODY_TYPES } = __mod_data_races_js;
 const { PLACES, getPlace } = __mod_data_places_js;
 const { APPEARANCE } = __mod_engine_state_js;
-const { portraitSvg, defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS, SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES: STANCE_LIST } = __mod_ui_portrait_js;
+const { portraitSvg, defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS, SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES: STANCE_LIST, MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks } = __mod_ui_portrait_js;
 const { eraName, worldPowerBaseline } = __mod_data_timeline_js;
 const { generateFullName } = __mod_data_names_js;
 const { BRANCHES, TECH_BY_ID } = __mod_data_techniques_js;
@@ -13669,6 +15624,7 @@ const { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, ba
 const { slotsLeft, slotsMax, costLabel } = __mod_engine_economy_js;
 const { ballsHeld, ballManifest, pingSquare, GRID } = __mod_engine_dragonballs_js;
 const { resolveTrial, getMastery } = __mod_engine_trials_js;
+const { FORMATS, createTournament, roundName, playerMatch, playerOpponent, resolveOtherMatches, recordPlayerResult, matchBattleSpec, bracketSummary, standings, payout, placementLine, describeField, settle } = __mod_engine_tournament_js;
 const { playTrial } = __mod_ui_trialui_js;
 
 const $ = (id) => document.getElementById(id);
@@ -13688,6 +15644,7 @@ let PENDING_ACTION = null;
 let BATTLE = null;
 let BATTLE_TAB = 'strike';
 let BATTLE_RETURN = null;
+let TOURNEY = null;
 
 const ERAS = [
   { year: 720, label: 'Age 720 - long before any of it' },
@@ -13746,6 +15703,7 @@ const CREATE_TABS = [
   { id: 'hair', label: 'Hair' },
   { id: 'body', label: 'Body' },
   { id: 'clothes', label: 'Clothes' },
+  { id: 'marks', label: 'Marks' },
   { id: 'self', label: 'Self' },
   { id: 'origin', label: 'Origin' },
 ];
@@ -13827,15 +15785,6 @@ function renderCreation() {
     panel.appendChild(eyes);
     labelled(panel, 'Eye colour');
     swatchRow(panel, EYE_COLOURS, look.eyeColour, (v) => set('eyeColour', v));
-    labelled(panel, 'Marking');
-    const marks = el('div', 'opts');
-    for (const m of [['none', 'None'], ['scar', 'Facial scar'], ['dots', 'Forehead dots'], ['thirdeye', 'Third eye']]) {
-      const b = el('button', 'opt' + (look.marking === m[0] ? ' on' : ''), m[1]);
-      b.type = 'button';
-      b.addEventListener('click', () => set('marking', m[0]));
-      marks.appendChild(b);
-    }
-    panel.appendChild(marks);
   } else if (CREATE_TAB === 'hair') {
     labelled(panel, 'Style');
     const styles = el('div', 'opts');
@@ -13893,6 +15842,52 @@ function renderCreation() {
       fits.appendChild(b);
     }
     panel.appendChild(fits);
+  } else if (CREATE_TAB === 'marks') {
+    look.marks = look.marks || [];
+    look.accessories = look.accessories || [];
+    const toggle = (list, id) => {
+      const i = list.indexOf(id);
+      if (i > -1) list.splice(i, 1); else list.push(id);
+      renderCreation();
+    };
+
+    labelled(panel, 'Scars, injuries and marks');
+    panel.appendChild(el('p', 'row-note', 'Pick as many as the body has earned. More will arrive on their own.'));
+    const marks = el('div', 'opts');
+    for (const m of MARK_PRESETS) {
+      const b = el('button', 'opt' + (look.marks.includes(m.id) ? ' on' : ''), m.name);
+      b.type = 'button';
+      b.addEventListener('click', () => toggle(look.marks, m.id));
+      marks.appendChild(b);
+    }
+    panel.appendChild(marks);
+    if (look.marks.includes('custom')) {
+      const input = el('input', 'text-input');
+      input.placeholder = 'Describe it - "a bite mark from a Saibaman", "frost damage on the left hand"';
+      input.maxLength = 90;
+      input.value = look.customMark || '';
+      input.addEventListener('input', () => { look.customMark = input.value; });
+      panel.appendChild(input);
+    }
+
+    labelled(panel, 'Worn');
+    panel.appendChild(el('p', 'row-note', 'What you start with. Scouters, belts, halos and swords come with the life.'));
+    const accs = el('div', 'opts');
+    for (const a2 of ACCESSORY_PRESETS.filter((x) => x.starter)) {
+      const b = el('button', 'opt' + (look.accessories.includes(a2.id) ? ' on' : ''), a2.name);
+      b.type = 'button';
+      b.addEventListener('click', () => toggle(look.accessories, a2.id));
+      accs.appendChild(b);
+    }
+    panel.appendChild(accs);
+    if (look.accessories.includes('custom')) {
+      const input = el('input', 'text-input');
+      input.placeholder = 'Name it - "my father\'s dog tags", "a bell on a cord"';
+      input.maxLength = 60;
+      input.value = look.customAccessory || '';
+      input.addEventListener('input', () => { look.customAccessory = input.value; });
+      panel.appendChild(input);
+    }
   } else if (CREATE_TAB === 'self') {
     labelled(panel, 'Temperament');
     optionRow(panel.appendChild(el('div', 'opts')), TEMPERAMENTS, DRAFT.temperamentId, (id) => {
@@ -14139,14 +16134,20 @@ function showEvent(event) {
   body.appendChild(el('p', 'event-text', event.text));
 
   for (const choice of event.choices) {
-    const b = el('button', 'choice' + (choice.danger ? ' danger' : ''));
+    const b = el('button', 'choice' + (choice.danger ? ' danger' : '') + (choice.freeText ? ' speak' : ''));
     b.type = 'button';
     b.disabled = !!choice.locked;
     b.appendChild(el('span', 'choice-label', choice.label));
     if (choice.hint || choice.lockReason) {
       b.appendChild(el('span', 'choice-hint', choice.locked ? choice.lockReason : choice.hint));
     }
-    b.addEventListener('click', () => answerEvent(event, choice.id));
+    // Some choices want words rather than a click. The box opens in the card
+    // body so the player can see what they are answering while they type.
+    if (choice.freeText) {
+      b.addEventListener('click', () => openFreeTextChoice(event, choice));
+    } else {
+      b.addEventListener('click', () => answerEvent(event, choice.id));
+    }
     foot.appendChild(b);
   }
 
@@ -14162,8 +16163,50 @@ function showEvent(event) {
   openSheet('event');
 }
 
-function answerEvent(event, choiceId) {
-  const pending = choose(GAME, choiceId);
+function openFreeTextChoice(event, choice) {
+  const body = $('sheet-body');
+  const foot = $('sheet-foot');
+  foot.innerHTML = '';
+
+  const wrap = el('div', 'speak-box');
+  wrap.appendChild(el('div', 'field-label', choice.label));
+  const box = document.createElement('textarea');
+  box.className = 'text-input';
+  box.rows = 3;
+  box.maxLength = 240;
+  box.placeholder = choice.placeholder || 'In your own words.';
+  wrap.appendChild(box);
+  body.appendChild(wrap);
+  box.focus();
+
+  const say = el('button', 'choice');
+  say.type = 'button';
+  say.appendChild(el('span', 'choice-label', 'Say it'));
+  say.addEventListener('click', async () => {
+    const text = box.value.trim();
+    if (!text) { flash('Say something first.'); return; }
+    say.disabled = true;
+    const params = { text };
+    // Where a model is connected it reads the wish as the dragon would,
+    // rather than leaving it to keyword matching.
+    if (choice.interpret && backendName() !== 'none') {
+      say.querySelector('.choice-label').innerHTML = '<span class="spinner"></span>The dragon considers it';
+      const read = await interpretWish(GAME, text, choice.interpret);
+      if (read && read.wishId) { params.wishId = read.wishId; params.reading = read.reading; }
+    }
+    answerEvent(event, choice.id, params);
+  });
+  foot.appendChild(say);
+
+  const back = el('button', 'choice');
+  back.type = 'button';
+  back.appendChild(el('span', 'choice-label', 'Choose from a list instead'));
+  back.addEventListener('click', () => showEvent(event));
+  foot.appendChild(back);
+}
+
+function answerEvent(event, choiceId, params) {
+  const pending = choose(GAME, choiceId, params || null);
   renderHud();
   renderFeed();
   maybeNarrate(event);
@@ -14181,6 +16224,14 @@ function answerEvent(event, choiceId) {
     GAME.turn.pendingBattle = null;
     closeSheet();
     openBattle(spec);
+    return;
+  }
+
+  const bracket = GAME.turn && GAME.turn.pendingTournament;
+  if (bracket) {
+    GAME.turn.pendingTournament = null;
+    closeSheet();
+    openTournament(bracket);
     return;
   }
 
@@ -14704,6 +16755,27 @@ function panelRecords() {
     }
   }
 
+  const marks = allMarks(c);
+  const worn = wornAccessories(c);
+  if (marks.length || worn.length) {
+    body.appendChild(el('div', 'group-label', 'The body'));
+    for (const sc of c.scars || []) {
+      const memo = el('div', 'memo');
+      memo.innerHTML = `<b>AGE ${sc.year - c.birthYear}</b> ${String(sc.text || '').replace(/[<>]/g, '')}`;
+      body.appendChild(memo);
+    }
+    const chosen = (c.appearance.marks || []).map((id) => {
+      const m = MARK_PRESETS.find((x) => x.id === id);
+      return id === 'custom' && c.appearance.customMark ? c.appearance.customMark : (m ? m.name : id);
+    });
+    if (chosen.length) body.appendChild(el('div', 'memo', `Marked from the start: ${chosen.join(', ').toLowerCase()}.`));
+    const wornNames = worn.map((id) => {
+      const a2 = ACCESSORY_PRESETS.find((x) => x.id === id);
+      return id === 'custom' && c.appearance.customAccessory ? c.appearance.customAccessory : (a2 ? a2.name : id);
+    });
+    if (wornNames.length) body.appendChild(el('div', 'memo', `Wearing: ${wornNames.join(', ').toLowerCase()}.`));
+  }
+
   body.appendChild(el('div', 'group-label', 'Record'));
   const stats = [
     ['Fights', GAME.stats.fights], ['Won', GAME.stats.wins], ['Lost', GAME.stats.losses],
@@ -14879,6 +16951,191 @@ function openTrial(trial) {
     if (!GAME.character.alive) { showDeath(); return; }
     showPlay();
     flash(result.text.slice(0, 140));
+  });
+}
+
+// ------------------------------------------------------------- tournament
+
+function openTournament(t) {
+  TOURNEY = t;
+  GAME.tournament = t;
+  const format = FORMATS[t.formatId] || FORMATS.wmat;
+  $('tourney-kicker').textContent = t.finished ? 'Result' : roundName(t);
+  $('tourney-title').textContent = t.name;
+  $('tourney-sub').textContent = format.flavour;
+  $('tourney-rules').textContent = [
+    t.rules.note,
+    t.purse ? `Purse ${zeni(t.purse)}.` : '',
+  ].filter(Boolean).join(' ');
+  renderTournament();
+  showScreen('tourney');
+}
+
+function renderTournament() {
+  const t = TOURNEY;
+  if (!t) return;
+  const body = $('tourney-body');
+  const foot = $('tourney-foot');
+  body.innerHTML = '';
+  foot.innerHTML = '';
+
+  $('tourney-kicker').textContent = t.finished ? 'Result' : roundName(t);
+
+  if (t.finished) {
+    body.appendChild(el('div', 'tourney-result', placementLine(t)));
+    const champ = t.champion ? t.champion.name : (t.placement === 1 ? GAME.character.name : null);
+    if (champ) body.appendChild(el('div', 'tourney-verdict', `${champ} takes the tournament.`));
+  } else {
+    const field = describeField(GAME, t);
+    body.appendChild(el('div', 'tourney-verdict', field.line));
+
+    const foe = playerOpponent(t);
+    if (foe) {
+      const card = el('div', 'draw-card');
+      card.appendChild(el('div', 'draw-label', `${roundName(t)} - your draw`));
+      card.appendChild(el('div', 'draw-name', foe.name));
+      card.appendChild(el('div', 'draw-power', `Power level ${numberish(foe.power)} - ${powerTier(foe.power)}`));
+      if (foe.flavour) card.appendChild(el('div', 'draw-flavour', foe.universe ? `Universe ${foe.universe}. ${foe.flavour}` : `They ${foe.flavour}.`));
+      body.appendChild(card);
+    } else {
+      body.appendChild(el('div', 'draw-card', 'You have a bye this round.'));
+    }
+  }
+
+  // Everything that has happened so far, round by round.
+  for (const round of bracketSummary(t)) {
+    const block = el('div', 'round-block' + (!t.finished && round.title === roundName(t) ? ' now' : ''));
+    block.appendChild(el('div', 'round-name', round.title));
+    for (const line of round.lines) {
+      const isMine = /^You /.test(line) || line.includes(GAME.character.name);
+      block.appendChild(el('div', 'round-line' + (isMine ? ' mine' : ''), line));
+    }
+    body.appendChild(block);
+  }
+
+  if (!t.finished) {
+    const live = standings(t).map((e) => e.id);
+    const block = el('div', 'round-block');
+    block.appendChild(el('div', 'round-name', `Still in - ${live.length}`));
+    for (const e of t.entrants) {
+      const row = el('div', 'field-row'
+        + (live.includes(e.id) ? '' : ' out')
+        + (e.isPlayer ? ' you' : ''));
+      row.appendChild(el('span', 'fname', e.name));
+      if (e.universe) row.appendChild(el('span', 'ftag', `U${e.universe}`));
+      else if (e.isCanon) row.appendChild(el('span', 'ftag', 'known'));
+      row.appendChild(el('span', 'fpow', numberish(e.power)));
+      block.appendChild(row);
+    }
+    body.appendChild(block);
+  }
+
+  if (t.finished) {
+    const done = el('button', 'primary-btn', 'Leave the arena');
+    done.type = 'button';
+    done.addEventListener('click', closeTournament);
+    foot.appendChild(done);
+    return;
+  }
+
+  const foe = playerOpponent(t);
+  const go = el('button', 'primary-btn', foe ? `Fight ${foe.name}` : 'Take the bye');
+  go.type = 'button';
+  go.addEventListener('click', fightTournamentMatch);
+  foot.appendChild(go);
+
+  const quit = el('button', 'ghost-btn danger', 'Withdraw');
+  quit.type = 'button';
+  quit.addEventListener('click', () => {
+    const rng = getRng(GAME);
+    recordPlayerResult(GAME, rng, t, false, { disqualified: true });
+    saveRng(GAME, rng);
+    t.finished = true;
+    t.withdrew = true;
+    renderTournament();
+  });
+  foot.appendChild(quit);
+}
+
+function fightTournamentMatch() {
+  const t = TOURNEY;
+  const rng = getRng(GAME);
+  // Everyone else's round happens first, so by the time you walk out the
+  // half of the draw you are not in has already thinned.
+  resolveOtherMatches(GAME, rng, t);
+  saveRng(GAME, rng);
+
+  const spec = matchBattleSpec(GAME, t);
+  if (!spec) {
+    const r2 = getRng(GAME);
+    recordPlayerResult(GAME, r2, t, true);
+    saveRng(GAME, r2);
+    renderTournament();
+    return;
+  }
+  openBattle(spec, (battle, after) => finishTournamentMatch(battle, after));
+}
+
+function finishTournamentMatch(battle, after) {
+  const t = TOURNEY;
+  const rng = getRng(GAME);
+  const won = battle.outcome === 'won';
+  // Killing somebody under tournament rules ends your tournament, whatever
+  // the scoreboard says.
+  const dq = t.rules.noKilling && battle.killed;
+  recordPlayerResult(GAME, rng, t, won, { disqualified: dq });
+  saveRng(GAME, rng);
+
+  if (dq) {
+    GAME.character.karma = Math.max(-100, GAME.character.karma - 18);
+    GAME.character.fame = Math.min(100, GAME.character.fame + 10);
+    t.finished = true;
+  }
+
+  renderHud();
+  if (!GAME.character.alive) { showDeath(); return; }
+  openTournament(t);
+}
+
+function closeTournament() {
+  const t = TOURNEY;
+  const rng = getRng(GAME);
+  const result = settle(GAME, t, rng);
+  saveRng(GAME, rng);
+
+  logLine({ kind: 'event', title: t.name, text: result.text });
+  addTournamentFact(t, result);
+
+  TOURNEY = null;
+  GAME.tournament = null;
+  renderHud();
+  renderFeed();
+  autosave();
+
+  if (result.erased) {
+    GAME.character.alive = false;
+    GAME.character.death = { cause: 'Erased with Universe 7', year: currentYear(GAME), age: GAME.character.age };
+    showDeath();
+    return;
+  }
+  showPlay();
+  const next = currentEvent(GAME);
+  if (next) showEvent(next);
+}
+
+function addTournamentFact(t, result) {
+  const year = currentYear(GAME);
+  GAME.memory.facts.push({
+    id: GAME.memory.nextFactId++,
+    type: 'tournament',
+    text: result.won
+      ? `Won ${t.name}${result.beat.length ? ', through ' + result.beat.join(' and ') : ''}.`
+      : `${placementLine(t)} at ${t.name}.`,
+    year,
+    subject: null,
+    object: null,
+    weight: result.won ? 8 : 3,
+    tags: ['fame', result.won ? 'milestone' : 'tournament'],
   });
 }
 
@@ -15062,7 +17319,9 @@ function endBattle() {
   wrap.innerHTML = '';
   $('battle-tabs').innerHTML = '';
 
-  const outcomeLine = {
+  const outcomeLine = BATTLE.byRingOut
+    ? (BATTLE.outcome === 'won' ? 'Ring-out. You win.' : 'Ring-out. You lose.')
+    : {
     won: 'You win.', lost: 'You lose.', fled: 'You got out.',
     yielded: 'You yielded and they let it stand.', draw: 'Neither of you could finish it.',
   }[BATTLE.outcome] || 'It is over.';
@@ -15074,8 +17333,14 @@ function endBattle() {
   done.addEventListener('click', () => closeBattle(after));
   wrap.appendChild(done);
 
+  // Under tournament rules there is nothing to decide: an official is already
+  // standing between you, and killing somebody ends your tournament.
+  if (BATTLE.outcome === 'won' && BATTLE.noKilling) {
+    pushBattleLines(['The officials are between you before you have finished the thought.'], 'big');
+  }
+
   // Beating somebody is a decision point, not just a result.
-  if (BATTLE.outcome === 'won' && BATTLE.stakes !== 'spar') {
+  if (BATTLE.outcome === 'won' && BATTLE.stakes !== 'spar' && !BATTLE.noKilling) {
     const spare = el('button', 'bact');
     spare.type = 'button';
     spare.appendChild(el('span', 'bact-label', 'Let them live'));
@@ -15095,6 +17360,7 @@ function endBattle() {
       const ref = BATTLE.context || {};
       const npc = ref.npcId ? GAME.npcs[ref.npcId] : (ref.canonId ? GAME.npcs['canon_' + ref.canonId] : null);
       if (npc) { npc.alive = false; npc.causeOfDeath = 'You killed them'; }
+      BATTLE.killed = true;
       GAME.character.karma = Math.max(-100, GAME.character.karma - 22);
       GAME.stats.kills += 1;
       pushBattleLines(['You finish it. Nobody argues with the result.'], 'big');
@@ -15118,6 +17384,8 @@ function closeBattle(after) {
   logLine({ kind: 'event', title: `Fight: ${BATTLE.them.name}`, text: summary, outcome: after.text || '' });
 
   const death = after.death;
+  const battle = BATTLE;
+  const handOff = BATTLE_RETURN;
   BATTLE = null;
   BATTLE_RETURN = null;
   renderHud();
@@ -15134,6 +17402,9 @@ function closeBattle(after) {
     // A fight can leave you at zero; the year change decides whether that kills you.
     flash('You are barely alive. Age up and find out if you make it.');
   }
+  // A fight can belong to something larger - a tournament round, say - which
+  // wants control back rather than dropping you into the year.
+  if (handOff) { handOff(battle, after); return; }
   showPlay();
   const next = currentEvent(GAME);
   if (next) showEvent(next);

@@ -107,6 +107,10 @@ export function createBattle(state, rng, opts = {}) {
     fled: false,
     surrendered: false,
     protecting: !!opts.protecting,
+    // Tournament rules. A ring changes what winning means: you do not have to
+    // put somebody down, you have to put them outside.
+    ringOut: !!(opts.context && opts.context.ringOut),
+    noKilling: !!(opts.context && opts.context.noKilling),
     context: opts.context || { reason: opts.reason || 'fight' },
   };
 }
@@ -210,6 +214,20 @@ export function battleActions(state, battle) {
     out.push({ id: 'senzu', kind: 'item', label: 'Eat a senzu bean', hint: `Full heal - ${c.senzu} left` });
   }
 
+  if (battle.ringOut) {
+    // Throwing somebody out of the ring is a real option against a fighter
+    // you could never knock down, and it is how most tournaments end.
+    const off = them_off_balance(battle);
+    out.push({
+      id: 'ringout',
+      kind: 'move',
+      label: 'Throw them out of the ring',
+      hint: off ? 'They are off balance. Take the chance.' : 'Needs them staggered, hurt, or blinded first.',
+      disabled: !off,
+      reason: off ? null : 'They are still set',
+    });
+  }
+
   if (battle.civilians && !battle.relocated && c.techniques.includes('instant_transmission')) {
     out.push({
       id: 'relocate', kind: 'move', label: 'Take it somewhere empty',
@@ -225,6 +243,12 @@ export function battleActions(state, battle) {
   }
 
   return out;
+}
+
+/** Is the opponent in a state where a throw could actually put them out? */
+function them_off_balance(battle) {
+  const them = battle.them;
+  return !!(them.staggered > 0 || them.blinded > 0 || them.hp <= them.hpMax * 0.45);
 }
 
 // ------------------------------------------------------------------- turn
@@ -335,6 +359,24 @@ function foeTurn(state, battle, rng) {
     }
   }
 
+  // In a ring, they will take the same shortcut you can.
+  if (battle.ringOut && !battle.over) {
+    const meOff = me.staggered > 0 || me.blinded > 0 || me.hp <= me.hpMax * 0.45;
+    if (meOff && rng.chance(0.42)) {
+      const chance = clamp(0.3 + Math.pow(ratioOf(them, me), 0.3) * 0.28
+        + (me.staggered ? 0.18 : 0) + (1 - me.hp / me.hpMax) * 0.22, 0.1, 0.9);
+      if (rng.chance(chance)) {
+        lines.push(`${them.name} gets under you and puts you over the edge. You land outside the ring.`);
+        battle.byRingOut = true;
+        battle.foeRingOut = true;
+        finish(state, battle, rng, 'lost');
+        return lines;
+      }
+      lines.push(`${them.name} tries to throw you out and you break the grip.`);
+      return lines;
+    }
+  }
+
   if (hurt < 0.35 && rng.chance(0.35)) {
     them.stance = 'defensive';
   } else if (losing && rng.chance(0.4)) {
@@ -424,6 +466,23 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
         if (them.hp / them.hpMax > 0.5) lines.push(`${them.name} ${rng.pick(['takes a step back', 'stops smiling', 'says nothing', 'looks at you differently'])}.`);
       }
     }
+  } else if (actionId === 'ringout') {
+    // Strength and technique against their weight and whatever balance they
+    // have left. Failing it puts you in a bad spot, which is the trade.
+    const ratio = ratioOf(me, them);
+    const chance = clamp(0.32 + Math.pow(ratio, 0.3) * 0.28
+      + (them.staggered ? 0.18 : 0) + (them.blinded ? 0.14 : 0)
+      + (1 - them.hp / them.hpMax) * 0.25, 0.1, 0.94);
+    me.stamina = Math.max(0, me.stamina - (me.infiniteStamina ? 0 : 18));
+    if (rng.chance(chance)) {
+      lines.push(render(`{You get under them and put them over the edge|You take their balance and throw|You lift them off the stone and let go}. `
+        + `{They land outside|Both feet outside the ring|Out}.`, {}, rng));
+      battle.byRingOut = true;
+      return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
+    }
+    lines.push(render(`{They plant and you cannot move them|The throw does not come off|You get a grip and they break it}. `
+      + `{You are wide open now|That cost you the position|You have given them the inside}.`, {}, rng));
+    freeSwing = true;
   } else if (actionId.startsWith('phys:')) {
     const move = PHYSICAL.find((m) => m.id === actionId.slice(5));
     if (move) {
@@ -519,6 +578,8 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
   if (!skipFoe) {
     if (freeSwing) lines.push(`${them.name} does not wait for you to finish.`);
     lines.push(...foeTurn(state, battle, rng));
+    // Their turn can end the fight outright (a ring-out).
+    if (battle.over) return { lines, over: true, outcome: battle.outcome };
   }
 
   if (me.hp <= 0) {
@@ -592,6 +653,11 @@ export function battleAftermath(state, rng, battle, opts = {}) {
     lines.push(`Your body rebuilds heavier than it was. Power level up ${numberish(battle.zenkai)}.`);
   }
 
+  // What the fight leaves on you. Regeneration closes almost everything; a
+  // body that does not regenerate keeps a record of the fights it nearly lost.
+  const scarred = markBody(state, rng, battle);
+  if (scarred) lines.push(scarred);
+
   // Collateral. Fighting over a city is a choice, and it is remembered.
   if (battle.civilians && battle.destruction > 25) {
     const severity = battle.destruction > 70 ? 'most of a district' : 'several streets';
@@ -651,6 +717,38 @@ export function battleAftermath(state, rng, battle, opts = {}) {
   }
 
   return { lines, text: lines.join(' ') };
+}
+
+const SCAR_MARKS = ['scar_cheek', 'scar_brow', 'scar_chest', 'scar_arm', 'scar_eye', 'burn_arm', 'burn_face'];
+
+function markBody(state, rng, battle) {
+  const c = state.character;
+  if (hasPerk(c, 'regeneration') || c.raceId === 'android') return null;
+  const nearDeath = battle.me.hp <= 12 && battle.outcome !== 'fled';
+  if (!nearDeath) return null;
+  c.scars = c.scars || [];
+  const have = new Set(c.scars.map((s) => s.mark));
+  const from = battle.them.name;
+  const year = c.birthYear + c.age;
+
+  // Losing badly to something lethal can cost more than skin.
+  if (battle.stakes === 'lethal' && battle.outcome === 'lost' && !have.has('missing_eye') && rng.chance(0.12)) {
+    c.scars.push({ year, mark: 'missing_eye', from, text: `Lost an eye to ${from}.` });
+    c.stats.speed = Math.max(1, c.stats.speed - 3);
+    return `You lose the eye. ${from} does not even notice.`;
+  }
+  if (rng.chance(0.45)) {
+    const open = SCAR_MARKS.filter((m) => !have.has(m));
+    if (!open.length) return null;
+    const mark = rng.pick(open);
+    c.scars.push({ year, mark, from, text: `A scar from ${from}.` });
+    return rng.pick([
+      `It heals badly. You will carry ${from} on your skin for the rest of your life.`,
+      `The cut does not close properly. A scar, then, and a story to go with it.`,
+      `Something in that fight is going to show for good.`,
+    ]);
+  }
+  return null;
 }
 
 /** Headless resolution, for the soak harness and for background fights. */

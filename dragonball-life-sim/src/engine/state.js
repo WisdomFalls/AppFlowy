@@ -73,9 +73,13 @@ export function createGame(creation, seedInput) {
       buildShape: body.id,
       hairStyle: 'spiked', hairColour: 'black',
       eyeShape: 'sharp', eyeColour: 'black',
-      skin: 'light', face: 'square', outfit: 'casual', marking: 'none',
+      skin: 'light', face: 'square', outfit: 'casual',
+      marks: [], customMark: '', accessories: [], customAccessory: '',
       heightCm: 175, weightKg: 70, stance: 'formless', stanceName: '',
     }, creation.look || {}),
+    // What the life leaves on the body. Each entry is drawn on the portrait
+    // and listed in the record, with who or what did it.
+    scars: [],
     upbringingId: upbringing.id,
     temperamentId: temperament.id,
     bodyId: body.id,

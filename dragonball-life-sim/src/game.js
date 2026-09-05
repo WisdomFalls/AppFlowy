@@ -8,6 +8,7 @@ import './engine/events/training.js';
 import './engine/events/social.js';
 import './engine/events/conflict.js';
 import './engine/events/world.js';
+import './engine/events/wishes.js';
 import './engine/events/afterlife.js';
 import './engine/events/actions.js';
 
@@ -16,7 +17,7 @@ import { startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, 
   insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter,
   tickRevivalEffort } from './engine/lifecycle.js';
 import { initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable,
-  getApiKey, setApiKey, errorCopy } from './engine/ai.js';
+  getApiKey, setApiKey, errorCopy, interpretWish } from './engine/ai.js';
 import { save, load, listSaves, clearSlot, exportString, importString } from './engine/save.js';
 import { allTemplates } from './engine/generator.js';
 import { ladderStatus, nearbyForms, unlockableForms } from './engine/progression.js';
@@ -28,7 +29,7 @@ export {
   startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die,
   insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort,
   initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable,
-  getApiKey, setApiKey, errorCopy,
+  getApiKey, setApiKey, errorCopy, interpretWish,
   save, load, listSaves, clearSlot, exportString, importString,
   allTemplates, ladderStatus, nearbyForms, unlockableForms, Rng,
   ACTIONS, availableActions, runAction, actionOptions,

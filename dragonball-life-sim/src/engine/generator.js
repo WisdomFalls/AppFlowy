@@ -142,6 +142,9 @@ export function materialise(ctx, template, slots) {
       danger: ch.danger || false,
       locked: ch.locked || false,
       lockReason: ch.lockReason || null,
+      freeText: !!ch.freeText,
+      placeholder: ch.placeholder || null,
+      interpret: ch.interpret || null,
     }));
 
   return {
@@ -178,6 +181,8 @@ export function forceEvent(state, rng, templateId, extra = {}) {
   if (!template) return null;
   const ctx = buildContext(state, rng);
   if (extra.evId) ctx.forceEvId = extra.evId;
+  // Whatever the caller wants the forced card to know about itself.
+  ctx.forceSlots = extra;
   let slots;
   try { slots = template.slots ? template.slots(ctx) : {}; } catch (err) { return null; }
   if (slots === null || slots === undefined) return null;
@@ -196,7 +201,7 @@ export function generateEvent(state, rng, opts = {}) {
 }
 
 /** Apply a chosen option. Returns the outcome block for the log. */
-export function resolveChoice(state, rng, event, choiceId) {
+export function resolveChoice(state, rng, event, choiceId, params = null) {
   // Model-authored events carry their outcomes inline so that they survive a
   // save/load cycle without needing anything in the template registry.
   if (event.ai) {
@@ -213,6 +218,9 @@ export function resolveChoice(state, rng, event, choiceId) {
   const template = REGISTRY.get(event.templateId);
   if (!template) return { text: 'The moment passes.', changes: {} };
   const ctx = buildContext(state, rng);
+  // Anything the player typed or picked alongside the choice travels with it.
+  ctx.params = params || {};
+  ctx.forceSlots = event.slots || {};
   const choices = (template.choices ? template.choices(ctx, event.slots) : []) || [];
   const choice = choices.find((c, i) => (c.id || `c${i}`) === choiceId) || choices[0];
   if (!choice || !choice.effect) {
@@ -246,6 +254,8 @@ export function resolveChoice(state, rng, event, choiceId) {
     aiHint: result.aiHint || null,
     outcome: result.outcome || null,
     battle: result.battle || null,
+    tournament: result.tournament || null,
+    followUpSlots: result.followUpSlots || null,
   };
 }
 

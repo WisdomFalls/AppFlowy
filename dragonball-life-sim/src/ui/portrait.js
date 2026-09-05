@@ -96,6 +96,90 @@ export const STANCES = [
 
 export const BUILD_SHAPES = ['small', 'wiry', 'lean', 'balanced', 'stocky', 'massive'];
 
+// Marks are things that happened to a body: scars, burns, what is missing, what
+// was inked on. A character can carry any number, chosen at creation or
+// earned in play, and each one is drawn.
+export const MARK_PRESETS = [
+  { id: 'scar_cheek', name: 'Scar across the cheek', where: 'face' },
+  { id: 'scar_eye', name: 'Scar through one eye', where: 'face' },
+  { id: 'scar_brow', name: 'Split eyebrow', where: 'face' },
+  { id: 'scar_chest', name: 'Scar across the chest', where: 'body' },
+  { id: 'scar_arm', name: 'Old cut down the arm', where: 'body' },
+  { id: 'burn_arm', name: 'Burn scars, forearms', where: 'body' },
+  { id: 'burn_face', name: 'Burn along the jaw', where: 'face' },
+  { id: 'missing_eye', name: 'Missing eye', where: 'face' },
+  { id: 'missing_ear', name: 'Missing ear', where: 'face' },
+  { id: 'missing_arm', name: 'Missing arm', where: 'body' },
+  { id: 'cyber_eye', name: 'Mechanical eye', where: 'face' },
+  { id: 'cyber_arm', name: 'Mechanical arm', where: 'body' },
+  { id: 'dots', name: 'Forehead dots', where: 'face' },
+  { id: 'thirdeye', name: 'Third eye', where: 'face' },
+  { id: 'tattoo_face', name: 'Face tattoo', where: 'face' },
+  { id: 'tattoo_arm', name: 'Arm tattoo', where: 'body' },
+  { id: 'crack_tooth', name: 'Cracked tooth', where: 'face' },
+  { id: 'birthmark', name: 'Birthmark', where: 'face' },
+  { id: 'custom', name: 'Something else', where: 'body' },
+];
+
+// Accessories are things a body wears. Some you can pick at the start; others
+// arrive with the items you own, the titles you win, and the state you are in
+// (the dead wear a halo whether they like it or not).
+export const ACCESSORY_PRESETS = [
+  { id: 'headband', name: 'Headband', starter: true },
+  { id: 'bandana', name: 'Bandana', starter: true },
+  { id: 'glasses', name: 'Glasses', starter: true },
+  { id: 'sunglasses', name: 'Sunglasses', starter: true },
+  { id: 'earring', name: 'Single earring', starter: true },
+  { id: 'earrings', name: 'Earrings', starter: true },
+  { id: 'necklace', name: 'Necklace', starter: true },
+  { id: 'wristbands', name: 'Wristbands', starter: true },
+  { id: 'cape', name: 'Cape', starter: true },
+  { id: 'turban', name: 'Turban', starter: true },
+  { id: 'hat', name: 'Wide hat', starter: true },
+  { id: 'eyepatch', name: 'Eyepatch', starter: true },
+  { id: 'scarf', name: 'Scarf', starter: true },
+  { id: 'scouter', name: 'Scouter', starter: false, item: 'scouter' },
+  { id: 'potara', name: 'Potara earrings', starter: false, item: 'potara' },
+  { id: 'sword', name: 'Sword on the back', starter: false, item: 'z_sword' },
+  { id: 'pole', name: 'Power Pole', starter: false, item: 'power_pole' },
+  { id: 'belt', name: 'Championship belt', starter: false, item: 'championship_belt' },
+  { id: 'shell', name: 'Turtle shell', starter: false, item: 'turtle_shell' },
+  { id: 'halo', name: 'Halo', starter: false },
+  { id: 'custom', name: 'Something else', starter: true },
+];
+
+/** Every accessory the character is wearing right now, from all sources. */
+export function wornAccessories(character) {
+  const a = character.appearance || {};
+  const out = new Set(a.accessories || []);
+  const items = character.items || [];
+  for (const acc of ACCESSORY_PRESETS) {
+    if (acc.item && items.includes(acc.item)) out.add(acc.id);
+  }
+  // Shop accessories carry the id of what they put on you.
+  for (const id of items) {
+    if (id.startsWith('acc_')) out.add(id.slice(4));
+  }
+  if (items.includes('cyber_eye')) out.add('cyber_eye');
+  if (character.inAfterlife && !character.keptBody) out.add('halo');
+  // Missing an eye without a patch is a choice; the default is the patch.
+  const marks = allMarks(character);
+  if (marks.includes('missing_eye') && !out.has('cyber_eye')) out.add('eyepatch');
+  return [...out];
+}
+
+/** Marks from creation plus everything the life has left on the body. */
+export function allMarks(character) {
+  const a = character.appearance || {};
+  const list = (a.marks || []).slice();
+  // Legacy single marking from older saves.
+  if (a.marking && a.marking !== 'none' && !list.length) {
+    list.push(a.marking === 'scar' ? 'scar_cheek' : a.marking);
+  }
+  for (const sc of character.scars || []) if (sc.mark && !list.includes(sc.mark)) list.push(sc.mark);
+  return list;
+}
+
 function look(list, id, fallback) {
   return list.find((x) => x.id === id) || list.find((x) => x.id === fallback) || list[0];
 }
@@ -310,17 +394,191 @@ export function portraitSvg(character, opts = {}) {
   parts.push(`<path d="M${cx + 20} ${eyeY - 11} l-14 -4" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
   parts.push(`<path d="M${cx - 7} ${headTop + 52} q7 5 14 0" fill="none" stroke="rgba(0,0,0,.42)" stroke-width="2.4" stroke-linecap="round"/>`);
 
-  if (a.marking === 'scar') {
-    parts.push(`<path d="M${cx + 10} ${headTop + 12} l6 30" stroke="rgba(0,0,0,.35)" stroke-width="2.5" stroke-linecap="round"/>`);
-  } else if (a.marking === 'dots') {
-    for (let i = 0; i < 3; i++) {
-      parts.push(`<circle cx="${cx - 10 + i * 10}" cy="${headTop + 8}" r="2.2" fill="rgba(0,0,0,.4)"/>`);
-    }
-  } else if (a.marking === 'thirdeye') {
-    parts.push(eyeShape('round', cx, headTop + 12, eyeColour));
-  }
+  drawMarks(parts, character, { cx, headTop, headH, headR, chin, eyeY, eyeColour, skin, shoulderWidth, H });
+  drawAccessories(parts, character, { cx, headTop, headH, headR, chin, eyeY, skin, shoulderWidth, H, hasHair, hairColour: finalHair, outfit });
 
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" role="img" aria-label="Character portrait" xmlns="http://www.w3.org/2000/svg">${parts.join('')}</svg>`;
+}
+
+const SCAR = 'rgba(60,20,20,.55)';
+const INK = 'rgba(20,20,40,.55)';
+const METAL = '#9aa3b2';
+
+function drawMarks(parts, character, g) {
+  const { cx, headTop, headH, headR, chin, eyeY, eyeColour, shoulderWidth, H } = g;
+  const marks = allMarks(character);
+  for (const m of marks) {
+    switch (m) {
+      case 'scar_cheek':
+        parts.push(`<path d="M${cx + 10} ${headTop + 14} l7 30" stroke="${SCAR}" stroke-width="2.6" stroke-linecap="round"/>`);
+        break;
+      case 'scar_eye':
+        parts.push(`<path d="M${cx - 21} ${eyeY - 16} l12 34" stroke="${SCAR}" stroke-width="2.6" stroke-linecap="round"/>`);
+        break;
+      case 'scar_brow':
+        parts.push(`<path d="M${cx + 13} ${eyeY - 18} l3 10" stroke="${SCAR}" stroke-width="2.8" stroke-linecap="round"/>`);
+        break;
+      case 'scar_chest':
+        parts.push(`<path d="M${cx - 18} ${chin + 30} l36 26" stroke="${SCAR}" stroke-width="3" stroke-linecap="round"/>`);
+        break;
+      case 'scar_arm':
+        parts.push(`<path d="M${cx + shoulderWidth - 12} ${chin + 44} l4 40" stroke="${SCAR}" stroke-width="2.6" stroke-linecap="round"/>`);
+        break;
+      case 'burn_arm':
+        for (let i = 0; i < 4; i++) {
+          parts.push(`<ellipse cx="${cx - shoulderWidth + 12 + (i % 2) * 6}" cy="${chin + 50 + i * 12}" rx="5" ry="3.5" fill="rgba(120,40,30,.4)"/>`);
+        }
+        break;
+      case 'burn_face':
+        parts.push(`<path d="M${cx - headR + 6} ${headTop + headH - 6} q10 12 26 10" stroke="rgba(120,40,30,.45)" stroke-width="7" stroke-linecap="round" fill="none"/>`);
+        break;
+      case 'missing_eye':
+        // The eye itself is gone; the patch (or the mechanical eye) is drawn
+        // over it by the accessory pass.
+        parts.push(`<path d="M${cx + 8} ${eyeY} q7 -3 14 0" stroke="rgba(0,0,0,.45)" stroke-width="2.4" fill="none"/>`);
+        break;
+      case 'missing_ear':
+        parts.push(`<path d="M${cx + headR - 4} ${headTop + 26} l4 12" stroke="${SCAR}" stroke-width="3" stroke-linecap="round"/>`);
+        break;
+      case 'missing_arm':
+        parts.push(`<path d="M${cx - shoulderWidth - 2} ${chin + 40} L${cx - shoulderWidth + 14} ${chin + 40} L${cx - shoulderWidth + 10} ${H} L${cx - shoulderWidth - 6} ${H} Z" fill="var(--ground)"/>`);
+        parts.push(`<path d="M${cx - shoulderWidth} ${chin + 42} q8 -6 14 0" stroke="${SCAR}" stroke-width="3" fill="none"/>`);
+        break;
+      case 'cyber_eye':
+        parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="7" fill="${METAL}"/>`);
+        parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="3" fill="#d1322a"/>`);
+        break;
+      case 'cyber_arm':
+        parts.push(`<path d="M${cx + shoulderWidth - 20} ${chin + 40} L${cx + shoulderWidth + 2} ${chin + 36} L${cx + shoulderWidth} ${H} L${cx + shoulderWidth - 18} ${H} Z" fill="${METAL}"/>`);
+        parts.push(`<path d="M${cx + shoulderWidth - 16} ${chin + 60} h14 M${cx + shoulderWidth - 15} ${chin + 80} h14" stroke="#5e6673" stroke-width="2"/>`);
+        break;
+      case 'dots':
+        for (let i = 0; i < 3; i++) parts.push(`<circle cx="${cx - 10 + i * 10}" cy="${headTop + 8}" r="2.2" fill="rgba(0,0,0,.4)"/>`);
+        break;
+      case 'thirdeye':
+        parts.push(eyeShape('round', cx, headTop + 12, eyeColour));
+        break;
+      case 'tattoo_face':
+        parts.push(`<path d="M${cx - headR + 8} ${eyeY + 6} q6 10 0 20 M${cx - headR + 12} ${eyeY + 2} q10 14 2 28" stroke="${INK}" stroke-width="2" fill="none"/>`);
+        break;
+      case 'tattoo_arm':
+        parts.push(`<path d="M${cx + shoulderWidth - 16} ${chin + 46} q10 8 0 18 q-10 8 0 18 q10 8 0 18" stroke="${INK}" stroke-width="2.4" fill="none"/>`);
+        break;
+      case 'crack_tooth':
+        parts.push(`<path d="M${cx - 2} ${headTop + 53} l1 4" stroke="rgba(255,255,255,.8)" stroke-width="2"/>`);
+        break;
+      case 'birthmark':
+        parts.push(`<ellipse cx="${cx - 12}" cy="${headTop + 46}" rx="4" ry="3" fill="rgba(90,40,30,.45)"/>`);
+        break;
+      case 'custom':
+        // Something the player described; we cannot draw it faithfully, so it
+        // is a mark, placed where a mark would be.
+        parts.push(`<path d="M${cx - 6} ${chin + 34} l12 14 M${cx + 6} ${chin + 34} l-12 14" stroke="${SCAR}" stroke-width="2.4" stroke-linecap="round"/>`);
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+function drawAccessories(parts, character, g) {
+  const { cx, headTop, headH, headR, chin, eyeY, shoulderWidth, H, hairColour, outfit } = g;
+  const worn = wornAccessories(character);
+  const trim = (outfit && outfit.trim) || '#c9a227';
+  for (const acc of worn) {
+    switch (acc) {
+      case 'headband':
+        parts.push(`<path d="M${cx - headR + 2} ${headTop + 6} Q${cx} ${headTop - 2} ${cx + headR - 2} ${headTop + 6}" stroke="#c0392b" stroke-width="7" fill="none"/>`);
+        break;
+      case 'bandana':
+        parts.push(`<path d="M${cx - headR} ${headTop + 8} Q${cx} ${headTop - 20} ${cx + headR} ${headTop + 8} Q${cx} ${headTop + 2} ${cx - headR} ${headTop + 8} Z" fill="#2f5bb7"/>`);
+        parts.push(`<path d="M${cx + headR - 4} ${headTop + 8} l16 14 l-6 -14" fill="#2f5bb7"/>`);
+        break;
+      case 'turban':
+        parts.push(`<ellipse cx="${cx}" cy="${headTop - 2}" rx="${headR + 4}" ry="20" fill="#e8e2d6"/>`);
+        parts.push(`<path d="M${cx - headR} ${headTop + 2} Q${cx} ${headTop - 18} ${cx + headR} ${headTop + 2}" stroke="#d8cdb9" stroke-width="3" fill="none"/>`);
+        break;
+      case 'hat':
+        parts.push(`<ellipse cx="${cx}" cy="${headTop + 2}" rx="${headR + 26}" ry="8" fill="#3c3229"/>`);
+        parts.push(`<path d="M${cx - headR + 4} ${headTop + 2} Q${cx} ${headTop - 34} ${cx + headR - 4} ${headTop + 2} Z" fill="#4a3d32"/>`);
+        break;
+      case 'glasses':
+        parts.push(`<circle cx="${cx - 15}" cy="${eyeY}" r="9" stroke="#2a2a30" stroke-width="2" fill="none"/>`);
+        parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="9" stroke="#2a2a30" stroke-width="2" fill="none"/>`);
+        parts.push(`<path d="M${cx - 6} ${eyeY} h12" stroke="#2a2a30" stroke-width="2"/>`);
+        break;
+      case 'sunglasses':
+        parts.push(`<rect x="${cx - 25}" y="${eyeY - 7}" width="20" height="13" rx="4" fill="#1a1620"/>`);
+        parts.push(`<rect x="${cx + 5}" y="${eyeY - 7}" width="20" height="13" rx="4" fill="#1a1620"/>`);
+        parts.push(`<path d="M${cx - 5} ${eyeY - 2} h10" stroke="#1a1620" stroke-width="2"/>`);
+        break;
+      case 'eyepatch':
+        parts.push(`<path d="M${cx + 6} ${eyeY - 9} h18 v16 h-18 Z" fill="#1a1620"/>`);
+        parts.push(`<path d="M${cx - headR} ${headTop + 22} L${cx + 24} ${eyeY - 8} M${cx + 24} ${eyeY - 8} L${cx + headR} ${headTop + 16}" stroke="#1a1620" stroke-width="2" fill="none"/>`);
+        break;
+      case 'scouter':
+        parts.push(`<path d="M${cx + headR - 2} ${headTop + 30} l-6 -14 l-26 4" stroke="#3a3a44" stroke-width="3" fill="none"/>`);
+        parts.push(`<rect x="${cx + 4}" y="${eyeY - 9}" width="20" height="15" rx="3" fill="#3fd6a4" opacity="0.8"/>`);
+        break;
+      case 'cyber_eye':
+        break;
+      case 'earring':
+        parts.push(`<circle cx="${cx + headR + 1}" cy="${headTop + 41}" r="3" fill="${trim}"/>`);
+        break;
+      case 'earrings':
+        parts.push(`<circle cx="${cx + headR + 1}" cy="${headTop + 41}" r="3" fill="${trim}"/>`);
+        parts.push(`<circle cx="${cx - headR - 1}" cy="${headTop + 41}" r="3" fill="${trim}"/>`);
+        break;
+      case 'potara':
+        parts.push(`<circle cx="${cx + headR + 2}" cy="${headTop + 42}" r="5" fill="#3fa46a"/>`);
+        parts.push(`<circle cx="${cx - headR - 2}" cy="${headTop + 42}" r="5" fill="#3fa46a"/>`);
+        break;
+      case 'necklace':
+        parts.push(`<path d="M${cx - 16} ${chin + 12} Q${cx} ${chin + 34} ${cx + 16} ${chin + 12}" stroke="${trim}" stroke-width="2.4" fill="none"/>`);
+        parts.push(`<circle cx="${cx}" cy="${chin + 33}" r="3.5" fill="${trim}"/>`);
+        break;
+      case 'scarf':
+        parts.push(`<path d="M${cx - 20} ${chin + 6} Q${cx} ${chin + 22} ${cx + 20} ${chin + 6} L${cx + 22} ${chin + 18} Q${cx} ${chin + 34} ${cx - 22} ${chin + 18} Z" fill="#c0392b"/>`);
+        parts.push(`<path d="M${cx + 8} ${chin + 24} l6 40 l10 -4 l-8 -38 Z" fill="#c0392b"/>`);
+        break;
+      case 'wristbands':
+        parts.push(`<rect x="${cx - shoulderWidth - 2}" y="${H - 34}" width="18" height="10" rx="2" fill="#2f5bb7"/>`);
+        parts.push(`<rect x="${cx + shoulderWidth - 16}" y="${H - 34}" width="18" height="10" rx="2" fill="#2f5bb7"/>`);
+        break;
+      case 'cape':
+        parts.push(`<path d="M${cx - shoulderWidth + 2} ${chin + 24} L${cx - shoulderWidth - 14} ${H} L${cx - shoulderWidth + 8} ${H} Z" fill="#e8e2d6" opacity="0.95"/>`);
+        parts.push(`<path d="M${cx + shoulderWidth - 2} ${chin + 24} L${cx + shoulderWidth + 14} ${H} L${cx + shoulderWidth - 8} ${H} Z" fill="#e8e2d6" opacity="0.95"/>`);
+        parts.push(`<path d="M${cx - shoulderWidth + 4} ${chin + 26} q${shoulderWidth - 4} -14 ${shoulderWidth * 2 - 8} 0" stroke="#e8e2d6" stroke-width="7" fill="none"/>`);
+        break;
+      case 'belt':
+        parts.push(`<rect x="${cx - 30}" y="${H - 22}" width="60" height="14" rx="3" fill="#3a2a10"/>`);
+        parts.push(`<rect x="${cx - 14}" y="${H - 24}" width="28" height="18" rx="4" fill="#f5c451"/>`);
+        break;
+      case 'shell':
+        parts.push(`<path d="M${cx - shoulderWidth - 8} ${chin + 40} q${shoulderWidth + 8} -18 ${(shoulderWidth + 8) * 2} 0 L${cx + shoulderWidth + 4} ${chin + 60} L${cx - shoulderWidth - 4} ${chin + 60} Z" fill="#6b5a3a" opacity="0.9"/>`);
+        parts.push(`<path d="M${cx - shoulderWidth + 6} ${chin + 30} L${cx + shoulderWidth - 6} ${chin + 30}" stroke="#6b5a3a" stroke-width="5"/>`);
+        break;
+      case 'sword':
+        parts.push(`<path d="M${cx + shoulderWidth - 30} ${chin + 20} l-16 -50" stroke="#5a4a3a" stroke-width="6" stroke-linecap="round"/>`);
+        parts.push(`<path d="M${cx + shoulderWidth - 40} ${chin - 20} l-12 -6 M${cx + shoulderWidth - 44} ${chin - 32} l12 -3" stroke="#c9a227" stroke-width="4" stroke-linecap="round"/>`);
+        parts.push(`<path d="M${cx - shoulderWidth + 6} ${chin + 26} L${cx + shoulderWidth - 6} ${H - 30}" stroke="#5a4a3a" stroke-width="4"/>`);
+        break;
+      case 'pole':
+        parts.push(`<path d="M${cx - shoulderWidth + 20} ${chin - 40} L${cx + shoulderWidth - 20} ${H}" stroke="#c0392b" stroke-width="5" stroke-linecap="round"/>`);
+        break;
+      case 'halo':
+        parts.push(`<ellipse cx="${cx}" cy="${headTop - 30}" rx="24" ry="6" stroke="#f5c451" stroke-width="4" fill="none" opacity="0.95"/>`);
+        break;
+      case 'custom': {
+        // A described accessory gets a small, neutral badge at the collar so it
+        // is at least visibly there.
+        parts.push(`<rect x="${cx + 18}" y="${chin + 14}" width="10" height="10" rx="2" fill="${trim}"/>`);
+        break;
+      }
+      default:
+        break;
+    }
+  }
 }
 
 /** Sensible defaults for a species, used when randomising. */
@@ -343,7 +601,10 @@ export function defaultAppearance(rng, raceId) {
     skin: skinByRace[raceId] || rng.pick(SKIN_TONES.slice(0, 5)).id,
     face: rng.pick(FACE_SHAPES).id,
     outfit: outfitByRace[raceId] || 'casual',
-    marking: rng.pick(['none', 'none', 'scar', 'dots', 'thirdeye']),
+    marks: rng.chance(0.4) ? [rng.pick(['scar_cheek', 'scar_brow', 'dots', 'thirdeye', 'birthmark', 'tattoo_arm', 'scar_chest'])] : [],
+    customMark: '',
+    accessories: rng.chance(0.35) ? [rng.pick(ACCESSORY_PRESETS.filter((x) => x.starter && x.id !== 'custom')).id] : [],
+    customAccessory: '',
     buildShape: 'balanced',
     heightCm: rng.int(150, 200),
     weightKg: rng.int(48, 110),

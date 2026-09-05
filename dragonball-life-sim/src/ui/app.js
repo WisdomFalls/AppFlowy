@@ -7,6 +7,7 @@ import {
   insertEvent, renarrateLast, skipRemaining, ladderStatus, nearbyForms,
   availableActions, runAction, actionOptions, Rng,
   initSampling, improviseEvent, narrateOutcome, backendName, getApiKey, setApiKey, errorCopy,
+  interpretWish,
   eventsRemaining,
   save, load, listSaves, clearSlot, exportString, importString,
 } from '../game.js';
@@ -14,7 +15,8 @@ import { RACES, getRace, UPBRINGINGS, TEMPERAMENTS, BODY_TYPES } from '../data/r
 import { PLACES, getPlace } from '../data/places.js';
 import { APPEARANCE } from '../engine/state.js';
 import { portraitSvg, defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS,
-  SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES as STANCE_LIST } from './portrait.js';
+  SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES as STANCE_LIST,
+  MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks } from './portrait.js';
 import { eraName, worldPowerBaseline } from '../data/timeline.js';
 import { generateFullName } from '../data/names.js';
 import { BRANCHES, TECH_BY_ID } from '../data/techniques.js';
@@ -30,6 +32,11 @@ import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, b
 import { slotsLeft, slotsMax, costLabel } from '../engine/economy.js';
 import { ballsHeld, ballManifest, pingSquare, GRID } from '../engine/dragonballs.js';
 import { resolveTrial, getMastery } from '../engine/trials.js';
+import {
+  FORMATS, createTournament, roundName, playerMatch, playerOpponent,
+  resolveOtherMatches, recordPlayerResult, matchBattleSpec, bracketSummary,
+  standings, payout, placementLine, describeField, settle,
+} from '../engine/tournament.js';
 import { playTrial } from './trialui.js';
 
 const $ = (id) => document.getElementById(id);
@@ -49,6 +56,7 @@ let PENDING_ACTION = null;
 let BATTLE = null;
 let BATTLE_TAB = 'strike';
 let BATTLE_RETURN = null;
+let TOURNEY = null;
 
 const ERAS = [
   { year: 720, label: 'Age 720 - long before any of it' },
@@ -107,6 +115,7 @@ const CREATE_TABS = [
   { id: 'hair', label: 'Hair' },
   { id: 'body', label: 'Body' },
   { id: 'clothes', label: 'Clothes' },
+  { id: 'marks', label: 'Marks' },
   { id: 'self', label: 'Self' },
   { id: 'origin', label: 'Origin' },
 ];
@@ -188,15 +197,6 @@ function renderCreation() {
     panel.appendChild(eyes);
     labelled(panel, 'Eye colour');
     swatchRow(panel, EYE_COLOURS, look.eyeColour, (v) => set('eyeColour', v));
-    labelled(panel, 'Marking');
-    const marks = el('div', 'opts');
-    for (const m of [['none', 'None'], ['scar', 'Facial scar'], ['dots', 'Forehead dots'], ['thirdeye', 'Third eye']]) {
-      const b = el('button', 'opt' + (look.marking === m[0] ? ' on' : ''), m[1]);
-      b.type = 'button';
-      b.addEventListener('click', () => set('marking', m[0]));
-      marks.appendChild(b);
-    }
-    panel.appendChild(marks);
   } else if (CREATE_TAB === 'hair') {
     labelled(panel, 'Style');
     const styles = el('div', 'opts');
@@ -254,6 +254,52 @@ function renderCreation() {
       fits.appendChild(b);
     }
     panel.appendChild(fits);
+  } else if (CREATE_TAB === 'marks') {
+    look.marks = look.marks || [];
+    look.accessories = look.accessories || [];
+    const toggle = (list, id) => {
+      const i = list.indexOf(id);
+      if (i > -1) list.splice(i, 1); else list.push(id);
+      renderCreation();
+    };
+
+    labelled(panel, 'Scars, injuries and marks');
+    panel.appendChild(el('p', 'row-note', 'Pick as many as the body has earned. More will arrive on their own.'));
+    const marks = el('div', 'opts');
+    for (const m of MARK_PRESETS) {
+      const b = el('button', 'opt' + (look.marks.includes(m.id) ? ' on' : ''), m.name);
+      b.type = 'button';
+      b.addEventListener('click', () => toggle(look.marks, m.id));
+      marks.appendChild(b);
+    }
+    panel.appendChild(marks);
+    if (look.marks.includes('custom')) {
+      const input = el('input', 'text-input');
+      input.placeholder = 'Describe it - "a bite mark from a Saibaman", "frost damage on the left hand"';
+      input.maxLength = 90;
+      input.value = look.customMark || '';
+      input.addEventListener('input', () => { look.customMark = input.value; });
+      panel.appendChild(input);
+    }
+
+    labelled(panel, 'Worn');
+    panel.appendChild(el('p', 'row-note', 'What you start with. Scouters, belts, halos and swords come with the life.'));
+    const accs = el('div', 'opts');
+    for (const a2 of ACCESSORY_PRESETS.filter((x) => x.starter)) {
+      const b = el('button', 'opt' + (look.accessories.includes(a2.id) ? ' on' : ''), a2.name);
+      b.type = 'button';
+      b.addEventListener('click', () => toggle(look.accessories, a2.id));
+      accs.appendChild(b);
+    }
+    panel.appendChild(accs);
+    if (look.accessories.includes('custom')) {
+      const input = el('input', 'text-input');
+      input.placeholder = 'Name it - "my father\'s dog tags", "a bell on a cord"';
+      input.maxLength = 60;
+      input.value = look.customAccessory || '';
+      input.addEventListener('input', () => { look.customAccessory = input.value; });
+      panel.appendChild(input);
+    }
   } else if (CREATE_TAB === 'self') {
     labelled(panel, 'Temperament');
     optionRow(panel.appendChild(el('div', 'opts')), TEMPERAMENTS, DRAFT.temperamentId, (id) => {
@@ -500,14 +546,20 @@ function showEvent(event) {
   body.appendChild(el('p', 'event-text', event.text));
 
   for (const choice of event.choices) {
-    const b = el('button', 'choice' + (choice.danger ? ' danger' : ''));
+    const b = el('button', 'choice' + (choice.danger ? ' danger' : '') + (choice.freeText ? ' speak' : ''));
     b.type = 'button';
     b.disabled = !!choice.locked;
     b.appendChild(el('span', 'choice-label', choice.label));
     if (choice.hint || choice.lockReason) {
       b.appendChild(el('span', 'choice-hint', choice.locked ? choice.lockReason : choice.hint));
     }
-    b.addEventListener('click', () => answerEvent(event, choice.id));
+    // Some choices want words rather than a click. The box opens in the card
+    // body so the player can see what they are answering while they type.
+    if (choice.freeText) {
+      b.addEventListener('click', () => openFreeTextChoice(event, choice));
+    } else {
+      b.addEventListener('click', () => answerEvent(event, choice.id));
+    }
     foot.appendChild(b);
   }
 
@@ -523,8 +575,50 @@ function showEvent(event) {
   openSheet('event');
 }
 
-function answerEvent(event, choiceId) {
-  const pending = choose(GAME, choiceId);
+function openFreeTextChoice(event, choice) {
+  const body = $('sheet-body');
+  const foot = $('sheet-foot');
+  foot.innerHTML = '';
+
+  const wrap = el('div', 'speak-box');
+  wrap.appendChild(el('div', 'field-label', choice.label));
+  const box = document.createElement('textarea');
+  box.className = 'text-input';
+  box.rows = 3;
+  box.maxLength = 240;
+  box.placeholder = choice.placeholder || 'In your own words.';
+  wrap.appendChild(box);
+  body.appendChild(wrap);
+  box.focus();
+
+  const say = el('button', 'choice');
+  say.type = 'button';
+  say.appendChild(el('span', 'choice-label', 'Say it'));
+  say.addEventListener('click', async () => {
+    const text = box.value.trim();
+    if (!text) { flash('Say something first.'); return; }
+    say.disabled = true;
+    const params = { text };
+    // Where a model is connected it reads the wish as the dragon would,
+    // rather than leaving it to keyword matching.
+    if (choice.interpret && backendName() !== 'none') {
+      say.querySelector('.choice-label').innerHTML = '<span class="spinner"></span>The dragon considers it';
+      const read = await interpretWish(GAME, text, choice.interpret);
+      if (read && read.wishId) { params.wishId = read.wishId; params.reading = read.reading; }
+    }
+    answerEvent(event, choice.id, params);
+  });
+  foot.appendChild(say);
+
+  const back = el('button', 'choice');
+  back.type = 'button';
+  back.appendChild(el('span', 'choice-label', 'Choose from a list instead'));
+  back.addEventListener('click', () => showEvent(event));
+  foot.appendChild(back);
+}
+
+function answerEvent(event, choiceId, params) {
+  const pending = choose(GAME, choiceId, params || null);
   renderHud();
   renderFeed();
   maybeNarrate(event);
@@ -542,6 +636,14 @@ function answerEvent(event, choiceId) {
     GAME.turn.pendingBattle = null;
     closeSheet();
     openBattle(spec);
+    return;
+  }
+
+  const bracket = GAME.turn && GAME.turn.pendingTournament;
+  if (bracket) {
+    GAME.turn.pendingTournament = null;
+    closeSheet();
+    openTournament(bracket);
     return;
   }
 
@@ -1065,6 +1167,27 @@ function panelRecords() {
     }
   }
 
+  const marks = allMarks(c);
+  const worn = wornAccessories(c);
+  if (marks.length || worn.length) {
+    body.appendChild(el('div', 'group-label', 'The body'));
+    for (const sc of c.scars || []) {
+      const memo = el('div', 'memo');
+      memo.innerHTML = `<b>AGE ${sc.year - c.birthYear}</b> ${String(sc.text || '').replace(/[<>]/g, '')}`;
+      body.appendChild(memo);
+    }
+    const chosen = (c.appearance.marks || []).map((id) => {
+      const m = MARK_PRESETS.find((x) => x.id === id);
+      return id === 'custom' && c.appearance.customMark ? c.appearance.customMark : (m ? m.name : id);
+    });
+    if (chosen.length) body.appendChild(el('div', 'memo', `Marked from the start: ${chosen.join(', ').toLowerCase()}.`));
+    const wornNames = worn.map((id) => {
+      const a2 = ACCESSORY_PRESETS.find((x) => x.id === id);
+      return id === 'custom' && c.appearance.customAccessory ? c.appearance.customAccessory : (a2 ? a2.name : id);
+    });
+    if (wornNames.length) body.appendChild(el('div', 'memo', `Wearing: ${wornNames.join(', ').toLowerCase()}.`));
+  }
+
   body.appendChild(el('div', 'group-label', 'Record'));
   const stats = [
     ['Fights', GAME.stats.fights], ['Won', GAME.stats.wins], ['Lost', GAME.stats.losses],
@@ -1240,6 +1363,191 @@ function openTrial(trial) {
     if (!GAME.character.alive) { showDeath(); return; }
     showPlay();
     flash(result.text.slice(0, 140));
+  });
+}
+
+// ------------------------------------------------------------- tournament
+
+function openTournament(t) {
+  TOURNEY = t;
+  GAME.tournament = t;
+  const format = FORMATS[t.formatId] || FORMATS.wmat;
+  $('tourney-kicker').textContent = t.finished ? 'Result' : roundName(t);
+  $('tourney-title').textContent = t.name;
+  $('tourney-sub').textContent = format.flavour;
+  $('tourney-rules').textContent = [
+    t.rules.note,
+    t.purse ? `Purse ${zeni(t.purse)}.` : '',
+  ].filter(Boolean).join(' ');
+  renderTournament();
+  showScreen('tourney');
+}
+
+function renderTournament() {
+  const t = TOURNEY;
+  if (!t) return;
+  const body = $('tourney-body');
+  const foot = $('tourney-foot');
+  body.innerHTML = '';
+  foot.innerHTML = '';
+
+  $('tourney-kicker').textContent = t.finished ? 'Result' : roundName(t);
+
+  if (t.finished) {
+    body.appendChild(el('div', 'tourney-result', placementLine(t)));
+    const champ = t.champion ? t.champion.name : (t.placement === 1 ? GAME.character.name : null);
+    if (champ) body.appendChild(el('div', 'tourney-verdict', `${champ} takes the tournament.`));
+  } else {
+    const field = describeField(GAME, t);
+    body.appendChild(el('div', 'tourney-verdict', field.line));
+
+    const foe = playerOpponent(t);
+    if (foe) {
+      const card = el('div', 'draw-card');
+      card.appendChild(el('div', 'draw-label', `${roundName(t)} - your draw`));
+      card.appendChild(el('div', 'draw-name', foe.name));
+      card.appendChild(el('div', 'draw-power', `Power level ${numberish(foe.power)} - ${powerTier(foe.power)}`));
+      if (foe.flavour) card.appendChild(el('div', 'draw-flavour', foe.universe ? `Universe ${foe.universe}. ${foe.flavour}` : `They ${foe.flavour}.`));
+      body.appendChild(card);
+    } else {
+      body.appendChild(el('div', 'draw-card', 'You have a bye this round.'));
+    }
+  }
+
+  // Everything that has happened so far, round by round.
+  for (const round of bracketSummary(t)) {
+    const block = el('div', 'round-block' + (!t.finished && round.title === roundName(t) ? ' now' : ''));
+    block.appendChild(el('div', 'round-name', round.title));
+    for (const line of round.lines) {
+      const isMine = /^You /.test(line) || line.includes(GAME.character.name);
+      block.appendChild(el('div', 'round-line' + (isMine ? ' mine' : ''), line));
+    }
+    body.appendChild(block);
+  }
+
+  if (!t.finished) {
+    const live = standings(t).map((e) => e.id);
+    const block = el('div', 'round-block');
+    block.appendChild(el('div', 'round-name', `Still in - ${live.length}`));
+    for (const e of t.entrants) {
+      const row = el('div', 'field-row'
+        + (live.includes(e.id) ? '' : ' out')
+        + (e.isPlayer ? ' you' : ''));
+      row.appendChild(el('span', 'fname', e.name));
+      if (e.universe) row.appendChild(el('span', 'ftag', `U${e.universe}`));
+      else if (e.isCanon) row.appendChild(el('span', 'ftag', 'known'));
+      row.appendChild(el('span', 'fpow', numberish(e.power)));
+      block.appendChild(row);
+    }
+    body.appendChild(block);
+  }
+
+  if (t.finished) {
+    const done = el('button', 'primary-btn', 'Leave the arena');
+    done.type = 'button';
+    done.addEventListener('click', closeTournament);
+    foot.appendChild(done);
+    return;
+  }
+
+  const foe = playerOpponent(t);
+  const go = el('button', 'primary-btn', foe ? `Fight ${foe.name}` : 'Take the bye');
+  go.type = 'button';
+  go.addEventListener('click', fightTournamentMatch);
+  foot.appendChild(go);
+
+  const quit = el('button', 'ghost-btn danger', 'Withdraw');
+  quit.type = 'button';
+  quit.addEventListener('click', () => {
+    const rng = getRng(GAME);
+    recordPlayerResult(GAME, rng, t, false, { disqualified: true });
+    saveRng(GAME, rng);
+    t.finished = true;
+    t.withdrew = true;
+    renderTournament();
+  });
+  foot.appendChild(quit);
+}
+
+function fightTournamentMatch() {
+  const t = TOURNEY;
+  const rng = getRng(GAME);
+  // Everyone else's round happens first, so by the time you walk out the
+  // half of the draw you are not in has already thinned.
+  resolveOtherMatches(GAME, rng, t);
+  saveRng(GAME, rng);
+
+  const spec = matchBattleSpec(GAME, t);
+  if (!spec) {
+    const r2 = getRng(GAME);
+    recordPlayerResult(GAME, r2, t, true);
+    saveRng(GAME, r2);
+    renderTournament();
+    return;
+  }
+  openBattle(spec, (battle, after) => finishTournamentMatch(battle, after));
+}
+
+function finishTournamentMatch(battle, after) {
+  const t = TOURNEY;
+  const rng = getRng(GAME);
+  const won = battle.outcome === 'won';
+  // Killing somebody under tournament rules ends your tournament, whatever
+  // the scoreboard says.
+  const dq = t.rules.noKilling && battle.killed;
+  recordPlayerResult(GAME, rng, t, won, { disqualified: dq });
+  saveRng(GAME, rng);
+
+  if (dq) {
+    GAME.character.karma = Math.max(-100, GAME.character.karma - 18);
+    GAME.character.fame = Math.min(100, GAME.character.fame + 10);
+    t.finished = true;
+  }
+
+  renderHud();
+  if (!GAME.character.alive) { showDeath(); return; }
+  openTournament(t);
+}
+
+function closeTournament() {
+  const t = TOURNEY;
+  const rng = getRng(GAME);
+  const result = settle(GAME, t, rng);
+  saveRng(GAME, rng);
+
+  logLine({ kind: 'event', title: t.name, text: result.text });
+  addTournamentFact(t, result);
+
+  TOURNEY = null;
+  GAME.tournament = null;
+  renderHud();
+  renderFeed();
+  autosave();
+
+  if (result.erased) {
+    GAME.character.alive = false;
+    GAME.character.death = { cause: 'Erased with Universe 7', year: currentYear(GAME), age: GAME.character.age };
+    showDeath();
+    return;
+  }
+  showPlay();
+  const next = currentEvent(GAME);
+  if (next) showEvent(next);
+}
+
+function addTournamentFact(t, result) {
+  const year = currentYear(GAME);
+  GAME.memory.facts.push({
+    id: GAME.memory.nextFactId++,
+    type: 'tournament',
+    text: result.won
+      ? `Won ${t.name}${result.beat.length ? ', through ' + result.beat.join(' and ') : ''}.`
+      : `${placementLine(t)} at ${t.name}.`,
+    year,
+    subject: null,
+    object: null,
+    weight: result.won ? 8 : 3,
+    tags: ['fame', result.won ? 'milestone' : 'tournament'],
   });
 }
 
@@ -1423,7 +1731,9 @@ function endBattle() {
   wrap.innerHTML = '';
   $('battle-tabs').innerHTML = '';
 
-  const outcomeLine = {
+  const outcomeLine = BATTLE.byRingOut
+    ? (BATTLE.outcome === 'won' ? 'Ring-out. You win.' : 'Ring-out. You lose.')
+    : {
     won: 'You win.', lost: 'You lose.', fled: 'You got out.',
     yielded: 'You yielded and they let it stand.', draw: 'Neither of you could finish it.',
   }[BATTLE.outcome] || 'It is over.';
@@ -1435,8 +1745,14 @@ function endBattle() {
   done.addEventListener('click', () => closeBattle(after));
   wrap.appendChild(done);
 
+  // Under tournament rules there is nothing to decide: an official is already
+  // standing between you, and killing somebody ends your tournament.
+  if (BATTLE.outcome === 'won' && BATTLE.noKilling) {
+    pushBattleLines(['The officials are between you before you have finished the thought.'], 'big');
+  }
+
   // Beating somebody is a decision point, not just a result.
-  if (BATTLE.outcome === 'won' && BATTLE.stakes !== 'spar') {
+  if (BATTLE.outcome === 'won' && BATTLE.stakes !== 'spar' && !BATTLE.noKilling) {
     const spare = el('button', 'bact');
     spare.type = 'button';
     spare.appendChild(el('span', 'bact-label', 'Let them live'));
@@ -1456,6 +1772,7 @@ function endBattle() {
       const ref = BATTLE.context || {};
       const npc = ref.npcId ? GAME.npcs[ref.npcId] : (ref.canonId ? GAME.npcs['canon_' + ref.canonId] : null);
       if (npc) { npc.alive = false; npc.causeOfDeath = 'You killed them'; }
+      BATTLE.killed = true;
       GAME.character.karma = Math.max(-100, GAME.character.karma - 22);
       GAME.stats.kills += 1;
       pushBattleLines(['You finish it. Nobody argues with the result.'], 'big');
@@ -1479,6 +1796,8 @@ function closeBattle(after) {
   logLine({ kind: 'event', title: `Fight: ${BATTLE.them.name}`, text: summary, outcome: after.text || '' });
 
   const death = after.death;
+  const battle = BATTLE;
+  const handOff = BATTLE_RETURN;
   BATTLE = null;
   BATTLE_RETURN = null;
   renderHud();
@@ -1495,6 +1814,9 @@ function closeBattle(after) {
     // A fight can leave you at zero; the year change decides whether that kills you.
     flash('You are barely alive. Age up and find out if you make it.');
   }
+  // A fight can belong to something larger - a tournament round, say - which
+  // wants control back rather than dropping you into the year.
+  if (handOff) { handOff(battle, after); return; }
   showPlay();
   const next = currentEvent(GAME);
   if (next) showEvent(next);

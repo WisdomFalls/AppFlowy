@@ -198,7 +198,7 @@ export function currentEvent(state) {
 }
 
 /** Answer the current event. Returns the next event, or null when the year ends. */
-export function choose(state, choiceId) {
+export function choose(state, choiceId, params = null) {
   const t = state.turn;
   if (!t || t.done) return null;
   const event = t.queue[t.index];
@@ -209,7 +209,17 @@ export function choose(state, choiceId) {
   }
 
   const rng = getRng(state);
-  const result = resolveChoice(state, rng, event, choiceId);
+  const result = resolveChoice(state, rng, event, choiceId, params);
+
+  // A choice can call the next card directly - a dragon that is still in the
+  // sky, a menu that needs a second step. It goes in right behind this one.
+  if (result.followUp) {
+    const next = forceEvent(state, rng, result.followUp, result.followUpSlots || {});
+    if (next) {
+      t.queue.splice(t.index + 1, 0, next);
+      t.count += 1;
+    }
+  }
   saveRng(state, rng);
 
   t.entries.push({
@@ -224,6 +234,9 @@ export function choose(state, choiceId) {
   // A choice that starts a fight parks the spec here; the UI picks it up and
   // hands control to the battle screen before the year continues.
   if (result.battle) t.pendingBattle = result.battle;
+  // A tournament is the same handover, one level up: the bracket takes over
+  // and gives the year back when the draw is done with you.
+  if (result.tournament) t.pendingTournament = result.tournament;
 
   for (const f of result.facts || []) {
     addFact(state.memory, { type: f.type || 'event', text: f.text, year: state.character.age, weight: f.weight ?? 1, tags: f.tags || [] });

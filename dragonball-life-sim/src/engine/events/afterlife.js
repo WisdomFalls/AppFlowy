@@ -11,6 +11,7 @@ import { combatPower } from '../stats.js';
 import { canonAlive } from '../../data/canon.js';
 import { generateFullName } from '../../data/names.js';
 import { numberish } from '../text.js';
+import { createTournament, autoRunTournament, settle } from '../tournament.js';
 
 function canonAliveNow(ctx, c) {
   return canonAlive(c, ctx.year);
@@ -376,21 +377,18 @@ registerEvents([
     text: `{Every so often the Kais hold one|The dead fight each other for something to do|Four quadrants, one ring}.
       {Nobody can die here, which changes everything|There are no rules worth the name|Some of these fighters have been dead for ten thousand years}.`,
     choices: (ctx) => [
-      { id: 'enter', label: 'Enter', effect: (c2) => {
-        const baseline = combatPower(c2.character) * 0.4;
-        const field = buildField(c2.rng, (power) => ({
-          name: generateFullName(c2.rng, c2.rng.pick(['other', 'saiyan', 'namekian', 'frostdemon'])),
-          power: Math.round(power),
-        }), 4, baseline);
-        const result = runTournament(c2.state, c2.rng, field, { lethality: 0 });
-        const lines = result.record.map((r) => `${r.foe}: ${r.won ? 'beaten' : 'not beaten'}.`);
-        if (result.won) {
-          const changes = apply(c2, { happiness: 20, fame: 10, stats: { technique: 4 } });
-          fact(c2, 'Won the Other World Tournament.', { type: 'tournament', weight: 7, tags: ['death', 'fame'] });
-          return { text: `${lines.join(' ')} {You win it|The Grand Kai says something complimentary|The dead applaud, which sounds strange}.`, changes };
-        }
-        const changes = apply(c2, { happiness: 4, stats: { technique: 3, discipline: 2 } });
-        return { text: `${lines.join(' ')} {You lose to somebody who has been practising for a millennium|It is the best fight you have ever had|Nobody bleeds and it still hurts}.`, changes };
+      { id: 'enter', label: 'Enter', hint: 'Fight the draw. Nobody here can die of it.', effect: (c2) => {
+        const t = createTournament(c2.state, c2.rng, {
+          formatId: 'otherworld',
+          purse: 0,
+          placeId: 'otherworld_arena',
+        });
+        const opener = `{The Grand Kai reads the draw off a scrap of paper|A dead announcer with a live microphone|Four quadrants, one ring}. Your name is on it.`;
+        if (!c2.state.autoBattle) return { text: opener, tournament: t };
+        autoRunTournament(c2.state, c2.rng, t);
+        const out = settle(c2.state, t, c2.rng);
+        if (out.won) fact(c2, 'Won the Other World Tournament.', { type: 'tournament', weight: 7, tags: ['death', 'fame'] });
+        return { text: `${opener} ${out.text}`, changes: apply(c2, { stats: { technique: 3 } }) };
       } },
       { id: 'skip', label: 'Train instead', effect: (c2) => {
         const t = trainYear(c2, { intensity: 1.4, placeMult: 2.0 });

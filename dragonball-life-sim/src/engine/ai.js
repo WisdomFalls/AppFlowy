@@ -470,6 +470,48 @@ flattery on somebody grieving. Reply with ONLY a JSON object:
   }
 }
 
+/**
+ * Map a spoken wish onto one the engine can actually grant. A dragon is a
+ * literal creature, so the model is asked to interpret rather than be generous:
+ * it picks the nearest legal wish, or says the wish cannot be granted.
+ */
+export async function interpretWish(state, spoken, catalogue, opts = {}) {
+  const backend = backendName();
+  if (backend === 'none') return null;
+  const ctx = aiContext(state);
+  const menu = catalogue.map((w) => `${w.id}: ${w.name} - ${w.desc}`).join('\n');
+  const prompt = `A Dragon Ball life simulator. A player has summoned the dragon and spoken a wish aloud.
+Map it onto exactly one wish from the list, or refuse.
+
+${STYLE}
+
+WHO IS WISHING: ${ctx.name}, ${ctx.race}, age ${ctx.age}, ${ctx.tier}, karma ${ctx.karma}.
+WHAT THEY SAID: "${String(spoken).slice(0, 300)}"
+
+WISHES THIS DRAGON CAN GRANT:
+${menu}
+
+Dragons are literal and slightly petty. Pick the closest wish even if the phrasing is
+loose, but refuse outright if they asked for something no wish on the list covers.
+Reply with ONLY a JSON object:
+{"wishId": "the id, or null if nothing fits", "reading": "how the dragon takes it, 8-25 words"}`;
+
+  try {
+    let raw;
+    if (backend === 'sample') raw = await callSampleJson(prompt, opts);
+    else if (backend === 'custom') raw = parseJsonLoosely(await callCustom(prompt, opts));
+    else raw = parseJsonLoosely(await callApi(prompt, opts));
+    if (!raw || typeof raw !== 'object') return null;
+    const id = typeof raw.wishId === 'string' ? raw.wishId.trim() : null;
+    return {
+      wishId: catalogue.some((w) => w.id === id) ? id : null,
+      reading: sanitiseText(raw.reading, 200),
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
 function clampNum(v, lo, hi) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;

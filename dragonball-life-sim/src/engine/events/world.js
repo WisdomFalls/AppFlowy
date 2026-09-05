@@ -10,11 +10,40 @@ import { combatPower, powerTier } from '../stats.js';
 import { TIMELINE, isTournamentYear, worldPowerBaseline, eraName } from '../../data/timeline.js';
 import { canonAvailable } from '../../data/canon.js';
 import { ensureBallSet, ballsHeld, ballsOn, ballManifest, scatterAfterWish, ballsAreInert } from '../dragonballs.js';
-import { WISHES, getItem } from '../../data/items.js';
+import { getItem } from '../../data/items.js';
 import { getPlace, PLACES } from '../../data/places.js';
 import { generateFullName } from '../../data/names.js';
 import { getTechnique, TECHNIQUES } from '../../data/techniques.js';
 import { numberish, zeni, ordinal } from '../text.js';
+import { createTournament, autoRunTournament, settle } from '../tournament.js';
+
+
+/**
+ * The canon tournaments are tournaments, not disasters. Walking into the 23rd
+ * World Martial Arts Tournament should put you in the draw, not in a lethal
+ * fight with an unnamed finalist.
+ */
+const TIMELINE_TOURNAMENTS = {
+  tournament_23: { formatId: 'wmat', purse: 500000, placeId: 'papaya' },
+  tournament_25: { formatId: 'wmat', purse: 900000, placeId: 'papaya' },
+  cell_games: { formatId: 'cell_games', purse: 0, placeId: 'wastes', size: 4 },
+  u6_tournament: {
+    formatId: 'invitational', purse: 0, placeId: 'tournament_u6', size: 6,
+    name: 'The Tournament of Destroyers',
+    // Universe 6 against Universe 7, chosen by two gods on a whim.
+    canonFilter: (e) => true,
+  },
+  tournament_of_power: { formatId: 'top', purse: 0, placeId: 'top_arena', size: 12 },
+};
+
+function timelineTournament(c2, ev) {
+  const spec = TIMELINE_TOURNAMENTS[ev.id];
+  if (!spec) return null;
+  return createTournament(c2.state, c2.rng, {
+    name: spec.name || ev.name,
+    ...spec,
+  });
+}
 
 /** Hand over N of the still-hidden balls, no searching required. */
 function claimBalls(state, rng, count) {
@@ -93,12 +122,27 @@ registerEvents([
       }
       if (s.reachable) {
         list.push({
-          id: 'intervene', label: 'Go. Put yourself in the middle of it.', danger: true,
-          hint: describeGap(combatPower(ctx.character), s.evThreat),
+          id: 'intervene',
+          label: TIMELINE_TOURNAMENTS[s.evId] ? 'Enter it' : 'Go. Put yourself in the middle of it.',
+          danger: !TIMELINE_TOURNAMENTS[s.evId],
+          hint: TIMELINE_TOURNAMENTS[s.evId]
+            ? 'Fight the draw, round by round.'
+            : describeGap(combatPower(ctx.character), s.evThreat),
           effect: (c2, sl) => {
             const ev = TIMELINE.find((t) => t.id === sl.evId);
             c2.state.world.resolved.push(ev.id);
             fact(c2, `Walked into ${ev.name}.`, { type: 'history', weight: 6, tags: ['witness'] });
+
+            const bracket = timelineTournament(c2, ev);
+            if (bracket) {
+              const opener = `${ev.blurb} You put your name in.`;
+              if (!c2.state.autoBattle) return { text: opener, tournament: bracket };
+              autoRunTournament(c2.state, c2.rng, bracket);
+              const out = settle(c2.state, bracket, c2.rng);
+              if (out.erased) return { text: `${opener} ${out.text}`, outcome: { death: 'Erased with Universe 7' } };
+              return { text: `${opener} ${out.text}` };
+            }
+
             // A warlord with tanks does not open with a Kamehameha.
             const kit = ev.threat > 1e8 ? ['ki_blast', 'death_beam', 'death_ball']
               : ev.threat > 1e4 ? ['ki_blast', 'galick_gun']
@@ -166,27 +210,28 @@ registerEvents([
     text: `{The posters go up in spring|It comes round again|Papaya Island, same as always}.
       {Everyone who thinks they are somebody will be there|The prize is [purse] Zeni|Somebody non-human always enters and pretends otherwise}.`,
     choices: (ctx, s) => [
-      { id: 'enter', label: 'Enter', effect: (c2, sl) => {
-        const baseline = Math.max(60, worldPowerBaseline(c2.year) * 0.02, combatPower(c2.character) * 0.25);
-        const field = buildField(c2.rng, (power, i) => ({
-          name: generateFullName(c2.rng, c2.rng.pick(['earthling', 'earthling', 'namekian', 'saiyan', 'other'])),
-          power: Math.round(power),
-        }), 4, baseline);
-        const result = runTournament(c2.state, c2.rng, field, { lethality: 0.03 });
-        const lines = result.record.map((r) =>
-          `Round ${r.round}: ${r.foe} (${numberish(r.foePower)}). ${r.won ? 'You take it.' : 'You do not.'}`);
-        if (result.won) {
-          c2.state.world.tournamentWins++;
-          const changes = apply(c2, { zeni: sl.purse, fame: 22, happiness: 22, health: -20 });
-          fact(c2, `Won the ${ordinal(sl.num)} World Martial Arts Tournament.`, { type: 'tournament', weight: 8, tags: ['fame', 'milestone'] });
-          return { text: `${lines.join(' ')} {They put a belt on you|The crowd is enormous|Somebody who has never met you cries}. World Champion.`, changes };
-        }
-        const changes = apply(c2, {
-          zeni: result.placement <= 2 ? Math.round(sl.purse * 0.3) : 20000,
-          fame: Math.max(2, 12 - result.placement * 2), happiness: -4, health: -14,
+      { id: 'enter', label: 'Enter', hint: 'Fight the draw yourself', effect: (c2, sl) => {
+        // A real bracket, seeded from who is alive and fighting in this year.
+        // The UI takes over from here and hands the year back afterwards.
+        const t = createTournament(c2.state, c2.rng, {
+          formatId: 'wmat',
+          purse: sl.purse,
+          edition: sl.num,
+          name: `The ${ordinal(sl.num)} World Martial Arts Tournament`,
+          placeId: 'papaya',
         });
-        fact(c2, `Placed ${ordinal(result.placement)} at the ${ordinal(sl.num)} tournament.`, { type: 'tournament', weight: 3, tags: ['fame'] });
-        return { text: `${lines.join(' ')} ${ordinal(result.placement)} place. #aftermath#`, changes };
+        const opener = `{You put your name down|You sign the sheet|They spell it wrong on the board and you let them}. `
+          + `The draw goes up an hour later.`;
+        if (!c2.state.autoBattle) return { text: opener, tournament: t };
+        // Headless: run the same bracket, same odds, no screen.
+        autoRunTournament(c2.state, c2.rng, t);
+        const out = settle(c2.state, t, c2.rng);
+        if (out.won) {
+          fact(c2, `Won the ${ordinal(sl.num)} World Martial Arts Tournament.`, { type: 'tournament', weight: 8, tags: ['fame', 'milestone'] });
+        } else {
+          fact(c2, `${out.placement === 2 ? 'Runner-up' : ordinal(out.placement) + ' place'} at the ${ordinal(sl.num)} tournament.`, { type: 'tournament', weight: 3, tags: ['fame'] });
+        }
+        return { text: `${opener} ${out.text}`, changes: [] };
       } },
       { id: 'watch', label: 'Watch from the stands', effect: (c2) => {
         const changes = apply(c2, { happiness: 6, stats: { technique: 3, intellect: 2 } });
@@ -229,119 +274,6 @@ registerEvents([
         changes: apply(c2, { karma: 3 }),
       }) },
     ],
-  },
-
-  {
-    id: 'summon_dragon', noFatigue: true, tags: ['world', 'dragonball', 'revival'], weight: 400,
-    when: (ctx) => ballsHeld(ctx.state) >= 7,
-    slots: (ctx) => ({ dragon: (ctx.state.world.ballSet && ctx.state.world.ballSet.dragon) || 'Shenron' }),
-    title: 'Summoning',
-    text: `Seven balls in a circle, and {the sky goes black|the sun goes out|the clouds come apart}.
-      [dragon] {rises|uncoils|fills the sky}. {"State your wish"|"Speak. I will grant one wish"|"You have summoned me. Make it quick"}.`,
-    choices: (ctx, s) => {
-      const c = ctx.character;
-      const usable = WISHES.filter((w) => !w.race || w.race.includes(c.raceId));
-      return ctx.rng.sample(usable, 4).map((w) => ({
-        id: w.id,
-        label: w.name,
-        hint: w.desc,
-        effect: (c2) => {
-          scatterAfterWish(c2.state, c2.rng);
-          c2.state.world.wishesUsed.push(w.id);
-          fact(c2, `Wished: ${w.name}.`, { type: 'wish', weight: 7, tags: ['dragonball', 'wish'] });
-          switch (w.id) {
-            case 'revive_one': {
-              const dead = Object.values(c2.state.npcs).filter((n) => !n.alive);
-              if (dead.length) {
-                const back = c2.rng.pick(dead);
-                back.alive = true;
-                back.deadSince = null;
-                const changes = apply(c2, { happiness: 25, karma: 8 });
-                fact(c2, `Brought ${back.name} back.`, { type: 'revival', weight: 8, subject: back.id, tags: ['wish'] });
-                return { text: `You say the name. {The dragon's eyes flare|It is done before you finish speaking|"It is done"}. ${back.name} {is standing there|opens their eyes somewhere and starts walking home|does not understand yet}.`, changes };
-              }
-              return { text: `{Nobody you love is dead yet|The dragon waits|"There is no one"}. You waste it on something small.`, changes: apply(c2, { happiness: -4 }) };
-            }
-            case 'immortality': {
-              c2.character.flags.immortal = true;
-              c2.character.lifeExpectancy = 99999;
-              const changes = apply(c2, { karma: -8, happiness: 10 });
-              fact(c2, 'Became immortal. Cannot die of age.', { type: 'wish', weight: 10, tags: ['wish', 'immortal'] });
-              return { text: `{"It is done"|The dragon looks at you for a long moment first|Nothing feels different, which is the frightening part}. You will not age out of this. {Everything else can still kill you|That was not the same as invulnerable and you knew it|You have all the time there is}.`, changes };
-            }
-            case 'power_up': {
-              const mult = c2.rng.float(6, 22);
-              const yearsLost = c2.rng.int(8, 25);
-              c2.character.lifeExpectancy = Math.max(c2.character.age + 3, c2.character.lifeExpectancy - yearsLost);
-              c2.character.flags.wished_power = true;
-              const changes = apply(c2, { powerMult: mult, happiness: 12, karma: -6 });
-              fact(c2, `Wished for power and paid ${yearsLost} years for it.`, { type: 'wish', weight: 9, tags: ['wish', 'power'] });
-              return { text: `{It arrives all at once and it hurts|Your whole body reorganises|You can feel it come in}. Power multiplied ${mult.toFixed(1)} times. {The dragon takes the payment from the far end of your life|"The years were the price"|You are ${yearsLost} years shorter now and you did not feel it go}.`, changes };
-            }
-            case 'unlock_potential': {
-              c2.character.flags.potential_unlocked = true;
-              c2.character.flags.wish_potential = true;
-              const changes = apply(c2, { powerMult: c2.rng.float(3, 7), happiness: 15,
-                stats: { kiControl: 8, technique: 6, discipline: 4 } });
-              fact(c2, 'Had every drop of latent potential unlocked by the dragon.', { type: 'wish', weight: 9, tags: ['wish', 'power'] });
-              return { text: `{Nothing visible happens|There is no glow, no shout|You feel the ceiling come off}. Everything you could ever have been is available now, and you have to go and take it.`, changes };
-            }
-            case 'wealth': {
-              const changes = apply(c2, { zeni: c2.rng.int(50000000, 900000000), happiness: 12, karma: -3 });
-              return { text: `{It is vulgar and it works|Money appears in accounts you do not have|Somebody delivers a case}. {You are rich|Obscenely rich|Rich enough that it stops being a number}.`, changes };
-            }
-            case 'youth': {
-              c2.character.age = Math.max(16, c2.character.age - 20);
-              const changes = apply(c2, { health: 40, happiness: 18 });
-              fact(c2, 'Wished twenty years back onto the clock.', { type: 'wish', weight: 8, tags: ['wish'] });
-              return { text: `{Twenty years come off|You feel it in your knees first|Your hands look wrong for a week}. You are ${c2.character.age} again, with everything you learned still in there.`, changes };
-            }
-            case 'knowledge': {
-              const pool = TECHNIQUES.filter((t) => !c2.character.techniques.includes(t.id)
-                && (!t.races || t.races.includes(c2.character.raceId)));
-              if (pool.length) {
-                const t = c2.rng.weighted(pool, (x) => x.tier);
-                c2.character.techniques.push(t.id);
-                c2.state.stats.techniquesLearned++;
-                const changes = apply(c2, { stats: { technique: 5, kiControl: 4 }, happiness: 10 });
-                fact(c2, `The dragon put the ${t.name} into their head.`, { type: 'technique', weight: 6, tags: ['wish', 'technique'] });
-                return { text: `{It arrives as memory, not learning|You simply know it, the way you know your own name|There is no practice and no wonder}. The ${t.name}. {It feels like cheating|You did not earn it|It works perfectly}.`, changes };
-              }
-              return { text: `You already know everything the dragon can teach.`, changes: [] };
-            }
-            case 'restore_planet': {
-              setWorldFlag(c2.state, 'planet_restored');
-              const changes = apply(c2, { karma: 25, happiness: 25, fame: 12 });
-              fact(c2, 'Asked the dragon to put a dead world back.', { type: 'wish', weight: 10, tags: ['wish', 'hero'] });
-              return { text: `{Rock, water, air, in that order|It takes eleven seconds|The dragon says it is done and it is done}. {The people are a separate wish and you do not have another|Somewhere a world is spinning again|It is empty and it is there}.`, changes };
-            }
-            case 'tail_back': {
-              c2.character.tail = true;
-              const changes = apply(c2, { happiness: 10, powerMult: 1.3 });
-              return { text: `{It grows back overnight|You wake up and it is there|It is stronger than the old one}. {You had forgotten what balance felt like|The moon is interesting again|Do not let anyone grab it}.`, changes };
-            }
-            case 'revive_many': {
-              const dead = Object.values(c2.state.npcs).filter((n) => !n.alive);
-              dead.forEach((n) => { n.alive = true; n.deadSince = null; });
-              const changes = apply(c2, { happiness: 30, karma: 20, fame: 10 });
-              fact(c2, `Brought back everyone who had died. All ${dead.length} of them.`, { type: 'revival', weight: 10, tags: ['wish', 'hero'] });
-              return { text: `{You ask for all of them|"All of them"|You do not ask for anything for yourself}. ${dead.length ? `${dead.length} people wake up somewhere and do not know why.` : `Nobody is dead. The dragon waits, then leaves.`}`, changes };
-            }
-            case 'erase_memory': {
-              c2.character.fame = 0;
-              Object.values(c2.state.npcs).forEach((n) => { n.closeness = Math.round(n.closeness * 0.2); n.respect = 0; });
-              const changes = apply(c2, { happiness: -10, karma: -4 });
-              fact(c2, 'Wished to be forgotten by everyone.', { type: 'wish', weight: 9, tags: ['wish'] });
-              return { text: `{It works immediately|Nobody looks up when you walk past|Somebody you love calls you "excuse me"}. {You are nobody|It is exactly what you asked for|You did not think about what it would feel like}.`, changes };
-            }
-            default: {
-              const changes = apply(c2, { happiness: 8 });
-              return { text: `{The dragon grants it without comment|"It is done"|It takes about four seconds}. {The sky comes back|The balls scatter across the world|They will be stone for a year}.`, changes };
-            }
-          }
-        },
-      }));
-    },
   },
 
   {
