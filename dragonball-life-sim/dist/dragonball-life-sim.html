@@ -2054,7 +2054,7 @@ const PLACES = [
   { id: 'planet_frieza_79', name: 'Planet Frieza 79', planet: 'frieza_79', danger: 5, training: 1.8, tags: ['imperial', 'jobs', 'highgrav'], desc: 'One of hundreds of identical garrison worlds, numbered rather than named.' },
   { id: 'yardrat', name: 'Planet Yardrat', planet: 'yardrat', danger: 2, training: 2.1, tags: ['spirit', 'teachers', 'quiet'], desc: 'Small people, enormous techniques, and an unshakeable calm about all of it.' },
   { id: 'cereal', name: 'Planet Cereal', planet: 'cereal', danger: 3, training: 1.4, tags: ['ruins', 'dragonballs', 'farm', 'conquered'], desc: 'Ruins, dust, longgrain in the fields nobody has taken yet, and a dragon nobody outside the system has heard of.' },
-  { id: 'kryllos', name: 'Kryllos', planet: 'kryllos', danger: 4, training: 1.6, tags: ['wild', 'hivekind'], desc: 'Red dust and hive-mounds to the horizon. Every Kryllian you meet already knows you are here.' },
+  { id: 'kryllos', name: 'Kryllos', planet: 'kryllos', danger: 4, training: 1.6, tags: ['wild', 'hivekind', 'civilised'], desc: 'Red dust and hive-mounds to the horizon. Every Kryllian you meet already knows you are here.' },
   { id: 'verdana', name: 'The Verdana Concourse', planet: 'verdana', danger: 2, training: 1.1, tags: ['urban', 'civilised', 'jobs', 'tournament'], desc: 'A trade city grown into a jungle canopy. A dozen species, one currency board, and no questions asked.' },
   { id: 'coldrift', name: 'Coldrift Mining Colony', planet: 'coldrift', danger: 5, training: 1.7, tags: ['imperial', 'jobs', 'highgrav', 'cold'], desc: 'Ice, crystal dust, and a quota that does not care how many shifts you have already worked.' },
   { id: 'kai_planet', name: "King Kai's Planet", planet: 'otherworld', danger: 2, training: 3.5, tags: ['divine', 'otherworld', 'highgrav', 'mentor'], desc: 'Ten times gravity on a rock the size of a football pitch, with a monkey and a cricket.' },
@@ -2947,6 +2947,22 @@ const TRANSFORMATIONS = [
     req: { anyFlag: ['grief', 'watched_friend_die', 'homeworld_destroyed'], power: 40000 },
     hint: 'Everything your people lost, arriving at once.',
     desc: 'Not a technique. Just every dead relative shouting through you at the same time.',
+  },
+
+  // ------------------------------------------------------------- Kryllian
+  {
+    id: 'hive_surge', name: 'Hive Surge', ladder: ['kryllian'], tier: 2,
+    mult: 5, drain: 6, control: -10, strain: 5,
+    req: { stat: { durability: 55 } },
+    hint: 'The chitin was always going to do more than sit there. Push against it until it answers.',
+    desc: 'Your plating splits along its growth-lines and hardens again, thicker, mid-fight.',
+  },
+  {
+    id: 'broodcall', name: 'Broodcall', ladder: ['kryllian'], tier: 5,
+    mult: 16, drain: 4, control: 10, strain: 6,
+    req: { parent: 'hive_surge', stat: { discipline: 60 } },
+    hint: 'The hive is always listening. Ask it for everything at once.',
+    desc: 'Every Kryllian who ever fought is in your head for exactly as long as you need them.',
   },
 
   // -------------------------------------------------------- Universal / fusion
@@ -11955,7 +11971,7 @@ function careersFor(character, placeTags, planetId) {
     // Earth's careers are not available off Earth.
     if (c.planets && planetId && !c.planets.includes(planetId)) return false;
     if (!c.planets && planetId && planetId !== 'earth'
-      && !c.where.some((w) => ['imperial', 'tech', 'civilised', 'urban', 'saiyan', 'spirit', 'sacred', 'otherworld'].includes(w))) {
+      && !c.where.some((w) => ['imperial', 'tech', 'civilised', 'urban', 'saiyan', 'spirit', 'sacred', 'otherworld', 'hivekind'].includes(w))) {
       return false;
     }
     if (!c.where.some((w) => placeTags.includes(w))) return false;
@@ -13131,6 +13147,7 @@ const { generateSignatureName } = __mod_data_names_js;
 const { numberish } = __mod_engine_text_js;
 const { getPlace } = __mod_data_places_js;
 const { unlockableForms, tryUnlockForm, describeRequirement } = __mod_engine_progression_js;
+const { zenkaiBoost } = __mod_engine_stats_js;
 
 const FOCUSES = [
   { id: 'strength', name: 'Raw strength', stats: { strength: 5, durability: 2 }, intensity: 1.3 },
@@ -13479,12 +13496,12 @@ registerEvents([
           return { text: `Three metres. {It takes eleven minutes|You do not remember doing it|Your ribs go on the way}. You hit the cutoff and lie there {laughing|not moving|for an hour}. ${powerLine(t.gained)}`, changes };
         }
         const changes = apply(ctx, { health: -45, happiness: -10 });
-        const boost = ctx.character.raceId === 'saiyan' || ctx.character.raceId === 'halfsaiyan';
         let text = `You do not make it. {Somebody finds you|The chamber vents automatically|You wake up in a bed}, {days later|much later|with a lot of things broken}.`;
-        if (boost) {
-          const gain = Math.round(ctx.character.power * 0.3);
-          apply(ctx, { power: gain });
-          text += ` {Saiyan bodies do this|When you can stand again you are stronger than you were|Nearly dying agreed with you}. ${powerLine(gain)}`;
+        // Zenkai (or its weaker half-blood form) is a body answering a near-death,
+        // not a species tag - anyone who has it gets the boost, scaled by how much.
+        const gain = zenkaiBoost(ctx.character, ctx.rng, 1.1);
+        if (gain > 0) {
+          text += ` {Your body does this|When you can stand again you are stronger than you were|Nearly dying agreed with you}. ${powerLine(gain)}`;
         }
         return { text, changes };
       } },

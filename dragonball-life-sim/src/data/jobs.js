@@ -386,7 +386,7 @@ export function careersFor(character, placeTags, planetId) {
     // Earth's careers are not available off Earth.
     if (c.planets && planetId && !c.planets.includes(planetId)) return false;
     if (!c.planets && planetId && planetId !== 'earth'
-      && !c.where.some((w) => ['imperial', 'tech', 'civilised', 'urban', 'saiyan', 'spirit', 'sacred', 'otherworld'].includes(w))) {
+      && !c.where.some((w) => ['imperial', 'tech', 'civilised', 'urban', 'saiyan', 'spirit', 'sacred', 'otherworld', 'hivekind'].includes(w))) {
       return false;
     }
     if (!c.where.some((w) => placeTags.includes(w))) return false;

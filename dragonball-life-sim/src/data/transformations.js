@@ -344,6 +344,22 @@ export const TRANSFORMATIONS = [
     desc: 'Not a technique. Just every dead relative shouting through you at the same time.',
   },
 
+  // ------------------------------------------------------------- Kryllian
+  {
+    id: 'hive_surge', name: 'Hive Surge', ladder: ['kryllian'], tier: 2,
+    mult: 5, drain: 6, control: -10, strain: 5,
+    req: { stat: { durability: 55 } },
+    hint: 'The chitin was always going to do more than sit there. Push against it until it answers.',
+    desc: 'Your plating splits along its growth-lines and hardens again, thicker, mid-fight.',
+  },
+  {
+    id: 'broodcall', name: 'Broodcall', ladder: ['kryllian'], tier: 5,
+    mult: 16, drain: 4, control: 10, strain: 6,
+    req: { parent: 'hive_surge', stat: { discipline: 60 } },
+    hint: 'The hive is always listening. Ask it for everything at once.',
+    desc: 'Every Kryllian who ever fought is in your head for exactly as long as you need them.',
+  },
+
   // -------------------------------------------------------- Universal / fusion
   {
     id: 'potara_fusion', name: 'Potara Fusion', ladder: ['*'], tier: 12,

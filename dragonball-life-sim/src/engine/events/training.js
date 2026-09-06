@@ -10,6 +10,7 @@ import { generateSignatureName } from '../../data/names.js';
 import { numberish } from '../text.js';
 import { getPlace } from '../../data/places.js';
 import { unlockableForms, tryUnlockForm, describeRequirement } from '../progression.js';
+import { zenkaiBoost } from '../stats.js';
 
 const FOCUSES = [
   { id: 'strength', name: 'Raw strength', stats: { strength: 5, durability: 2 }, intensity: 1.3 },
@@ -358,12 +359,12 @@ registerEvents([
           return { text: `Three metres. {It takes eleven minutes|You do not remember doing it|Your ribs go on the way}. You hit the cutoff and lie there {laughing|not moving|for an hour}. ${powerLine(t.gained)}`, changes };
         }
         const changes = apply(ctx, { health: -45, happiness: -10 });
-        const boost = ctx.character.raceId === 'saiyan' || ctx.character.raceId === 'halfsaiyan';
         let text = `You do not make it. {Somebody finds you|The chamber vents automatically|You wake up in a bed}, {days later|much later|with a lot of things broken}.`;
-        if (boost) {
-          const gain = Math.round(ctx.character.power * 0.3);
-          apply(ctx, { power: gain });
-          text += ` {Saiyan bodies do this|When you can stand again you are stronger than you were|Nearly dying agreed with you}. ${powerLine(gain)}`;
+        // Zenkai (or its weaker half-blood form) is a body answering a near-death,
+        // not a species tag - anyone who has it gets the boost, scaled by how much.
+        const gain = zenkaiBoost(ctx.character, ctx.rng, 1.1);
+        if (gain > 0) {
+          text += ` {Your body does this|When you can stand again you are stronger than you were|Nearly dying agreed with you}. ${powerLine(gain)}`;
         }
         return { text, changes };
       } },
