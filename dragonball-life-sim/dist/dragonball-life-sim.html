@@ -5395,7 +5395,7 @@ function portraitSvg(character, opts = {}) {
     }
   }
 
-  drawMarks(parts, character, { cx, headTop, headH, headR, chin, eyeY, eyeColour: finalEyeColour, skin, shoulderWidth, H });
+  drawMarks(parts, character, { cx, headTop, headH, headR, chin, eyeY, eyeColour: finalEyeColour, skin, shoulderWidth, H, bodyColour });
   drawAccessories(parts, character, {
     cx, headTop, headH, headR, chin, eyeY, skin, shoulderWidth, H,
     hasHair, hairColour: finalHair, outfit, stage,
@@ -5409,7 +5409,7 @@ const INK = 'rgba(20,20,40,.55)';
 const METAL = '#9aa3b2';
 
 function drawMarks(parts, character, g) {
-  const { cx, headTop, headH, headR, chin, eyeY, eyeColour, shoulderWidth, H } = g;
+  const { cx, headTop, headH, headR, chin, eyeY, eyeColour, skin, shoulderWidth, H, bodyColour } = g;
   const marks = allMarks(character);
   for (const m of marks) {
     switch (m) {
@@ -5423,9 +5423,21 @@ function drawMarks(parts, character, g) {
         parts.push(`<path d="M${cx + 13} ${eyeY - 18} l3 10" stroke="${SCAR}" stroke-width="2.8" stroke-linecap="round"/>`);
         break;
       case 'scar_chest':
+        // A scar does not show through an intact shirt - the fabric over it
+        // is torn, with a bit of skin actually showing through the gap.
+        if (bodyColour) {
+          parts.push(`<ellipse cx="${cx - 2}" cy="${chin + 38}" rx="10" ry="8" fill="${skin}"/>`);
+          parts.push(`<path d="M${cx - 20} ${chin + 24} l10 6 l-4 10 l12 4 l-6 12 l10 4"
+            fill="none" stroke="${shade(bodyColour, -0.35)}" stroke-width="2" stroke-linecap="round"/>`);
+        }
         parts.push(`<path d="M${cx - 18} ${chin + 30} l36 26" stroke="${SCAR}" stroke-width="3" stroke-linecap="round"/>`);
         break;
       case 'scar_arm':
+        if (bodyColour) {
+          parts.push(`<ellipse cx="${cx + shoulderWidth - 10}" cy="${chin + 58}" rx="7" ry="16" fill="${skin}"/>`);
+          parts.push(`<path d="M${cx + shoulderWidth - 16} ${chin + 44} l5 5 l-4 6 l6 5"
+            fill="none" stroke="${shade(bodyColour, -0.35)}" stroke-width="1.6" stroke-linecap="round"/>`);
+        }
         parts.push(`<path d="M${cx + shoulderWidth - 12} ${chin + 44} l4 40" stroke="${SCAR}" stroke-width="2.6" stroke-linecap="round"/>`);
         break;
       case 'burn_arm':
