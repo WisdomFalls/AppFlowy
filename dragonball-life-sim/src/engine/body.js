@@ -10,13 +10,13 @@ import { getRace, hasPerk } from '../data/races.js';
 
 export const INJURIES = {
   lost_arm: {
-    id: 'lost_arm', name: 'a missing arm', mark: 'stump_arm', side: true,
+    id: 'lost_arm', name: 'a missing arm', mark: 'missing_arm', side: true,
     desc: 'Taken off above the elbow. You have relearned everything one-handed.',
     stats: { strength: -10, technique: -8 }, powerMult: 0.82,
     prosthetic: 'mech_arm',
   },
   lost_hand: {
-    id: 'lost_hand', name: 'a missing hand', mark: 'stump_hand', side: true,
+    id: 'lost_hand', name: 'a missing hand', mark: 'scar_arm', side: true,
     desc: 'The hand is gone. The arm works.',
     stats: { technique: -6, strength: -3 }, powerMult: 0.93,
     prosthetic: 'mech_arm',
@@ -28,7 +28,7 @@ export const INJURIES = {
     prosthetic: 'mech_eye',
   },
   lost_leg: {
-    id: 'lost_leg', name: 'a missing leg', mark: 'stump_leg', side: true,
+    id: 'lost_leg', name: 'a missing leg', mark: 'missing_leg', side: true,
     desc: 'Below the knee. Flight helps. Standing does not.',
     stats: { speed: -12, strength: -4 }, powerMult: 0.85,
     prosthetic: 'mech_leg',
@@ -51,10 +51,28 @@ export const INJURIES = {
 };
 
 export const PROSTHETICS = {
-  mech_arm: { id: 'mech_arm', name: 'a mechanical arm', restores: 0.85, stats: { strength: 4 } },
-  mech_leg: { id: 'mech_leg', name: 'a mechanical leg', restores: 0.85, stats: { speed: 3 } },
-  mech_eye: { id: 'mech_eye', name: 'an artificial eye', restores: 0.9, stats: { technique: 2 } },
+  mech_arm: { id: 'mech_arm', name: 'a mechanical arm', restores: 0.85, stats: { strength: 4 }, mark: 'cyber_arm' },
+  mech_leg: { id: 'mech_leg', name: 'a mechanical leg', restores: 0.85, stats: { speed: 3 }, mark: 'cyber_leg' },
+  mech_eye: { id: 'mech_eye', name: 'an artificial eye', restores: 0.9, stats: { technique: 2 }, mark: 'cyber_eye' },
 };
+
+/** Who can fit one, and how well, in a given year and place. */
+export const FITTERS = [
+  { id: 'capsule', name: 'Capsule Corporation', quality: 1.0, cost: 400000, from: 750,
+    where: ['earth'], blurb: 'Bulma has done stranger jobs and will bill you for this one.' },
+  { id: 'gero', name: 'a Red Ribbon research annexe', quality: 1.0, cost: 0, from: 745, until: 767,
+    where: ['earth'], karma: -12,
+    blurb: 'They will do it for nothing, and there is a reason it is for nothing.' },
+  { id: 'imperial', name: 'a Frieza Force medical bay', quality: 0.85, cost: 120000, from: 730,
+    where: ['frieza_79'], karma: -4, blurb: 'Standard issue. They fit hundreds a year and it shows.' },
+  { id: 'local', name: 'a back-street engineer', quality: 0.6, cost: 45000, from: 700,
+    where: null, blurb: 'They mostly do agricultural machinery. They are willing to try.' },
+];
+
+export function fittersFor(year, planetId) {
+  return FITTERS.filter((f) => year >= f.from && (!f.until || year <= f.until)
+    && (!f.where || f.where.includes(planetId)));
+}
 
 export function injuries(character) {
   return character.injuries || (character.injuries = []);
@@ -91,15 +109,38 @@ export function maim(state, rng, id, from, opts = {}) {
     c.scars.push({ year: entry.year, mark: spec.mark, from: entry.from, text: `${spec.name}, from ${entry.from}.` });
   }
   if (id === 'lost_tail') c.tail = false;
-  applyInjuryStats(c, spec, 1);
+  entry.statLedger = {};
+  bumpStats(c, spec.stats, 1, 1, entry.statLedger);
+  entry.powerLedger = c.power;
   c.power = Math.max(1, Math.round(c.power * spec.powerMult));
+  entry.powerLedger = entry.powerLedger - c.power;
 
   return opts.text || `You lose ${entry.side ? 'the ' + entry.side + ' one' : 'it'}. ${spec.desc}`;
 }
 
 function applyInjuryStats(character, spec, sign) {
   for (const [k, v] of Object.entries(spec.stats || {})) {
-    character.stats[k] = clamp((character.stats[k] || 0) + v * sign, 1, 100);
+    character.stats[k] = clamp(Math.round((character.stats[k] || 0) + v * sign), 1, 100);
+  }
+}
+
+/**
+ * Apply a stat change and record exactly what was applied, so undoing it later
+ * returns the character to the number they started on rather than to whatever
+ * rounding leaves behind.
+ */
+function bumpStats(character, stats, sign, scale = 1, ledger = null) {
+  for (const [k, v] of Object.entries(stats || {})) {
+    const before = character.stats[k] || 0;
+    const after = clamp(Math.round(before + v * sign * scale), 1, 100);
+    character.stats[k] = after;
+    if (ledger) ledger[k] = (ledger[k] || 0) + (after - before);
+  }
+}
+
+function undoLedger(character, ledger) {
+  for (const [k, v] of Object.entries(ledger || {})) {
+    character.stats[k] = clamp(Math.round((character.stats[k] || 0) - v), 1, 100);
   }
 }
 
@@ -137,15 +178,21 @@ export function fitProsthetic(state, injuryId, quality = 1) {
 
   entry.prosthetic = part.id;
   entry.quality = quality;
+  // The portrait stops showing a stump and starts showing what replaced it.
+  if (spec.mark) c.scars = (c.scars || []).filter((s) => s.mark !== spec.mark);
+  if (part.mark) {
+    c.scars = c.scars || [];
+    c.scars.push({ year: c.birthYear + c.age, mark: part.mark, from: 'fitted', text: `${part.name}, fitted.` });
+  }
   // Give back most of what the injury took, scaled by how good the work is.
   const back = part.restores * quality;
-  for (const [k, v] of Object.entries(spec.stats || {})) {
-    c.stats[k] = clamp((c.stats[k] || 0) - v * back, 1, 100);
-  }
-  for (const [k, v] of Object.entries(part.stats || {})) {
-    c.stats[k] = clamp((c.stats[k] || 0) + v * quality, 1, 100);
-  }
-  c.power = Math.max(1, Math.round(c.power / (spec.powerMult + (1 - spec.powerMult) * (1 - back))));
+  entry.restored = back;
+  entry.fitLedger = {};
+  bumpStats(c, spec.stats, -1, back, entry.fitLedger);
+  bumpStats(c, part.stats, 1, quality, entry.fitLedger);
+  const powerBefore = c.power;
+  c.power = Math.max(1, Math.round(c.power + entry.powerLedger * back));
+  entry.fitPower = c.power - powerBefore;
   return {
     ok: true, part,
     text: `${part.name.charAt(0).toUpperCase()}${part.name.slice(1)}, fitted and calibrated. `
@@ -162,12 +209,17 @@ export function restoreBody(state) {
   for (const e of list) {
     const spec = INJURIES[e.id];
     if (!spec) continue;
-    if (!e.prosthetic) {
-      applyInjuryStats(c, spec, -1);
-      c.power = Math.max(1, Math.round(c.power / spec.powerMult));
+    // Reverse exactly what was applied, in the order it was applied.
+    if (e.prosthetic) {
+      undoLedger(c, e.fitLedger);
+      if (e.fitPower) c.power = Math.max(1, c.power - e.fitPower);
     }
+    undoLedger(c, e.statLedger);
+    if (e.powerLedger) c.power = Math.max(1, c.power + e.powerLedger);
     if (e.id === 'lost_tail' && getRace(c.raceId).perks.includes('oozaru')) c.tail = true;
     if (spec.mark) c.scars = (c.scars || []).filter((s) => s.mark !== spec.mark);
+    const part = e.prosthetic ? PROSTHETICS[e.prosthetic] : null;
+    if (part && part.mark) c.scars = (c.scars || []).filter((s) => s.mark !== part.mark);
   }
   const n = list.length;
   c.injuries = [];

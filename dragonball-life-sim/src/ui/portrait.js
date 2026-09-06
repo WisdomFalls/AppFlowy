@@ -111,7 +111,9 @@ export const MARK_PRESETS = [
   { id: 'missing_ear', name: 'Missing ear', where: 'face' },
   { id: 'missing_arm', name: 'Missing arm', where: 'body' },
   { id: 'cyber_eye', name: 'Mechanical eye', where: 'face' },
+  { id: 'missing_leg', name: 'Missing leg', where: 'body' },
   { id: 'cyber_arm', name: 'Mechanical arm', where: 'body' },
+  { id: 'cyber_leg', name: 'Mechanical leg', where: 'body' },
   { id: 'dots', name: 'Forehead dots', where: 'face' },
   { id: 'thirdeye', name: 'Third eye', where: 'face' },
   { id: 'tattoo_face', name: 'Face tattoo', where: 'face' },
@@ -691,6 +693,15 @@ function drawMarks(parts, character, g) {
         parts.push(`<path d="M${cx - shoulderWidth - 2} ${chin + 40} L${cx - shoulderWidth + 14} ${chin + 40} L${cx - shoulderWidth + 10} ${H} L${cx - shoulderWidth - 6} ${H} Z" fill="var(--ground)"/>`);
         parts.push(`<path d="M${cx - shoulderWidth} ${chin + 42} q8 -6 14 0" stroke="${SCAR}" stroke-width="3" fill="none"/>`);
         break;
+      case 'missing_leg':
+        // Taken below the knee. The stump ends where the leg used to carry on.
+        parts.push(`<rect x="${cx + 2}" y="${chin + 96}" width="14" height="${Math.max(0, H - (chin + 96))}" fill="var(--ground)"/>`);
+        parts.push(`<path d="M${cx + 3} ${chin + 96} q7 5 13 0" stroke="${SCAR}" stroke-width="3" fill="none"/>`);
+        break;
+      case 'cyber_leg':
+        parts.push(`<rect x="${cx + 3}" y="${chin + 96}" width="12" height="${Math.max(0, H - (chin + 98))}" rx="4" fill="${METAL}"/>`);
+        parts.push(`<rect x="${cx + 4}" y="${chin + 112}" width="10" height="3" fill="rgba(0,0,0,.35)"/>`);
+        break;
       case 'cyber_eye':
         parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="7" fill="${METAL}"/>`);
         parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="3" fill="#d1322a"/>`);
@@ -766,6 +777,15 @@ function drawAccessories(parts, character, g) {
       case 'scouter':
         parts.push(`<path d="M${cx + headR - 2} ${headTop + 30} l-6 -14 l-26 4" stroke="#3a3a44" stroke-width="3" fill="none"/>`);
         parts.push(`<rect x="${cx + 4}" y="${eyeY - 9}" width="20" height="15" rx="3" fill="#3fd6a4" opacity="0.8"/>`);
+        break;
+      case 'missing_leg':
+        // Taken below the knee. The stump ends where the leg used to carry on.
+        parts.push(`<rect x="${cx + 2}" y="${chin + 96}" width="14" height="${Math.max(0, H - (chin + 96))}" fill="var(--ground)"/>`);
+        parts.push(`<path d="M${cx + 3} ${chin + 96} q7 5 13 0" stroke="${SCAR}" stroke-width="3" fill="none"/>`);
+        break;
+      case 'cyber_leg':
+        parts.push(`<rect x="${cx + 3}" y="${chin + 96}" width="12" height="${Math.max(0, H - (chin + 98))}" rx="4" fill="${METAL}"/>`);
+        parts.push(`<rect x="${cx + 4}" y="${chin + 112}" width="10" height="3" fill="rgba(0,0,0,.35)"/>`);
         break;
       case 'cyber_eye':
         break;

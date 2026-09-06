@@ -3687,7 +3687,9 @@ const MARK_PRESETS = [
   { id: 'missing_ear', name: 'Missing ear', where: 'face' },
   { id: 'missing_arm', name: 'Missing arm', where: 'body' },
   { id: 'cyber_eye', name: 'Mechanical eye', where: 'face' },
+  { id: 'missing_leg', name: 'Missing leg', where: 'body' },
   { id: 'cyber_arm', name: 'Mechanical arm', where: 'body' },
+  { id: 'cyber_leg', name: 'Mechanical leg', where: 'body' },
   { id: 'dots', name: 'Forehead dots', where: 'face' },
   { id: 'thirdeye', name: 'Third eye', where: 'face' },
   { id: 'tattoo_face', name: 'Face tattoo', where: 'face' },
@@ -4267,6 +4269,15 @@ function drawMarks(parts, character, g) {
         parts.push(`<path d="M${cx - shoulderWidth - 2} ${chin + 40} L${cx - shoulderWidth + 14} ${chin + 40} L${cx - shoulderWidth + 10} ${H} L${cx - shoulderWidth - 6} ${H} Z" fill="var(--ground)"/>`);
         parts.push(`<path d="M${cx - shoulderWidth} ${chin + 42} q8 -6 14 0" stroke="${SCAR}" stroke-width="3" fill="none"/>`);
         break;
+      case 'missing_leg':
+        // Taken below the knee. The stump ends where the leg used to carry on.
+        parts.push(`<rect x="${cx + 2}" y="${chin + 96}" width="14" height="${Math.max(0, H - (chin + 96))}" fill="var(--ground)"/>`);
+        parts.push(`<path d="M${cx + 3} ${chin + 96} q7 5 13 0" stroke="${SCAR}" stroke-width="3" fill="none"/>`);
+        break;
+      case 'cyber_leg':
+        parts.push(`<rect x="${cx + 3}" y="${chin + 96}" width="12" height="${Math.max(0, H - (chin + 98))}" rx="4" fill="${METAL}"/>`);
+        parts.push(`<rect x="${cx + 4}" y="${chin + 112}" width="10" height="3" fill="rgba(0,0,0,.35)"/>`);
+        break;
       case 'cyber_eye':
         parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="7" fill="${METAL}"/>`);
         parts.push(`<circle cx="${cx + 15}" cy="${eyeY}" r="3" fill="#d1322a"/>`);
@@ -4342,6 +4353,15 @@ function drawAccessories(parts, character, g) {
       case 'scouter':
         parts.push(`<path d="M${cx + headR - 2} ${headTop + 30} l-6 -14 l-26 4" stroke="#3a3a44" stroke-width="3" fill="none"/>`);
         parts.push(`<rect x="${cx + 4}" y="${eyeY - 9}" width="20" height="15" rx="3" fill="#3fd6a4" opacity="0.8"/>`);
+        break;
+      case 'missing_leg':
+        // Taken below the knee. The stump ends where the leg used to carry on.
+        parts.push(`<rect x="${cx + 2}" y="${chin + 96}" width="14" height="${Math.max(0, H - (chin + 96))}" fill="var(--ground)"/>`);
+        parts.push(`<path d="M${cx + 3} ${chin + 96} q7 5 13 0" stroke="${SCAR}" stroke-width="3" fill="none"/>`);
+        break;
+      case 'cyber_leg':
+        parts.push(`<rect x="${cx + 3}" y="${chin + 96}" width="12" height="${Math.max(0, H - (chin + 98))}" rx="4" fill="${METAL}"/>`);
+        parts.push(`<rect x="${cx + 4}" y="${chin + 112}" width="10" height="3" fill="rgba(0,0,0,.35)"/>`);
         break;
       case 'cyber_eye':
         break;
@@ -8234,13 +8254,13 @@ const { getRace, hasPerk } = __mod_data_races_js;
 
 const INJURIES = {
   lost_arm: {
-    id: 'lost_arm', name: 'a missing arm', mark: 'stump_arm', side: true,
+    id: 'lost_arm', name: 'a missing arm', mark: 'missing_arm', side: true,
     desc: 'Taken off above the elbow. You have relearned everything one-handed.',
     stats: { strength: -10, technique: -8 }, powerMult: 0.82,
     prosthetic: 'mech_arm',
   },
   lost_hand: {
-    id: 'lost_hand', name: 'a missing hand', mark: 'stump_hand', side: true,
+    id: 'lost_hand', name: 'a missing hand', mark: 'scar_arm', side: true,
     desc: 'The hand is gone. The arm works.',
     stats: { technique: -6, strength: -3 }, powerMult: 0.93,
     prosthetic: 'mech_arm',
@@ -8252,7 +8272,7 @@ const INJURIES = {
     prosthetic: 'mech_eye',
   },
   lost_leg: {
-    id: 'lost_leg', name: 'a missing leg', mark: 'stump_leg', side: true,
+    id: 'lost_leg', name: 'a missing leg', mark: 'missing_leg', side: true,
     desc: 'Below the knee. Flight helps. Standing does not.',
     stats: { speed: -12, strength: -4 }, powerMult: 0.85,
     prosthetic: 'mech_leg',
@@ -8275,10 +8295,28 @@ const INJURIES = {
 };
 
 const PROSTHETICS = {
-  mech_arm: { id: 'mech_arm', name: 'a mechanical arm', restores: 0.85, stats: { strength: 4 } },
-  mech_leg: { id: 'mech_leg', name: 'a mechanical leg', restores: 0.85, stats: { speed: 3 } },
-  mech_eye: { id: 'mech_eye', name: 'an artificial eye', restores: 0.9, stats: { technique: 2 } },
+  mech_arm: { id: 'mech_arm', name: 'a mechanical arm', restores: 0.85, stats: { strength: 4 }, mark: 'cyber_arm' },
+  mech_leg: { id: 'mech_leg', name: 'a mechanical leg', restores: 0.85, stats: { speed: 3 }, mark: 'cyber_leg' },
+  mech_eye: { id: 'mech_eye', name: 'an artificial eye', restores: 0.9, stats: { technique: 2 }, mark: 'cyber_eye' },
 };
+
+/** Who can fit one, and how well, in a given year and place. */
+const FITTERS = [
+  { id: 'capsule', name: 'Capsule Corporation', quality: 1.0, cost: 400000, from: 750,
+    where: ['earth'], blurb: 'Bulma has done stranger jobs and will bill you for this one.' },
+  { id: 'gero', name: 'a Red Ribbon research annexe', quality: 1.0, cost: 0, from: 745, until: 767,
+    where: ['earth'], karma: -12,
+    blurb: 'They will do it for nothing, and there is a reason it is for nothing.' },
+  { id: 'imperial', name: 'a Frieza Force medical bay', quality: 0.85, cost: 120000, from: 730,
+    where: ['frieza_79'], karma: -4, blurb: 'Standard issue. They fit hundreds a year and it shows.' },
+  { id: 'local', name: 'a back-street engineer', quality: 0.6, cost: 45000, from: 700,
+    where: null, blurb: 'They mostly do agricultural machinery. They are willing to try.' },
+];
+
+function fittersFor(year, planetId) {
+  return FITTERS.filter((f) => year >= f.from && (!f.until || year <= f.until)
+    && (!f.where || f.where.includes(planetId)));
+}
 
 function injuries(character) {
   return character.injuries || (character.injuries = []);
@@ -8315,15 +8353,38 @@ function maim(state, rng, id, from, opts = {}) {
     c.scars.push({ year: entry.year, mark: spec.mark, from: entry.from, text: `${spec.name}, from ${entry.from}.` });
   }
   if (id === 'lost_tail') c.tail = false;
-  applyInjuryStats(c, spec, 1);
+  entry.statLedger = {};
+  bumpStats(c, spec.stats, 1, 1, entry.statLedger);
+  entry.powerLedger = c.power;
   c.power = Math.max(1, Math.round(c.power * spec.powerMult));
+  entry.powerLedger = entry.powerLedger - c.power;
 
   return opts.text || `You lose ${entry.side ? 'the ' + entry.side + ' one' : 'it'}. ${spec.desc}`;
 }
 
 function applyInjuryStats(character, spec, sign) {
   for (const [k, v] of Object.entries(spec.stats || {})) {
-    character.stats[k] = clamp((character.stats[k] || 0) + v * sign, 1, 100);
+    character.stats[k] = clamp(Math.round((character.stats[k] || 0) + v * sign), 1, 100);
+  }
+}
+
+/**
+ * Apply a stat change and record exactly what was applied, so undoing it later
+ * returns the character to the number they started on rather than to whatever
+ * rounding leaves behind.
+ */
+function bumpStats(character, stats, sign, scale = 1, ledger = null) {
+  for (const [k, v] of Object.entries(stats || {})) {
+    const before = character.stats[k] || 0;
+    const after = clamp(Math.round(before + v * sign * scale), 1, 100);
+    character.stats[k] = after;
+    if (ledger) ledger[k] = (ledger[k] || 0) + (after - before);
+  }
+}
+
+function undoLedger(character, ledger) {
+  for (const [k, v] of Object.entries(ledger || {})) {
+    character.stats[k] = clamp(Math.round((character.stats[k] || 0) - v), 1, 100);
   }
 }
 
@@ -8361,15 +8422,21 @@ function fitProsthetic(state, injuryId, quality = 1) {
 
   entry.prosthetic = part.id;
   entry.quality = quality;
+  // The portrait stops showing a stump and starts showing what replaced it.
+  if (spec.mark) c.scars = (c.scars || []).filter((s) => s.mark !== spec.mark);
+  if (part.mark) {
+    c.scars = c.scars || [];
+    c.scars.push({ year: c.birthYear + c.age, mark: part.mark, from: 'fitted', text: `${part.name}, fitted.` });
+  }
   // Give back most of what the injury took, scaled by how good the work is.
   const back = part.restores * quality;
-  for (const [k, v] of Object.entries(spec.stats || {})) {
-    c.stats[k] = clamp((c.stats[k] || 0) - v * back, 1, 100);
-  }
-  for (const [k, v] of Object.entries(part.stats || {})) {
-    c.stats[k] = clamp((c.stats[k] || 0) + v * quality, 1, 100);
-  }
-  c.power = Math.max(1, Math.round(c.power / (spec.powerMult + (1 - spec.powerMult) * (1 - back))));
+  entry.restored = back;
+  entry.fitLedger = {};
+  bumpStats(c, spec.stats, -1, back, entry.fitLedger);
+  bumpStats(c, part.stats, 1, quality, entry.fitLedger);
+  const powerBefore = c.power;
+  c.power = Math.max(1, Math.round(c.power + entry.powerLedger * back));
+  entry.fitPower = c.power - powerBefore;
   return {
     ok: true, part,
     text: `${part.name.charAt(0).toUpperCase()}${part.name.slice(1)}, fitted and calibrated. `
@@ -8386,18 +8453,23 @@ function restoreBody(state) {
   for (const e of list) {
     const spec = INJURIES[e.id];
     if (!spec) continue;
-    if (!e.prosthetic) {
-      applyInjuryStats(c, spec, -1);
-      c.power = Math.max(1, Math.round(c.power / spec.powerMult));
+    // Reverse exactly what was applied, in the order it was applied.
+    if (e.prosthetic) {
+      undoLedger(c, e.fitLedger);
+      if (e.fitPower) c.power = Math.max(1, c.power - e.fitPower);
     }
+    undoLedger(c, e.statLedger);
+    if (e.powerLedger) c.power = Math.max(1, c.power + e.powerLedger);
     if (e.id === 'lost_tail' && getRace(c.raceId).perks.includes('oozaru')) c.tail = true;
     if (spec.mark) c.scars = (c.scars || []).filter((s) => s.mark !== spec.mark);
+    const part = e.prosthetic ? PROSTHETICS[e.prosthetic] : null;
+    if (part && part.mark) c.scars = (c.scars || []).filter((s) => s.mark !== part.mark);
   }
   const n = list.length;
   c.injuries = [];
   return { ok: true, text: `Everything that was taken off you is back on. ${n === 1 ? 'It' : 'All of it'} works.` };
 }
-  return { INJURIES, PROSTHETICS, injuries, hasInjury, maim, injuryList, prostheticOptions, fitProsthetic, restoreBody };
+  return { INJURIES, PROSTHETICS, FITTERS, fittersFor, injuries, hasInjury, maim, injuryList, prostheticOptions, fitProsthetic, restoreBody };
 })();
 
 /* ==== engine/battle.js ==== */
@@ -18099,6 +18171,199 @@ registerEvents([
 ]);
 })();
 
+/* ==== engine/events/injury.js ==== */
+const __mod_engine_events_injury_js = (function () {
+// Living with what a fight took.
+//
+// An injury that only ever subtracts is a punishment, not a mechanic. These
+// are the answers: an engineer who can bolt something on, a Namekian who can
+// simply put it back, and the long, unglamorous business of relearning how to
+// fight with a body that is a different shape than it was.
+
+const { registerEvents } = __mod_engine_generator_js;
+const { apply, fact, relate, trainYear, powerLine, findNpc, canonHere, meetCanon } = __mod_engine_events_helpers_js;
+const { injuries, injuryList, prostheticOptions, fitProsthetic, restoreBody, fittersFor, INJURIES } = __mod_engine_body_js;
+const { getPlace } = __mod_data_places_js;
+const { currencyFor, priceIn, canAfford, debit, formatMoney } = __mod_data_currency_js;
+const { hasPerk } = __mod_data_races_js;
+
+function maimed(ctx) {
+  return injuries(ctx.character).length > 0;
+}
+
+function unfixed(ctx) {
+  return prostheticOptions(ctx.character);
+}
+
+registerEvents([
+  {
+    id: 'get_fitted', tags: ['life', 'body'], weight: 40, minBioAge: 10,
+    when: (ctx) => !ctx.character.inAfterlife && unfixed(ctx).length > 0
+      && fittersFor(ctx.year, ctx.place.planet).length > 0,
+    slots: (ctx) => {
+      const opt = unfixed(ctx)[0];
+      const fitters = fittersFor(ctx.year, ctx.place.planet);
+      const best = fitters.sort((a, b) => b.quality - a.quality)[0];
+      const cheap = fitters.sort((a, b) => a.cost - b.cost)[0];
+      return {
+        missing: opt.spec.name,
+        injuryId: opt.entry.id,
+        side: opt.entry.side || '',
+        part: opt.part.name,
+        bestId: best.id, bestName: best.name, bestBlurb: best.blurb,
+        bestCost: best.cost, bestQuality: best.quality,
+        cheapId: cheap.id, cheapName: cheap.name, cheapBlurb: cheap.blurb,
+        cheapCost: cheap.cost, cheapQuality: cheap.quality,
+        same: best.id === cheap.id ? 'yes' : 'no',
+      };
+    },
+    title: 'Something To Replace It',
+    text: `{You have been managing|You have got used to it, which is not the same as being fine|`
+      + `It has been long enough that people have stopped asking}. `
+      + `{Somebody mentions that [missing] does not have to be permanent|`
+      + `There is a way round [missing] and you have been putting it off|`
+      + `[bestName] can do something about [missing]}.`,
+    choices: (ctx, s) => {
+      const list = [];
+      const cur = currencyFor(getPlace(ctx.character.placeId).planet);
+      const fit = (fitterId, quality, cost, name) => (c2, sl) => {
+        const cur2 = currencyFor(getPlace(c2.character.placeId).planet);
+        const price = priceIn(cost, cur2.id);
+        if (price && !canAfford(c2.character, cur2.id, price)) {
+          return { text: 'You cannot cover it, and they are not doing it on credit.', changes: [] };
+        }
+        if (price) debit(c2.character, cur2.id, price);
+        const res = fitProsthetic(c2.state, sl.injuryId, quality);
+        const fitter = fittersFor(c2.year, getPlace(c2.character.placeId).planet).find((f) => f.id === fitterId);
+        fact(c2, `Had ${res.part ? res.part.name : 'a replacement'} fitted by ${name}.`,
+          { type: 'body', weight: 6, tags: ['injury'] });
+        return {
+          text: `${res.text} {The first week is the worst part|`
+            + `Learning it takes a season and you have the season|`
+            + `You spend a month reaching for things and missing}.`,
+          changes: apply(c2, { happiness: 12, karma: fitter && fitter.karma ? fitter.karma : 0 }),
+        };
+      };
+
+      list.push({
+        id: 'best', label: `Go to ${s.bestName}`,
+        hint: `${s.bestBlurb}${s.bestCost ? ' ' + formatMoney(priceIn(s.bestCost, cur.id), cur.id) : ' No charge.'}`,
+        effect: fit(s.bestId, s.bestQuality, s.bestCost, s.bestName),
+      });
+      if (s.same === 'no') {
+        list.push({
+          id: 'cheap', label: `Go to ${s.cheapName}`,
+          hint: `${s.cheapBlurb}${s.cheapCost ? ' ' + formatMoney(priceIn(s.cheapCost, cur.id), cur.id) : ' No charge.'}`,
+          effect: fit(s.cheapId, s.cheapQuality, s.cheapCost, s.cheapName),
+        });
+      }
+      list.push({
+        id: 'adapt', label: 'Learn to fight without it', effect: (c2, sl) => {
+          const t = trainYear(c2, { intensity: 1.6 });
+          c2.character.flags.adapted_to_injury = true;
+          return {
+            text: `{You are not having metal in you|You rebuild the whole style around the gap|`
+              + `Everything you knew how to do, you learn again from the other side}. `
+              + `{It takes a year and it works|You are worse at four things and better at one|`
+              + `Nobody who fights you afterwards guesses}. ${powerLine(t.gained)}`,
+            changes: apply(c2, { stats: { technique: 6, discipline: 5 }, happiness: 6 }),
+          };
+        },
+      });
+      list.push({
+        id: 'wait', label: 'Leave it', effect: (c2) => ({
+          text: `{You leave it|It is part of you now|You have stopped thinking of it as missing}.`,
+          changes: apply(c2, { stats: { discipline: 2 } }),
+        }),
+      });
+      return list;
+    },
+  },
+
+  // A Namekian healer, or a wish, puts back what a machine can only replace.
+  {
+    id: 'healer_offers', tags: ['life', 'body', 'canon'], weight: 34, minBioAge: 8,
+    when: (ctx) => !ctx.character.inAfterlife && maimed(ctx)
+      && (ctx.place.planet === 'namek' || ctx.place.planet === 'new_namek'
+        || canonHere(ctx, (c) => ['dende', 'guru', 'moori'].includes(c.id)).length > 0),
+    slots: (ctx) => {
+      const canon = canonHere(ctx, (c) => ['dende', 'guru', 'moori'].includes(c.id));
+      const who = canon.length ? ctx.rng.pick(canon) : null;
+      return {
+        who: who ? who.name : 'an elder with both hands out',
+        canonId: who ? who.id : null,
+        what: injuryList(ctx.character).map((i) => i.name).join(' and '),
+      };
+    },
+    title: 'Hands Out',
+    text: `{[who] looks at you for a long moment and does not comment|`
+      + `[who] asks you to sit down and puts both hands out|`
+      + `Somebody notices [what] and says nothing about it, which is how you know they can help}. `
+      + `{This is not medicine. It is somebody deciding you are whole and being right|`
+      + `They do not explain what they are about to do|It takes about four seconds}.`,
+    choices: (ctx, s) => [
+      {
+        id: 'accept', label: 'Let them', effect: (c2, sl) => {
+          if (sl.canonId) {
+            const npc = meetCanon(c2, sl.canonId);
+            if (npc) relate(c2, npc, { closeness: 14, trust: 20 });
+          }
+          const res = restoreBody(c2.state);
+          fact(c2, `Was made whole again by ${sl.who}.`, { type: 'body', weight: 8, tags: ['injury'] });
+          return {
+            text: `${res.text} {You look at your own hand for a while|`
+              + `There is no scar and no seam and nothing to show for any of it|`
+              + `Something you had accepted as permanent simply stops being true}.`,
+            changes: apply(c2, { happiness: 25, health: 20 }),
+          };
+        },
+      },
+      {
+        id: 'refuse', label: 'Refuse', effect: (c2, sl) => ({
+          text: `{You say no|You have earned every one of these|`
+            + `You would rather keep the record}. `
+            + `{[who] does not argue|They put their hands down and never mention it again|`
+            + `Nobody understands it, including you, entirely}.`,
+          changes: apply(c2, { happiness: -4, stats: { discipline: 6 } }),
+          view: { who: sl.who },
+        }),
+      },
+    ],
+  },
+
+  // The part nobody writes about: the year after.
+  {
+    id: 'phantom', tags: ['life', 'body'], weight: 18, minBioAge: 10,
+    when: (ctx) => maimed(ctx) && !hasPerk(ctx.character, 'regeneration'),
+    slots: (ctx) => ({
+      what: injuryList(ctx.character)[0]?.name || 'the injury',
+      when: ctx.rng.pick(['in the middle of a movement you have done ten thousand times',
+        'reaching for something on a shelf', 'halfway through a form',
+        'in your sleep', 'when somebody throws you something']),
+    }),
+    title: 'It Is Still There',
+    text: `{It happens [when]|[when], it happens again|You forget, [when], and then you remember}. `
+      + `{The part of you that is gone still reports for work|`
+      + `Your body has not been told|Something that is not there hurts, which is a difficult thing to explain}.`,
+    choices: (ctx, s) => [
+      { id: 'work', label: 'Work through it', effect: (c2) => {
+        const t = trainYear(c2, { intensity: 1.5 });
+        return { text: `{You drill it until the body updates its map|`
+          + `Repetition is the only thing that works and it takes months|`
+          + `You go at it the way you go at everything}. ${powerLine(t.gained)}`,
+        changes: apply(c2, { stats: { discipline: 4, technique: 3 }, happiness: -3 }) };
+      } },
+      { id: 'sit', label: 'Sit with it', effect: (c2) => ({
+        text: `{You stop fighting it|It is a thing that happens and then stops happening|`
+          + `You let it be there}. {It gets quieter|It does not get quieter for another two years|`
+          + `Some days you barely notice}.`,
+        changes: apply(c2, { happiness: 6, stats: { kiControl: 3 } }),
+      }) },
+    ],
+  },
+]);
+})();
+
 /* ==== engine/prologue.js ==== */
 const __mod_engine_prologue_js = (function () {
 // The first minutes.
@@ -21995,6 +22260,7 @@ const __mod_game_js = (function () {
 
 
 
+
 const { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext } = __mod_engine_state_js;
 const { startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort } = __mod_engine_lifecycle_js;
 const { initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish, PRESETS } = __mod_engine_ai_js;
@@ -23073,6 +23339,7 @@ const { reputationOf, homeOf, homeBonus } = __mod_engine_settlement_js;
 const { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSense } = __mod_engine_perception_js;
 const { getRng, saveRng } = __mod_engine_state_js;
 const { ceilingFor, ceilingBlock, ceilingPressure, masteryLabel } = __mod_engine_mastery_js;
+const { injuryList } = __mod_engine_body_js;
 const { startSurvival, survivalActions, survivalTurn, survivalStatus, RULES } = __mod_engine_survival_js;
 const { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } = __mod_engine_battle_js;
 const { costLabel, limitFor, usedThisYear, yearCapacity } = __mod_engine_economy_js;
@@ -24423,6 +24690,24 @@ function panelRecords() {
   lookRow.appendChild(lookMain);
   lookRow.addEventListener('click', panelAppearance);
   body.appendChild(lookRow);
+
+  // What is actually missing, separately from what is merely marked.
+  const gone = injuryList(c);
+  if (gone.length) {
+    body.appendChild(el('div', 'group-label', 'What is not there'));
+    for (const inj of gone) {
+      const row = el('div', 'row' + (inj.prosthetic ? '' : ' locked'));
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title',
+        `${inj.side ? inj.side.charAt(0).toUpperCase() + inj.side.slice(1) + ': ' : ''}${inj.name}`));
+      main.appendChild(el('div', 'row-note', inj.prosthetic
+        ? `Replaced with ${inj.prosthetic}. ${inj.desc}`
+        : `${inj.desc} Taken by ${inj.from}, Age ${inj.year}.`));
+      row.appendChild(main);
+      row.appendChild(el('div', 'row-value', inj.prosthetic ? 'fitted' : inj.fixable ? 'fixable' : '-'));
+      body.appendChild(row);
+    }
+  }
 
   const marks = allMarks(c);
   const worn = wornAccessories(c);

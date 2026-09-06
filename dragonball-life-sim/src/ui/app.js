@@ -37,6 +37,7 @@ import { reputationOf, homeOf, homeBonus } from '../engine/settlement.js';
 import { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSense } from '../engine/perception.js';
 import { getRng, saveRng } from '../engine/state.js';
 import { ceilingFor, ceilingBlock, ceilingPressure, masteryLabel } from '../engine/mastery.js';
+import { injuryList } from '../engine/body.js';
 import { startSurvival, survivalActions, survivalTurn, survivalStatus, RULES } from '../engine/survival.js';
 import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } from '../engine/battle.js';
 import { costLabel, limitFor, usedThisYear, yearCapacity } from '../engine/economy.js';
@@ -1391,6 +1392,24 @@ function panelRecords() {
   lookRow.appendChild(lookMain);
   lookRow.addEventListener('click', panelAppearance);
   body.appendChild(lookRow);
+
+  // What is actually missing, separately from what is merely marked.
+  const gone = injuryList(c);
+  if (gone.length) {
+    body.appendChild(el('div', 'group-label', 'What is not there'));
+    for (const inj of gone) {
+      const row = el('div', 'row' + (inj.prosthetic ? '' : ' locked'));
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title',
+        `${inj.side ? inj.side.charAt(0).toUpperCase() + inj.side.slice(1) + ': ' : ''}${inj.name}`));
+      main.appendChild(el('div', 'row-note', inj.prosthetic
+        ? `Replaced with ${inj.prosthetic}. ${inj.desc}`
+        : `${inj.desc} Taken by ${inj.from}, Age ${inj.year}.`));
+      row.appendChild(main);
+      row.appendChild(el('div', 'row-value', inj.prosthetic ? 'fitted' : inj.fixable ? 'fixable' : '-'));
+      body.appendChild(row);
+    }
+  }
 
   const marks = allMarks(c);
   const worn = wornAccessories(c);

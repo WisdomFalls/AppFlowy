@@ -15,6 +15,7 @@ import './engine/events/otherworld.js';
 import './engine/events/growingup.js';
 import './engine/events/forces.js';
 import './engine/events/peace.js';
+import './engine/events/injury.js';
 import './engine/events/afterlife.js';
 import './engine/events/actions.js';
 
