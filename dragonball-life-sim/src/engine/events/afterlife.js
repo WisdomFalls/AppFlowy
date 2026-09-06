@@ -9,13 +9,23 @@ import { spreadWord, DEED_SCALE } from '../settlement.js';
 import { reviveCharacter } from '../lifecycle.js';
 import { fight, narrateFight, describeGap, runTournament, buildField } from '../combat.js';
 import { combatPower } from '../stats.js';
-import { canonAlive } from '../../data/canon.js';
+import { canonAlive, canonPlace } from '../../data/canon.js';
+import { getPlace } from '../../data/places.js';
 import { generateFullName } from '../../data/names.js';
 import { numberish } from '../text.js';
 import { createTournament, autoRunTournament, settle } from '../tournament.js';
+import { TIMELINE } from '../../data/timeline.js';
+import { livingNpcs } from '../state.js';
 
 function canonAliveNow(ctx, c) {
   return canonAlive(c, ctx.year);
+}
+
+function deadHeroPool(ctx) {
+  return canonHere(ctx, (c) => (c.tags.includes('hero') || c.tags.includes('ally') || c.tags.includes('mentor'))
+    && !c.tags.includes('villain')
+    && !ctx.state.npcs['canon_' + c.id]
+    && getPlace(canonPlace(c, ctx.year)).planet === 'otherworld');
 }
 
 registerEvents([
@@ -133,6 +143,64 @@ registerEvents([
         const changes = apply(c2, { karma: 6, stats: { discipline: 4 } });
         return { text: `{You walk away|Whatever they are offering, no|They shout after you and you keep going}.`, changes };
       } },
+    ],
+  },
+
+  // The dead are not only the people you put there. Some of them are the
+  // heroes you never got to fight beside, dead the same way everybody is
+  // dead here - and there is nothing stopping a friendship starting now that
+  // could not have started while they were alive and busy.
+  {
+    id: 'dead_hero_encounter', tags: ['afterlife', 'social'], weight: 26,
+    requiresAfterlife: true,
+    // A hero is "here" for this event when they are currently dead - which
+    // for the ones the story kills and revives (Goku at the Cell Games, and
+    // so on) is not the same question as canonAlive(), which only tracks
+    // permanent death. Their itinerary already threads them through the
+    // Other World for exactly the years they are actually dead; read that
+    // instead of asking whether they died for good.
+    when: (ctx) => deadHeroPool(ctx).length > 0,
+    slots: (ctx) => {
+      const pool = deadHeroPool(ctx);
+      const who = ctx.rng.pick(pool);
+      return { name: who.name, canonId: who.id, quirk: who.quirk || who.personality || '' };
+    },
+    title: (ctx, s) => s.name,
+    text: `{You recognise them before they say anything|Everybody here knows who this is|You have heard the name a hundred times and never once expected to be standing in front of it}.
+      [name]. {Dead the same way you are, it turns out|Just as dead as everybody else here|Nobody here is special for it, including them}. [quirk]`,
+    choices: (ctx, s) => [
+      {
+        id: 'introduce', label: 'Introduce yourself', effect: (c2, sl) => {
+          const npc = meetCanon(c2, sl.canonId, 'acquaintance');
+          if (npc) relate(c2, npc, { closeness: 14, respect: 8, trust: 10 });
+          return {
+            text: `{They already know who you are, which is its own kind of strange|`
+              + `Word travels fast when everyone has nothing but time|They shake your hand like it is nothing}. `
+              + `{You talk for what might be a whole afternoon, or a week|It is easier than you expected|`
+              + `Neither of you mentions how you got here}.`,
+            changes: apply(c2, { happiness: 12 }),
+          };
+        },
+      },
+      {
+        id: 'train', label: 'Ask to train together', effect: (c2, sl) => {
+          const npc = meetCanon(c2, sl.canonId, 'mentor');
+          if (npc) relate(c2, npc, { closeness: 16, respect: 14, trust: 10 });
+          const t = trainYear(c2, { intensity: 1.5, placeMult: 2.0, mentorMult: 1.3 });
+          fact(c2, `Trained with ${sl.name} in the Other World.`, { type: 'afterlife', weight: 6, tags: ['friendship'] });
+          return {
+            text: `{Nobody here can be hurt permanently, which changes what a spar is for|`
+              + `You go at it for what might be years and neither of you tires|`
+              + `They do not go easy on you, and you would not want them to}. ${powerLine(t.gained)}`,
+            changes: apply(c2, { happiness: 10, stats: { discipline: 2 } }),
+          };
+        },
+      },
+      {
+        id: 'pass', label: 'Leave them be', effect: () => ({
+          text: `{Not everyone wants company|You nod and keep walking|There will be another chance. There always is, here}.`,
+          changes: [],
+        }) },
     ],
   },
 
@@ -459,12 +527,29 @@ registerEvents([
 // finished them.
 
 /** What a life gets you after death: hard training and nothing else to do. */
+/**
+ * Not everyone who dies gets stronger down here. Hell does not manufacture
+ * potential - it removes hunger, fear and any reason to stop, which only
+ * matters for somebody who had further to go in the first place. A scripted
+ * canon escalation always applies; everyone else is gated on the `potential`
+ * roll made at the moment they died, and grows at their own `pace` if it
+ * hit - fast and dramatic for some, slow and barely noticeable for others,
+ * both compounding with how long they have actually been down here.
+ */
 function hellPower(record, year) {
   const years = Math.max(0, year - record.year);
-  // Nothing to eat, nothing to fear, and no reason to stop.
-  const growth = Math.pow(1.16, Math.min(years, 60));
   const escalation = ESCALATIONS[record.canonId];
-  return Math.round(record.power * growth * (escalation ? escalation.mult : 1));
+  if (escalation) {
+    const growth = Math.pow(1.16, Math.min(years, 60));
+    return Math.round(record.power * growth * escalation.mult);
+  }
+  if (!record.potential) {
+    // They persist. Repetition sharpens the edges a little and nothing more.
+    return Math.round(record.power * (1 + Math.min(years, 40) * 0.008));
+  }
+  const rate = 1.025 + 0.028 * (record.pace ?? 1);
+  const growth = Math.pow(rate, Math.min(years, 60));
+  return Math.round(record.power * growth);
 }
 
 /**
@@ -635,4 +720,120 @@ registerEvents([
       },
     ],
   },
+
+  // ------------------------------------------------------- a day back
+  //
+  // Canonically this happened exactly once, on the record: Goku got one day
+  // back for the 25th World Martial Arts Tournament, on King Yemma's leave,
+  // and used it to watch Gohan grown and meet Goten for the first time. It
+  // was never explained as more than "he earned it" - so here it is earned,
+  // not automatic: real standing, and a real occasion to spend it on.
+  {
+    id: 'day_pass_offer', tags: ['afterlife', 'family', 'reward'], weight: 20,
+    requiresAfterlife: true,
+    when: (ctx) => dayPassOccasion(ctx) && !ctx.character.flags['day_pass_' + ctx.year]
+      && (ctx.character.karma > 15 || ctx.character.fame > 25
+        || livingNpcs(ctx.state).some((n) => ['spouse', 'child'].includes(n.relation) && (n.closeness || 0) > 55)),
+    slots: (ctx) => {
+      const occ = dayPassOccasion(ctx);
+      return { kind: occ.kind, label: occ.label, placeId: occ.placeId };
+    },
+    title: "King Yemma's Leave",
+    text: (ctx, s) => `{Somebody comes to find you, which never happens|You are summoned, which is not the usual traffic|`
+      + `King Yemma sends for you personally}. `
+      + `{"You have not caused any trouble down here"|"Your file is better than most"|"I do not do this often"}. `
+      + `${s.kind === 'tournament'
+        ? `[label] is on, down there, today. "One day. Your choice what you do with it. Back here by sundown, no arguments."`
+        : `There is a reason to go back, down there, today - [label]. "One day. I will know if you are late."`}`,
+    choices: (ctx, s) => [
+      {
+        id: 'go', label: 'Take the day', effect: (c2, sl) => {
+          c2.character.flags['day_pass_' + c2.year] = true;
+          const reactions = livingWorldReactions(c2);
+          fact(c2, `Spent a day back among the living: ${sl.label}.`,
+            { type: 'afterlife', weight: 8, tags: ['family', 'reward'] });
+          const lines = [
+            sl.kind === 'tournament'
+              ? `{You watch from the stands, or near enough that it does not matter|`
+                + `Nobody official knows you are there|You do not fight. That is not what the day is for}. `
+                + `{The crowd has no idea how many dead people are in the seats today|`
+                + `Somebody strong enough to sense it goes very still and does not say anything|`
+                + `You watch somebody you taught do something you did not teach them}.`
+              : `{You are there. Actually there|Nobody sent word. You just are|One day, and you spend it exactly where you want to be}.`,
+            ...reactions,
+          ];
+          return {
+            text: lines.filter(Boolean).join(' '),
+            changes: apply(c2, { happiness: 22, karma: 4 }),
+          };
+        },
+      },
+      {
+        id: 'decline', label: 'Stay', effect: (c2) => ({
+          text: `{You say no|It is a kind offer and you do not take it|`
+            + `"Not this time." Yemma does not ask again this year}. `
+            + `{Some things you would rather remember than revisit|`
+              + `Watching from here is enough|You are not sure you could leave a second time}.`,
+          changes: apply(c2, { happiness: 4 }),
+        }) },
+    ],
+  },
 ]);
+
+
+
+/** What occasion, if any, is worth King Yemma bending the rules for. */
+function dayPassOccasion(ctx) {
+  const tourney = TIMELINE.find((t) => t.year === ctx.year && /^tournament_(?!of_power)/.test(t.id));
+  if (tourney) return { kind: 'tournament', label: tourney.name, placeId: 'papaya' };
+  const family = livingNpcs(ctx.state).filter((n) => ['spouse', 'child'].includes(n.relation) && (n.closeness || 0) > 55);
+  if (family.length && ctx.rng.chance(0.4)) {
+    const who = ctx.rng.pick(family);
+    return {
+      kind: 'family',
+      label: who.relation === 'child' ? `seeing ${who.name} again` : `a day with ${who.name}`,
+      placeId: who.placeId || 'east_city',
+    };
+  }
+  return null;
+}
+
+/**
+ * How the people who love you react to a halo showing up at the door. Not
+ * one line - it depends on how close you actually are, what kind of person
+ * they are, and whether they are somebody who has stood in a fight herself
+ * or somebody for whom this is simply the strangest day of her life.
+ */
+function livingWorldReactions(ctx) {
+  const spouse = livingNpcs(ctx.state).find((n) => n.relation === 'spouse');
+  if (!spouse) return [];
+  const close = (spouse.closeness || 0) > 60;
+  const fighter = (spouse.power || 0) > 500 || (spouse.stats && spouse.stats.strength > 55);
+  const volatile = (spouse.tags || []).some((t) => ['volatile', 'fierce', 'vengeful', 'jealous'].includes(t));
+  const gentle = (spouse.tags || []).some((t) => ['gentle', 'kind', 'warm', 'sweet', 'patient'].includes(t));
+
+  let line;
+  if (!close) {
+    line = `${spouse.name} {does not know what to do with her face|takes a step back before she takes a step forward|`
+      + `has clearly rehearsed being angry about this and cannot remember any of it now}.`;
+  } else if (volatile && fighter) {
+    line = `${spouse.name} {hits you, and then does not let go|puts you on the ground first and asks questions after|`
+      + `is furious and will not stop touching your arm to check you are real}.`;
+  } else if (volatile) {
+    line = `${spouse.name} {shouts at you for dying and cries doing it|`
+      + `has clearly practised this speech and abandons it halfway through|`
+      + `is angrier at the year than at you and it comes out sideways}.`;
+  } else if (gentle && fighter) {
+    line = `${spouse.name} {does not say anything for a long moment, and then does not stop saying things|`
+      + `checks you over the way she would check an injury, out of habit|`
+      + `holds on like she is confirming a reading rather than feeling something}.`;
+  } else if (gentle) {
+    line = `${spouse.name} {cries in the quiet way, the way that is worse|`
+      + `holds your face like she is making sure|does not let go for a long time and you do not mind}.`;
+  } else {
+    line = `${spouse.name} {looks at you like the maths does not work|says your name twice, checking it|`
+      + `takes a while to believe it and then does not want to stop looking at you}.`;
+  }
+  relate(ctx, spouse, { closeness: 10, trust: 8 });
+  return [line];
+}

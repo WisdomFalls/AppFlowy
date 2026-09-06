@@ -1059,6 +1059,11 @@ export function battleAftermath(state, rng, battle, opts = {}) {
       if (foe.hp > 0) continue;
       state.stats.kills += 1;
       state.world.ended = state.world.ended || [];
+      // Whether they were ever going to be more than they were. Most people
+      // are not - Hell does not manufacture potential, it just gives whoever
+      // already had some nothing else to do with the time. Stronger opponents
+      // were more likely to have room left to grow in the first place.
+      const potential = rng.chance(clamp(0.16 + Math.log10(Math.max(10, foe.basePower || 1)) * 0.07, 0.1, 0.68));
       state.world.ended.push({
         name: foe.name,
         power: Math.round(foe.basePower || 1),
@@ -1067,6 +1072,10 @@ export function battleAftermath(state, rng, battle, opts = {}) {
         npcId: (foe.ref && foe.ref.npcId) || battle.foeRef.npcId || null,
         raceId: foe.raceId || 'other',
         how: battle.reason || 'a fight',
+        potential,
+        // How fast they use it, once they start. Rolled once, so the same
+        // person is not a slow burn one visit and a prodigy the next.
+        pace: rng.float(0.7, 1.6),
       });
       const npc = ((foe.ref && foe.ref.npcId) && state.npcs[foe.ref.npcId])
         || (battle.foeRef.npcId && state.npcs[battle.foeRef.npcId]);
