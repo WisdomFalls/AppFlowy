@@ -117,7 +117,7 @@ export function chargeAction(state, action) {
  */
 export function trainingCapForYear(state) {
   const c = state.character;
-  const rate = trainingRate(c, { intensity: 1.6, placeMult: 2.5, gearMult: 2.1, mentorMult: 2 });
+  const rate = trainingRate(c, { state, intensity: 1.6, placeMult: 2.5, gearMult: 2.1, mentorMult: 2 });
   const ceiling = clamp(rate * 2.4, 0.05, 1.3);
   return Math.max(3, Math.round(c.power * ceiling));
 }

@@ -3,6 +3,7 @@
 // what a score is worth; the UI decides how it is played.
 
 import { clamp } from './rng.js';
+import { masteryMult, masteryDrain, masteryLabel } from './mastery.js';
 import { traitEffect } from '../data/traits.js';
 import { getTechnique, TECH_BY_ID } from '../data/techniques.js';
 import { getTransformation } from '../data/transformations.js';
@@ -177,11 +178,13 @@ export function setMastery(state, formId, delta) {
  * Saiyan is not a bigger number, it is a form you can live in.
  */
 export function masteryEffect(state, formId) {
-  const m = getMastery(state, formId) / 100;
+  // One mastery curve, defined in mastery.js, so the number the screen quotes
+  // is the number the fight uses.
   return {
-    drainMult: 1 - m * 0.75,
-    powerMult: 1 + m * 0.25,
-    mastery: Math.round(m * 100),
+    drainMult: masteryDrain(state.character, formId),
+    powerMult: masteryMult(state.character, formId),
+    mastery: Math.round(getMastery(state, formId)),
+    label: masteryLabel(getMastery(state, formId)),
   };
 }
 

@@ -502,6 +502,70 @@ export function canonAlive(char, year) {
   return true;
 }
 
+/**
+ * Where somebody actually is in a given Age.
+ *
+ * `home` is where a character is from, not where they have been standing for
+ * seventy years. Goku is on Snake Way in 762, on Namek in 763, on Yardrat
+ * until 767 and dead from 774 to 778, and meeting him in a bar on Yardrat in
+ * 745 is the kind of thing that tells a player nobody thought about it.
+ *
+ * Entries are [fromYear, placeId]. The last one whose year has passed wins.
+ */
+export const ITINERARY = {
+  goku: [[737, 'paozu'], [749, 'paozu'], [761, 'papaya'], [762, 'snake_way'], [763, 'namek'],
+    [764, 'yardrat'], [767, 'paozu'], [774, 'otherworld'], [778, 'paozu'], [779, 'beerus_world'], [780, 'paozu']],
+  vegeta: [[732, 'planet_vegeta'], [737, 'frieza_79'], [761, 'earth'], [762, 'earth'],
+    [763, 'namek'], [764, 'capsule_corp'], [774, 'otherworld'], [775, 'capsule_corp'], [779, 'beerus_world'], [780, 'capsule_corp']],
+  piccolo: [[753, 'wastes'], [762, 'otherworld'], [763, 'namek'], [764, 'lookout'], [767, 'satan_city']],
+  gohan: [[757, 'paozu'], [762, 'wastes'], [763, 'namek'], [764, 'paozu'], [774, 'satan_city']],
+  krillin: [[736, 'kame_house'], [763, 'namek'], [764, 'kame_house']],
+  bulma: [[733, 'capsule_corp'], [763, 'namek'], [764, 'capsule_corp']],
+  frieza: [[737, 'frieza_79'], [762, 'namek'], [764, 'frieza_79'], [766, 'otherworld'], [779, 'frieza_79']],
+  cell: [[767, 'wastes'], [768, 'otherworld']],
+  buu: [[774, 'wastes'], [775, 'satan_city']],
+  whis: [[700, 'beerus_world']],
+  beerus: [[700, 'beerus_world']],
+  king_kai: [[500, 'kings_road']],
+  supreme_kai: [[500, 'sacred_world']],
+  guru: [[400, 'namek'], [763, 'new_namek']],
+  dende: [[762, 'namek'], [764, 'lookout']],
+  nail: [[740, 'namek']],
+  moori: [[700, 'namek'], [763, 'new_namek']],
+  raditz: [[733, 'frieza_79'], [761, 'earth'], [762, 'otherworld']],
+  nappa: [[700, 'planet_vegeta'], [737, 'frieza_79'], [762, 'earth']],
+  ginyu: [[740, 'frieza_79'], [763, 'namek']],
+  zarbon: [[740, 'frieza_79'], [763, 'namek']],
+  dodoria: [[740, 'frieza_79'], [763, 'namek']],
+  king_vegeta: [[700, 'planet_vegeta']],
+  bardock: [[720, 'planet_vegeta']],
+  gine: [[720, 'planet_vegeta']],
+  broly: [[737, 'vampa'], [779, 'frieza_79']],
+  paragus: [[720, 'planet_vegeta'], [737, 'vampa']],
+  cabba: [[770, 'sadala']],
+  caulifla: [[770, 'sadala']],
+  kale: [[770, 'sadala']],
+  hit: [[700, 'universe6']],
+  jiren: [[700, 'universe11']],
+  toppo: [[700, 'universe11']],
+  frost: [[700, 'universe6']],
+  granolah: [[762, 'cereal']],
+};
+
+/** The place id a canon character is standing in, in this Age. */
+export function canonPlace(char, year) {
+  const c = typeof char === 'string' ? CANON_BY_ID[char] : char;
+  if (!c) return null;
+  const route = ITINERARY[c.id];
+  if (!route || !route.length) return c.home;
+  let at = c.home;
+  for (const [from, placeId] of route) {
+    if (year >= from) at = placeId;
+    else break;
+  }
+  return at;
+}
+
 export function canonAvailable(year, filter = () => true) {
   return CANON.filter((c) => canonAlive(c, year) && filter(c));
 }

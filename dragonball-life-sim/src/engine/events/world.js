@@ -9,6 +9,7 @@ import { fight, narrateFight, describeGap, runTournament, buildField } from '../
 import { combatPower, powerTier } from '../stats.js';
 import { TIMELINE, isTournamentYear, worldPowerBaseline, eraName } from '../../data/timeline.js';
 import { canonAvailable } from '../../data/canon.js';
+import { startSurvival, survivalActions, survivalTurn, RULES } from '../survival.js';
 import { ensureBallSet, ballsHeld, ballsOn, ballManifest, scatterAfterWish, ballsAreInert } from '../dragonballs.js';
 import { getItem } from '../../data/items.js';
 import { getPlace, PLACES } from '../../data/places.js';
@@ -132,6 +133,24 @@ registerEvents([
             const ev = TIMELINE.find((t) => t.id === sl.evId);
             c2.state.world.resolved.push(ev.id);
             fact(c2, `Walked into ${ev.name}.`, { type: 'history', weight: 6, tags: ['witness'] });
+
+            // The Tournament of Power is not a bracket and never was. It gets
+            // its own board: one stage, forty-eight minutes, ring-out only.
+            if (ev.id === 'tournament_of_power') {
+              const board = startSurvival(c2.state, c2.rng, {});
+              const opener = `${ev.blurb} ${RULES[0]} ${RULES[3]}`;
+              if (!c2.state.autoBattle) return { text: opener, survival: board };
+              let guard = 0;
+              while (!board.over && guard++ < 80) {
+                const acts = survivalActions(board);
+                if (!acts.length) break;
+                survivalTurn(c2.state, board, c2.rng, c2.rng.pick(acts).id);
+              }
+              if (board.outcome === 'erased') {
+                return { text: `${opener} ${board.log.slice(-1)[0]}`, outcome: { death: 'Erased with Universe 7' } };
+              }
+              return { text: `${opener} ${board.log.slice(-2).join(' ')}` };
+            }
 
             const bracket = timelineTournament(c2, ev);
             if (bracket) {

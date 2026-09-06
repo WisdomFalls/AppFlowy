@@ -21,26 +21,44 @@ function bestForm(character) {
   return best;
 }
 
-/** Where raw training stops working, for a character at their current rung. */
+/** The nearest unopened door on the ladder: the cheapest one, not the next by tier. */
+function nextRung(character) {
+  const owned = new Set(character.transformations || []);
+  let best = null;
+  for (const f of ladderFor(character.raceId)) {
+    if (owned.has(f.id)) continue;
+    if (!f.req || !f.req.power) continue;
+    if (!best || f.req.power < best.req.power) best = f;
+  }
+  return best;
+}
+
+/**
+ * Where raw training stops working.
+ *
+ * The roof sits just past whatever it takes to open the next door. A form that
+ * needs a moment as well as a number is allowed to be trained past its number,
+ * because progression.js lets enough raw power overflow into it without the
+ * moment - so the roof has to be above that overflow point or the ladder has a
+ * rung nobody can reach.
+ */
 export function ceilingFor(state) {
   const c = state.character;
-  const ladder = ladderFor(c.raceId).slice().sort((a, b) => a.mult - b.mult);
-  const owned = new Set(c.transformations);
+  const ladder = ladderFor(c.raceId);
+  const next = nextRung(c);
 
-  // The next rung you have not taken sets the roof: you can train up to
-  // comfortably past its entry requirement, and then you are simply stuck at
-  // the door until you open it.
-  const next = ladder.find((f) => !owned.has(f.id) && f.req && f.req.power);
   let base;
   if (next) {
-    base = next.req.power * 1.6;
+    const needsMoment = !!(next.req.anyFlag && next.req.anyFlag.length);
+    const waiver = needsMoment ? (next.req.flagWaiverMult || 25) : 1;
+    base = next.req.power * waiver * (needsMoment ? 1.35 : 3);
   } else {
-    // Nothing left on the ladder. The roof becomes your best form's own
+    // Nothing left with a number on it. The roof becomes your best form's own
     // ceiling, which is very high but not infinite.
     const best = bestForm(c);
-    const top = ladder[ladder.length - 1];
+    const top = ladder.slice().sort((a, b) => a.mult - b.mult)[ladder.length - 1];
     const anchor = (best && best.req && best.req.power) || (top && top.req && top.req.power) || 1000;
-    base = anchor * 250;
+    base = Math.max(anchor, c.power) * 250;
   }
 
   // A form you have worn until it fits holds more than one you just found.
@@ -48,11 +66,11 @@ export function ceilingFor(state) {
   const m = best ? masteryOf(c, best.id) : 0;
   base *= 1 + (m / 100) * 1.4;
 
-  // Species that grow without a ladder at all (Earthlings, most of them) are
-  // not meant to be capped by a form they can never reach.
-  if (!ladder.length) base = Math.max(base, c.power * 6);
+  // Species with no ladder at all are not meant to be capped by a door that
+  // does not exist for them.
+  if (!ladder.length) base = Math.max(base, c.power * 8);
 
-  return Math.max(120, base);
+  return Math.max(500, base);
 }
 
 /** 0 at nowhere near the roof, 1 at it. */
@@ -63,8 +81,10 @@ export function ceilingPressure(state) {
 /** The training multiplier the ceiling imposes. Falls away sharply at the top. */
 export function ceilingDamping(state) {
   const p = ceilingPressure(state);
-  if (p < 0.6) return 1;
-  return clamp(1 - Math.pow((p - 0.6) / 0.42, 2.4), 0.04, 1);
+  if (p < 0.7) return 1;
+  // Not a wall: gains thin out fast and never quite stop, so a stubborn
+  // fighter can still inch forward while they look for the door.
+  return clamp(1 - Math.pow((p - 0.7) / 0.34, 2.2), 0.12, 1);
 }
 
 /** What is actually stopping you, in words, or null if nothing is. */

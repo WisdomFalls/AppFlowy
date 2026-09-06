@@ -157,26 +157,33 @@ export function applyStatDelta(character, delta, cap = 100) {
  * say so instead of everyone sharing one hundred hit points forever.
  */
 export function healthMaxFor(character) {
-  const race = getRace(character.raceId);
   const dur = character.stats.durability || 40;
-  let max = 60 + dur * 0.8;                                   // 68 .. 140
-  max += Math.min(60, (character.flags?.hardTrainingYears || 0) * 2.2);
-  max += Math.min(70, (character.zenkaiCount || 0) * 9);      // scar tissue that helps
-  max += Math.min(40, Math.log10(Math.max(10, character.power)) * 6);
+  // A hundred is the baseline everything in the game is written against, so
+  // it is a floor rather than a target: conditioning adds to it, and only
+  // real old age takes anything off.
+  let max = 100;
+  max += Math.max(0, dur - 45) * 0.7;                          // up to +38
+  max += Math.min(50, (character.flags?.hardTrainingYears || 0) * 2);
+  max += Math.min(70, (character.zenkaiCount || 0) * 9);       // scar tissue that helps
+  max += Math.min(45, Math.max(0, Math.log10(Math.max(10, character.power)) - 2) * 8);
   if (hasPerk(character, 'hardToKill')) max *= 1.15;
   if (hasPerk(character, 'regeneration')) max *= 1.08;
-  max *= ageFactor(character) < 0.3 ? 0.8 : 1;                // the very old and the very small
   max *= traitEffect(character, 'healthMult') || 1;
-  return Math.round(clamp(max, 45, 420));
+  // Only the far end of a life takes the ceiling back down.
+  const age = ageFactor(character);
+  if (age <= 0.1) max *= 0.75;
+  else if (age <= 0.22) max *= 0.88;
+  return Math.round(clamp(max, 70, 420));
 }
 
 /** Stamina pool. Same idea: conditioning is a thing you build. */
 export function staminaMaxFor(character) {
   if (hasPerk(character, 'infiniteStamina')) return 100;
-  const base = 55 + (character.stats.durability || 40) * 0.35 + (character.stats.discipline || 40) * 0.3;
+  const base = 100 + Math.max(0, (character.stats.durability || 40) - 45) * 0.4
+    + Math.max(0, (character.stats.discipline || 40) - 45) * 0.3;
   const trained = Math.min(45, (character.flags?.hardTrainingYears || 0) * 1.6);
   const mult = traitEffect(character, 'staminaMult') || 1;
-  return Math.round(clamp((base + trained) * mult * (ageFactor(character) < 0.3 ? 0.85 : 1), 50, 240));
+  return Math.round(clamp((base + trained) * mult * (ageFactor(character) <= 0.22 ? 0.85 : 1), 80, 260));
 }
 
 /** Maximum ki pool, which grows with control and technique. */

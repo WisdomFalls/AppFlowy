@@ -15,18 +15,18 @@ import { shopStock, getItem, ITEMS } from '../../data/items.js';
 import { buyItem, valueHere, hasItem } from '../inventory.js';
 import { topicsFor, converse } from '../conversation.js';
 import { homeOptions, settleHome, homeOf } from '../settlement.js';
-import { currencyFor, formatMoney, balance } from '../../data/currency.js';
+import { currencyFor, formatMoney, balance, priceIn, canAfford, debit } from '../../data/currency.js';
 import { CAREERS, getCareer, careersFor } from '../../data/jobs.js';
 import { getRace, hasPerk } from '../../data/races.js';
 import { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel,
   limitFor, usedThisYear, trainingRoomLeft } from '../economy.js';
 import { makeNpc, bondScore, relationLabel } from '../npc.js';
-import { canonAvailable, canonPower } from '../../data/canon.js';
+import { canonAvailable, canonPower, canonPlace } from '../../data/canon.js';
 import { ensureBallSet, ballsHeld, startHunt, surveyPlanet, ballsAreInert, summonReady } from '../dragonballs.js';
 import { startTrial, STAT_TRIALS, TRIAL_KINDS, getMastery, masteryEffect, inventForm } from '../trials.js';
 import { createTournament, autoRunTournament, settle } from '../tournament.js';
 import { travelOptions, travelTo, actOnWorld, standingOn } from '../worlds.js';
-import { getPlanet, PLANETS } from '../../data/planets.js';
+import { getPlanet, PLANETS, planetExists } from '../../data/planets.js';
 import { generateFullName, generateSignatureName } from '../../data/names.js';
 import { zeni, numberish } from '../text.js';
 
@@ -45,6 +45,7 @@ function trainOnce(state, rng, opts = {}) {
       : c.items.includes('heavy_weights') ? 1.4
         : c.items.includes('weighted_clothing') ? 1.25 : 1;
   const rate = trainingRate(c, {
+    state,
     intensity: opts.intensity ?? 1,
     placeMult: place.training,
     gearMult,
@@ -409,23 +410,37 @@ export const ACTIONS = [
     desc: 'Somewhere else. Crossing space costs years unless you can skip them.',
     available: (s) => !s.character.inAfterlife,
     options: (s) => {
+      // Grouped by world, because the question is which planet, and only then
+      // where on it. A crossing shows what it costs before you commit to it.
       const here = getPlace(s.character.placeId);
       const out = [];
       for (const place of PLACES) {
         if (place.id === s.character.placeId) continue;
+        if (place.planet !== here.planet) continue;
         if (['otherworld', 'void'].includes(place.planet)) continue;
-        if (place.planet === here.planet) {
-          out.push({ id: place.id, label: place.name, hint: `Same world - training x${place.training}` });
-          continue;
-        }
-        const methods = travelOptions(s, place.planet);
+        out.push({ id: place.id, group: getPlanet(here.planet).name + ' (here)',
+          label: place.name, hint: `Training x${place.training} - ${place.desc}` });
+      }
+      for (const planet of PLANETS) {
+        if (planet.id === here.planet) continue;
+        if (['otherworld', 'void'].includes(planet.id)) continue;
+        if (!planetExists(planet.id, s.character.birthYear + s.character.age)) continue;
+        const methods = travelOptions(s, planet.id);
         if (!methods.length) continue;
-        const best = methods.sort((x, y) => x.years - y.years)[0];
-        out.push({
-          id: place.id,
-          label: place.name,
-          hint: `${getPlanet(place.planet).name} - ${best.name}, ${best.years === 0 ? 'instant' : best.years + ' year' + (best.years === 1 ? '' : 's')}`,
-        });
+        const best = methods.sort((x, y) => (x.years - y.years) || (x.cost - y.cost))[0];
+        const canPay = !best.cost || balance(s.character, currencyFor(here.planet).id) >= priceIn(best.cost, currencyFor(here.planet).id);
+        const spots = PLACES.filter((p) => p.planet === planet.id);
+        for (const place of spots) {
+          out.push({
+            id: place.id,
+            group: `${planet.name} - ${best.name}, ${best.years === 0 ? 'no time at all' : best.years + ' year' + (best.years === 1 ? '' : 's')}`
+              + (best.cost ? `, ${formatMoney(priceIn(best.cost, currencyFor(here.planet).id), currencyFor(here.planet).id)}` : ''),
+            label: place.name,
+            hint: place.desc,
+            disabled: !canPay,
+            reason: canPay ? null : 'You cannot afford the passage.',
+          });
+        }
       }
       return out;
     },
@@ -440,11 +455,27 @@ export const ACTIONS = [
       }
       const methods = travelOptions(s, dest.planet);
       if (!methods.length) return { text: 'You have no way to cross that distance.' };
-      const best = methods.sort((x, y) => x.years - y.years)[0];
+      const best = methods.sort((x, y) => (x.years - y.years) || (x.cost - y.cost))[0];
+      const cur = currencyFor(here.planet);
+      if (best.cost) {
+        const price = priceIn(best.cost, cur.id);
+        if (!canAfford(s.character, cur.id, price)) {
+          return { text: 'You cannot cover the passage, and nobody is running a tab for you.' };
+        }
+        debit(s.character, cur.id, price);
+      }
       const trip = travelTo(s, rng, dest.id, best.id);
+      const how = {
+        instant: 'You lock onto something you can feel from here and step through.',
+        ship: 'You take the ship. There is a kitchen and a gravity setting and nothing else to do.',
+        pod: 'The pod puts you under and wakes you when it is time.',
+        flight: 'You fly it. All of it. There is no air out there and after a while you stop noticing.',
+        passage: 'You buy a berth on a freighter and spend the crossing in a room the size of a cupboard.',
+        stowaway: 'You get into a container and stay in it. Twice somebody almost opens it.',
+      }[best.id] || '';
       // Years in transit are years of your life.
       return {
-        text: `${dest.name}. ${dest.desc}`
+        text: `${how} ${dest.name}. ${dest.desc}`
           + (trip.years > 0 ? ` The crossing takes ${trip.years} year${trip.years === 1 ? '' : 's'}.` : ' You are simply there.'),
         skipYears: trip.years,
       };
@@ -689,9 +720,17 @@ function findChallenger(state, rng, scope) {
 
   // A living canon fighter in the right band is always a better opponent than
   // a generated one, so look there first.
+  // Somebody in the right power band who is also actually on this world.
+  // "The strongest in this sector" can reach further; the local pool cannot.
+  const herePlanet = getPlace(c.placeId).planet;
   const canonPool = canonAvailable(year, (x) => {
     const p = canonPower(x, year);
-    return p >= mine * lo && p <= mine * hi;
+    if (p < mine * lo || p > mine * hi) return false;
+    if (scope === 'universe') return true;
+    const at = getPlace(canonPlace(x, year));
+    if (!at) return true;
+    if (scope === 'sector') return at.planet === herePlanet || x.tags.includes('divine') || at.planet !== 'otherworld';
+    return at.planet === herePlanet;
   });
   if (canonPool.length && rng.chance(scope === 'local' ? 0.25 : 0.6)) {
     const pick = rng.pick(canonPool);

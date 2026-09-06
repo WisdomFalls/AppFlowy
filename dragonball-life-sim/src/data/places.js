@@ -42,6 +42,8 @@ export const PLACES = [
 
   // Misc
   { id: 'galactic_prison', name: 'Galactic Prison', planet: 'void', danger: 7, training: 2.0, tags: ['prison', 'crime'], desc: 'Where the Galactic Patrol puts the ones they cannot kill.' },
+  { id: 'universe11', name: 'Nikoji', planet: 'u11_world', danger: 7, training: 2.2, tags: ['u11', 'lawful', 'civilised'], desc: 'Universe 11. Everybody here is on duty, and the training is done in formation.' },
+  { id: 'universe10', name: 'Bell', planet: 'u10_world', danger: 5, training: 2.0, tags: ['u10', 'devout', 'civilised'], desc: 'Universe 10. Strength as worship, and a god in the stands taking notes.' },
   { id: 'tournament_u6', name: 'World of Void Arena', planet: 'void', danger: 6, training: 1.0, tags: ['tournament', 'u6'], desc: 'A neutral ring between universes, with gods in the stands.' },
 ];
 

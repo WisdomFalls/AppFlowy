@@ -376,6 +376,7 @@ export function choose(state, choiceId, params = null) {
   // A tournament is the same handover, one level up: the bracket takes over
   // and gives the year back when the draw is done with you.
   if (result.tournament) t.pendingTournament = result.tournament;
+  if (result.survival) t.pendingSurvival = result.survival;
 
   for (const f of result.facts || []) {
     addFact(state.memory, { type: f.type || 'event', text: f.text, year: state.character.age, weight: f.weight ?? 1, tags: f.tags || [] });

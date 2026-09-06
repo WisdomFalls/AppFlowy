@@ -36,6 +36,8 @@ import { TRAITS, getTrait, TRAIT_KINDS } from '../data/traits.js';
 import { reputationOf, homeOf, homeBonus } from '../engine/settlement.js';
 import { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSense } from '../engine/perception.js';
 import { getRng, saveRng } from '../engine/state.js';
+import { ceilingFor, ceilingBlock, ceilingPressure, masteryLabel } from '../engine/mastery.js';
+import { startSurvival, survivalActions, survivalTurn, survivalStatus, RULES } from '../engine/survival.js';
 import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } from '../engine/battle.js';
 import { costLabel, limitFor, usedThisYear, yearCapacity } from '../engine/economy.js';
 import { ballsHeld, ballManifest, pingSquare, GRID } from '../engine/dragonballs.js';
@@ -236,7 +238,12 @@ function renderHud() {
     $('f-' + key).style.width = pct + '%';
     $('v-' + key).textContent = Math.round(value);
   };
-  setBar('health', c.vitals.health, 100);
+  // Health has a ceiling that moves, so the number says what it is out of.
+  const hMax = Math.max(1, c.vitals.healthMax || 100);
+  setBar('health', c.vitals.health, hMax);
+  $('v-health').textContent = hMax > 100
+    ? `${Math.round(c.vitals.health)}/${Math.round(hMax)}`
+    : Math.round(c.vitals.health);
   setBar('happy', c.vitals.happiness, 100);
   setBar('ki', c.vitals.ki, Math.max(1, c.vitals.kiMax));
 
@@ -460,6 +467,14 @@ function answerEvent(event, choiceId, params) {
     return;
   }
 
+  const board = GAME.turn && GAME.turn.pendingSurvival;
+  if (board) {
+    GAME.turn.pendingSurvival = null;
+    closeSheet();
+    openSurvival(board);
+    return;
+  }
+
   if (pending) {
     showEvent(pending);
   } else {
@@ -584,13 +599,20 @@ function panelActivities() {
 function chooseActionTarget(action, options) {
   const { body } = sheetShell(action.name, 'Pick one');
   body.appendChild(el('p', 'row-note', action.desc));
+  let group = null;
   for (const option of options) {
+    // Options can arrive grouped - travel is by world first, place second.
+    if (option.group && option.group !== group) {
+      group = option.group;
+      body.appendChild(el('div', 'group-head', group));
+    }
     const b = el('button', 'row');
     b.type = 'button';
     b.disabled = !!option.disabled;
     const main = el('div', 'row-main');
     main.appendChild(el('div', 'row-title', option.label));
-    if (option.hint) main.appendChild(el('div', 'row-note', option.hint));
+    if (option.reason) main.appendChild(el('div', 'row-note warn', option.reason));
+    else if (option.hint) main.appendChild(el('div', 'row-note', option.hint));
     b.appendChild(main);
     b.addEventListener('click', () => doAction(action.id, { option: option.id }));
     body.appendChild(b);
@@ -940,6 +962,22 @@ function panelPower() {
   }
   body.appendChild(grid);
 
+  // The roof. A ceiling nobody can see reads as broken progression, so it is
+  // stated plainly along with what would lift it.
+  const block = ceilingBlock(GAME);
+  const roof = ceilingFor(GAME);
+  body.appendChild(el('div', 'group-label', 'The ceiling'));
+  const roofRow = el('div', 'row' + (block && block.at ? ' locked' : ''));
+  const roofMain = el('div', 'row-main');
+  roofMain.appendChild(el('div', 'row-title',
+    `${numberish(Math.round(c.power))} of about ${numberish(Math.round(roof))}`));
+  roofMain.appendChild(el('div', 'row-note', block
+    ? block.text
+    : 'Training is still paying. You are nowhere near what this shape holds.'));
+  roofRow.appendChild(roofMain);
+  roofRow.appendChild(el('div', 'row-value', Math.round(ceilingPressure(GAME) * 100) + '%'));
+  body.appendChild(roofRow);
+
   body.appendChild(el('div', 'group-label', 'Transformations'));
   const ladder = ladderStatus(GAME);
   if (!ladder.length) body.appendChild(el('p', 'row-note', 'Your species does not transform.'));
@@ -949,7 +987,7 @@ function panelPower() {
     main.appendChild(el('div', 'row-title', form.name));
     const mastery = getMastery(GAME, form.id);
     main.appendChild(el('div', 'row-note', form.owned
-      ? `${mastery}% mastered - ${form.desc}`
+      ? `${mastery}% worn in (${masteryLabel(mastery)}) - ${form.desc}`
       : form.missing.length ? 'Needs ' + form.missing.slice(0, 3).join(', ') : 'Ready to attempt'));
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', 'x' + numberish(form.mult)));
@@ -1791,6 +1829,96 @@ function addTournamentFact(t, result) {
 // ------------------------------------------------------------------- hunt
 
 let HUNT = null;
+
+// ------------------------------------------------- the Tournament of Power
+
+let SURVIVAL = null;
+
+function openSurvival(board) {
+  SURVIVAL = board;
+  $('surv-log').innerHTML = '';
+  pushSurvivalLines([RULES[0], RULES[1], RULES[3]], 'big');
+  pushSurvivalLines(board.log, 'big');
+  renderSurvival();
+  showScreen('survival');
+}
+
+function pushSurvivalLines(lines, cls) {
+  const log = $('surv-log');
+  for (const line of lines) {
+    if (!line) continue;
+    log.appendChild(el('div', 'line ' + (cls || 'new'), line));
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderSurvival() {
+  const st = survivalStatus(SURVIVAL);
+  const mins = Math.max(0, st.left);
+  $('surv-clock').textContent = `${String(mins).padStart(2, '0')}:00`;
+  $('surv-sub').textContent = st.over
+    ? {
+      won: 'You are the last one standing.',
+      survived: 'The clock ran out and your universe is still here.',
+      out: 'You are off the stage.',
+      erased: 'There is no Universe 7 any more.',
+    }[st.outcome] || 'Over.'
+    : `${st.teams.reduce((n, t) => n + t.up, 0)} still standing - `
+      + `${st.knockedOut} put out by you${st.saved ? `, ${st.saved} caught` : ''}`;
+  $('surv-grip').style.width = st.me.grip + '%';
+  $('surv-sta').style.width = st.me.stamina + '%';
+
+  const teams = $('surv-teams');
+  teams.innerHTML = '';
+  for (const t of st.teams) {
+    const box = el('div', 'uteam' + (t.mine ? ' mine' : '') + (t.erased ? ' gone' : ''));
+    box.appendChild(el('span', 'uteam-n', 'U' + t.universe));
+    box.appendChild(el('span', 'uteam-c', `${t.up}/${t.total}`));
+    box.title = t.fighters.map((f) => (f.out ? '- ' : '') + f.name).join('\n');
+    teams.appendChild(box);
+  }
+
+  const wrap = $('surv-actions');
+  wrap.innerHTML = '';
+  if (st.over) {
+    const done = el('button', 'primary-btn', 'Leave the stage');
+    done.type = 'button';
+    done.addEventListener('click', () => {
+      logLine({ kind: 'event', title: 'The Tournament of Power', text: SURVIVAL.log.slice(-3).join(' ') });
+      if (SURVIVAL.outcome === 'erased') {
+        GAME.character.alive = false;
+        GAME.character.death = { cause: 'Erased with Universe 7', year: currentYear(GAME), age: GAME.character.age };
+        SURVIVAL = null;
+        showDeath();
+        return;
+      }
+      SURVIVAL = null;
+      renderHud();
+      renderFeed();
+      autosave();
+      showPlay();
+    });
+    wrap.appendChild(done);
+    return;
+  }
+  for (const action of survivalActions(SURVIVAL)) {
+    const b = el('button', 'bact');
+    b.type = 'button';
+    b.appendChild(el('span', 'bact-label', action.label));
+    if (action.hint) b.appendChild(el('span', 'bact-hint', action.hint));
+    b.addEventListener('click', () => survivalStep(action.id));
+    wrap.appendChild(b);
+  }
+}
+
+function survivalStep(actionId) {
+  const rng = getRng(GAME);
+  const res = survivalTurn(GAME, SURVIVAL, rng, actionId);
+  saveRng(GAME, rng);
+  pushSurvivalLines([`Minute ${SURVIVAL.minute}`], 'turn');
+  pushSurvivalLines(res.lines);
+  renderSurvival();
+}
 
 function openHunt(hunt) {
   HUNT = hunt;

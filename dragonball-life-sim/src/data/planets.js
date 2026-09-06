@@ -71,6 +71,26 @@ export const PLANETS = [
     flora: 'Nothing grows. Everything is shipped in.',
     strength: 'Individually unimpressive. There are a great many of them.',
   },
+  // The universes next door. Reachable only by Kai Kai, an angel, or a pass
+  // that a god of destruction has personally signed off on.
+  {
+    id: 'u11_world', name: 'Nikoji', distance: 200, universe: 11,
+    inhabitants: 'Pride Troopers and the people they protect',
+    population: 'millions', tech: 'modern', alignment: 'lawful',
+    strength: 'Extreme', flora: 'Ordered, planted in rows, cut to length.',
+    law: 'The Pride Troopers, and they do not go off duty.',
+    desc: 'A universe with the highest mortal level of the survivors, run top to bottom by people in uniform.',
+    defenders: [],
+  },
+  {
+    id: 'u10_world', name: 'Bell', distance: 200, universe: 10,
+    inhabitants: 'Devotees of a god who grades them',
+    population: 'millions', tech: 'modern', alignment: 'devout',
+    strength: 'High', flora: 'Cultivated within an inch of its life.',
+    law: 'A priesthood that answers to Rumsshi and grades everybody.',
+    desc: 'A universe that treats physical strength as a religious discipline and its god as a critic.',
+    defenders: [],
+  },
   {
     id: 'void', name: 'Deep Space', distance: 25, inhabitants: 'Whoever is passing through',
     population: 'none', tech: 'none', alignment: 'indifferent',
@@ -92,12 +112,29 @@ export function getPlanet(id) {
 }
 
 /** Rough travel years between two worlds, by method. */
+/**
+ * Whether a world is there to be travelled to in a given Age. Planet Vegeta
+ * is not a destination in 764, and Namek is not one in 770.
+ */
+export function planetExists(planetId, year) {
+  if (planetId === 'planet_vegeta') return year < 737;
+  if (planetId === 'namek') return year < 763;
+  if (planetId === 'new_namek') return year >= 763;
+  if (planetId === 'cereal') return year < 740 || year > 780;
+  return true;
+}
+
 export function travelYears(fromId, toId, method) {
   const a = getPlanet(fromId);
   const b = getPlanet(toId);
   const gap = Math.abs((a.distance || 0) - (b.distance || 0)) + (a.id === b.id ? 0 : 6);
   switch (method) {
     case 'instant': return 0;
+    case 'kai_kai': return 0;
+    case 'angel': return 0;
+    case 'pass': return 0;
+    case 'passage': return Math.max(1, Math.round(gap / 5));
+    case 'stowaway': return Math.max(1, Math.round(gap / 4));
     case 'ship': return Math.max(0, Math.round(gap / 12));
     case 'pod': return Math.max(1, Math.round(gap / 7));
     case 'flight': return Math.max(2, Math.round(gap / 3));
@@ -106,6 +143,14 @@ export function travelYears(fromId, toId, method) {
 }
 
 export const TRAVEL_METHODS = [
+  {
+    id: 'passage', name: 'Booked passage', needs: 'money and a spaceport',
+    blurb: 'A freighter with a berth free. Slow, cramped, and available to anybody who can pay.',
+  },
+  {
+    id: 'stowaway', name: 'Stowed away', needs: 'nerve',
+    blurb: 'A cargo hold and a long time being very still. Free, and you arrive owing somebody an explanation.',
+  },
   {
     id: 'instant', name: 'Instant Transmission', needs: 'the technique',
     blurb: 'Lock onto a signature and be there. No time passes at all.',

@@ -4,7 +4,7 @@ import { clamp } from '../rng.js';
 import { addFact, openThread, findThread, advanceThread } from '../memory.js';
 import { adjust, addNpc, findNpc, setFlag, setWorldFlag } from '../state.js';
 import { makeNpc, makeCanonNpc, nextNpcId, bondScore } from '../npc.js';
-import { canonAvailable, getCanon, canonPower } from '../../data/canon.js';
+import { canonAvailable, getCanon, canonPower, canonPlace } from '../../data/canon.js';
 import { trainingRate, combatPower, powerTier } from '../stats.js';
 import { createBattle, autoResolve, battleAftermath } from '../battle.js';
 import { getPlace, PLACES } from '../../data/places.js';
@@ -71,16 +71,30 @@ export function meetCanon(ctx, canonId, relation = 'acquaintance') {
   return npc;
 }
 
-/** Canon characters plausibly present: alive, and not wildly out of place. */
+/**
+ * Canon characters plausibly present. Not "alive somewhere in the universe" -
+ * standing on this planet, in this year, according to where the series had
+ * them. Meeting Goku on Yardrat in 745 is a bug, not a cameo.
+ */
 export function canonHere(ctx, filter = () => true) {
   return canonAvailable(ctx.year, (c) => {
     if (!filter(c)) return false;
-    const home = getPlace(c.home);
-    if (!home) return true;
-    // Same planet, or a mobile character, or somewhere the player already is.
-    if (c.home === ctx.character.placeId) return true;
-    if (home.planet === ctx.place.planet) return true;
-    return c.tags.includes('divine') && ctx.place.tags.includes('divine');
+    const at = getPlace(canonPlace(c, ctx.year));
+    if (!at) return true;
+    if (at.id === ctx.character.placeId) return true;
+    if (at.planet === ctx.place.planet) return true;
+    // The gods go where they like, and the dead are all in one place.
+    if (c.tags.includes('divine') && ctx.place.tags.includes('divine')) return true;
+    if (ctx.character.inAfterlife && at.planet === 'otherworld') return true;
+    return false;
+  });
+}
+
+/** Everyone from the series who is on a given world this year. */
+export function canonOnPlanet(year, planetId) {
+  return canonAvailable(year, (c) => {
+    const at = getPlace(canonPlace(c, year));
+    return at && at.planet === planetId;
   });
 }
 
@@ -140,6 +154,7 @@ export function trainYear(ctx, opts = {}) {
       : c.items.includes('heavy_weights') ? 1.4
         : c.items.includes('weighted_clothing') ? 1.25 : 1;
   const rate = trainingRate(c, {
+    state: ctx.state,
     intensity: opts.intensity ?? 1,
     placeMult: opts.placeMult ?? ctx.place.training,
     mentorMult: opts.mentorMult ?? 1,

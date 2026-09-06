@@ -212,7 +212,8 @@ export function createGame(creation, seedInput) {
 
   addFact(state.memory, {
     type: 'birth', year: 0, weight: 5,
-    text: `Born ${race.name.toLowerCase() === 'earthling' ? 'a Human' : 'a ' + race.name} on ${getPlace(placeId).name} in Age ${birthYear}.`,
+    text: `Born ${race.name.toLowerCase() === 'earthling' ? 'a Human'
+      : (/^[aeiou]/i.test(race.name) ? 'an ' : 'a ') + race.name} on ${getPlace(placeId).name} in Age ${birthYear}.`,
     tags: ['origin'],
   });
   if (family.length) {

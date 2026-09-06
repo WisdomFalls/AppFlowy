@@ -35,15 +35,50 @@ export function travelOptions(state, targetPlanetId) {
   const c = state.character;
   const here = getPlace(c.placeId).planet;
   const out = [];
+
+  // A freighter does not cross universes. Kai Kai does, an angel does, and a
+  // ring signed off by a god of destruction does. Nothing else.
+  const from = getPlanet(here);
+  const to = getPlanet(targetPlanetId);
+  const myUniverse = (from && from.universe) || c.universe || 7;
+  const theirUniverse = (to && to.universe) || 7;
+  if (myUniverse !== theirUniverse) {
+    const ways = [];
+    if (c.techniques.includes('kai_kai')) ways.push({ id: 'kai_kai', name: 'Kai Kai', years: 0, cost: 0, blurb: 'Across the boundary, in one step.' });
+    if (c.mentors.includes('whis') || c.mentors.includes('beerus') || c.flags.angel_escort) {
+      ways.push({ id: 'angel', name: 'Carried by an angel', years: 0, cost: 0, blurb: 'Whis takes you, and finds the whole thing mildly amusing.' });
+    }
+    if (c.flags.zeno_pass || c.flags.won_tournament_of_power) {
+      ways.push({ id: 'pass', name: 'The ring you were given', years: 0, cost: 0, blurb: 'Somebody very high up cleared this in advance.' });
+    }
+    return ways;
+  }
   for (const method of TRAVEL_METHODS) {
     let usable = false;
+    let cost = 0;
+    const from = getPlanet(here);
+    // A world with nobody on it has no spaceport and nothing to book.
+    // Namek has no spaceport. Earth has Capsule Corp. The test is whether
+    // anybody on this world builds or berths something that leaves it.
+    const spaceport = !!(from && from.population !== 'none'
+      && !/none to speak of|spiritual|primitive/i.test(from.tech || ''));
     if (method.id === 'instant') usable = c.techniques.includes('instant_transmission') || c.techniques.includes('kai_kai');
     else if (method.id === 'ship') usable = c.items.includes('spaceship');
     else if (method.id === 'pod') usable = c.items.includes('attack_ball');
     else if (method.id === 'flight') usable = (c.stats.speed || 0) >= 80 && c.techniques.includes('bukujutsu');
+    else if (method.id === 'passage') {
+      // The ordinary way anybody crosses space: buy a seat. This is why the
+      // travel screen used to be empty for every character without a ship.
+      usable = spaceport;
+      cost = Math.round(18000 + travelYears(here, targetPlanetId, 'passage') * 22000);
+    } else if (method.id === 'stowaway') {
+      usable = spaceport;
+      cost = 0;
+    }
     if (!usable) continue;
     out.push({
       ...method,
+      cost,
       years: travelYears(here, targetPlanetId, method.id),
     });
   }
