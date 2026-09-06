@@ -22,7 +22,7 @@ import './engine/events/actions.js';
 import { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext } from './engine/state.js';
 import { startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die,
   insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter,
-  tickRevivalEffort, openingLogEntry } from './engine/lifecycle.js';
+  tickRevivalEffort, openingLogEntry, acceptPermanentDeath } from './engine/lifecycle.js';
 import { initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable,
   getApiKey, setApiKey, errorCopy, interpretWish, PRESETS } from './engine/ai.js';
 import { save, load, listSaves, clearSlot, exportString, importString } from './engine/save.js';
@@ -35,7 +35,7 @@ export {
   createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext,
   startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die,
   insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort,
-  openingLogEntry,
+  openingLogEntry, acceptPermanentDeath,
   initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable,
   getApiKey, setApiKey, errorCopy, interpretWish, PRESETS,
   save, load, listSaves, clearSlot, exportString, importString,

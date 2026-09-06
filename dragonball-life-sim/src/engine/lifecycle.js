@@ -596,6 +596,9 @@ export function die(state, cause) {
 export function tickRevivalEffort(state, rng) {
   const c = state.character;
   if (!c.inAfterlife) return null;
+  // A death accepted as final is final. Nobody starts a scavenger hunt for
+  // somebody who told them not to.
+  if (c.flags.permadeath) return null;
   const world = state.world;
 
   if (!world.revival) {
@@ -648,9 +651,38 @@ export function tickRevivalEffort(state, rng) {
   return null;
 }
 
+/**
+ * Let a death be final. No wish will ever be spent on this life again - the
+ * Other World is closed to leaving, not just to visiting. This does not end
+ * the save: a living child can still be played as afterward (that is a
+ * separate, later choice), but this specific person is not coming back, and
+ * the people who were close to them feel it now rather than never noticing.
+ */
+export function acceptPermanentDeath(state) {
+  const c = state.character;
+  c.flags.permadeath = true;
+  state.world.revival = null;
+  const info = epitaph(state);
+  for (const n of livingNpcs(state).filter((x) => x.closeness > 40)) {
+    n.mood = 'grieving';
+  }
+  addFact(state.memory, {
+    type: 'death', text: `${c.name}'s death was accepted as final: ${info.title}.`,
+    year: c.age, weight: 10, tags: ['death', 'legend'],
+  });
+  state.world.legends = state.world.legends || [];
+  state.world.legends.push({
+    name: c.name, raceId: c.raceId, title: info.title, score: info.score,
+    cause: c.death ? c.death.cause : 'unknown', year: currentYear(state),
+  });
+  if (state.world.legends.length > 20) state.world.legends = state.world.legends.slice(-20);
+  return info;
+}
+
 /** Bring a dead character back to the world of the living, properly. */
 export function reviveCharacter(state) {
   const c = state.character;
+  if (c.flags.permadeath) return state;
   c.inAfterlife = false;
   c.alive = true;
   c.death = null;

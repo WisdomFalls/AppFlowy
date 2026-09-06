@@ -21079,6 +21079,9 @@ function die(state, cause) {
 function tickRevivalEffort(state, rng) {
   const c = state.character;
   if (!c.inAfterlife) return null;
+  // A death accepted as final is final. Nobody starts a scavenger hunt for
+  // somebody who told them not to.
+  if (c.flags.permadeath) return null;
   const world = state.world;
 
   if (!world.revival) {
@@ -21131,9 +21134,38 @@ function tickRevivalEffort(state, rng) {
   return null;
 }
 
+/**
+ * Let a death be final. No wish will ever be spent on this life again - the
+ * Other World is closed to leaving, not just to visiting. This does not end
+ * the save: a living child can still be played as afterward (that is a
+ * separate, later choice), but this specific person is not coming back, and
+ * the people who were close to them feel it now rather than never noticing.
+ */
+function acceptPermanentDeath(state) {
+  const c = state.character;
+  c.flags.permadeath = true;
+  state.world.revival = null;
+  const info = epitaph(state);
+  for (const n of livingNpcs(state).filter((x) => x.closeness > 40)) {
+    n.mood = 'grieving';
+  }
+  addFact(state.memory, {
+    type: 'death', text: `${c.name}'s death was accepted as final: ${info.title}.`,
+    year: c.age, weight: 10, tags: ['death', 'legend'],
+  });
+  state.world.legends = state.world.legends || [];
+  state.world.legends.push({
+    name: c.name, raceId: c.raceId, title: info.title, score: info.score,
+    cause: c.death ? c.death.cause : 'unknown', year: currentYear(state),
+  });
+  if (state.world.legends.length > 20) state.world.legends = state.world.legends.slice(-20);
+  return info;
+}
+
 /** Bring a dead character back to the world of the living, properly. */
 function reviveCharacter(state) {
   const c = state.character;
+  if (c.flags.permadeath) return state;
   c.inAfterlife = false;
   c.alive = true;
   c.death = null;
@@ -21279,7 +21311,7 @@ function beginLegacy(state) {
   saveRng(state, rng);
   return state;
 }
-  return { mournNpc, openingLogEntry, startYear, insertEvent, eventsRemaining, renarrateLast, currentEvent, choose, skipRemaining, die, tickRevivalEffort, reviveCharacter, enterAfterlife, epitaph, beginLegacy };
+  return { mournNpc, openingLogEntry, startYear, insertEvent, eventsRemaining, renarrateLast, currentEvent, choose, skipRemaining, die, tickRevivalEffort, acceptPermanentDeath, reviveCharacter, enterAfterlife, epitaph, beginLegacy };
 })();
 
 /* ==== engine/events/afterlife.js ==== */
@@ -24240,14 +24272,14 @@ const __mod_game_js = (function () {
 
 
 const { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext } = __mod_engine_state_js;
-const { startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort, openingLogEntry } = __mod_engine_lifecycle_js;
+const { startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort, openingLogEntry, acceptPermanentDeath } = __mod_engine_lifecycle_js;
 const { initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish, PRESETS } = __mod_engine_ai_js;
 const { save, load, listSaves, clearSlot, exportString, importString } = __mod_engine_save_js;
 const { allTemplates } = __mod_engine_generator_js;
 const { ladderStatus, nearbyForms, unlockableForms } = __mod_engine_progression_js;
 const { Rng, Rng: RngClass } = __mod_engine_rng_js;
 const { ACTIONS, availableActions, runAction, actionOptions } = __mod_engine_events_actions_js;
-  return { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort, openingLogEntry, initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish, PRESETS, save, load, listSaves, clearSlot, exportString, importString, allTemplates, ladderStatus, nearbyForms, unlockableForms, Rng, ACTIONS, availableActions, runAction, actionOptions };
+  return { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort, openingLogEntry, acceptPermanentDeath, initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish, PRESETS, save, load, listSaves, clearSlot, exportString, importString, allTemplates, ladderStatus, nearbyForms, unlockableForms, Rng, ACTIONS, availableActions, runAction, actionOptions };
 })();
 
 /* ==== engine/social.js ==== */
@@ -25419,7 +25451,7 @@ const __mod_ui_app_js = (function () {
 // UI controller. Vanilla DOM, one render pass per change - the simulation is
 // the interesting part, so the interface stays boring on purpose.
 
-const { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, insertEvent, renarrateLast, skipRemaining, ladderStatus, nearbyForms, availableActions, runAction, actionOptions, Rng, initSampling, improviseEvent, narrateOutcome, backendName, getApiKey, setApiKey, errorCopy, interpretWish, eventsRemaining, openingLogEntry, save, load, listSaves, clearSlot, exportString, importString } = __mod_game_js;
+const { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, insertEvent, renarrateLast, skipRemaining, ladderStatus, nearbyForms, availableActions, runAction, actionOptions, Rng, initSampling, improviseEvent, narrateOutcome, backendName, getApiKey, setApiKey, errorCopy, interpretWish, eventsRemaining, openingLogEntry, acceptPermanentDeath, save, load, listSaves, clearSlot, exportString, importString } = __mod_game_js;
 const { CREATABLE_RACES, getRace, sexesFor, UPBRINGINGS, TEMPERAMENTS, BODY_TYPES } = __mod_data_races_js;
 const { PLACES, getPlace } = __mod_data_places_js;
 const { APPEARANCE } = __mod_engine_state_js;
@@ -27852,6 +27884,24 @@ function showDeath() {
     node.appendChild(b);
     node.appendChild(el('p', 'hint-text',
       'Dying is not the end in this setting. You can train under King Kai, fight in the Other World tournament, and be wished back if anyone down there cares enough.'));
+  }
+
+  if (!GAME.character.flags.permadeath) {
+    const end = el('button', 'ghost-btn', 'Accept it. This is the end.');
+    end.type = 'button';
+    end.addEventListener('click', () => {
+      acceptPermanentDeath(GAME);
+      autosave();
+      showDeath();
+      flash('No wish is ever spent on this life again. It is finished, on your terms.');
+    });
+    node.appendChild(end);
+    node.appendChild(el('p', 'hint-text',
+      'This closes the door on this specific life for good - no revival, no Other World hero run. '
+      + 'A living child can still be played as afterward; that is a separate choice from this one.'));
+  } else {
+    node.appendChild(el('p', 'hint-text',
+      `${info.name}'s death was accepted as final. ${info.title}. It shaped everyone still close to them.`));
   }
 
   const kids = Object.values(GAME.npcs).filter((n) => n.relation === 'child' && n.alive);

@@ -8,7 +8,7 @@ import {
   availableActions, runAction, actionOptions, Rng,
   initSampling, improviseEvent, narrateOutcome, backendName, getApiKey, setApiKey, errorCopy,
   interpretWish,
-  eventsRemaining, openingLogEntry,
+  eventsRemaining, openingLogEntry, acceptPermanentDeath,
   save, load, listSaves, clearSlot, exportString, importString,
 } from '../game.js';
 import { CREATABLE_RACES, getRace, sexesFor, UPBRINGINGS, TEMPERAMENTS, BODY_TYPES } from '../data/races.js';
@@ -2451,6 +2451,24 @@ function showDeath() {
     node.appendChild(b);
     node.appendChild(el('p', 'hint-text',
       'Dying is not the end in this setting. You can train under King Kai, fight in the Other World tournament, and be wished back if anyone down there cares enough.'));
+  }
+
+  if (!GAME.character.flags.permadeath) {
+    const end = el('button', 'ghost-btn', 'Accept it. This is the end.');
+    end.type = 'button';
+    end.addEventListener('click', () => {
+      acceptPermanentDeath(GAME);
+      autosave();
+      showDeath();
+      flash('No wish is ever spent on this life again. It is finished, on your terms.');
+    });
+    node.appendChild(end);
+    node.appendChild(el('p', 'hint-text',
+      'This closes the door on this specific life for good - no revival, no Other World hero run. '
+      + 'A living child can still be played as afterward; that is a separate choice from this one.'));
+  } else {
+    node.appendChild(el('p', 'hint-text',
+      `${info.name}'s death was accepted as final. ${info.title}. It shaped everyone still close to them.`));
   }
 
   const kids = Object.values(GAME.npcs).filter((n) => n.relation === 'child' && n.alive);
