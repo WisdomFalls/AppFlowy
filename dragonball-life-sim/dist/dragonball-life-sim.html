@@ -740,6 +740,31 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
 }
 .foe-face svg { display: block; }
 
+/* ------------------------------------------------------------- inventory */
+
+.purse { border: 1px solid var(--line); border-radius: var(--radius-s); overflow: hidden; margin-bottom: 10px; }
+.purse-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 7px 11px; border-bottom: 1px solid var(--line-soft); background: var(--ground-2);
+}
+.purse-row:last-child { border-bottom: none; }
+.purse-row.here { background: var(--gi-soft); }
+.purse-name { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; color: var(--ink-3); text-transform: uppercase; }
+.purse-row.here .purse-name { color: var(--gi); }
+.purse-val { font-family: var(--font-mono); font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.cond { height: 3px; background: var(--line-soft); border-radius: 99px; margin-top: 6px; overflow: hidden; }
+.cond-fill { height: 100%; background: var(--ki); }
+.cond-fill.bad { background: var(--blood); }
+
+.item-acts { display: flex; flex-direction: column; gap: 4px; flex: none; }
+.mini {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase;
+  padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--ground); color: var(--ink-2); white-space: nowrap;
+}
+.mini:hover { border-color: var(--gi); color: var(--gi); }
+
 </style>
 <div id="app">
 
@@ -2013,6 +2038,277 @@ function substream(rng, topic) {
   return { hashSeed, Rng, clamp, substream };
 })();
 
+/* ==== data/traits.js ==== */
+const __mod_data_traits_js = (function () {
+// Traits.
+//
+// Two sources, and they behave differently. Blood traits come from your
+// parents and are set before you draw breath: you do not earn them and you
+// cannot lose them. Earned traits are what a life does to somebody, and they
+// arrive when the conditions are met, sometimes whether you wanted them or not.
+//
+// A trait's `effect` is read by the systems that care. Nothing here reaches
+// into the engine itself, so a trait is always a number somewhere else.
+
+const TRAIT_KINDS = { blood: 'In the blood', earned: 'Earned', origin: 'From how you grew up' };
+
+const TRAITS = [
+  // ------------------------------------------------------------ inherited
+  {
+    id: 'genius', kind: 'blood', name: 'Genius', rarity: 0.06,
+    desc: 'Things arrive whole, and much sooner than they should.',
+    effect: { learnSpeed: 1.45, trialEase: 0.12, iq: 22 },
+    line: 'You worked it out before they finished explaining it.',
+  },
+  {
+    id: 'slow_study', kind: 'blood', name: 'Slow Study', rarity: 0.09, bad: true,
+    desc: 'It goes in eventually. Everything takes two passes.',
+    effect: { learnSpeed: 0.62, trialEase: -0.08, iq: -14 },
+    line: 'It takes you twice as long and then it never leaves.',
+  },
+  {
+    id: 'prodigy_body', kind: 'blood', name: 'Prodigious Body', rarity: 0.07,
+    desc: 'Muscle answers faster than it has any right to.',
+    effect: { trainMult: 1.35, potential: 18 },
+    line: 'Your body learns things your head has not agreed to yet.',
+  },
+  {
+    id: 'frail', kind: 'blood', name: 'Frail', rarity: 0.08, bad: true,
+    desc: 'Everything hurts you more than it hurts other people.',
+    effect: { damageTaken: 1.3, healRate: 0.7, maxHealth: -15 },
+    line: 'You bruise like fruit and you always have.',
+  },
+  {
+    id: 'huge_reserves', kind: 'blood', name: 'Deep Reserves', rarity: 0.08,
+    desc: 'Your ki does not run out when other people\'s does.',
+    effect: { kiMult: 1.4, staminaMult: 1.2 },
+    line: 'You are still going long after you should not be.',
+  },
+  {
+    id: 'battle_read', kind: 'blood', name: 'Reads a Fight', rarity: 0.07,
+    desc: 'You see the punch a beat before it is thrown.',
+    effect: { dodge: 0.1, battleInstinct: 22 },
+    line: 'You move before you have decided to.',
+  },
+  {
+    id: 'legendary_blood', kind: 'blood', name: 'Legendary Blood', rarity: 0.015, races: ['saiyan', 'halfsaiyan'],
+    desc: 'The thing that happens once every thousand years, and it happened to you.',
+    effect: { trainMult: 1.5, powerMult: 1.6, rage: 0.2 },
+    line: 'Something in your line skipped a thousand years and landed on you.',
+  },
+  {
+    id: 'royal_line', kind: 'blood', name: 'Royal Line', rarity: 0.04, races: ['saiyan', 'frostdemon', 'shinjin'],
+    desc: 'People who have never met you know your family name.',
+    effect: { fameFloor: 12, charisma: 8 },
+    line: 'Your name opens doors and closes others.',
+  },
+  {
+    id: 'thick_skull', kind: 'blood', name: 'Thick Skull', rarity: 0.1,
+    desc: 'Concussions happen to other people.',
+    effect: { damageTaken: 0.85, durability: 10 },
+    line: 'Things bounce off you that should not.',
+  },
+  {
+    id: 'short_fuse', kind: 'blood', name: 'Short Fuse', rarity: 0.11, bad: true,
+    desc: 'You are angry before you know why.',
+    effect: { rage: 0.25, charisma: -6, tensionGain: 1.3 },
+    line: 'It goes from nothing to everything with no step in between.',
+  },
+  {
+    id: 'long_lived', kind: 'blood', name: 'Long-Lived Stock', rarity: 0.07,
+    desc: 'Everyone in your family died annoyed at how long it took.',
+    effect: { lifespan: 1.2, agingRate: 0.85 },
+    line: 'Your grandmother buried three doctors.',
+  },
+  {
+    id: 'lucky', kind: 'blood', name: 'Born Lucky', rarity: 0.06,
+    desc: 'Things go your way slightly more often than they should.',
+    effect: { luck: 25 },
+    line: 'It keeps working out and you have stopped questioning it.',
+  },
+
+  // -------------------------------------------------------- from upbringing
+  {
+    id: 'feral', kind: 'origin', name: 'Feral', from: ['animals'],
+    desc: 'You learned to hunt before you learned to talk.',
+    effect: { charisma: -10, speed: 8, battleInstinct: 12 },
+    line: 'You still hear things other people do not.',
+  },
+  {
+    id: 'self_made', kind: 'origin', name: 'Self-Made', from: ['self_raised', 'street'],
+    desc: 'Nobody taught you anything, so nothing you know is borrowed.',
+    effect: { discipline: 10, trialEase: 0.06 },
+    line: 'Everything you have, you worked out on your own.',
+  },
+  {
+    id: 'drilled', kind: 'origin', name: 'Drilled', from: ['saiyan_creche', 'warrior_clan'],
+    desc: 'Graded at three and never allowed to forget the number.',
+    effect: { trainMult: 1.2, discipline: 8, happinessFloor: -8 },
+    line: 'You know exactly where you ranked, and you always will.',
+  },
+  {
+    id: 'catalogued', kind: 'origin', name: 'Catalogued', from: ['lab'],
+    desc: 'You have a serial number and somebody still has the file.',
+    effect: { intellect: 8, charisma: -8, durability: 8 },
+    line: 'Somewhere there is a folder with your growth curve in it.',
+  },
+  {
+    id: 'occupied', kind: 'origin', name: 'Grew Up Occupied', from: ['conquered'],
+    desc: 'Somebody else\'s flag over your town for your whole childhood.',
+    effect: { discipline: 6, tensionGain: 1.15, karmaFloor: -5 },
+    line: 'You learned very young which questions not to ask out loud.',
+  },
+  {
+    id: 'well_loved', kind: 'origin', name: 'Well Loved', from: ['foster', 'farm', 'city'],
+    desc: 'Somebody was pleased to see you every single day.',
+    effect: { charisma: 8, happinessFloor: 10, healRate: 1.15 },
+    line: 'You have a baseline other people had to build.',
+  },
+
+  // ------------------------------------------------------------- earned
+  {
+    id: 'iron_will', kind: 'earned', name: 'Iron Will', when: (c) => c.stats.discipline >= 85,
+    desc: 'You do not stop because stopping is not one of the things you do.',
+    effect: { staminaMult: 1.25, trialEase: 0.1 },
+    line: 'Somewhere along the way, quitting stopped being available to you.',
+  },
+  {
+    id: 'scarred', kind: 'earned', name: 'Scarred', when: (c) => (c.scars || []).length >= 3,
+    desc: 'Three fights that never fully healed.',
+    effect: { damageTaken: 0.9, charisma: -4, fameFloor: 5 },
+    line: 'People read your history off you before you speak.',
+  },
+  {
+    id: 'killer', kind: 'earned', name: 'Killer', when: (c, s) => (s.stats.kills || 0) >= 3,
+    desc: 'You have done it enough times that it is a thing you do.',
+    effect: { karmaFloor: -20, tensionGain: 1.4, battleInstinct: 10 },
+    line: 'It got easier, and that is the part that should worry you.',
+  },
+  {
+    id: 'merciful', kind: 'earned', name: 'Merciful', when: (c, s) => c.karma >= 55 && (s.stats.kills || 0) === 0,
+    desc: 'You have never finished anybody, and people know it.',
+    effect: { charisma: 10, karmaFloor: 30, respectGain: 1.2 },
+    line: 'You have put a lot of people down and never kept one there.',
+  },
+  {
+    id: 'famous', kind: 'earned', name: 'Known Everywhere', when: (c) => c.fame >= 70,
+    desc: 'Strangers on other worlds have opinions about you.',
+    effect: { charisma: 6, fameFloor: 60 },
+    line: 'You cannot go anywhere without somebody already knowing.',
+  },
+  {
+    id: 'feared', kind: 'earned', name: 'Feared', when: (c) => c.karma <= -50 && c.fame >= 40,
+    desc: 'The room changes when you walk into it, and not for the better.',
+    effect: { charisma: -12, intimidate: 0.3, fameFloor: 40 },
+    line: 'People go quiet, and they were not quiet before.',
+  },
+  {
+    id: 'survivor', kind: 'earned', name: 'Survivor', when: (c) => !!c.flags.brink_of_death && !!c.flags.died_once,
+    desc: 'You have been all the way to the edge and come back.',
+    effect: { damageTaken: 0.85, healRate: 1.2 },
+    line: 'You have died before. It informs your approach.',
+  },
+  {
+    id: 'grieving', kind: 'earned', name: 'Carrying It', when: (c) => !!c.flags.was_not_there,
+    desc: 'You were not there when it mattered and you know exactly how far away you were.',
+    effect: { happinessFloor: -12, discipline: 6, trainMult: 1.1 },
+    line: 'You train harder now. It is not really about the training.',
+  },
+  {
+    id: 'teacher', kind: 'earned', name: 'Teacher', when: (c, s) => (s.stats.taught || 0) >= 2,
+    desc: 'Other people fight the way you do now.',
+    effect: { charisma: 8, respectGain: 1.25 },
+    line: 'Somebody out there throws your punch.',
+  },
+  {
+    id: 'wanderer', kind: 'earned', name: 'Wanderer', when: (c, s) => Object.keys(s.world.planets || {}).length >= 4,
+    desc: 'Four worlds and none of them home.',
+    effect: { intellect: 6, charisma: 4, happinessFloor: -5 },
+    line: 'You have stopped calling anywhere home and started giving coordinates.',
+  },
+];
+
+const TRAIT_BY_ID = Object.fromEntries(TRAITS.map((t) => [t.id, t]));
+
+function getTrait(id) {
+  return TRAIT_BY_ID[id];
+}
+
+/**
+ * The sum of one effect key across every trait somebody has. Multiplicative
+ * keys start at 1 and multiply; everything else adds.
+ */
+const MULTIPLICATIVE = ['learnSpeed', 'trainMult', 'kiMult', 'staminaMult', 'damageTaken',
+  'healRate', 'powerMult', 'lifespan', 'agingRate', 'tensionGain', 'respectGain'];
+
+function traitEffect(character, key) {
+  const ids = character.traits2 || [];
+  const mult = MULTIPLICATIVE.includes(key);
+  let out = mult ? 1 : 0;
+  for (const id of ids) {
+    const t = TRAIT_BY_ID[id];
+    if (!t || t.effect[key] === undefined) continue;
+    if (mult) out *= t.effect[key];
+    else out += t.effect[key];
+  }
+  return out;
+}
+
+function hasTrait(character, id) {
+  return (character.traits2 || []).includes(id);
+}
+
+/**
+ * What a child inherits. Each parent trait has a real chance of passing, and
+ * there is a small chance of something arriving from nowhere, because that is
+ * how it works.
+ */
+function inheritTraits(rng, parents = [], raceId) {
+  const out = new Set();
+  for (const parent of parents) {
+    for (const id of parent.traits2 || []) {
+      const t = TRAIT_BY_ID[id];
+      if (!t || t.kind !== 'blood') continue;
+      if (t.races && !t.races.includes(raceId)) continue;
+      if (rng.chance(0.45)) out.add(id);
+    }
+  }
+  // A roll of the dice on top, for a character with no parents on file.
+  for (const t of TRAITS) {
+    if (t.kind !== 'blood' || out.has(t.id)) continue;
+    if (t.races && !t.races.includes(raceId)) continue;
+    if (rng.chance(t.rarity * (parents.length ? 0.4 : 1))) out.add(t.id);
+  }
+  return [...out].slice(0, 3);
+}
+
+/** Traits an upbringing hands you. */
+function originTraits(upbringingId) {
+  return TRAITS.filter((t) => t.kind === 'origin' && (t.from || []).includes(upbringingId)).map((t) => t.id);
+}
+
+/**
+ * Anything the life has now earned. Returns the newly acquired ones so the
+ * year can announce them.
+ */
+function checkEarnedTraits(state) {
+  const c = state.character;
+  c.traits2 = c.traits2 || [];
+  const gained = [];
+  for (const t of TRAITS) {
+    if (t.kind !== 'earned' || c.traits2.includes(t.id)) continue;
+    let ok = false;
+    try { ok = t.when(c, state); } catch (e) { ok = false; }
+    if (ok) {
+      c.traits2.push(t.id);
+      gained.push(t);
+    }
+  }
+  return gained;
+}
+  return { TRAIT_KINDS, TRAITS, TRAIT_BY_ID, getTrait, traitEffect, hasTrait, inheritTraits, originTraits, checkEarnedTraits };
+})();
+
 /* ==== data/transformations.js ==== */
 const __mod_data_transformations_js = (function () {
 // Transformation ladders. Each form multiplies effective power, drains ki, and
@@ -2619,6 +2915,7 @@ const __mod_engine_stats_js = (function () {
 // thousands rather than adding a flat amount.
 
 const { clamp } = __mod_engine_rng_js;
+const { traitEffect } = __mod_data_traits_js;
 const { getRace, hasPerk } = __mod_data_races_js;
 const { getTransformation } = __mod_data_transformations_js;
 const { techniquePower } = __mod_data_techniques_js;
@@ -2661,6 +2958,7 @@ function agingDecay(character) {
  * power, before injury and event modifiers.
  */
 function trainingRate(character, opts = {}) {
+  // Blood and upbringing move how fast a body answers.
   const race = getRace(character.raceId);
   const intensity = opts.intensity ?? 1.0;      // 0.4 light .. 2.0 suicidal
   const placeMult = opts.placeMult ?? 1.0;
@@ -2686,7 +2984,7 @@ function trainingRate(character, opts = {}) {
   if (character.vitals.health < 40) rate *= 0.6;
   if (character.vitals.happiness < 25) rate *= 0.8;
 
-  return Math.max(0, rate);
+  return (Math.max(0, rate)) * traitEffect(character, 'trainMult');
 }
 
 /** Apply a zenkai: near-death survival permanently raises the ceiling. */
@@ -2760,9 +3058,10 @@ function applyStatDelta(character, delta, cap = 100) {
 
 /** Maximum ki pool, which grows with control and technique. */
 function kiMaxFor(character) {
+  // Deep reserves are a real thing somebody is born with.
   const base = 40 + character.stats.kiControl * 0.9 + character.stats.discipline * 0.3;
   const bonus = character.techniques.length * 2;
-  return Math.round(base + bonus);
+  return Math.round((Math.round(base + bonus)) * traitEffect(character, 'kiMult'));
 }
 
 function lifeExpectancy(character, rng) {
@@ -4002,6 +4301,139 @@ function describeOrigin(character) {
   return `${up ? up.name : 'Unknown origins'} on ${place ? place.name : 'somewhere'}, ${up ? up.blurb.toLowerCase() : ''}`;
 }
   return { rollOrigin, describeOrigin };
+})();
+
+/* ==== data/currency.js ==== */
+const __mod_data_currency_js = (function () {
+// Money is local.
+//
+// Zeni is Earth's currency. It is not the galaxy's, and a Saiyan on Planet
+// Vegeta in Age 730 had never seen a note of it. Every world in play has
+// something it settles debts in, drawn from what that place actually values,
+// and converting between them costs you.
+
+const CURRENCIES = {
+  zeni: {
+    id: 'zeni', name: 'Zeni', short: 'Z', rate: 1,
+    desc: 'Earth\'s money. Paper, coins, and a bank that will not take anything else.',
+    where: 'Earth and anywhere Capsule Corporation trades.',
+  },
+  merit: {
+    id: 'merit', name: 'Battle Merit', short: 'BM', rate: 320,
+    desc: 'What the Saiyan army paid in: recorded kills, worlds taken, ranks earned. It buys armour, pods, and the right to be spoken to.',
+    where: 'Planet Vegeta, Sadala, and any Saiyan settlement since.',
+  },
+  scrip: {
+    id: 'scrip', name: 'Force Scrip', short: 'FS', rate: 180,
+    desc: 'Frieza Force pay. Redeemable at any garrison, worthless the moment the garrison falls.',
+    where: 'Frieza Force worlds and the ships between them.',
+  },
+  water: {
+    id: 'water', name: 'Sacred Water', short: 'SW', rate: 900,
+    desc: 'Namekians do not trade in money. They trade in what keeps a village alive through a dry season.',
+    where: 'Namek and New Namek.',
+  },
+  shard: {
+    id: 'shard', name: 'Katchin Shard', short: 'KS', rate: 2400,
+    desc: 'The hardest substance there is, cut into weights. Nobody can forge it, which is the entire point.',
+    where: 'Yardrat, the deep worlds, and anywhere that does not trust paper.',
+  },
+  favour: {
+    id: 'favour', name: 'Standing', short: 'ST', rate: 0,
+    desc: 'What the Other World runs on. It cannot be carried, spent twice, or stolen.',
+    where: 'The Other World, where money is meaningless and reputation is not.',
+  },
+};
+
+/** What a given world settles in. */
+const PLANET_CURRENCY = {
+  earth: 'zeni',
+  planet_vegeta: 'merit',
+  sadala: 'merit',
+  namek: 'water',
+  new_namek: 'water',
+  yardrat: 'shard',
+  cereal: 'shard',
+  frieza_79: 'scrip',
+  void: 'scrip',
+  otherworld: 'favour',
+};
+
+function currencyFor(planetId) {
+  return CURRENCIES[PLANET_CURRENCY[planetId] || 'zeni'];
+}
+
+function getCurrency(id) {
+  return CURRENCIES[id] || CURRENCIES.zeni;
+}
+
+/** A purse always holds every currency; most balances are just zero. */
+function emptyPurse() {
+  const out = {};
+  for (const id of Object.keys(CURRENCIES)) out[id] = 0;
+  return out;
+}
+
+function balance(character, currencyId) {
+  if (!character.purse) return currencyId === 'zeni' ? (character.zeni || 0) : 0;
+  return character.purse[currencyId] || 0;
+}
+
+function credit(character, currencyId, amount) {
+  character.purse = character.purse || emptyPurse();
+  character.purse[currencyId] = Math.max(0, (character.purse[currencyId] || 0) + amount);
+  if (currencyId === 'zeni') character.zeni = character.purse.zeni;
+  return character.purse[currencyId];
+}
+
+function debit(character, currencyId, amount) {
+  return credit(character, currencyId, -amount);
+}
+
+function canAfford(character, currencyId, amount) {
+  return balance(character, currencyId) >= amount;
+}
+
+/**
+ * What something costs here. Prices are authored in Zeni because that is the
+ * scale everything else in the game already uses; a world's own currency is
+ * worth more per unit, so the number on the tag is smaller.
+ */
+function priceIn(zeniPrice, currencyId) {
+  const cur = getCurrency(currencyId);
+  if (!cur.rate) return 0;
+  return Math.max(1, Math.round(zeniPrice / cur.rate));
+}
+
+function formatMoney(amount, currencyId) {
+  const cur = getCurrency(currencyId);
+  const v = Math.round(amount);
+  if (cur.id === 'zeni') {
+    if (Math.abs(v) >= 1e9) return `${(v / 1e9).toFixed(2).replace(/\.?0+$/, '')}B Zeni`;
+    if (Math.abs(v) >= 1e6) return `${(v / 1e6).toFixed(2).replace(/\.?0+$/, '')}M Zeni`;
+    return `${v.toLocaleString('en-US')} Zeni`;
+  }
+  return `${v.toLocaleString('en-US')} ${cur.name}${Math.abs(v) === 1 ? '' : 's'}`;
+}
+
+/**
+ * Changing money. Nobody does this for free, and the further the two worlds
+ * are from each other's economies the worse the spread.
+ */
+function exchange(character, fromId, toId, amount) {
+  const from = getCurrency(fromId);
+  const to = getCurrency(toId);
+  if (!from.rate || !to.rate) return { ok: false, reason: 'That cannot be exchanged for anything.' };
+  if (!canAfford(character, fromId, amount)) return { ok: false, reason: `You do not have ${formatMoney(amount, fromId)}.` };
+  const inZeni = amount * from.rate;
+  const cut = 0.18;
+  const got = Math.floor((inZeni * (1 - cut)) / to.rate);
+  if (got < 1) return { ok: false, reason: 'Not enough to be worth changing.' };
+  debit(character, fromId, amount);
+  credit(character, toId, got);
+  return { ok: true, got, cut, text: `${formatMoney(amount, fromId)} becomes ${formatMoney(got, toId)}. The changer keeps the rest.` };
+}
+  return { CURRENCIES, PLANET_CURRENCY, currencyFor, getCurrency, emptyPurse, balance, credit, debit, canAfford, priceIn, formatMoney, exchange };
 })();
 
 /* ==== data/canon.js ==== */
@@ -5595,6 +6027,8 @@ const { getPlace } = __mod_data_places_js;
 const { eraName, worldPowerBaseline } = __mod_data_timeline_js;
 const { generateFullName } = __mod_data_names_js;
 const { rollOrigin } = __mod_engine_origins_js;
+const { inheritTraits, originTraits, traitEffect } = __mod_data_traits_js;
+const { emptyPurse, currencyFor, priceIn, credit } = __mod_data_currency_js;
 const { makeFamily, resetNpcCounter } = __mod_engine_npc_js;
 const { STAT_KEYS, kiMaxFor, lifeExpectancy, combatPower, powerTier } = __mod_engine_stats_js;
 
@@ -5681,6 +6115,10 @@ function createGame(creation, seedInput) {
     battleInstinct: origin.battleInstinct,
     iq: origin.iq,
     luck: origin.luck,
+
+    // What your blood gave you, and what your upbringing added. Set before
+    // anything else happens and never chosen.
+    traits2: [],
     // What the life leaves on the body. Each entry is drawn on the portrait
     // and listed in the record, with who or what did it.
     scars: [],
@@ -5726,6 +6164,28 @@ function createGame(creation, seedInput) {
     trainingFocus: null,
     yearsInAfterlife: 0,
   };
+  // Traits, before the derived numbers, because several of them move those.
+  character.traits2 = inheritTraits(rng, creation.parents || [], creation.raceId)
+    .concat(originTraits(upbringing.id));
+  character.potential = clamp(character.potential + traitEffect(character, 'potential'), 1, 120);
+  character.battleInstinct = clamp(character.battleInstinct + traitEffect(character, 'battleInstinct'), 1, 120);
+  character.iq = clamp(character.iq + traitEffect(character, 'iq'), 40, 200);
+  character.luck = clamp(character.luck + traitEffect(character, 'luck'), 1, 120);
+  for (const k of STAT_KEYS) {
+    const bump = traitEffect(character, k);
+    if (bump) character.stats[k] = clamp(character.stats[k] + bump, 1, 99);
+  }
+  const powerMult = traitEffect(character, 'powerMult');
+  if (powerMult !== 1) character.power = Math.max(1, Math.round(character.power * powerMult));
+  character.peakPower = character.power;
+
+  // You are born holding whatever the place you were born settles in. A
+  // Saiyan on Planet Vegeta has never seen a Zeni note.
+  character.purse = emptyPurse();
+  const bornCurrency = currencyFor(getPlace(placeId).planet);
+  credit(character, bornCurrency.id, priceIn(character.zeni, bornCurrency.id));
+  character.zeni = character.purse.zeni;
+
   character.vitals.kiMax = kiMaxFor(character);
   character.vitals.ki = character.vitals.kiMax;
   character.lifeExpectancy = lifeExpectancy(character, rng);
@@ -6403,6 +6863,531 @@ function slotNpc(state, slots) {
   return { registerEvents, allTemplates, getTemplate, buildContext, selectTemplate, materialise, forceEvent, generateEvent, resolveChoice, directorBias, pickNpc, npcSlot, slotNpc };
 })();
 
+/* ==== data/items.js ==== */
+const __mod_data_items_js = (function () {
+// Assets, gear and consumables. `effect` is applied by the engine when owned
+// (passive) or used (consumable).
+
+const ITEMS = [
+  // Training gear
+  { id: 'weighted_clothing', name: 'Weighted Training Gi', cat: 'gear', cost: 25000, passive: { trainMult: 1.25, speedPenalty: 4 },
+    desc: 'Turtle School standard issue. The undershirt alone weighs more than you do.' },
+  { id: 'heavy_weights', name: 'King Kai Weight Set', cat: 'gear', cost: 90000, passive: { trainMult: 1.4, speedPenalty: 8 },
+    desc: 'Designed for ten times gravity. On Earth it is simply cruel.' },
+  { id: 'gravity_chamber', name: 'Gravity Chamber', cat: 'property', cost: 4000000, passive: { trainMult: 2.1, injuryRisk: 0.08 },
+    desc: 'Up to 500g in a room the size of a garage. Capsule Corp will not insure it.' },
+  { id: 'gravity_capsule', name: 'Portable Gravity Capsule', cat: 'gear', cost: 900000, passive: { trainMult: 1.6, injuryRisk: 0.04 },
+    desc: 'A one-person pod. Cramped, loud, extremely effective.' },
+  { id: 'scouter', name: 'Scouter', cat: 'gear', cost: 60000, passive: { senseBonus: 0.5, scoutPower: true },
+    desc: 'Reads power levels, transmits everything you see to whoever issued it.' },
+  { id: 'battle_armour', name: 'Saiyan Battle Armour', cat: 'gear', cost: 120000, passive: { defence: 12, stretch: true },
+    desc: 'Stretches to any size, survives most things, and never quite fits over the shoulders.' },
+  { id: 'z_sword', name: 'The Z-Sword', cat: 'gear', cost: 0, passive: { attack: 25, unique: true },
+    desc: 'Stuck in a rock on the Sacred World for generations. Heavier than it has any right to be.' },
+  { id: 'power_pole', name: 'Power Pole', cat: 'gear', cost: 0, passive: { attack: 10, reach: 0.3 },
+    desc: 'Extends from here to the Lookout, if you ask it nicely.' },
+
+  // Transport
+  { id: 'hovercar', name: 'Hovercar', cat: 'transport', cost: 180000, passive: { travel: 1 }, desc: 'Standard, dull, reliable.' },
+  { id: 'capsule_jet', name: 'Capsule Jet', cat: 'transport', cost: 700000, passive: { travel: 2 }, desc: 'Folds into a pill. Unfolds at eight hundred kilometres an hour.' },
+  { id: 'flying_nimbus', name: 'Flying Nimbus', cat: 'transport', cost: 0, passive: { travel: 2, goodOnly: true },
+    desc: 'A small yellow cloud that will drop you through it if your heart is impure.' },
+  { id: 'spaceship', name: 'Capsule Spaceship', cat: 'transport', cost: 9000000, passive: { travel: 4, space: true },
+    desc: 'Interstellar, with a gravity setting and a very small kitchen.' },
+  { id: 'attack_ball', name: 'Saiyan Attack Ball', cat: 'transport', cost: 2000000, passive: { travel: 3, space: true },
+    desc: 'A one-seat pod that lands by cratering. Bring a helmet.' },
+
+  // Property
+  { id: 'capsule_house', name: 'Capsule House', cat: 'property', cost: 350000, passive: { comfort: 8 }, desc: 'A whole house in your pocket, assuming you remember which pocket.' },
+  { id: 'mountain_home', name: 'Mountain Home', cat: 'property', cost: 900000, passive: { comfort: 12, trainMult: 1.15 }, desc: 'Deep in the woods, no neighbours, excellent for shouting.' },
+  { id: 'city_apartment', name: 'City Apartment', cat: 'property', cost: 600000, passive: { comfort: 10, social: 5 }, desc: 'Forty floors up, and the neighbours complain about the training.' },
+  { id: 'dojo_property', name: 'Private Dojo', cat: 'property', cost: 2500000, passive: { comfort: 10, trainMult: 1.3, income: 40000 }, desc: 'Your own school, your own rules, your own leaking roof.' },
+  { id: 'island', name: 'Private Island', cat: 'property', cost: 30000000, passive: { comfort: 25, trainMult: 1.2, fame: 8 }, desc: 'Nobody within a hundred kilometres to complain about the craters.' },
+
+  // Consumables
+  { id: 'dragon_ball', name: 'A Dragon Ball', cat: 'treasure', cost: 0, passive: { unique: true },
+    desc: 'One of seven. Warm to the touch, and worth more than anything else you will ever hold.' },
+  { id: 'senzu', name: 'Senzu Bean', cat: 'consumable', cost: 0, use: { healFull: true, kiFull: true },
+    desc: 'Heals everything, feeds you for ten days, tastes of nothing at all.' },
+  { id: 'medicine', name: 'Emergency Medicine', cat: 'consumable', cost: 8000, use: { heal: 35 },
+    desc: 'A field kit. Better than nothing, worse than a bean.' },
+  { id: 'dragon_radar', name: 'Dragon Radar', cat: 'gear', cost: 0, passive: { dragonSearch: 0.45 },
+    desc: 'A palm-sized dish that blips at anything with seven stars in it.' },
+  { id: 'potara', name: 'Potara Earrings', cat: 'gear', cost: 0, passive: { potara: true },
+    desc: 'A matched pair. Wear one, hand over the other, and hope you get on.' },
+  { id: 'time_ring', name: 'Time Ring', cat: 'gear', cost: 0, passive: { timeTravel: true, unique: true },
+    desc: 'Forbidden to everyone below Supreme Kai. Rings on the finger of anyone who breaks time.' },
+  { id: 'sacred_water', name: 'Ultra Divine Water', cat: 'consumable', cost: 0, use: { unlockPotential: 0.5, deathRisk: 0.35 },
+    desc: 'Drink it and either your latent power comes out or you do not.' },
+  // Worn things. Cheap, cosmetic, and drawn on you.
+  { id: 'acc_headband', name: 'Headband', cat: 'accessory', cost: 1200, wear: 'headband', desc: 'Keeps the hair out of your eyes and the sweat out of the fight.' },
+  { id: 'acc_bandana', name: 'Bandana', cat: 'accessory', cost: 900, wear: 'bandana', desc: 'Blue, knotted at the back, faintly piratical.' },
+  { id: 'acc_glasses', name: 'Glasses', cat: 'accessory', cost: 6000, wear: 'glasses', desc: 'You did not need them until you started reading technique diagrams by candlelight.' },
+  { id: 'acc_sunglasses', name: 'Sunglasses', cat: 'accessory', cost: 4000, wear: 'sunglasses', desc: 'For the Solar Flare, allegedly.' },
+  { id: 'acc_earrings', name: 'Earrings', cat: 'accessory', cost: 15000, wear: 'earrings', desc: 'Not Potara. People will still ask.' },
+  { id: 'acc_necklace', name: 'Necklace', cat: 'accessory', cost: 22000, wear: 'necklace', desc: 'A pendant on a chain. Somebody gave it to you, or you tell people somebody did.' },
+  { id: 'acc_cape', name: 'Cape', cat: 'accessory', cost: 30000, wear: 'cape', desc: 'Weighted, if you want it weighted. Dramatic either way.' },
+  { id: 'acc_scarf', name: 'Red scarf', cat: 'accessory', cost: 3500, wear: 'scarf', desc: 'Long enough to catch the wind when you land.' },
+  { id: 'acc_wristbands', name: 'Wristbands', cat: 'accessory', cost: 2500, wear: 'wristbands', desc: 'Blue, thick, and heavier than they look.' },
+  { id: 'acc_hat', name: 'Wide hat', cat: 'accessory', cost: 5000, wear: 'hat', desc: 'Shade in the wastelands and a target everywhere else.' },
+
+  // Things you cannot buy. They arrive when you earn them.
+  { id: 'championship_belt', name: 'World Championship Belt', cat: 'trophy', cost: 0, wear: 'belt', passive: { fame: 6 },
+    desc: 'Heavy, gold, and yours until somebody takes it.' },
+  { id: 'turtle_shell', name: 'Turtle Shell', cat: 'gear', cost: 0, wear: 'shell', passive: { trainMult: 1.3, speedPenalty: 6 },
+    desc: 'Twenty kilos of shell strapped to your back. Master Roshi says you will thank him.' },
+  { id: 'cyber_eye', name: 'Mechanical Eye', cat: 'gear', cost: 400000, passive: { senseBonus: 0.3 },
+    desc: 'Built to replace the one you lost. It reads power levels, badly.' },
+  { id: 'fruit_of_might', name: 'Fruit of the Tree of Might', cat: 'consumable', cost: 0, use: { powerMult: 1.6, karma: -10 },
+    desc: 'A whole world\'s life energy in one piece of fruit. It tastes of everything that died.' },
+];
+
+const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
+
+function getItem(id) {
+  return ITEM_BY_ID[id];
+}
+
+function shopStock(placeTags, planetId) {
+  // What a world sells is what a world has. Nobody on Namek stocks a hovercar,
+  // and the Frieza Force does not sell you a Flying Nimbus.
+  const off = {
+    namek: ['transport', 'property', 'accessory'],
+    new_namek: ['transport', 'property'],
+    void: ['property'],
+    otherworld: ['transport', 'property', 'gear', 'accessory'],
+    planet_vegeta: ['property', 'accessory'],
+    yardrat: ['transport', 'property'],
+  }[planetId] || [];
+  return ITEMS.filter((i) => {
+    if (off.includes(i.cat)) return false;
+    if (i.cost === 0) return false;
+    if (i.cat === 'accessory' && !placeTags.includes('civilised') && !placeTags.includes('urban') && !placeTags.includes('tournament')) return false;
+    if (i.id === 'cyber_eye' && !placeTags.includes('lab') && !placeTags.includes('tech')) return false;
+    if (i.cat === 'property' && !placeTags.includes('civilised') && !placeTags.includes('urban')) return false;
+    if ((i.id === 'scouter' || i.id === 'battle_armour') && !placeTags.includes('imperial') && !placeTags.includes('tech')) return false;
+    if ((i.id === 'gravity_chamber' || i.id === 'spaceship' || i.id === 'gravity_capsule') && !placeTags.includes('tech')) return false;
+    return true;
+  });
+}
+
+// Wishes the Dragon Balls can grant. `power` is what a dragon has to be able
+// to manage: Shenron cannot exceed his creator, Porunga is stronger and speaks
+// three times, and Super Shenron does whatever is asked without comment.
+const DRAGONS = {
+  shenron: { id: 'shenron', name: 'Shenron', power: 3, wishes: 1, voice: 'a voice like a landslide', desc: 'Earth\'s dragon. One wish, within the power of the one who made him.' },
+  porunga: { id: 'porunga', name: 'Porunga', power: 4, wishes: 3, voice: 'a voice that is mostly chest', desc: 'Namek\'s dragon. Three wishes, one soul at a time, in the Namekian tongue.' },
+  super: { id: 'super', name: 'Super Shenron', power: 6, wishes: 1, voice: 'no voice at all, only the wish coming true', desc: 'The dragon of the Super Dragon Balls. Anything. Once.' },
+};
+
+const WISH_GROUPS = ['Life and death', 'Yourself', 'The world', 'Other people', 'Small things'];
+
+const WISHES = [
+  // ------------------------------------------------------ life and death
+  { id: 'revive_named', group: 'Life and death', name: 'Bring back someone by name', power: 2, karma: 6,
+    desc: 'Say the name. They come back exactly as they were, minus the dying.', pick: 'dead' },
+  { id: 'revive_many', group: 'Life and death', name: 'Revive everyone killed by one thing', power: 4, karma: 15,
+    desc: 'A whole planet, if the dragon is strong enough. Porunga will not; Shenron might.' },
+  { id: 'revive_all', group: 'Life and death', name: 'Undo every death you have caused', power: 4, karma: 30,
+    desc: 'Everyone you killed. All of them. The dragon does not ask why.', needs: 'kills' },
+  { id: 'immortality', group: 'Life and death', name: 'Eternal life', power: 5, karma: -8,
+    desc: 'You will not age and you cannot die of it. Everything else still applies, and the gods notice.' },
+  { id: 'youth', group: 'Life and death', name: 'Twenty years back', power: 3, karma: 0,
+    desc: 'Twenty years off the clock, with everything you learned still in there.' },
+  { id: 'cure', group: 'Life and death', name: 'Make me whole', power: 2, karma: 0,
+    desc: 'Every scar, every old injury, every lost piece. Gone, as though it never happened.', needs: 'scars' },
+
+  // ------------------------------------------------------------ yourself
+  { id: 'power_up', group: 'Yourself', name: 'Make me the strongest in the universe', power: 5, karma: -6,
+    desc: 'The dragon takes the years off the end to pay for it.' },
+  { id: 'unlock_potential', group: 'Yourself', name: 'Unlock all my latent potential', power: 4, karma: 0,
+    desc: 'Everything you could ever have been, available now.' },
+  { id: 'next_form', group: 'Yourself', name: 'Give me the next transformation', power: 3, karma: -2,
+    desc: 'The form you are reaching for, handed over. It will feel unearned because it is.' },
+  { id: 'knowledge', group: 'Yourself', name: 'Teach me a technique', power: 2, karma: 0,
+    desc: 'The dragon can put anything anyone has ever known into your head.' },
+  { id: 'change_race', group: 'Yourself', name: 'Make me a different species', power: 5, karma: -3,
+    desc: 'Saiyan, Namekian, whatever you have envied. Your body reorganises. Your memories stay.', pick: 'race' },
+  { id: 'know_everyone', group: 'Yourself', name: 'Let me see everyone as they are', power: 3, karma: -4,
+    desc: 'Every person you know, fully understood. Their strength, their secrets, what they want. It is a violation and it works.' },
+  { id: 'tail_back', group: 'Yourself', name: 'Give me back my tail', power: 1, karma: 0, race: ['saiyan', 'halfsaiyan'],
+    desc: 'It grows back stronger, apparently.' },
+  { id: 'erase_memory', group: 'Yourself', name: 'Erase all memory of me', power: 3, karma: -4,
+    desc: 'Nobody will remember what you did. Nobody at all.' },
+
+  // ----------------------------------------------------------- the world
+  { id: 'restore_planet', group: 'The world', name: 'Restore a destroyed world', power: 5, karma: 20,
+    desc: 'Rock, water, air. The people are a separate wish.' },
+  { id: 'restore_people', group: 'The world', name: 'Bring back a dead world\'s people', power: 5, karma: 25,
+    desc: 'Everyone who was on it when it went. Porunga did this once. Shenron cannot.', needs: 'planet_restored' },
+  { id: 'remove_threat', group: 'The world', name: 'Send a tyrant somewhere they cannot come back from', power: 5, karma: 12,
+    desc: 'Name the one you mean. If they are stronger than the dragon\'s maker, the dragon says so and waits.', pick: 'threat' },
+  { id: 'peace', group: 'The world', name: 'Peace on this world', power: 4, karma: 18,
+    desc: 'The wars stop. The tyrants find they no longer want to. It lasts a generation, then people are people again.' },
+  { id: 'own_world', group: 'The world', name: 'A world of my own', power: 4, karma: -2,
+    desc: 'Empty, habitable, and yours. Nobody to rule, unless you bring them.' },
+  { id: 'wealth', group: 'The world', name: 'Unimaginable wealth', power: 1, karma: -2,
+    desc: 'Vulgar, but it works.' },
+
+  // -------------------------------------------------------- other people
+  { id: 'for_someone', group: 'Other people', name: 'Grant what someone else wants', power: 3, karma: 14,
+    desc: 'You know what they have been chasing. Give it to them instead of yourself.', pick: 'living' },
+  { id: 'partner', group: 'Other people', name: 'Someone to love me', power: 3, karma: -10,
+    desc: 'The dragon will make somebody. They will love you and they will know why, and so will you.' },
+  { id: 'strengthen_ally', group: 'Other people', name: 'Make a friend strong enough to stand beside me', power: 4, karma: 4,
+    desc: 'Pick them. They wake up a hundred times what they were and have to learn to live in it.', pick: 'living' },
+
+  // -------------------------------------------------------- small things
+  { id: 'feast', group: 'Small things', name: 'The best meal of my life', power: 1, karma: 0,
+    desc: 'Forty courses. Somebody will be furious you spent it on this.' },
+  { id: 'better_underwear', group: 'Small things', name: 'A really nice pair of underwear', power: 1, karma: 0,
+    desc: 'Someone genuinely did this once. Shenron granted it without comment.' },
+  { id: 'speak', group: 'Small things', name: 'Say it in your own words', power: 0, karma: 0, freeText: true,
+    desc: 'Speak the wish aloud. The dragon will interpret, and dragons are literal.' },
+];
+
+const WISH_BY_ID = Object.fromEntries(WISHES.map((w) => [w.id, w]));
+
+/**
+ * Map a spoken wish onto the nearest thing a dragon can do. This is the
+ * fallback when no model is connected; a dragon is a literal creature, so
+ * keyword matching is honestly not far from the source material.
+ */
+function interpretWishLocally(text) {
+  const t = String(text || '').toLowerCase();
+  const rules = [
+    [/\bbring\b[\s\S]{0,30}\bback\b|\brevive\b|\bresurrect|\balive again\b|\bback to life\b|\bundo\b[\s\S]{0,20}\bdeath\b|\bnot be dead\b/, 'revive_named'],
+    [/\beveryone\b[\s\S]{0,30}\b(back|alive)\b|\ball of them\b|\bevery(one| person) (who|that) died\b/, 'revive_many'],
+    [/\bimmortal|\bnever die\b|\blive forever\b|\beternal life\b/, 'immortality'],
+    [/\byoung|\byouth|\byears back\b|\bage\b.*\bback/, 'youth'],
+    [/\bheal|\bscar|\bwhole again\b|\bmy eye\b|\bmy arm\b|\binjur/, 'cure'],
+    [/\bstrongest\b|\bmost powerful\b|\bpower level\b|\bstronger\b/, 'power_up'],
+    [/\bpotential\b/, 'unlock_potential'],
+    [/\btransform|\bsuper saiyan\b|\bform\b/, 'next_form'],
+    [/\bteach|\btechnique|\bkamehameha|\binstant transmission\b|\blearn\b/, 'knowledge'],
+    [/\bmake me (a|an) (saiyan|namekian|human|earthling|android|majin|frost|kai)|\bturn me into\b|\bdifferent species\b|\bbecome a\b/, 'change_race'],
+    [/\bknow everything\b|\bsecrets\b|\bsee everyone\b|\btruth about\b/, 'know_everyone'],
+    [/\btail\b/, 'tail_back'],
+    [/\bforget me\b|\bforgotten\b|\bnobody remember/, 'erase_memory'],
+    [/\brestore\b.*\b(planet|world)|\bplanet\b.*\bback\b|\bnamek\b.*\bback\b|\bvegeta\b.*\bback\b/, 'restore_planet'],
+    [/\bpeople of\b|\bpopulation\b|\bthe namekians\b|\bthe saiyans back\b/, 'restore_people'],
+    [/\bkill\b|\bdestroy\b|\bget rid of\b|\bbanish|\bfrieza\b|\bcell\b|\bbuu\b|\bsend .* away\b/, 'remove_threat'],
+    [/\bpeace\b|\bend (the )?war|\bno more fighting\b/, 'peace'],
+    [/\bplanet of my own\b|\bmy own (planet|world)\b|\ba world\b/, 'own_world'],
+    [/\brich\b|\bmoney\b|\bzeni\b|\bwealth|\bgold\b/, 'wealth'],
+    [/\blove me\b|\bsomeone to love\b|\bwife\b|\bhusband\b|\bpartner\b|\bgirlfriend\b|\bboyfriend\b/, 'partner'],
+    [/\bmake .* strong|\bfor (my|him|her|them)\b.*\bstrong/, 'strengthen_ally'],
+    [/\bfor (him|her|them|my)\b|\bwhat (he|she|they) want/, 'for_someone'],
+    [/\bfood\b|\beat\b|\bmeal\b|\bfeast\b|\bhungry\b/, 'feast'],
+    [/\bunderwear\b|\bpanties\b|\bpants\b/, 'better_underwear'],
+  ];
+  // "everyone" beats "bring back one", so the broader rules are checked first.
+  const broad = rules.filter(([, id]) => id === 'revive_many' || id === 'revive_all');
+  for (const [re, id] of broad) if (re.test(t)) return id;
+  for (const [re, id] of rules) if (re.test(t)) return id;
+  return null;
+}
+  return { ITEMS, ITEM_BY_ID, getItem, shopStock, DRAGONS, WISH_GROUPS, WISHES, WISH_BY_ID, interpretWishLocally };
+})();
+
+/* ==== engine/inventory.js ==== */
+const __mod_engine_inventory_js = (function () {
+// Things you own.
+//
+// Items used to be a flat array of ids with no screen and no handling: you
+// could buy one and that was the end of its life. This gives every character -
+// you and everybody else - a real inventory, so a thing can be worn, used,
+// sold, given away, or taken off somebody who did not want to give it up.
+
+const { clamp } = __mod_engine_rng_js;
+const { getItem, ITEMS } = __mod_data_items_js;
+const { currencyFor, priceIn, credit, debit, canAfford, balance, formatMoney } = __mod_data_currency_js;
+const { getPlace } = __mod_data_places_js;
+
+/** Slots a wearable item can occupy. One thing per slot. */
+const SLOTS = {
+  body: 'Worn', head: 'Head', held: 'Carried', trinket: 'Trinket', none: null,
+};
+
+function slotOf(item) {
+  if (!item) return 'none';
+  if (item.cat === 'accessory') return ['acc_hat', 'acc_bandana', 'acc_headband', 'acc_sunglasses', 'acc_glasses'].includes(item.id) ? 'head' : 'trinket';
+  if (item.id === 'battle_armour' || item.id === 'weighted_clothing' || item.id === 'turtle_shell') return 'body';
+  if (item.id === 'z_sword' || item.id === 'power_pole') return 'held';
+  if (item.id === 'scouter') return 'head';
+  if (item.id === 'potara' || item.id === 'time_ring' || item.id === 'championship_belt') return 'trinket';
+  return 'none';
+}
+
+function itemSlot(itemId) {
+  return slotOf(getItem(itemId));
+}
+
+/** Everything a character is carrying, as rows the UI can render. */
+function inventoryOf(character) {
+  const bag = character.bag || [];
+  return bag.map((entry) => {
+    const item = getItem(entry.id);
+    return {
+      ...entry,
+      item,
+      name: item ? item.name : entry.id,
+      desc: item ? item.desc : '',
+      cat: item ? item.cat : 'misc',
+      slot: slotOf(item),
+      worn: !!entry.worn,
+      condition: entry.condition ?? 100,
+    };
+  });
+}
+
+/** Move a character's legacy flat item list into the bag, once. */
+function ensureBag(character) {
+  if (character.bag) return character.bag;
+  character.bag = (character.items || []).map((id) => ({ id, qty: 1, condition: 100, worn: slotOf(getItem(id)) !== 'none' }));
+  return character.bag;
+}
+
+function findEntry(character, itemId) {
+  ensureBag(character);
+  return character.bag.find((e) => e.id === itemId) || null;
+}
+
+function hasItem(character, itemId) {
+  return !!findEntry(character, itemId);
+}
+
+function addItem(character, itemId, opts = {}) {
+  ensureBag(character);
+  const item = getItem(itemId);
+  const existing = findEntry(character, itemId);
+  if (existing && (item ? item.cat === 'consumable' : true)) {
+    existing.qty = (existing.qty || 1) + (opts.qty || 1);
+  } else if (!existing) {
+    character.bag.push({
+      id: itemId, qty: opts.qty || 1, condition: opts.condition ?? 100,
+      worn: opts.worn ?? false, from: opts.from || null,
+    });
+  }
+  // The old flat list stays in step so nothing that reads it breaks.
+  character.items = character.items || [];
+  if (!character.items.includes(itemId)) character.items.push(itemId);
+  return true;
+}
+
+function removeItem(character, itemId, qty = 1) {
+  ensureBag(character);
+  const i = character.bag.findIndex((e) => e.id === itemId);
+  if (i < 0) return false;
+  const entry = character.bag[i];
+  entry.qty = (entry.qty || 1) - qty;
+  if (entry.qty <= 0) character.bag.splice(i, 1);
+  if (!findEntry(character, itemId)) {
+    character.items = (character.items || []).filter((x) => x !== itemId);
+  }
+  return true;
+}
+
+/** Wear or stow. One item per slot, so putting one on takes another off. */
+function toggleWorn(character, itemId) {
+  const entry = findEntry(character, itemId);
+  if (!entry) return { ok: false, text: 'You do not have that.' };
+  const slot = itemSlot(itemId);
+  if (slot === 'none') return { ok: false, text: 'That is not something you wear.' };
+  if (entry.worn) {
+    entry.worn = false;
+    return { ok: true, text: `You put the ${getItem(itemId).name.toLowerCase()} away.` };
+  }
+  for (const other of character.bag) {
+    if (other !== entry && other.worn && itemSlot(other.id) === slot) other.worn = false;
+  }
+  entry.worn = true;
+  return { ok: true, text: `${getItem(itemId).name}, on.` };
+}
+
+/** What something is worth here, in the local currency. */
+function valueHere(state, itemId, opts = {}) {
+  const item = getItem(itemId);
+  if (!item) return { amount: 0, currency: 'zeni' };
+  const planet = getPlace(state.character.placeId).planet;
+  const cur = currencyFor(planet);
+  const entry = findEntry(state.character, itemId);
+  const wear = entry ? clamp((entry.condition ?? 100) / 100, 0.2, 1) : 1;
+  // A thing with no price on Earth still has a price somewhere; unique things
+  // are worth a great deal to the right buyer.
+  const base = item.cost || (item.passive && item.passive.unique ? 5000000 : 40000);
+  const sell = opts.sell ? 0.45 : 1;
+  return { amount: Math.max(1, priceIn(Math.round(base * wear * sell), cur.id)), currency: cur.id, cur };
+}
+
+/** Sell to whoever is buying on this world. */
+function sellItem(state, itemId) {
+  const item = getItem(itemId);
+  if (!item) return { ok: false, text: 'Nothing to sell.' };
+  const entry = findEntry(state.character, itemId);
+  if (!entry) return { ok: false, text: 'You do not have that.' };
+  if (entry.worn) toggleWorn(state.character, itemId);
+  const { amount, currency } = valueHere(state, itemId, { sell: true });
+  removeItem(state.character, itemId, 1);
+  credit(state.character, currency, amount);
+  return { ok: true, amount, currency, text: `Sold. ${formatMoney(amount, currency)}.` };
+}
+
+/** Buy from whoever is selling. */
+function buyItem(state, itemId) {
+  const item = getItem(itemId);
+  if (!item) return { ok: false, text: 'They do not have that.' };
+  const { amount, currency, cur } = valueHere(state, itemId);
+  if (!canAfford(state.character, currency, amount)) {
+    return { ok: false, text: `${item.name} costs ${formatMoney(amount, currency)}. You do not have it.` };
+  }
+  debit(state.character, currency, amount);
+  addItem(state.character, itemId);
+  return { ok: true, amount, currency, text: `${item.name}. ${formatMoney(amount, currency)}. ${item.desc}` };
+}
+
+// --------------------------------------------------------- other people
+
+/** What an NPC is carrying. Generated once and then it is theirs. */
+function npcBag(rng, npc) {
+  if (npc.bag) return npc.bag;
+  const bag = [];
+  const wealth = Math.log10(Math.max(100, npc.zeni || 1000));
+  const pool = ITEMS.filter((i) => i.cost > 0 && i.cost < Math.pow(10, wealth) * 4);
+  const count = rng.int(0, Math.min(4, Math.floor(wealth - 2)));
+  for (let i = 0; i < count; i++) {
+    const item = rng.pick(pool);
+    if (item && !bag.some((e) => e.id === item.id)) {
+      bag.push({ id: item.id, qty: 1, condition: rng.int(55, 100), worn: rng.chance(0.6) });
+    }
+  }
+  if (npc.hasDragonBall) bag.push({ id: 'dragon_ball', qty: 1, condition: 100, worn: false });
+  npc.bag = bag;
+  return bag;
+}
+
+/** Everything of theirs you have learned about. */
+function knownItems(npc) {
+  const k = npc.knowledge || 0;
+  const bag = npc.bag || [];
+  if (k >= 3) return bag;
+  if (k >= 2) return bag.filter((e) => e.worn);
+  if (k >= 1) return bag.filter((e) => e.worn && itemSlot(e.id) !== 'trinket');
+  return [];
+}
+
+/**
+ * Ask, buy, or take. Asking works on goodwill, buying on money, and taking on
+ * being frightening enough that they decide not to argue.
+ */
+function requestItem(state, rng, npc, itemId, how) {
+  const item = getItem(itemId);
+  const entry = (npc.bag || []).find((e) => e.id === itemId);
+  if (!item || !entry) return { ok: false, text: 'They are not carrying that.' };
+  const c = state.character;
+
+  if (how === 'ask') {
+    const bond = (npc.closeness || 0) + (npc.trust ?? 30) * 0.5 - (npc.tension || 0);
+    const chance = clamp(0.05 + bond / 200 - (item.cost || 0) / 4000000, 0.02, 0.9);
+    if (rng.chance(chance)) {
+      npc.bag.splice(npc.bag.indexOf(entry), 1);
+      addItem(c, itemId, { condition: entry.condition, from: npc.name });
+      npc.closeness = clamp((npc.closeness || 0) - 3, 0, 100);
+      return { ok: true, text: `${npc.name} hands it over without much fuss. "Keep it."` };
+    }
+    npc.tension = clamp((npc.tension || 0) + 4, 0, 100);
+    return { ok: false, text: `${npc.name} says no, and does not soften it.` };
+  }
+
+  if (how === 'buy') {
+    const { amount, currency } = valueHere(state, itemId);
+    const asking = Math.round(amount * (1.1 - (npc.closeness || 0) / 400));
+    if (!canAfford(c, currency, asking)) {
+      return { ok: false, text: `They want ${formatMoney(asking, currency)}. You do not have it.` };
+    }
+    debit(c, currency, asking);
+    npc.zeni = (npc.zeni || 0) + asking;
+    npc.bag.splice(npc.bag.indexOf(entry), 1);
+    addItem(c, itemId, { condition: entry.condition, from: npc.name });
+    npc.closeness = clamp((npc.closeness || 0) + 2, 0, 100);
+    return { ok: true, text: `Done. ${formatMoney(asking, currency)}, and they throw in a warning about the condition.` };
+  }
+
+  // Taking it.
+  const theirs = Math.max(1, npc.power || 1);
+  const mine = Math.max(1, c.power || 1);
+  const overmatch = mine / theirs;
+  if (rng.chance(clamp(0.2 + Math.log10(overmatch) * 0.6, 0.05, 0.95))) {
+    npc.bag.splice(npc.bag.indexOf(entry), 1);
+    addItem(c, itemId, { condition: entry.condition, from: `taken from ${npc.name}` });
+    npc.tension = 100;
+    npc.trust = 0;
+    npc.closeness = clamp((npc.closeness || 0) - 40, 0, 100);
+    if (npc.relation !== 'nemesis') npc.relation = 'enemy';
+    c.karma = clamp((c.karma || 0) - 12, -100, 100);
+    return { ok: true, took: true, text: `You take it. ${npc.name} does not try to stop you, which is not the same as letting you.` };
+  }
+  npc.tension = clamp((npc.tension || 0) + 30, 0, 100);
+  c.karma = clamp((c.karma || 0) - 6, -100, 100);
+  return { ok: false, text: `${npc.name} will not let go of it, and you find out you are not as far above them as you thought.` };
+}
+
+/** Give something of yours away. */
+function giveItem(state, npc, itemId) {
+  const entry = findEntry(state.character, itemId);
+  if (!entry) return { ok: false, text: 'You do not have that.' };
+  const item = getItem(itemId);
+  removeItem(state.character, itemId, 1);
+  npc.bag = npc.bag || [];
+  npc.bag.push({ id: itemId, qty: 1, condition: entry.condition ?? 100, worn: false });
+  const worth = Math.log10(Math.max(10, item.cost || 1000));
+  npc.closeness = clamp((npc.closeness || 0) + Math.round(worth * 2.5), 0, 100);
+  npc.trust = clamp((npc.trust ?? 30) + Math.round(worth * 2), 0, 100);
+  return { ok: true, text: `${npc.name} takes it, and takes a moment over it.` };
+}
+
+/** A fight wears things out. */
+function damageGear(character, rng, severity = 1) {
+  ensureBag(character);
+  const hits = [];
+  for (const entry of character.bag) {
+    if (!entry.worn) continue;
+    const item = getItem(entry.id);
+    if (!item || item.cat === 'consumable') continue;
+    const loss = Math.round(rng.int(4, 18) * severity);
+    entry.condition = clamp((entry.condition ?? 100) - loss, 0, 100);
+    if (entry.condition <= 0) {
+      hits.push(`Your ${item.name.toLowerCase()} is finished.`);
+      entry.worn = false;
+    } else if (entry.condition < 30 && rng.chance(0.4)) {
+      hits.push(`Your ${item.name.toLowerCase()} will not survive another one of those.`);
+    }
+  }
+  return hits;
+}
+
+/** Get something repaired, at a price that depends on where you are. */
+function repairItem(state, itemId) {
+  const entry = findEntry(state.character, itemId);
+  if (!entry) return { ok: false, text: 'You do not have that.' };
+  const missing = 100 - (entry.condition ?? 100);
+  if (missing <= 0) return { ok: false, text: 'It is fine as it is.' };
+  const item = getItem(itemId);
+  const planet = getPlace(state.character.placeId).planet;
+  const cur = currencyFor(planet);
+  // Good standing gets you a discount; being feared does not.
+  const goodwill = clamp(1 - (state.character.karma || 0) / 300, 0.7, 1.2);
+  const cost = Math.max(1, priceIn(Math.round((item.cost || 20000) * (missing / 100) * 0.5 * goodwill), cur.id));
+  if (!canAfford(state.character, cur.id, cost)) {
+    return { ok: false, text: `Putting it right costs ${formatMoney(cost, cur.id)}. You do not have it.` };
+  }
+  debit(state.character, cur.id, cost);
+  entry.condition = 100;
+  return { ok: true, text: `Repaired. ${formatMoney(cost, cur.id)}, and they were not pleased about the state of it.` };
+}
+  return { SLOTS, itemSlot, inventoryOf, ensureBag, findEntry, hasItem, addItem, removeItem, toggleWorn, valueHere, sellItem, buyItem, npcBag, knownItems, requestItem, giveItem, damageGear, repairItem };
+})();
+
 /* ==== engine/battle.js ==== */
 const __mod_engine_battle_js = (function () {
 // Turn-based combat.
@@ -6420,6 +7405,7 @@ const { getTransformation, ladderFor } = __mod_data_transformations_js;
 const { getPlace } = __mod_data_places_js;
 const { getRace, hasPerk } = __mod_data_races_js;
 const { numberish } = __mod_engine_text_js;
+const { damageGear } = __mod_engine_inventory_js;
 
 const STANCES = {
   neutral: { name: 'Neutral', desc: 'No commitment either way.', atk: 1, def: 1, dodge: 0, kiRegen: 1, stamRegen: 1 },
@@ -7058,6 +8044,12 @@ function battleAftermath(state, rng, battle, opts = {}) {
 
   if (battle.zenkai) {
     lines.push(`Your body rebuilds heavier than it was. Power level up ${numberish(battle.zenkai)}.`);
+  }
+
+  // Clothes and kit take the same beating you do.
+  const severity = battle.outcome === 'lost' ? 1.6 : battle.me.hp < 40 ? 1.2 : 0.6;
+  for (const line of damageGear(c, rng, severity * (battle.stakes === 'spar' ? 0.4 : 1))) {
+    lines.push(line);
   }
 
   // What the fight leaves on you. Regeneration closes almost everything; a
@@ -8395,220 +9387,6 @@ function careersFor(character, placeTags) {
   });
 }
   return { CAREERS, CAREER_BY_ID, getCareer, careersFor };
-})();
-
-/* ==== data/items.js ==== */
-const __mod_data_items_js = (function () {
-// Assets, gear and consumables. `effect` is applied by the engine when owned
-// (passive) or used (consumable).
-
-const ITEMS = [
-  // Training gear
-  { id: 'weighted_clothing', name: 'Weighted Training Gi', cat: 'gear', cost: 25000, passive: { trainMult: 1.25, speedPenalty: 4 },
-    desc: 'Turtle School standard issue. The undershirt alone weighs more than you do.' },
-  { id: 'heavy_weights', name: 'King Kai Weight Set', cat: 'gear', cost: 90000, passive: { trainMult: 1.4, speedPenalty: 8 },
-    desc: 'Designed for ten times gravity. On Earth it is simply cruel.' },
-  { id: 'gravity_chamber', name: 'Gravity Chamber', cat: 'property', cost: 4000000, passive: { trainMult: 2.1, injuryRisk: 0.08 },
-    desc: 'Up to 500g in a room the size of a garage. Capsule Corp will not insure it.' },
-  { id: 'gravity_capsule', name: 'Portable Gravity Capsule', cat: 'gear', cost: 900000, passive: { trainMult: 1.6, injuryRisk: 0.04 },
-    desc: 'A one-person pod. Cramped, loud, extremely effective.' },
-  { id: 'scouter', name: 'Scouter', cat: 'gear', cost: 60000, passive: { senseBonus: 0.5, scoutPower: true },
-    desc: 'Reads power levels, transmits everything you see to whoever issued it.' },
-  { id: 'battle_armour', name: 'Saiyan Battle Armour', cat: 'gear', cost: 120000, passive: { defence: 12, stretch: true },
-    desc: 'Stretches to any size, survives most things, and never quite fits over the shoulders.' },
-  { id: 'z_sword', name: 'The Z-Sword', cat: 'gear', cost: 0, passive: { attack: 25, unique: true },
-    desc: 'Stuck in a rock on the Sacred World for generations. Heavier than it has any right to be.' },
-  { id: 'power_pole', name: 'Power Pole', cat: 'gear', cost: 0, passive: { attack: 10, reach: 0.3 },
-    desc: 'Extends from here to the Lookout, if you ask it nicely.' },
-
-  // Transport
-  { id: 'hovercar', name: 'Hovercar', cat: 'transport', cost: 180000, passive: { travel: 1 }, desc: 'Standard, dull, reliable.' },
-  { id: 'capsule_jet', name: 'Capsule Jet', cat: 'transport', cost: 700000, passive: { travel: 2 }, desc: 'Folds into a pill. Unfolds at eight hundred kilometres an hour.' },
-  { id: 'flying_nimbus', name: 'Flying Nimbus', cat: 'transport', cost: 0, passive: { travel: 2, goodOnly: true },
-    desc: 'A small yellow cloud that will drop you through it if your heart is impure.' },
-  { id: 'spaceship', name: 'Capsule Spaceship', cat: 'transport', cost: 9000000, passive: { travel: 4, space: true },
-    desc: 'Interstellar, with a gravity setting and a very small kitchen.' },
-  { id: 'attack_ball', name: 'Saiyan Attack Ball', cat: 'transport', cost: 2000000, passive: { travel: 3, space: true },
-    desc: 'A one-seat pod that lands by cratering. Bring a helmet.' },
-
-  // Property
-  { id: 'capsule_house', name: 'Capsule House', cat: 'property', cost: 350000, passive: { comfort: 8 }, desc: 'A whole house in your pocket, assuming you remember which pocket.' },
-  { id: 'mountain_home', name: 'Mountain Home', cat: 'property', cost: 900000, passive: { comfort: 12, trainMult: 1.15 }, desc: 'Deep in the woods, no neighbours, excellent for shouting.' },
-  { id: 'city_apartment', name: 'City Apartment', cat: 'property', cost: 600000, passive: { comfort: 10, social: 5 }, desc: 'Forty floors up, and the neighbours complain about the training.' },
-  { id: 'dojo_property', name: 'Private Dojo', cat: 'property', cost: 2500000, passive: { comfort: 10, trainMult: 1.3, income: 40000 }, desc: 'Your own school, your own rules, your own leaking roof.' },
-  { id: 'island', name: 'Private Island', cat: 'property', cost: 30000000, passive: { comfort: 25, trainMult: 1.2, fame: 8 }, desc: 'Nobody within a hundred kilometres to complain about the craters.' },
-
-  // Consumables
-  { id: 'senzu', name: 'Senzu Bean', cat: 'consumable', cost: 0, use: { healFull: true, kiFull: true },
-    desc: 'Heals everything, feeds you for ten days, tastes of nothing at all.' },
-  { id: 'medicine', name: 'Emergency Medicine', cat: 'consumable', cost: 8000, use: { heal: 35 },
-    desc: 'A field kit. Better than nothing, worse than a bean.' },
-  { id: 'dragon_radar', name: 'Dragon Radar', cat: 'gear', cost: 0, passive: { dragonSearch: 0.45 },
-    desc: 'A palm-sized dish that blips at anything with seven stars in it.' },
-  { id: 'potara', name: 'Potara Earrings', cat: 'gear', cost: 0, passive: { potara: true },
-    desc: 'A matched pair. Wear one, hand over the other, and hope you get on.' },
-  { id: 'time_ring', name: 'Time Ring', cat: 'gear', cost: 0, passive: { timeTravel: true, unique: true },
-    desc: 'Forbidden to everyone below Supreme Kai. Rings on the finger of anyone who breaks time.' },
-  { id: 'sacred_water', name: 'Ultra Divine Water', cat: 'consumable', cost: 0, use: { unlockPotential: 0.5, deathRisk: 0.35 },
-    desc: 'Drink it and either your latent power comes out or you do not.' },
-  // Worn things. Cheap, cosmetic, and drawn on you.
-  { id: 'acc_headband', name: 'Headband', cat: 'accessory', cost: 1200, wear: 'headband', desc: 'Keeps the hair out of your eyes and the sweat out of the fight.' },
-  { id: 'acc_bandana', name: 'Bandana', cat: 'accessory', cost: 900, wear: 'bandana', desc: 'Blue, knotted at the back, faintly piratical.' },
-  { id: 'acc_glasses', name: 'Glasses', cat: 'accessory', cost: 6000, wear: 'glasses', desc: 'You did not need them until you started reading technique diagrams by candlelight.' },
-  { id: 'acc_sunglasses', name: 'Sunglasses', cat: 'accessory', cost: 4000, wear: 'sunglasses', desc: 'For the Solar Flare, allegedly.' },
-  { id: 'acc_earrings', name: 'Earrings', cat: 'accessory', cost: 15000, wear: 'earrings', desc: 'Not Potara. People will still ask.' },
-  { id: 'acc_necklace', name: 'Necklace', cat: 'accessory', cost: 22000, wear: 'necklace', desc: 'A pendant on a chain. Somebody gave it to you, or you tell people somebody did.' },
-  { id: 'acc_cape', name: 'Cape', cat: 'accessory', cost: 30000, wear: 'cape', desc: 'Weighted, if you want it weighted. Dramatic either way.' },
-  { id: 'acc_scarf', name: 'Red scarf', cat: 'accessory', cost: 3500, wear: 'scarf', desc: 'Long enough to catch the wind when you land.' },
-  { id: 'acc_wristbands', name: 'Wristbands', cat: 'accessory', cost: 2500, wear: 'wristbands', desc: 'Blue, thick, and heavier than they look.' },
-  { id: 'acc_hat', name: 'Wide hat', cat: 'accessory', cost: 5000, wear: 'hat', desc: 'Shade in the wastelands and a target everywhere else.' },
-
-  // Things you cannot buy. They arrive when you earn them.
-  { id: 'championship_belt', name: 'World Championship Belt', cat: 'trophy', cost: 0, wear: 'belt', passive: { fame: 6 },
-    desc: 'Heavy, gold, and yours until somebody takes it.' },
-  { id: 'turtle_shell', name: 'Turtle Shell', cat: 'gear', cost: 0, wear: 'shell', passive: { trainMult: 1.3, speedPenalty: 6 },
-    desc: 'Twenty kilos of shell strapped to your back. Master Roshi says you will thank him.' },
-  { id: 'cyber_eye', name: 'Mechanical Eye', cat: 'gear', cost: 400000, passive: { senseBonus: 0.3 },
-    desc: 'Built to replace the one you lost. It reads power levels, badly.' },
-  { id: 'fruit_of_might', name: 'Fruit of the Tree of Might', cat: 'consumable', cost: 0, use: { powerMult: 1.6, karma: -10 },
-    desc: 'A whole world\'s life energy in one piece of fruit. It tastes of everything that died.' },
-];
-
-const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
-
-function getItem(id) {
-  return ITEM_BY_ID[id];
-}
-
-function shopStock(placeTags) {
-  return ITEMS.filter((i) => {
-    if (i.cost === 0) return false;
-    if (i.cat === 'accessory' && !placeTags.includes('civilised') && !placeTags.includes('urban') && !placeTags.includes('tournament')) return false;
-    if (i.id === 'cyber_eye' && !placeTags.includes('lab') && !placeTags.includes('tech')) return false;
-    if (i.cat === 'property' && !placeTags.includes('civilised') && !placeTags.includes('urban')) return false;
-    if ((i.id === 'scouter' || i.id === 'battle_armour') && !placeTags.includes('imperial') && !placeTags.includes('tech')) return false;
-    if ((i.id === 'gravity_chamber' || i.id === 'spaceship' || i.id === 'gravity_capsule') && !placeTags.includes('tech')) return false;
-    return true;
-  });
-}
-
-// Wishes the Dragon Balls can grant. `power` is what a dragon has to be able
-// to manage: Shenron cannot exceed his creator, Porunga is stronger and speaks
-// three times, and Super Shenron does whatever is asked without comment.
-const DRAGONS = {
-  shenron: { id: 'shenron', name: 'Shenron', power: 3, wishes: 1, voice: 'a voice like a landslide', desc: 'Earth\'s dragon. One wish, within the power of the one who made him.' },
-  porunga: { id: 'porunga', name: 'Porunga', power: 4, wishes: 3, voice: 'a voice that is mostly chest', desc: 'Namek\'s dragon. Three wishes, one soul at a time, in the Namekian tongue.' },
-  super: { id: 'super', name: 'Super Shenron', power: 6, wishes: 1, voice: 'no voice at all, only the wish coming true', desc: 'The dragon of the Super Dragon Balls. Anything. Once.' },
-};
-
-const WISH_GROUPS = ['Life and death', 'Yourself', 'The world', 'Other people', 'Small things'];
-
-const WISHES = [
-  // ------------------------------------------------------ life and death
-  { id: 'revive_named', group: 'Life and death', name: 'Bring back someone by name', power: 2, karma: 6,
-    desc: 'Say the name. They come back exactly as they were, minus the dying.', pick: 'dead' },
-  { id: 'revive_many', group: 'Life and death', name: 'Revive everyone killed by one thing', power: 4, karma: 15,
-    desc: 'A whole planet, if the dragon is strong enough. Porunga will not; Shenron might.' },
-  { id: 'revive_all', group: 'Life and death', name: 'Undo every death you have caused', power: 4, karma: 30,
-    desc: 'Everyone you killed. All of them. The dragon does not ask why.', needs: 'kills' },
-  { id: 'immortality', group: 'Life and death', name: 'Eternal life', power: 5, karma: -8,
-    desc: 'You will not age and you cannot die of it. Everything else still applies, and the gods notice.' },
-  { id: 'youth', group: 'Life and death', name: 'Twenty years back', power: 3, karma: 0,
-    desc: 'Twenty years off the clock, with everything you learned still in there.' },
-  { id: 'cure', group: 'Life and death', name: 'Make me whole', power: 2, karma: 0,
-    desc: 'Every scar, every old injury, every lost piece. Gone, as though it never happened.', needs: 'scars' },
-
-  // ------------------------------------------------------------ yourself
-  { id: 'power_up', group: 'Yourself', name: 'Make me the strongest in the universe', power: 5, karma: -6,
-    desc: 'The dragon takes the years off the end to pay for it.' },
-  { id: 'unlock_potential', group: 'Yourself', name: 'Unlock all my latent potential', power: 4, karma: 0,
-    desc: 'Everything you could ever have been, available now.' },
-  { id: 'next_form', group: 'Yourself', name: 'Give me the next transformation', power: 3, karma: -2,
-    desc: 'The form you are reaching for, handed over. It will feel unearned because it is.' },
-  { id: 'knowledge', group: 'Yourself', name: 'Teach me a technique', power: 2, karma: 0,
-    desc: 'The dragon can put anything anyone has ever known into your head.' },
-  { id: 'change_race', group: 'Yourself', name: 'Make me a different species', power: 5, karma: -3,
-    desc: 'Saiyan, Namekian, whatever you have envied. Your body reorganises. Your memories stay.', pick: 'race' },
-  { id: 'know_everyone', group: 'Yourself', name: 'Let me see everyone as they are', power: 3, karma: -4,
-    desc: 'Every person you know, fully understood. Their strength, their secrets, what they want. It is a violation and it works.' },
-  { id: 'tail_back', group: 'Yourself', name: 'Give me back my tail', power: 1, karma: 0, race: ['saiyan', 'halfsaiyan'],
-    desc: 'It grows back stronger, apparently.' },
-  { id: 'erase_memory', group: 'Yourself', name: 'Erase all memory of me', power: 3, karma: -4,
-    desc: 'Nobody will remember what you did. Nobody at all.' },
-
-  // ----------------------------------------------------------- the world
-  { id: 'restore_planet', group: 'The world', name: 'Restore a destroyed world', power: 5, karma: 20,
-    desc: 'Rock, water, air. The people are a separate wish.' },
-  { id: 'restore_people', group: 'The world', name: 'Bring back a dead world\'s people', power: 5, karma: 25,
-    desc: 'Everyone who was on it when it went. Porunga did this once. Shenron cannot.', needs: 'planet_restored' },
-  { id: 'remove_threat', group: 'The world', name: 'Send a tyrant somewhere they cannot come back from', power: 5, karma: 12,
-    desc: 'Name the one you mean. If they are stronger than the dragon\'s maker, the dragon says so and waits.', pick: 'threat' },
-  { id: 'peace', group: 'The world', name: 'Peace on this world', power: 4, karma: 18,
-    desc: 'The wars stop. The tyrants find they no longer want to. It lasts a generation, then people are people again.' },
-  { id: 'own_world', group: 'The world', name: 'A world of my own', power: 4, karma: -2,
-    desc: 'Empty, habitable, and yours. Nobody to rule, unless you bring them.' },
-  { id: 'wealth', group: 'The world', name: 'Unimaginable wealth', power: 1, karma: -2,
-    desc: 'Vulgar, but it works.' },
-
-  // -------------------------------------------------------- other people
-  { id: 'for_someone', group: 'Other people', name: 'Grant what someone else wants', power: 3, karma: 14,
-    desc: 'You know what they have been chasing. Give it to them instead of yourself.', pick: 'living' },
-  { id: 'partner', group: 'Other people', name: 'Someone to love me', power: 3, karma: -10,
-    desc: 'The dragon will make somebody. They will love you and they will know why, and so will you.' },
-  { id: 'strengthen_ally', group: 'Other people', name: 'Make a friend strong enough to stand beside me', power: 4, karma: 4,
-    desc: 'Pick them. They wake up a hundred times what they were and have to learn to live in it.', pick: 'living' },
-
-  // -------------------------------------------------------- small things
-  { id: 'feast', group: 'Small things', name: 'The best meal of my life', power: 1, karma: 0,
-    desc: 'Forty courses. Somebody will be furious you spent it on this.' },
-  { id: 'better_underwear', group: 'Small things', name: 'A really nice pair of underwear', power: 1, karma: 0,
-    desc: 'Someone genuinely did this once. Shenron granted it without comment.' },
-  { id: 'speak', group: 'Small things', name: 'Say it in your own words', power: 0, karma: 0, freeText: true,
-    desc: 'Speak the wish aloud. The dragon will interpret, and dragons are literal.' },
-];
-
-const WISH_BY_ID = Object.fromEntries(WISHES.map((w) => [w.id, w]));
-
-/**
- * Map a spoken wish onto the nearest thing a dragon can do. This is the
- * fallback when no model is connected; a dragon is a literal creature, so
- * keyword matching is honestly not far from the source material.
- */
-function interpretWishLocally(text) {
-  const t = String(text || '').toLowerCase();
-  const rules = [
-    [/\bbring\b[\s\S]{0,30}\bback\b|\brevive\b|\bresurrect|\balive again\b|\bback to life\b|\bundo\b[\s\S]{0,20}\bdeath\b|\bnot be dead\b/, 'revive_named'],
-    [/\beveryone\b[\s\S]{0,30}\b(back|alive)\b|\ball of them\b|\bevery(one| person) (who|that) died\b/, 'revive_many'],
-    [/\bimmortal|\bnever die\b|\blive forever\b|\beternal life\b/, 'immortality'],
-    [/\byoung|\byouth|\byears back\b|\bage\b.*\bback/, 'youth'],
-    [/\bheal|\bscar|\bwhole again\b|\bmy eye\b|\bmy arm\b|\binjur/, 'cure'],
-    [/\bstrongest\b|\bmost powerful\b|\bpower level\b|\bstronger\b/, 'power_up'],
-    [/\bpotential\b/, 'unlock_potential'],
-    [/\btransform|\bsuper saiyan\b|\bform\b/, 'next_form'],
-    [/\bteach|\btechnique|\bkamehameha|\binstant transmission\b|\blearn\b/, 'knowledge'],
-    [/\bmake me (a|an) (saiyan|namekian|human|earthling|android|majin|frost|kai)|\bturn me into\b|\bdifferent species\b|\bbecome a\b/, 'change_race'],
-    [/\bknow everything\b|\bsecrets\b|\bsee everyone\b|\btruth about\b/, 'know_everyone'],
-    [/\btail\b/, 'tail_back'],
-    [/\bforget me\b|\bforgotten\b|\bnobody remember/, 'erase_memory'],
-    [/\brestore\b.*\b(planet|world)|\bplanet\b.*\bback\b|\bnamek\b.*\bback\b|\bvegeta\b.*\bback\b/, 'restore_planet'],
-    [/\bpeople of\b|\bpopulation\b|\bthe namekians\b|\bthe saiyans back\b/, 'restore_people'],
-    [/\bkill\b|\bdestroy\b|\bget rid of\b|\bbanish|\bfrieza\b|\bcell\b|\bbuu\b|\bsend .* away\b/, 'remove_threat'],
-    [/\bpeace\b|\bend (the )?war|\bno more fighting\b/, 'peace'],
-    [/\bplanet of my own\b|\bmy own (planet|world)\b|\ba world\b/, 'own_world'],
-    [/\brich\b|\bmoney\b|\bzeni\b|\bwealth|\bgold\b/, 'wealth'],
-    [/\blove me\b|\bsomeone to love\b|\bwife\b|\bhusband\b|\bpartner\b|\bgirlfriend\b|\bboyfriend\b/, 'partner'],
-    [/\bmake .* strong|\bfor (my|him|her|them)\b.*\bstrong/, 'strengthen_ally'],
-    [/\bfor (him|her|them|my)\b|\bwhat (he|she|they) want/, 'for_someone'],
-    [/\bfood\b|\beat\b|\bmeal\b|\bfeast\b|\bhungry\b/, 'feast'],
-    [/\bunderwear\b|\bpanties\b|\bpants\b/, 'better_underwear'],
-  ];
-  // "everyone" beats "bring back one", so the broader rules are checked first.
-  const broad = rules.filter(([, id]) => id === 'revive_many' || id === 'revive_all');
-  for (const [re, id] of broad) if (re.test(t)) return id;
-  for (const [re, id] of rules) if (re.test(t)) return id;
-  return null;
-}
-  return { ITEMS, ITEM_BY_ID, getItem, shopStock, DRAGONS, WISH_GROUPS, WISHES, WISH_BY_ID, interpretWishLocally };
 })();
 
 /* ==== engine/events/life.js ==== */
@@ -14557,6 +15335,7 @@ const { getRng, saveRng, currentYear, livingNpcs, adjust, place: placeOf, charac
 const { getCareer } = __mod_data_jobs_js;
 const { resetYearBudget } = __mod_engine_economy_js;
 const { getItem } = __mod_data_items_js;
+const { checkEarnedTraits, traitEffect } = __mod_data_traits_js;
 
 const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
 
@@ -14751,6 +15530,16 @@ function startYear(state) {
         if (note) entries.push(note);
       }
     }
+  }
+
+  // What the life has made of you. Earned traits arrive when their conditions
+  // are met, announced or not asked for.
+  for (const t of checkEarnedTraits(state)) {
+    entries.push({ kind: 'trait', text: `${t.line} (${t.name})` });
+    addFact(state.memory, {
+      type: 'trait', text: `Became ${t.name.toLowerCase()}.`, year: c.age,
+      weight: 6, tags: ['trait'],
+    });
   }
 
   // Anybody who died some other way and was never announced gets announced
@@ -14959,7 +15748,8 @@ function passiveYear(state, rng) {
   }
 
   // Recovery and mood
-  const heal = c.inAfterlife ? 40 : (24 + c.stats.durability * 0.28 + (hasPerk(c, 'regeneration') ? 30 : 0));
+  const heal = (c.inAfterlife ? 40 : (24 + c.stats.durability * 0.28 + (hasPerk(c, 'regeneration') ? 30 : 0)))
+    * traitEffect(c, 'healRate');
   adjust(state, { health: heal, ki: 999 });
   const moodDrift = rng.float(-4, 4)
     + (livingNpcs(state).filter((n) => n.closeness > 55).length * 0.8)
@@ -15736,6 +16526,7 @@ const __mod_engine_trials_js = (function () {
 // what a score is worth; the UI decides how it is played.
 
 const { clamp } = __mod_engine_rng_js;
+const { traitEffect } = __mod_data_traits_js;
 const { getTechnique, TECH_BY_ID } = __mod_data_techniques_js;
 const { getTransformation } = __mod_data_transformations_js;
 const { grantTrainingPower } = __mod_engine_economy_js;
@@ -15804,6 +16595,15 @@ function startTrial(state, rng, opts = {}) {
 }
 
 /** Score is 0-1. Everything downstream keys off it. */
+/**
+ * How much easier a trial is for this character before they have touched it.
+ * A genius starts ahead; a slow study starts behind.
+ */
+function trialBonus(state) {
+  const c = state.character;
+  return clamp(traitEffect(c, 'trialEase') + ((c.iq || 100) - 100) / 500, -0.2, 0.3);
+}
+
 function gradeTrial(score) {
   if (score >= 0.92) return { grade: 'perfect', mult: 1.9, text: 'Perfect. Not one wasted movement.' };
   if (score >= 0.75) return { grade: 'strong', mult: 1.45, text: 'Clean. Better than you have managed before.' };
@@ -15814,6 +16614,8 @@ function gradeTrial(score) {
 
 /** Turn a played trial into consequences. */
 function resolveTrial(state, rng, trial, score) {
+  // Traits move the score before anything is judged against it.
+  score = clamp(score + trialBonus(state), 0, 1);
   const c = state.character;
   const result = gradeTrial(clamp(score, 0, 1));
   const lines = [result.text];
@@ -15915,7 +16717,7 @@ function inventForm(state, rng, baseFormId, name) {
   });
   return invented;
 }
-  return { TRIAL_KINDS, STAT_TRIALS, startTrial, gradeTrial, resolveTrial, getMastery, setMastery, masteryEffect, inventForm };
+  return { TRIAL_KINDS, STAT_TRIALS, startTrial, trialBonus, gradeTrial, resolveTrial, getMastery, setMastery, masteryEffect, inventForm };
 })();
 
 /* ==== engine/worlds.js ==== */
@@ -16102,6 +16904,8 @@ const { getTransformation } = __mod_data_transformations_js;
 const { unlockableForms, tryUnlockForm, nearbyForms } = __mod_engine_progression_js;
 const { getPlace, PLACES } = __mod_data_places_js;
 const { shopStock, getItem, ITEMS } = __mod_data_items_js;
+const { buyItem, valueHere, hasItem } = __mod_engine_inventory_js;
+const { currencyFor, formatMoney, balance } = __mod_data_currency_js;
 const { CAREERS, getCareer, careersFor } = __mod_data_jobs_js;
 const { getRace, hasPerk } = __mod_data_races_js;
 const { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel, limitFor, usedThisYear, trainingRoomLeft } = __mod_engine_economy_js;
@@ -16560,17 +17364,29 @@ const ACTIONS = [
     id: 'shop', maxPerYear: 5, minMaturity: 5, tooYoung: 'Somebody else buys your things.', slots: 0, name: 'Go shopping', cat: 'world', cost: 'A moment',
     desc: 'Gear, property and transport.',
     available: (s) => !s.character.inAfterlife,
-    options: (s) => shopStock(getPlace(s.character.placeId).tags)
-      .filter((i) => !s.character.items.includes(i.id))
-      .map((i) => ({ id: i.id, label: `${i.name} - ${zeni(i.cost)}`, hint: i.desc, disabled: s.character.zeni < i.cost })),
+    options: (s) => {
+      const place = getPlace(s.character.placeId);
+      const cur = currencyFor(place.planet);
+      return shopStock(place.tags, place.planet)
+        .filter((i) => !hasItem(s.character, i.id))
+        .map((i) => {
+          const price = valueHere(s, i.id);
+          return {
+            id: i.id,
+            label: `${i.name} - ${formatMoney(price.amount, price.currency)}`,
+            hint: i.desc,
+            disabled: balance(s.character, cur.id) < price.amount,
+          };
+        });
+    },
     run: (s, rng, params) => {
-      const item = params && params.option ? getItem(params.option) : null;
-      if (!item) return { text: 'You buy nothing.' };
-      if (s.character.zeni < item.cost) return { text: `${item.name} costs ${zeni(item.cost)}. You cannot afford it.` };
-      adjust(s, { zeni: -item.cost, happiness: 4 });
-      s.character.items.push(item.id);
-      fact(s, `Bought ${item.name}.`, { type: 'item', weight: 2, tags: ['asset'] });
-      return { text: `${item.name}. ${item.desc}` };
+      const id = params && params.option;
+      if (!id) return { text: 'You buy nothing.' };
+      const res = buyItem(s, id);
+      if (!res.ok) return { text: res.text };
+      adjust(s, { happiness: 4 });
+      fact(s, `Bought ${getItem(id).name}.`, { type: 'item', weight: 2, tags: ['asset'] });
+      return { text: res.text };
     },
   },
   {
@@ -18482,6 +19298,10 @@ const { npcActions, runNpcAction } = __mod_engine_social_js;
 const { scoreReplyLocally, applyReply, impressionLabel } = __mod_engine_dialogue_js;
 const { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } = __mod_engine_ai_js;
 const { numberish, zeni } = __mod_engine_text_js;
+const { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere, repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot } = __mod_engine_inventory_js;
+const { currencyFor, balance, formatMoney, exchange, CURRENCIES } = __mod_data_currency_js;
+const { getItem } = __mod_data_items_js;
+const { TRAITS, getTrait, TRAIT_KINDS } = __mod_data_traits_js;
 const { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSense } = __mod_engine_perception_js;
 const { getRng, saveRng } = __mod_engine_state_js;
 const { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } = __mod_engine_battle_js;
@@ -18693,7 +19513,9 @@ function renderHud() {
   };
   const cap = yearCapacity(GAME);
   if (cap < 0.75) add('Year', cap < 0.5 ? 'Small' : 'Short', 'gold');
-  add('Zeni', zeni(c.zeni).replace(' Zeni', ''));
+  // The money in your hand is the money of the world you are standing on.
+  const localCur = currencyFor(getPlace(c.placeId).planet);
+  add(localCur.short, Math.round(balance(c, localCur.id)).toLocaleString('en-US'));
   add('Fame', Math.round(c.fame));
   add('Karma', Math.round(c.karma), c.karma > 20 ? 'good' : c.karma < -20 ? 'bad' : '');
   if (c.career) add('Job', c.career.title);
@@ -19195,6 +20017,53 @@ function panelPerson(npcId) {
   }
   body.appendChild(table);
 
+  // What they are carrying, as far as you have seen. Ask, buy, or take it.
+  const rng0 = getRng(GAME);
+  npcBag(rng0, npc);
+  saveRng(GAME, rng0);
+  const theirs = knownItems(npc);
+  if (theirs.length) {
+    body.appendChild(el('div', 'group-label', 'What they have'));
+    for (const entry of theirs) {
+      const item = getItem(entry.id);
+      if (!item) continue;
+      const price = valueHere(GAME, entry.id);
+      const row = el('div', 'row');
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', item.name + (entry.worn ? ' (on them)' : '')));
+      main.appendChild(el('div', 'row-note', item.desc));
+      row.appendChild(main);
+      const acts = el('div', 'item-acts');
+      for (const [how, label] of [['ask', 'Ask'], ['buy', formatMoney(price.amount, price.currency)], ['take', 'Take']]) {
+        const b = el('button', 'mini' + (how === 'take' ? ' danger' : ''), label);
+        b.type = 'button';
+        b.addEventListener('click', () => {
+          const rng = getRng(GAME);
+          const res = requestItem(GAME, rng, npc, entry.id, how);
+          saveRng(GAME, rng);
+          flash(res.text, 5000);
+          logLine({ kind: 'event', title: `${item.name}`, text: res.text });
+          renderHud();
+          renderFeed();
+          autosave();
+          panelPerson(npc.id);
+        });
+        acts.appendChild(b);
+      }
+      row.appendChild(acts);
+      body.appendChild(row);
+    }
+  }
+
+  // Something of yours, handed over.
+  const mine = inventoryOf(GAME.character).filter((r) => !r.worn);
+  if (mine.length) {
+    const give = el('button', 'ghost-btn', `Give ${npc.name} something`);
+    give.type = 'button';
+    give.addEventListener('click', () => panelGive(npc.id));
+    body.appendChild(give);
+  }
+
   const tones = [['warm', 'Kindness'], ['romance', 'Romance'], ['hostile', 'Cruelty']];
   const actions = npcActions(GAME, npc);
   for (const [tone, label] of tones) {
@@ -19503,6 +20372,192 @@ function panelAppearance() {
   openSheet('panel');
 }
 
+function panelGive(npcId) {
+  const npc = GAME.npcs[npcId];
+  if (!npc) return;
+  const { body } = sheetShell(`Give ${npc.name} something`, 'They will remember it.');
+  for (const row of inventoryOf(GAME.character).filter((r) => !r.worn)) {
+    const b = el('button', 'row');
+    b.type = 'button';
+    const main = el('div', 'row-main');
+    main.appendChild(el('div', 'row-title', row.name));
+    main.appendChild(el('div', 'row-note', row.desc));
+    b.appendChild(main);
+    b.addEventListener('click', () => {
+      const res = giveItem(GAME, npc, row.id);
+      flash(res.text);
+      logLine({ kind: 'event', title: `You gave ${npc.name} ${row.name}`, text: res.text });
+      renderHud();
+      renderFeed();
+      autosave();
+      panelPerson(npcId);
+    });
+    body.appendChild(b);
+  }
+  const back = el('button', 'ghost-btn', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', () => panelPerson(npcId));
+  body.appendChild(back);
+  openSheet('panel');
+}
+
+function panelInventory() {
+  const c = GAME.character;
+  ensureBag(c);
+  const planet = getPlace(c.placeId).planet;
+  const cur = currencyFor(planet);
+  const { body } = sheetShell('What you carry', `${formatMoney(balance(c, cur.id), cur.id)}`);
+
+  // Every purse with something in it, because money does not travel.
+  const purses = Object.values(CURRENCIES)
+    .filter((x) => balance(c, x.id) > 0 || x.id === cur.id);
+  const money = el('div', 'purse');
+  for (const p of purses) {
+    const row = el('div', 'purse-row' + (p.id === cur.id ? ' here' : ''));
+    row.appendChild(el('span', 'purse-name', p.name));
+    row.appendChild(el('span', 'purse-val', formatMoney(balance(c, p.id), p.id)));
+    money.appendChild(row);
+  }
+  body.appendChild(money);
+  body.appendChild(el('p', 'row-note', `${cur.where} ${cur.desc}`));
+
+  if (purses.length > 1) {
+    const swap = el('button', 'ghost-btn', 'Change money');
+    swap.type = 'button';
+    swap.addEventListener('click', () => panelExchange());
+    body.appendChild(swap);
+  }
+
+  const rows = inventoryOf(c);
+  if (!rows.length) {
+    body.appendChild(el('p', 'row-note', 'You are carrying nothing at all.'));
+  }
+  const groups = [['Worn', (r) => r.worn], ['Carried', (r) => !r.worn]];
+  for (const [label, filter] of groups) {
+    const set = rows.filter(filter);
+    if (!set.length) continue;
+    body.appendChild(el('div', 'group-label', label));
+    for (const row of set) {
+      const b = el('div', 'row');
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', row.name + (row.qty > 1 ? ` ×${row.qty}` : '')));
+      const bits = [row.desc];
+      if (row.from) bits.push(`From ${row.from}.`);
+      main.appendChild(el('div', 'row-note', bits.join(' ')));
+      if (row.condition < 100) {
+        const wear = el('div', 'cond');
+        const fill = el('div', 'cond-fill');
+        fill.style.width = row.condition + '%';
+        if (row.condition < 30) fill.classList.add('bad');
+        wear.appendChild(fill);
+        main.appendChild(wear);
+        main.appendChild(el('div', 'row-note', row.condition < 30
+          ? 'Barely holding together.' : `${row.condition}% of what it was.`));
+      }
+      b.appendChild(main);
+
+      const acts = el('div', 'item-acts');
+      if (row.slot !== 'none') {
+        const w = el('button', 'mini', row.worn ? 'Stow' : 'Wear');
+        w.type = 'button';
+        w.addEventListener('click', () => { flash(toggleWorn(c, row.id).text); redrawLook(); panelInventory(); });
+        acts.appendChild(w);
+      }
+      if (row.condition < 100) {
+        const r = el('button', 'mini', 'Repair');
+        r.type = 'button';
+        r.addEventListener('click', () => { flash(repairItem(GAME, row.id).text); panelInventory(); });
+        acts.appendChild(r);
+      }
+      const sellPrice = valueHere(GAME, row.id, { sell: true });
+      const sl = el('button', 'mini', `Sell ${formatMoney(sellPrice.amount, sellPrice.currency)}`);
+      sl.type = 'button';
+      sl.addEventListener('click', () => { flash(sellItem(GAME, row.id).text); renderHud(); panelInventory(); });
+      acts.appendChild(sl);
+      b.appendChild(acts);
+      body.appendChild(b);
+    }
+  }
+
+  const back = el('button', 'ghost-btn', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', panelRecords);
+  body.appendChild(back);
+  openSheet('panel');
+}
+
+function redrawLook() {
+  renderHud();
+  autosave();
+}
+
+function panelExchange() {
+  const c = GAME.character;
+  const here = currencyFor(getPlace(c.placeId).planet);
+  const { body } = sheetShell('Change money', `They take a cut. They always take a cut.`);
+  const from = Object.values(CURRENCIES).filter((x) => balance(c, x.id) > 0 && x.id !== here.id && x.rate);
+  if (!from.length) {
+    body.appendChild(el('p', 'row-note', `You have nothing but ${here.name} to change.`));
+  }
+  for (const f of from) {
+    const b = el('button', 'row');
+    b.type = 'button';
+    const main = el('div', 'row-main');
+    main.appendChild(el('div', 'row-title', `All your ${f.name}`));
+    main.appendChild(el('div', 'row-note', `${formatMoney(balance(c, f.id), f.id)} into ${here.name}, minus 18%.`));
+    b.appendChild(main);
+    b.addEventListener('click', () => {
+      const res = exchange(c, f.id, here.id, balance(c, f.id));
+      flash(res.ok ? res.text : res.reason);
+      renderHud();
+      panelExchange();
+    });
+    body.appendChild(b);
+  }
+  const back = el('button', 'ghost-btn', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', panelInventory);
+  body.appendChild(back);
+  openSheet('panel');
+}
+
+function panelTraits() {
+  const c = GAME.character;
+  const { body } = sheetShell('What you are', `${(c.traits2 || []).length} traits`);
+  const mine = (c.traits2 || []).map(getTrait).filter(Boolean);
+  for (const [kind, label] of Object.entries(TRAIT_KINDS)) {
+    const set = mine.filter((t) => t.kind === kind);
+    if (!set.length) continue;
+    body.appendChild(el('div', 'group-label', label));
+    for (const t of set) {
+      const row = el('div', 'row' + (t.bad ? ' danger' : ''));
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', t.name));
+      main.appendChild(el('div', 'row-note', t.desc));
+      row.appendChild(main);
+      body.appendChild(row);
+    }
+  }
+  if (!mine.length) body.appendChild(el('p', 'row-note', 'Nothing has marked you out yet.'));
+
+  body.appendChild(el('div', 'group-label', 'What you were born with'));
+  const grid = el('div', 'stat-grid');
+  for (const [label, value] of [['Potential', c.potential], ['Battle instinct', c.battleInstinct],
+    ['Intellect', c.iq], ['Luck', c.luck]]) {
+    const box = el('div', 'stat');
+    box.appendChild(el('div', 'stat-name', label));
+    box.appendChild(el('div', 'stat-val', String(value ?? '—')));
+    grid.appendChild(box);
+  }
+  body.appendChild(grid);
+
+  const back = el('button', 'ghost-btn', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', panelRecords);
+  body.appendChild(back);
+  openSheet('panel');
+}
+
 function panelRecords() {
   const { body } = sheetShell('Life', `Age ${GAME.character.age}`);
   const c = GAME.character;
@@ -19534,6 +20589,21 @@ function panelRecords() {
     for (const d of GAME.world.divergences) {
       body.appendChild(el('div', 'memo', `Age ${d.year}: ${d.event.replace(/_/g, ' ')} - ${d.how}`));
     }
+  }
+
+  body.appendChild(el('div', 'group-label', 'You'));
+  for (const [title, note, fn] of [
+    ['What you carry', `${(c.bag || c.items || []).length} things, and the money for where you are`, panelInventory],
+    ['What you are', `${(c.traits2 || []).length} traits, and what you were born with`, panelTraits],
+  ]) {
+    const r = el('button', 'row');
+    r.type = 'button';
+    const m = el('div', 'row-main');
+    m.appendChild(el('div', 'row-title', title));
+    m.appendChild(el('div', 'row-note', note));
+    r.appendChild(m);
+    r.addEventListener('click', fn);
+    body.appendChild(r);
   }
 
   body.appendChild(el('div', 'group-label', 'Appearance'));

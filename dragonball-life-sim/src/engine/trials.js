@@ -3,6 +3,7 @@
 // what a score is worth; the UI decides how it is played.
 
 import { clamp } from './rng.js';
+import { traitEffect } from '../data/traits.js';
 import { getTechnique, TECH_BY_ID } from '../data/techniques.js';
 import { getTransformation } from '../data/transformations.js';
 import { grantTrainingPower } from './economy.js';
@@ -71,6 +72,15 @@ export function startTrial(state, rng, opts = {}) {
 }
 
 /** Score is 0-1. Everything downstream keys off it. */
+/**
+ * How much easier a trial is for this character before they have touched it.
+ * A genius starts ahead; a slow study starts behind.
+ */
+export function trialBonus(state) {
+  const c = state.character;
+  return clamp(traitEffect(c, 'trialEase') + ((c.iq || 100) - 100) / 500, -0.2, 0.3);
+}
+
 export function gradeTrial(score) {
   if (score >= 0.92) return { grade: 'perfect', mult: 1.9, text: 'Perfect. Not one wasted movement.' };
   if (score >= 0.75) return { grade: 'strong', mult: 1.45, text: 'Clean. Better than you have managed before.' };
@@ -81,6 +91,8 @@ export function gradeTrial(score) {
 
 /** Turn a played trial into consequences. */
 export function resolveTrial(state, rng, trial, score) {
+  // Traits move the score before anything is judged against it.
+  score = clamp(score + trialBonus(state), 0, 1);
   const c = state.character;
   const result = gradeTrial(clamp(score, 0, 1));
   const lines = [result.text];

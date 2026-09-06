@@ -4,6 +4,7 @@
 // thousands rather than adding a flat amount.
 
 import { clamp } from './rng.js';
+import { traitEffect } from '../data/traits.js';
 import { getRace, hasPerk } from '../data/races.js';
 import { getTransformation } from '../data/transformations.js';
 import { techniquePower } from '../data/techniques.js';
@@ -46,6 +47,7 @@ export function agingDecay(character) {
  * power, before injury and event modifiers.
  */
 export function trainingRate(character, opts = {}) {
+  // Blood and upbringing move how fast a body answers.
   const race = getRace(character.raceId);
   const intensity = opts.intensity ?? 1.0;      // 0.4 light .. 2.0 suicidal
   const placeMult = opts.placeMult ?? 1.0;
@@ -71,7 +73,7 @@ export function trainingRate(character, opts = {}) {
   if (character.vitals.health < 40) rate *= 0.6;
   if (character.vitals.happiness < 25) rate *= 0.8;
 
-  return Math.max(0, rate);
+  return (Math.max(0, rate)) * traitEffect(character, 'trainMult');
 }
 
 /** Apply a zenkai: near-death survival permanently raises the ceiling. */
@@ -145,9 +147,10 @@ export function applyStatDelta(character, delta, cap = 100) {
 
 /** Maximum ki pool, which grows with control and technique. */
 export function kiMaxFor(character) {
+  // Deep reserves are a real thing somebody is born with.
   const base = 40 + character.stats.kiControl * 0.9 + character.stats.discipline * 0.3;
   const bonus = character.techniques.length * 2;
-  return Math.round(base + bonus);
+  return Math.round((Math.round(base + bonus)) * traitEffect(character, 'kiMult'));
 }
 
 export function lifeExpectancy(character, rng) {

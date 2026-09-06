@@ -7,6 +7,8 @@ import { getPlace } from '../data/places.js';
 import { eraName, worldPowerBaseline } from '../data/timeline.js';
 import { generateFullName } from '../data/names.js';
 import { rollOrigin } from './origins.js';
+import { inheritTraits, originTraits, traitEffect } from '../data/traits.js';
+import { emptyPurse, currencyFor, priceIn, credit } from '../data/currency.js';
 import { makeFamily, resetNpcCounter } from './npc.js';
 import { STAT_KEYS, kiMaxFor, lifeExpectancy, combatPower, powerTier } from './stats.js';
 
@@ -93,6 +95,10 @@ export function createGame(creation, seedInput) {
     battleInstinct: origin.battleInstinct,
     iq: origin.iq,
     luck: origin.luck,
+
+    // What your blood gave you, and what your upbringing added. Set before
+    // anything else happens and never chosen.
+    traits2: [],
     // What the life leaves on the body. Each entry is drawn on the portrait
     // and listed in the record, with who or what did it.
     scars: [],
@@ -138,6 +144,28 @@ export function createGame(creation, seedInput) {
     trainingFocus: null,
     yearsInAfterlife: 0,
   };
+  // Traits, before the derived numbers, because several of them move those.
+  character.traits2 = inheritTraits(rng, creation.parents || [], creation.raceId)
+    .concat(originTraits(upbringing.id));
+  character.potential = clamp(character.potential + traitEffect(character, 'potential'), 1, 120);
+  character.battleInstinct = clamp(character.battleInstinct + traitEffect(character, 'battleInstinct'), 1, 120);
+  character.iq = clamp(character.iq + traitEffect(character, 'iq'), 40, 200);
+  character.luck = clamp(character.luck + traitEffect(character, 'luck'), 1, 120);
+  for (const k of STAT_KEYS) {
+    const bump = traitEffect(character, k);
+    if (bump) character.stats[k] = clamp(character.stats[k] + bump, 1, 99);
+  }
+  const powerMult = traitEffect(character, 'powerMult');
+  if (powerMult !== 1) character.power = Math.max(1, Math.round(character.power * powerMult));
+  character.peakPower = character.power;
+
+  // You are born holding whatever the place you were born settles in. A
+  // Saiyan on Planet Vegeta has never seen a Zeni note.
+  character.purse = emptyPurse();
+  const bornCurrency = currencyFor(getPlace(placeId).planet);
+  credit(character, bornCurrency.id, priceIn(character.zeni, bornCurrency.id));
+  character.zeni = character.purse.zeni;
+
   character.vitals.kiMax = kiMaxFor(character);
   character.vitals.ki = character.vitals.kiMax;
   character.lifeExpectancy = lifeExpectancy(character, rng);

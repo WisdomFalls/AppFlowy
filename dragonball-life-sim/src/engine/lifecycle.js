@@ -16,6 +16,7 @@ import { getRng, saveRng, currentYear, livingNpcs, adjust, place as placeOf, cha
 import { getCareer } from '../data/jobs.js';
 import { resetYearBudget } from './economy.js';
 import { getItem } from '../data/items.js';
+import { checkEarnedTraits, traitEffect } from '../data/traits.js';
 
 const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
 
@@ -210,6 +211,16 @@ export function startYear(state) {
         if (note) entries.push(note);
       }
     }
+  }
+
+  // What the life has made of you. Earned traits arrive when their conditions
+  // are met, announced or not asked for.
+  for (const t of checkEarnedTraits(state)) {
+    entries.push({ kind: 'trait', text: `${t.line} (${t.name})` });
+    addFact(state.memory, {
+      type: 'trait', text: `Became ${t.name.toLowerCase()}.`, year: c.age,
+      weight: 6, tags: ['trait'],
+    });
   }
 
   // Anybody who died some other way and was never announced gets announced
@@ -418,7 +429,8 @@ function passiveYear(state, rng) {
   }
 
   // Recovery and mood
-  const heal = c.inAfterlife ? 40 : (24 + c.stats.durability * 0.28 + (hasPerk(c, 'regeneration') ? 30 : 0));
+  const heal = (c.inAfterlife ? 40 : (24 + c.stats.durability * 0.28 + (hasPerk(c, 'regeneration') ? 30 : 0)))
+    * traitEffect(c, 'healRate');
   adjust(state, { health: heal, ki: 999 });
   const moodDrift = rng.float(-4, 4)
     + (livingNpcs(state).filter((n) => n.closeness > 55).length * 0.8)

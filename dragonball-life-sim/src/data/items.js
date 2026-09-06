@@ -38,6 +38,8 @@ export const ITEMS = [
   { id: 'island', name: 'Private Island', cat: 'property', cost: 30000000, passive: { comfort: 25, trainMult: 1.2, fame: 8 }, desc: 'Nobody within a hundred kilometres to complain about the craters.' },
 
   // Consumables
+  { id: 'dragon_ball', name: 'A Dragon Ball', cat: 'treasure', cost: 0, passive: { unique: true },
+    desc: 'One of seven. Warm to the touch, and worth more than anything else you will ever hold.' },
   { id: 'senzu', name: 'Senzu Bean', cat: 'consumable', cost: 0, use: { healFull: true, kiFull: true },
     desc: 'Heals everything, feeds you for ten days, tastes of nothing at all.' },
   { id: 'medicine', name: 'Emergency Medicine', cat: 'consumable', cost: 8000, use: { heal: 35 },
@@ -79,8 +81,19 @@ export function getItem(id) {
   return ITEM_BY_ID[id];
 }
 
-export function shopStock(placeTags) {
+export function shopStock(placeTags, planetId) {
+  // What a world sells is what a world has. Nobody on Namek stocks a hovercar,
+  // and the Frieza Force does not sell you a Flying Nimbus.
+  const off = {
+    namek: ['transport', 'property', 'accessory'],
+    new_namek: ['transport', 'property'],
+    void: ['property'],
+    otherworld: ['transport', 'property', 'gear', 'accessory'],
+    planet_vegeta: ['property', 'accessory'],
+    yardrat: ['transport', 'property'],
+  }[planetId] || [];
   return ITEMS.filter((i) => {
+    if (off.includes(i.cat)) return false;
     if (i.cost === 0) return false;
     if (i.cat === 'accessory' && !placeTags.includes('civilised') && !placeTags.includes('urban') && !placeTags.includes('tournament')) return false;
     if (i.id === 'cyber_eye' && !placeTags.includes('lab') && !placeTags.includes('tech')) return false;

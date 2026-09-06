@@ -28,6 +28,11 @@ import { npcActions, runNpcAction } from '../engine/social.js';
 import { scoreReplyLocally, applyReply, impressionLabel } from '../engine/dialogue.js';
 import { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } from '../engine/ai.js';
 import { numberish, zeni } from '../engine/text.js';
+import { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere,
+  repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot } from '../engine/inventory.js';
+import { currencyFor, balance, formatMoney, exchange, CURRENCIES } from '../data/currency.js';
+import { getItem } from '../data/items.js';
+import { TRAITS, getTrait, TRAIT_KINDS } from '../data/traits.js';
 import { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSense } from '../engine/perception.js';
 import { getRng, saveRng } from '../engine/state.js';
 import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } from '../engine/battle.js';
@@ -243,7 +248,9 @@ function renderHud() {
   };
   const cap = yearCapacity(GAME);
   if (cap < 0.75) add('Year', cap < 0.5 ? 'Small' : 'Short', 'gold');
-  add('Zeni', zeni(c.zeni).replace(' Zeni', ''));
+  // The money in your hand is the money of the world you are standing on.
+  const localCur = currencyFor(getPlace(c.placeId).planet);
+  add(localCur.short, Math.round(balance(c, localCur.id)).toLocaleString('en-US'));
   add('Fame', Math.round(c.fame));
   add('Karma', Math.round(c.karma), c.karma > 20 ? 'good' : c.karma < -20 ? 'bad' : '');
   if (c.career) add('Job', c.career.title);
@@ -745,6 +752,53 @@ function panelPerson(npcId) {
   }
   body.appendChild(table);
 
+  // What they are carrying, as far as you have seen. Ask, buy, or take it.
+  const rng0 = getRng(GAME);
+  npcBag(rng0, npc);
+  saveRng(GAME, rng0);
+  const theirs = knownItems(npc);
+  if (theirs.length) {
+    body.appendChild(el('div', 'group-label', 'What they have'));
+    for (const entry of theirs) {
+      const item = getItem(entry.id);
+      if (!item) continue;
+      const price = valueHere(GAME, entry.id);
+      const row = el('div', 'row');
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', item.name + (entry.worn ? ' (on them)' : '')));
+      main.appendChild(el('div', 'row-note', item.desc));
+      row.appendChild(main);
+      const acts = el('div', 'item-acts');
+      for (const [how, label] of [['ask', 'Ask'], ['buy', formatMoney(price.amount, price.currency)], ['take', 'Take']]) {
+        const b = el('button', 'mini' + (how === 'take' ? ' danger' : ''), label);
+        b.type = 'button';
+        b.addEventListener('click', () => {
+          const rng = getRng(GAME);
+          const res = requestItem(GAME, rng, npc, entry.id, how);
+          saveRng(GAME, rng);
+          flash(res.text, 5000);
+          logLine({ kind: 'event', title: `${item.name}`, text: res.text });
+          renderHud();
+          renderFeed();
+          autosave();
+          panelPerson(npc.id);
+        });
+        acts.appendChild(b);
+      }
+      row.appendChild(acts);
+      body.appendChild(row);
+    }
+  }
+
+  // Something of yours, handed over.
+  const mine = inventoryOf(GAME.character).filter((r) => !r.worn);
+  if (mine.length) {
+    const give = el('button', 'ghost-btn', `Give ${npc.name} something`);
+    give.type = 'button';
+    give.addEventListener('click', () => panelGive(npc.id));
+    body.appendChild(give);
+  }
+
   const tones = [['warm', 'Kindness'], ['romance', 'Romance'], ['hostile', 'Cruelty']];
   const actions = npcActions(GAME, npc);
   for (const [tone, label] of tones) {
@@ -1053,6 +1107,192 @@ function panelAppearance() {
   openSheet('panel');
 }
 
+function panelGive(npcId) {
+  const npc = GAME.npcs[npcId];
+  if (!npc) return;
+  const { body } = sheetShell(`Give ${npc.name} something`, 'They will remember it.');
+  for (const row of inventoryOf(GAME.character).filter((r) => !r.worn)) {
+    const b = el('button', 'row');
+    b.type = 'button';
+    const main = el('div', 'row-main');
+    main.appendChild(el('div', 'row-title', row.name));
+    main.appendChild(el('div', 'row-note', row.desc));
+    b.appendChild(main);
+    b.addEventListener('click', () => {
+      const res = giveItem(GAME, npc, row.id);
+      flash(res.text);
+      logLine({ kind: 'event', title: `You gave ${npc.name} ${row.name}`, text: res.text });
+      renderHud();
+      renderFeed();
+      autosave();
+      panelPerson(npcId);
+    });
+    body.appendChild(b);
+  }
+  const back = el('button', 'ghost-btn', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', () => panelPerson(npcId));
+  body.appendChild(back);
+  openSheet('panel');
+}
+
+function panelInventory() {
+  const c = GAME.character;
+  ensureBag(c);
+  const planet = getPlace(c.placeId).planet;
+  const cur = currencyFor(planet);
+  const { body } = sheetShell('What you carry', `${formatMoney(balance(c, cur.id), cur.id)}`);
+
+  // Every purse with something in it, because money does not travel.
+  const purses = Object.values(CURRENCIES)
+    .filter((x) => balance(c, x.id) > 0 || x.id === cur.id);
+  const money = el('div', 'purse');
+  for (const p of purses) {
+    const row = el('div', 'purse-row' + (p.id === cur.id ? ' here' : ''));
+    row.appendChild(el('span', 'purse-name', p.name));
+    row.appendChild(el('span', 'purse-val', formatMoney(balance(c, p.id), p.id)));
+    money.appendChild(row);
+  }
+  body.appendChild(money);
+  body.appendChild(el('p', 'row-note', `${cur.where} ${cur.desc}`));
+
+  if (purses.length > 1) {
+    const swap = el('button', 'ghost-btn', 'Change money');
+    swap.type = 'button';
+    swap.addEventListener('click', () => panelExchange());
+    body.appendChild(swap);
+  }
+
+  const rows = inventoryOf(c);
+  if (!rows.length) {
+    body.appendChild(el('p', 'row-note', 'You are carrying nothing at all.'));
+  }
+  const groups = [['Worn', (r) => r.worn], ['Carried', (r) => !r.worn]];
+  for (const [label, filter] of groups) {
+    const set = rows.filter(filter);
+    if (!set.length) continue;
+    body.appendChild(el('div', 'group-label', label));
+    for (const row of set) {
+      const b = el('div', 'row');
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', row.name + (row.qty > 1 ? ` ×${row.qty}` : '')));
+      const bits = [row.desc];
+      if (row.from) bits.push(`From ${row.from}.`);
+      main.appendChild(el('div', 'row-note', bits.join(' ')));
+      if (row.condition < 100) {
+        const wear = el('div', 'cond');
+        const fill = el('div', 'cond-fill');
+        fill.style.width = row.condition + '%';
+        if (row.condition < 30) fill.classList.add('bad');
+        wear.appendChild(fill);
+        main.appendChild(wear);
+        main.appendChild(el('div', 'row-note', row.condition < 30
+          ? 'Barely holding together.' : `${row.condition}% of what it was.`));
+      }
+      b.appendChild(main);
+
+      const acts = el('div', 'item-acts');
+      if (row.slot !== 'none') {
+        const w = el('button', 'mini', row.worn ? 'Stow' : 'Wear');
+        w.type = 'button';
+        w.addEventListener('click', () => { flash(toggleWorn(c, row.id).text); redrawLook(); panelInventory(); });
+        acts.appendChild(w);
+      }
+      if (row.condition < 100) {
+        const r = el('button', 'mini', 'Repair');
+        r.type = 'button';
+        r.addEventListener('click', () => { flash(repairItem(GAME, row.id).text); panelInventory(); });
+        acts.appendChild(r);
+      }
+      const sellPrice = valueHere(GAME, row.id, { sell: true });
+      const sl = el('button', 'mini', `Sell ${formatMoney(sellPrice.amount, sellPrice.currency)}`);
+      sl.type = 'button';
+      sl.addEventListener('click', () => { flash(sellItem(GAME, row.id).text); renderHud(); panelInventory(); });
+      acts.appendChild(sl);
+      b.appendChild(acts);
+      body.appendChild(b);
+    }
+  }
+
+  const back = el('button', 'ghost-btn', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', panelRecords);
+  body.appendChild(back);
+  openSheet('panel');
+}
+
+function redrawLook() {
+  renderHud();
+  autosave();
+}
+
+function panelExchange() {
+  const c = GAME.character;
+  const here = currencyFor(getPlace(c.placeId).planet);
+  const { body } = sheetShell('Change money', `They take a cut. They always take a cut.`);
+  const from = Object.values(CURRENCIES).filter((x) => balance(c, x.id) > 0 && x.id !== here.id && x.rate);
+  if (!from.length) {
+    body.appendChild(el('p', 'row-note', `You have nothing but ${here.name} to change.`));
+  }
+  for (const f of from) {
+    const b = el('button', 'row');
+    b.type = 'button';
+    const main = el('div', 'row-main');
+    main.appendChild(el('div', 'row-title', `All your ${f.name}`));
+    main.appendChild(el('div', 'row-note', `${formatMoney(balance(c, f.id), f.id)} into ${here.name}, minus 18%.`));
+    b.appendChild(main);
+    b.addEventListener('click', () => {
+      const res = exchange(c, f.id, here.id, balance(c, f.id));
+      flash(res.ok ? res.text : res.reason);
+      renderHud();
+      panelExchange();
+    });
+    body.appendChild(b);
+  }
+  const back = el('button', 'ghost-btn', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', panelInventory);
+  body.appendChild(back);
+  openSheet('panel');
+}
+
+function panelTraits() {
+  const c = GAME.character;
+  const { body } = sheetShell('What you are', `${(c.traits2 || []).length} traits`);
+  const mine = (c.traits2 || []).map(getTrait).filter(Boolean);
+  for (const [kind, label] of Object.entries(TRAIT_KINDS)) {
+    const set = mine.filter((t) => t.kind === kind);
+    if (!set.length) continue;
+    body.appendChild(el('div', 'group-label', label));
+    for (const t of set) {
+      const row = el('div', 'row' + (t.bad ? ' danger' : ''));
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', t.name));
+      main.appendChild(el('div', 'row-note', t.desc));
+      row.appendChild(main);
+      body.appendChild(row);
+    }
+  }
+  if (!mine.length) body.appendChild(el('p', 'row-note', 'Nothing has marked you out yet.'));
+
+  body.appendChild(el('div', 'group-label', 'What you were born with'));
+  const grid = el('div', 'stat-grid');
+  for (const [label, value] of [['Potential', c.potential], ['Battle instinct', c.battleInstinct],
+    ['Intellect', c.iq], ['Luck', c.luck]]) {
+    const box = el('div', 'stat');
+    box.appendChild(el('div', 'stat-name', label));
+    box.appendChild(el('div', 'stat-val', String(value ?? '—')));
+    grid.appendChild(box);
+  }
+  body.appendChild(grid);
+
+  const back = el('button', 'ghost-btn', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', panelRecords);
+  body.appendChild(back);
+  openSheet('panel');
+}
+
 function panelRecords() {
   const { body } = sheetShell('Life', `Age ${GAME.character.age}`);
   const c = GAME.character;
@@ -1084,6 +1324,21 @@ function panelRecords() {
     for (const d of GAME.world.divergences) {
       body.appendChild(el('div', 'memo', `Age ${d.year}: ${d.event.replace(/_/g, ' ')} - ${d.how}`));
     }
+  }
+
+  body.appendChild(el('div', 'group-label', 'You'));
+  for (const [title, note, fn] of [
+    ['What you carry', `${(c.bag || c.items || []).length} things, and the money for where you are`, panelInventory],
+    ['What you are', `${(c.traits2 || []).length} traits, and what you were born with`, panelTraits],
+  ]) {
+    const r = el('button', 'row');
+    r.type = 'button';
+    const m = el('div', 'row-main');
+    m.appendChild(el('div', 'row-title', title));
+    m.appendChild(el('div', 'row-note', note));
+    r.appendChild(m);
+    r.addEventListener('click', fn);
+    body.appendChild(r);
   }
 
   body.appendChild(el('div', 'group-label', 'Appearance'));

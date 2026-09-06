@@ -736,3 +736,28 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
   border: 1px solid var(--line); background: var(--ground); margin-right: 10px;
 }
 .foe-face svg { display: block; }
+
+/* ------------------------------------------------------------- inventory */
+
+.purse { border: 1px solid var(--line); border-radius: var(--radius-s); overflow: hidden; margin-bottom: 10px; }
+.purse-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 7px 11px; border-bottom: 1px solid var(--line-soft); background: var(--ground-2);
+}
+.purse-row:last-child { border-bottom: none; }
+.purse-row.here { background: var(--gi-soft); }
+.purse-name { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; color: var(--ink-3); text-transform: uppercase; }
+.purse-row.here .purse-name { color: var(--gi); }
+.purse-val { font-family: var(--font-mono); font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.cond { height: 3px; background: var(--line-soft); border-radius: 99px; margin-top: 6px; overflow: hidden; }
+.cond-fill { height: 100%; background: var(--ki); }
+.cond-fill.bad { background: var(--blood); }
+
+.item-acts { display: flex; flex-direction: column; gap: 4px; flex: none; }
+.mini {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase;
+  padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--ground); color: var(--ink-2); white-space: nowrap;
+}
+.mini:hover { border-color: var(--gi); color: var(--gi); }

@@ -12,6 +12,8 @@ import { getTransformation } from '../../data/transformations.js';
 import { unlockableForms, tryUnlockForm, nearbyForms } from '../progression.js';
 import { getPlace, PLACES } from '../../data/places.js';
 import { shopStock, getItem, ITEMS } from '../../data/items.js';
+import { buyItem, valueHere, hasItem } from '../inventory.js';
+import { currencyFor, formatMoney, balance } from '../../data/currency.js';
 import { CAREERS, getCareer, careersFor } from '../../data/jobs.js';
 import { getRace, hasPerk } from '../../data/races.js';
 import { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel,
@@ -471,17 +473,29 @@ export const ACTIONS = [
     id: 'shop', maxPerYear: 5, minMaturity: 5, tooYoung: 'Somebody else buys your things.', slots: 0, name: 'Go shopping', cat: 'world', cost: 'A moment',
     desc: 'Gear, property and transport.',
     available: (s) => !s.character.inAfterlife,
-    options: (s) => shopStock(getPlace(s.character.placeId).tags)
-      .filter((i) => !s.character.items.includes(i.id))
-      .map((i) => ({ id: i.id, label: `${i.name} - ${zeni(i.cost)}`, hint: i.desc, disabled: s.character.zeni < i.cost })),
+    options: (s) => {
+      const place = getPlace(s.character.placeId);
+      const cur = currencyFor(place.planet);
+      return shopStock(place.tags, place.planet)
+        .filter((i) => !hasItem(s.character, i.id))
+        .map((i) => {
+          const price = valueHere(s, i.id);
+          return {
+            id: i.id,
+            label: `${i.name} - ${formatMoney(price.amount, price.currency)}`,
+            hint: i.desc,
+            disabled: balance(s.character, cur.id) < price.amount,
+          };
+        });
+    },
     run: (s, rng, params) => {
-      const item = params && params.option ? getItem(params.option) : null;
-      if (!item) return { text: 'You buy nothing.' };
-      if (s.character.zeni < item.cost) return { text: `${item.name} costs ${zeni(item.cost)}. You cannot afford it.` };
-      adjust(s, { zeni: -item.cost, happiness: 4 });
-      s.character.items.push(item.id);
-      fact(s, `Bought ${item.name}.`, { type: 'item', weight: 2, tags: ['asset'] });
-      return { text: `${item.name}. ${item.desc}` };
+      const id = params && params.option;
+      if (!id) return { text: 'You buy nothing.' };
+      const res = buyItem(s, id);
+      if (!res.ok) return { text: res.text };
+      adjust(s, { happiness: 4 });
+      fact(s, `Bought ${getItem(id).name}.`, { type: 'item', weight: 2, tags: ['asset'] });
+      return { text: res.text };
     },
   },
   {

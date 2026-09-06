@@ -13,6 +13,7 @@ import { getTransformation, ladderFor } from '../data/transformations.js';
 import { getPlace } from '../data/places.js';
 import { getRace, hasPerk } from '../data/races.js';
 import { numberish } from './text.js';
+import { damageGear } from './inventory.js';
 
 export const STANCES = {
   neutral: { name: 'Neutral', desc: 'No commitment either way.', atk: 1, def: 1, dodge: 0, kiRegen: 1, stamRegen: 1 },
@@ -651,6 +652,12 @@ export function battleAftermath(state, rng, battle, opts = {}) {
 
   if (battle.zenkai) {
     lines.push(`Your body rebuilds heavier than it was. Power level up ${numberish(battle.zenkai)}.`);
+  }
+
+  // Clothes and kit take the same beating you do.
+  const severity = battle.outcome === 'lost' ? 1.6 : battle.me.hp < 40 ? 1.2 : 0.6;
+  for (const line of damageGear(c, rng, severity * (battle.stakes === 'spar' ? 0.4 : 1))) {
+    lines.push(line);
   }
 
   // What the fight leaves on you. Regeneration closes almost everything; a
