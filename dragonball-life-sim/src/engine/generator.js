@@ -255,6 +255,11 @@ export function resolveChoice(state, rng, event, choiceId, params = null) {
     outcome: result.outcome || null,
     battle: result.battle || null,
     tournament: result.tournament || null,
+    // Handovers that take the year away from the event system: a bracket, the
+    // survival board, or a trial the player has to actually play.
+    survival: result.survival || null,
+    trial: result.trial || null,
+    hunt: result.hunt || null,
     followUpSlots: result.followUpSlots || null,
   };
 }

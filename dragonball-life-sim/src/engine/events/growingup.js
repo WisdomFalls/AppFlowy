@@ -15,6 +15,7 @@ import { currencyFor, formatMoney, canAfford, debit, priceIn } from '../../data/
 import { maturity } from '../../data/races.js';
 import { numberish } from '../text.js';
 import { clamp } from '../rng.js';
+import { startTrial } from '../trials.js';
 
 /** People you know who are not on this world. */
 function offWorld(ctx) {
@@ -54,16 +55,29 @@ registerEvents([
          {You come off [drop] and do not land|Something catches, about a metre up|For four seconds you are not touching anything}.
          {You come down hard|You land on your face|It is the most frightening thing that has ever happened to you}.`),
     choices: (ctx, s) => [
-      { id: 'stick', label: 'Keep at it until it holds', effect: (c2, sl) => {
-        c2.character.techniques.push('bukujutsu');
-        c2.state.stats.techniquesLearned = (c2.state.stats.techniquesLearned || 0) + 1;
-        if (sl.npcId) relate(c2, findNpc(c2.state, sl.npcId), { closeness: 12, respect: 10 });
-        fact(c2, 'Learned to fly.', { type: 'technique', weight: 7, tags: ['milestone'] });
-        return { text: `{It takes months and then it is simply something you can do|`
-          + `One morning you get up and do not put your feet down|You stop noticing that you are doing it}. `
-          + `{Walking anywhere feels absurd now|The world is a different size|You will never lose this}.`,
-        changes: apply(c2, { stats: { kiControl: 5, speed: 3, discipline: 2 }, happiness: 18 }) };
-      } },
+      { id: 'stick', label: 'Keep at it until it holds',
+        hint: 'You have to hold it yourself. Nobody can do this part for you.',
+        effect: (c2, sl) => {
+          if (sl.npcId) relate(c2, findNpc(c2.state, sl.npcId), { closeness: 12, respect: 10 });
+          // Flight is a thing you hold, not a thing you buy, so it is played.
+          const trial = startTrial(c2.state, c2.rng, {
+            kind: 'endurance',
+            purpose: 'technique',
+            // Almost everybody in this setting can fly. The test is whether
+            // you hold it today, not whether you are capable of it at all.
+            difficulty: 1,
+            label: 'Off the ground',
+            blurb: 'Hold it. The moment you think about it you are on the floor.',
+            payload: { techId: 'bukujutsu' },
+          });
+          return {
+            text: `{You go back up|You climb it again|You get back on the roof}. `
+              + `{The trick is not pushing. The trick is not stopping|`
+              + `It is entirely a matter of not letting go|Everything depends on the next thirty seconds}.`,
+            changes: [],
+            trial,
+          };
+        } },
       { id: 'later', label: 'Leave it for now', danger: false, effect: (c2) => ({
         text: `{You put it down|It frightens you and you do not say so|There is time}. `
           + `{You walk everywhere for another few years|It will come back around|Somebody laughs at you for it later}.`,

@@ -16,6 +16,7 @@ import { prologueEntries } from './prologue.js';
 import { getRng, saveRng, currentYear, livingNpcs, adjust, place as placeOf, characterSummary } from './state.js';
 import { getCareer } from '../data/jobs.js';
 import { resetYearBudget } from './economy.js';
+import { resolveTrial } from './trials.js';
 import { getItem } from '../data/items.js';
 import { checkEarnedTraits, traitEffect } from '../data/traits.js';
 
@@ -361,14 +362,15 @@ export function choose(state, choiceId, params = null) {
   }
   saveRng(state, rng);
 
-  t.entries.push({
+  const entry = {
     kind: 'event',
     title: event.title,
     text: event.text,
     outcome: result.text,
     tags: event.tags,
     templateId: event.templateId,
-  });
+  };
+  t.entries.push(entry);
 
   // A choice that starts a fight parks the spec here; the UI picks it up and
   // hands control to the battle screen before the year continues.
@@ -377,6 +379,20 @@ export function choose(state, choiceId, params = null) {
   // and gives the year back when the draw is done with you.
   if (result.tournament) t.pendingTournament = result.tournament;
   if (result.survival) t.pendingSurvival = result.survival;
+  // Some choices are a thing you have to actually do, not a thing you pick.
+  // Headless callers have nobody to play it, so it is scored off the stat the
+  // trial tests and resolved on the spot.
+  if (result.trial) {
+    if (state.autoBattle) {
+      const rng2 = getRng(state);
+      const score = clamp(result.trial.aptitude * 0.8 + rng2.float(-0.15, 0.35), 0, 1);
+      const played = resolveTrial(state, rng2, result.trial, score);
+      saveRng(state, rng2);
+      entry.outcome = [entry.outcome, played.text].filter(Boolean).join(' ');
+    } else {
+      t.pendingTrial = result.trial;
+    }
+  }
 
   for (const f of result.facts || []) {
     addFact(state.memory, { type: f.type || 'event', text: f.text, year: state.character.age, weight: f.weight ?? 1, tags: f.tags || [] });

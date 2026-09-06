@@ -232,7 +232,8 @@ function renderHud() {
     portraitBox.innerHTML = portraitSvg(c, { form: bestOwnedForm(c) });
   }
   $('hud-name').textContent = c.name;
-  $('hud-sub').textContent = `${s.race} - ${s.place} - Age ${s.year}${c.inAfterlife ? ' - OTHER WORLD' : ''}`;
+  $('hud-sub').textContent = `${c.sex === 'female' ? 'Female' : 'Male'} ${s.race} - ${s.place} - Age ${s.year}`
+    + `${c.inAfterlife ? ' - OTHER WORLD' : ''}`;
   $('hud-age').innerHTML = `${c.age}<small>${c.inAfterlife ? 'dead' : 'years'}</small>`;
   $('hud-power').textContent = numberish(s.combat);
   $('hud-tier').textContent = s.tier;
@@ -476,6 +477,14 @@ function answerEvent(event, choiceId, params) {
     GAME.turn.pendingSurvival = null;
     closeSheet();
     openSurvival(board);
+    return;
+  }
+
+  const eventTrial = GAME.turn && GAME.turn.pendingTrial;
+  if (eventTrial) {
+    GAME.turn.pendingTrial = null;
+    closeSheet();
+    openTrial(eventTrial);
     return;
   }
 
@@ -1452,7 +1461,8 @@ function panelRecords() {
   const lookMain = el('div', 'row-main');
   lookMain.appendChild(el('div', 'row-title', 'How you look'));
   lookMain.appendChild(el('div', 'row-note',
-    `${c.appearance.heightCm}cm, ${c.appearance.weightKg}kg, ${c.appearance.buildShape}. Change your hair, clothes and stance.`));
+    `${c.sex === 'female' ? 'Female' : 'Male'}, ${c.appearance.heightCm}cm, ${c.appearance.weightKg}kg, `
+    + `${c.appearance.buildShape}. Change your hair, clothes and stance.`));
   lookRow.appendChild(lookMain);
   lookRow.addEventListener('click', panelAppearance);
   body.appendChild(lookRow);
