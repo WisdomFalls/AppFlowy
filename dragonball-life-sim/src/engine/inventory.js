@@ -185,6 +185,23 @@ export function npcBag(rng, npc) {
   return bag;
 }
 
+/**
+ * What somebody you just killed was carrying, taken rather than asked for.
+ * A body does not stop a fight from ending with fewer of its problems than
+ * it started with - whatever they had on them is just sitting there now.
+ */
+export function lootFromDefeated(rng, npc, character) {
+  npcBag(rng, npc);
+  if (!npc.bag || !npc.bag.length) return null;
+  if (!rng.chance(0.6)) return null;
+  const entry = rng.pick(npc.bag);
+  const item = getItem(entry.id);
+  if (!item) return null;
+  npc.bag.splice(npc.bag.indexOf(entry), 1);
+  addItem(character, entry.id, { condition: entry.condition, from: `looted from ${npc.name}` });
+  return `${item.name} - taken off ${npc.name}. It is yours now.`;
+}
+
 /** Everything of theirs you have learned about. */
 export function knownItems(npc) {
   const k = npc.knowledge || 0;

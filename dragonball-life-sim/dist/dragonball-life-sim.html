@@ -8971,6 +8971,23 @@ function npcBag(rng, npc) {
   return bag;
 }
 
+/**
+ * What somebody you just killed was carrying, taken rather than asked for.
+ * A body does not stop a fight from ending with fewer of its problems than
+ * it started with - whatever they had on them is just sitting there now.
+ */
+function lootFromDefeated(rng, npc, character) {
+  npcBag(rng, npc);
+  if (!npc.bag || !npc.bag.length) return null;
+  if (!rng.chance(0.6)) return null;
+  const entry = rng.pick(npc.bag);
+  const item = getItem(entry.id);
+  if (!item) return null;
+  npc.bag.splice(npc.bag.indexOf(entry), 1);
+  addItem(character, entry.id, { condition: entry.condition, from: `looted from ${npc.name}` });
+  return `${item.name} - taken off ${npc.name}. It is yours now.`;
+}
+
 /** Everything of theirs you have learned about. */
 function knownItems(npc) {
   const k = npc.knowledge || 0;
@@ -9165,7 +9182,7 @@ function repairItem(state, itemId) {
   entry.condition = 100;
   return { ok: true, text: `Repaired. ${formatMoney(cost, cur.id)}, and they were not pleased about the state of it.` };
 }
-  return { SLOTS, itemSlot, inventoryOf, ensureBag, findEntry, hasItem, addItem, removeItem, toggleWorn, valueHere, sellItem, buyItem, npcBag, knownItems, requestItem, giftFit, giveItem, damageGear, repairItem };
+  return { SLOTS, itemSlot, inventoryOf, ensureBag, findEntry, hasItem, addItem, removeItem, toggleWorn, valueHere, sellItem, buyItem, npcBag, lootFromDefeated, knownItems, requestItem, giftFit, giveItem, damageGear, repairItem };
 })();
 
 /* ==== engine/settlement.js ==== */
@@ -9640,7 +9657,7 @@ const { getTransformation, ladderFor } = __mod_data_transformations_js;
 const { getPlace } = __mod_data_places_js;
 const { getRace, hasPerk } = __mod_data_races_js;
 const { numberish } = __mod_engine_text_js;
-const { damageGear } = __mod_engine_inventory_js;
+const { damageGear, lootFromDefeated } = __mod_engine_inventory_js;
 const { spreadWord, DEED_SCALE } = __mod_engine_settlement_js;
 const { maim } = __mod_engine_body_js;
 
@@ -10711,6 +10728,8 @@ function battleAftermath(state, rng, battle, opts = {}) {
         npc.deadSince = year;
         npc.causeOfDeath = 'killed by you';
         npc.killedByPlayer = true;
+        const loot = lootFromDefeated(rng, npc, c);
+        if (loot) lines.push(loot);
       }
     }
     if (state.world.ended.length > 40) state.world.ended = state.world.ended.slice(-40);
@@ -25466,7 +25485,7 @@ const { npcActions, runNpcAction } = __mod_engine_social_js;
 const { scoreReplyLocally, applyReply, impressionLabel } = __mod_engine_dialogue_js;
 const { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } = __mod_engine_ai_js;
 const { numberish, zeni } = __mod_engine_text_js;
-const { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere, repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot } = __mod_engine_inventory_js;
+const { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere, repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot, lootFromDefeated } = __mod_engine_inventory_js;
 const { currencyFor, balance, formatMoney, exchange, CURRENCIES } = __mod_data_currency_js;
 const { getItem } = __mod_data_items_js;
 const { TRAITS, getTrait, TRAIT_KINDS } = __mod_data_traits_js;
@@ -27783,11 +27802,19 @@ function endBattle() {
     kill.addEventListener('click', () => {
       const ref = BATTLE.context || {};
       const npc = ref.npcId ? GAME.npcs[ref.npcId] : (ref.canonId ? GAME.npcs['canon_' + ref.canonId] : null);
-      if (npc) { npc.alive = false; npc.causeOfDeath = 'You killed them'; }
+      const lines = ['You finish it. Nobody argues with the result.'];
+      if (npc) {
+        npc.alive = false;
+        npc.causeOfDeath = 'You killed them';
+        const rng = getRng(GAME);
+        const loot = lootFromDefeated(rng, npc, GAME.character);
+        saveRng(GAME, rng);
+        if (loot) lines.push(loot);
+      }
       BATTLE.killed = true;
       GAME.character.karma = Math.max(-100, GAME.character.karma - 22);
       GAME.stats.kills += 1;
-      pushBattleLines(['You finish it. Nobody argues with the result.'], 'big');
+      pushBattleLines(lines, 'big');
       kill.remove();
       const s2 = document.querySelector('.bact:not(.wide):not(.kill)');
       if (s2) s2.remove();

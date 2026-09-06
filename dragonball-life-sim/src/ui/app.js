@@ -29,7 +29,7 @@ import { scoreReplyLocally, applyReply, impressionLabel } from '../engine/dialog
 import { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } from '../engine/ai.js';
 import { numberish, zeni } from '../engine/text.js';
 import { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere,
-  repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot } from '../engine/inventory.js';
+  repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot, lootFromDefeated } from '../engine/inventory.js';
 import { currencyFor, balance, formatMoney, exchange, CURRENCIES } from '../data/currency.js';
 import { getItem } from '../data/items.js';
 import { TRAITS, getTrait, TRAIT_KINDS } from '../data/traits.js';
@@ -2350,11 +2350,19 @@ function endBattle() {
     kill.addEventListener('click', () => {
       const ref = BATTLE.context || {};
       const npc = ref.npcId ? GAME.npcs[ref.npcId] : (ref.canonId ? GAME.npcs['canon_' + ref.canonId] : null);
-      if (npc) { npc.alive = false; npc.causeOfDeath = 'You killed them'; }
+      const lines = ['You finish it. Nobody argues with the result.'];
+      if (npc) {
+        npc.alive = false;
+        npc.causeOfDeath = 'You killed them';
+        const rng = getRng(GAME);
+        const loot = lootFromDefeated(rng, npc, GAME.character);
+        saveRng(GAME, rng);
+        if (loot) lines.push(loot);
+      }
       BATTLE.killed = true;
       GAME.character.karma = Math.max(-100, GAME.character.karma - 22);
       GAME.stats.kills += 1;
-      pushBattleLines(['You finish it. Nobody argues with the result.'], 'big');
+      pushBattleLines(lines, 'big');
       kill.remove();
       const s2 = document.querySelector('.bact:not(.wide):not(.kill)');
       if (s2) s2.remove();

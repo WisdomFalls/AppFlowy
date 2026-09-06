@@ -14,7 +14,7 @@ import { getTransformation, ladderFor } from '../data/transformations.js';
 import { getPlace } from '../data/places.js';
 import { getRace, hasPerk } from '../data/races.js';
 import { numberish } from './text.js';
-import { damageGear } from './inventory.js';
+import { damageGear, lootFromDefeated } from './inventory.js';
 import { spreadWord, DEED_SCALE } from './settlement.js';
 import { maim } from './body.js';
 
@@ -1085,6 +1085,8 @@ export function battleAftermath(state, rng, battle, opts = {}) {
         npc.deadSince = year;
         npc.causeOfDeath = 'killed by you';
         npc.killedByPlayer = true;
+        const loot = lootFromDefeated(rng, npc, c);
+        if (loot) lines.push(loot);
       }
     }
     if (state.world.ended.length > 40) state.world.ended = state.world.ended.slice(-40);
