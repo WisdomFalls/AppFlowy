@@ -17,7 +17,7 @@ import { defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS,
  * How likely each upbringing is, for this species in this year. Weight 0 means
  * it cannot happen at all.
  */
-function upbringingWeights(raceId, year) {
+function upbringingWeights(raceId, year, homeworld) {
   const w = {
     warrior_clan: 3, street: 3, wealthy: 2, temple: 2, lab: 1, farm: 3, city: 4,
     orphan_pod: 1, royal: 0.5, exile: 1.5,
@@ -26,8 +26,16 @@ function upbringingWeights(raceId, year) {
 
   switch (raceId) {
     case 'saiyan':
-      // Planet Vegeta ran a creche system until it did not.
-      if (year < 737) {
+      if (homeworld === 'sadala') {
+        // Sadala never burned, and Universe 6 was never Frieza's to grind
+        // down - no scattering, no genocide, nobody's childhood built out
+        // of a pod and a stranger. Most kids there grow up with an actual
+        // family and a warrior tradition instead of whatever survival looks
+        // like after the thing that shaped Universe 7's Saiyans.
+        Object.assign(w, { saiyan_creche: 0, warrior_clan: 8, city: 5, wealthy: 3, royal: 1, foster: 3,
+          farm: 2, temple: 1, orphan_pod: 0.4, exile: 0.4, self_raised: 0.6, animals: 0.3 });
+      } else if (year < 737) {
+        // Planet Vegeta ran a creche system until it did not.
         Object.assign(w, { saiyan_creche: 14, warrior_clan: 6, royal: 1.5, city: 0, farm: 0, wealthy: 0, temple: 0, lab: 0, animals: 0.3 });
       } else {
         Object.assign(w, { saiyan_creche: 0, orphan_pod: 8, exile: 6, self_raised: 4, foster: 5, animals: 2, warrior_clan: 2, city: 1, farm: 1, wealthy: 0.3, royal: 0.4 });
@@ -103,13 +111,20 @@ function birthable(place, year) {
 }
 
 /** A homeworld that makes sense for this species, upbringing and year. */
-function placeFor(rng, raceId, upbringingId, year) {
+function placeFor(rng, raceId, upbringingId, year, preferredPlaceId) {
   const race = getRace(raceId);
   let homes = (race.homeworlds || []).map((id) => getPlace(id))
     .filter((p) => birthable(p, year));
   if (!homes.length) homes = PLACES.filter((p) => p.tags.includes('civilised') && birthable(p, year));
 
   if (upbringingId === 'saiyan_creche' && existsIn('planet_vegeta', year)) return 'planet_vegeta';
+  // Whichever homeworld drove the upbringing odds above should be the one
+  // this life actually lands on, as long as the upbringing itself has not
+  // pulled it somewhere more specific (a lab, a wild place, a temple).
+  if (preferredPlaceId && homes.some((h) => h.id === preferredPlaceId)
+    && !['lab', 'animals', 'self_raised', 'temple'].includes(upbringingId)) {
+    return preferredPlaceId;
+  }
   if (upbringingId === 'lab') {
     const labs = PLACES.filter((p) => (p.tags.includes('lab') || p.tags.includes('tech')) && birthable(p, year));
     if (labs.length) return rng.pick(labs).id;
@@ -172,12 +187,38 @@ const SAIYAN_ARMOUR_BY_UPBRINGING = {
  */
 export function rollOrigin(rng, raceId, birthYear, opts = {}) {
   const race = getRace(raceId);
-  const weights = upbringingWeights(raceId, birthYear);
+  // Sadala (Universe 6) never burned and was never Frieza's - a Saiyan
+  // whose life centres there grows up in a different culture than one from
+  // Universe 7's Planet Vegeta, and that has to be decided before the
+  // upbringing odds below can be picked correctly, not inferred afterward.
+  let saiyanHome = null;
+  if (raceId === 'saiyan') {
+    if (opts.placeId) {
+      const p = getPlace(opts.placeId);
+      saiyanHome = p && (p.planet === 'sadala' || p.planet === 'planet_vegeta') ? p.planet : null;
+    } else if (existsIn('planet_vegeta', birthYear)) {
+      // Vegeta still exists in this slice of time - most Saiyan lives are
+      // still Universe 7's, but Sadala is a real, standing alternative.
+      saiyanHome = rng.chance(0.3) ? 'sadala' : 'planet_vegeta';
+    } else if (rng.chance(0.4)) {
+      // Vegeta is already gone. A Saiyan born after that is either part of
+      // the scattered Universe 7 diaspora (the original, unchanged case
+      // below) or simply one of Sadala's own, which never had a disaster to
+      // survive in the first place - both are real, so this is not an
+      // automatic default to either one.
+      saiyanHome = 'sadala';
+    }
+  }
+  const weights = upbringingWeights(raceId, birthYear, saiyanHome);
   const pool = UPBRINGINGS.filter((u) => (weights[u.id] ?? 1) > 0);
   const upbringing = rng.weighted(pool, (u) => weights[u.id] ?? 1);
-  const temperament = rng.pick(TEMPERAMENTS);
+  // Nothing here shattered Sadala's own institutions, so its people lean
+  // less toward the cruelty that Frieza's occupation bred into Universe 7's.
+  const temperament = saiyanHome === 'sadala'
+    ? rng.weighted(TEMPERAMENTS, (t) => (t.tags.includes('evil') ? 0.25 : t.tags.includes('good') ? 1.6 : 1))
+    : rng.pick(TEMPERAMENTS);
   const body = rng.pick(BODY_TYPES);
-  const placeId = opts.placeId || placeFor(rng, raceId, upbringing.id, birthYear);
+  const placeId = opts.placeId || placeFor(rng, raceId, upbringing.id, birthYear, saiyanHome);
 
   const look = defaultAppearance(rng, raceId);
   Object.assign(look, bodyFor(rng, raceId, body.id));
