@@ -11,7 +11,7 @@ import { TECHNIQUES } from '../data/techniques.js';
 import { getRace, hasPerk, maturity, raceHasTail } from '../data/races.js';
 import { getPlace } from '../data/places.js';
 import { TIMELINE, eraName, worldPowerBaseline } from '../data/timeline.js';
-import { agingDecay, naturalDeathChance, combatPower, powerTier, kiMaxFor, lifeExpectancy, zenkaiBoost, STAT_KEYS } from './stats.js';
+import { agingDecay, naturalDeathChance, combatPower, powerTier, kiMaxFor, lifeExpectancy, zenkaiBoost, STAT_KEYS, equippedWeapon } from './stats.js';
 import { prologueEntries } from './prologue.js';
 import { getRng, saveRng, currentYear, livingNpcs, adjust, place as placeOf, characterSummary } from './state.js';
 import { getCareer } from '../data/jobs.js';
@@ -481,6 +481,15 @@ function passiveYear(state, rng) {
   // Hard training accrues toward forms that ask for it.
   if (c.flags.trainedHardThisYear) {
     c.flags.hardTrainingYears = (c.flags.hardTrainingYears || 0) + 1;
+    // Nobody is born knowing how to fight with a weapon, and nobody gets to
+    // just decide they are equally dangerous with one. Training while
+    // actually carrying one, year over year, is what earns it.
+    if (equippedWeapon(c) && (c.flags.weaponTrainingYears || 0) < 99) {
+      c.flags.weaponTrainingYears = (c.flags.weaponTrainingYears || 0) + 1;
+      if (c.flags.weaponTrainingYears >= 2 && c.fightingStyle === 'martial_arts') {
+        c.fightingStyle = 'both';
+      }
+    }
     c.flags.trainedHardThisYear = false;
   }
   // Living in Super Saiyan is how it becomes effortless.
