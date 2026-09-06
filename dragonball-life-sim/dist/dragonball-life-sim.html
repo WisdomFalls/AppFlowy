@@ -765,6 +765,18 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
 }
 .mini:hover { border-color: var(--gi); color: var(--gi); }
 
+.still-ring {
+  width: 150px; height: 150px; border-radius: 50%;
+  border: 2px solid var(--line); display: grid; place-items: center;
+}
+.still-inner {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--line); transition: all .5s ease;
+}
+.still-inner.lit { width: 84px; height: 84px; background: var(--gi); }
+.still-label { font-size: 15.5px; color: var(--ink-2); text-align: center; min-height: 2.4em; }
+@media (prefers-reduced-motion: reduce) { .still-inner { transition: none; } }
+
 </style>
 <div id="app">
 
@@ -7407,6 +7419,74 @@ const { getRace, hasPerk } = __mod_data_races_js;
 const { numberish } = __mod_engine_text_js;
 const { damageGear } = __mod_engine_inventory_js;
 
+/**
+ * What people say mid-fight. Nobody in this setting fights silently: they
+ * comment on a form, they gloat, they concede, they get insulted at being
+ * held back against. The bank is keyed by what just happened and picked from
+ * by the speaker's temperament.
+ */
+const VOICE = {
+  proud: {
+    form: ['"So that is what you have been hiding."', '"Do it again. Slower."', '"Finally."'],
+    hurt: ['"That one counted."', '"Good. Again."', 'They spit and do not look away.'],
+    winning: ['"Is this all of it?"', '"You are not going to reach me."', '"Stand up."'],
+    losing: ['"I am not finished."', '"You have not won anything yet."', 'They will not go down and will not say why.'],
+    insulted: ['"Do not do that." Their voice has changed. "Do not hold back on me."', '"I know what you are doing. Stop it."'],
+    beaten: ['"...Fine. You were better."', 'They laugh, which is somehow worse.'],
+  },
+  cheerful: {
+    form: ['"Whoa! What is that one?"', '"That is amazing. Can you teach me?"', 'They are grinning at it.'],
+    hurt: ['"Okay! Okay. That hurt."', '"You are strong!"', 'They shake it off, delighted.'],
+    winning: ['"Come on, you can do better than that!"', '"This is fun!"'],
+    losing: ['"I am not done yet!"', '"Just getting warmed up."'],
+    insulted: ['"You are going easy on me. Do not do that, it is boring."'],
+    beaten: ['"That was great. Let us do it again some time."'],
+  },
+  cruel: {
+    form: ['"How quaint."', '"Do you think that changes anything?"', 'They look bored.'],
+    hurt: ['Their face does something unpleasant.', '"You will regret that."'],
+    winning: ['"I want you to understand how far apart we are."', '"Beg. It will not help."'],
+    losing: ['"This is not possible."', '"You are nothing. You are NOTHING."'],
+    insulted: ['"Restraint? From you?" They are furious.'],
+    beaten: ['"This is not over. It is never over."'],
+  },
+  professional: {
+    form: ['They note it and adjust.', '"Interesting. Not enough."'],
+    hurt: ['They acknowledge it with a nod.', 'They reassess, visibly.'],
+    winning: ['"You are outmatched. I would stop."'],
+    losing: ['They stop talking entirely.'],
+    insulted: ['"Fight properly or do not fight."'],
+    beaten: ['"Noted." They mean it.'],
+  },
+  frightened: {
+    form: ['"What ARE you?"', 'They take a step back and do not know they did.'],
+    hurt: ['They make a sound they did not intend to.'],
+    winning: ['"Stay down. Please stay down."'],
+    losing: ['"Wait — wait, listen —"'],
+    insulted: ['"Why are you playing with me?"'],
+    beaten: ['They are already apologising.'],
+  },
+};
+
+/** Something to say, if this fighter is the sort who says things. */
+function voiceLine(battle, rng, kind) {
+  const v = battle.them.voice;
+  if (!v) return null;
+  const bank = VOICE[v] || VOICE.professional;
+  const set = bank[kind];
+  if (!set || !set.length) return null;
+  if (!rng.chance(0.55)) return null;
+  return `${battle.them.name}: ${rng.pick(set)}`.replace(/^([^:]+): (They|Their)/, '$2');
+}
+
+/** What you can say back, given what just happened. */
+const REPLIES = [
+  { id: 'taunt', label: 'Taunt them', text: '"Is that it?"', effect: { theirRage: 12, myFocus: 0 } },
+  { id: 'respect', label: 'Give them their due', text: '"You are better than they said."', effect: { theirRage: -10, myFocus: 4 } },
+  { id: 'warn', label: 'Warn them off', text: '"Walk away. I am asking once."', effect: { theirRage: -6, surrender: 0.12 } },
+  { id: 'silent', label: 'Say nothing', text: '', effect: { myFocus: 6 } },
+];
+
 const STANCES = {
   neutral: { name: 'Neutral', desc: 'No commitment either way.', atk: 1, def: 1, dodge: 0, kiRegen: 1, stamRegen: 1 },
   aggressive: { name: 'Aggressive', desc: 'Hit harder. Get hit harder.', atk: 1.38, def: 0.72, dodge: -0.05, kiRegen: 0.8, stamRegen: 0.8 },
@@ -7450,6 +7530,10 @@ function sideTemplate(name, power, opts = {}) {
     techniques: opts.techniques || [],
     forms: opts.forms || [],
     raceId: opts.raceId || 'other',
+    speedStat: opts.speedStat ?? 50,
+    instinct: opts.instinct ?? 50,
+    // What they say when things happen. Filled in by the caller.
+    voice: opts.voice || null,
   };
 }
 
@@ -7461,6 +7545,8 @@ function createBattle(state, rng, opts = {}) {
   const foeSpec = opts.foe || { name: 'a stranger', power: combatPower(c) };
 
   const me = sideTemplate(c.name, combatPower(c, { form: null }), {
+    speedStat: c.stats.speed,
+    instinct: c.battleInstinct ?? 50,
     ki: c.vitals.ki,
     kiMax: Math.max(20, c.vitals.kiMax),
     infiniteStamina: hasPerk(c, 'infiniteStamina'),
@@ -7473,6 +7559,9 @@ function createBattle(state, rng, opts = {}) {
   me.hpMax = 100;
 
   const them = sideTemplate(foeSpec.name, Math.max(1, foeSpec.power), {
+    speedStat: foeSpec.speedStat ?? 50,
+    instinct: foeSpec.instinct ?? 50,
+    voice: foeSpec.voice || null,
     techniques: foeSpec.techniques || [],
     forms: foeSpec.forms || [],
     raceId: foeSpec.raceId || 'other',
@@ -7500,6 +7589,9 @@ function createBattle(state, rng, opts = {}) {
     fled: false,
     surrendered: false,
     protecting: !!opts.protecting,
+    // How much of yourself you are using. Holding back keeps a fight going,
+    // tests somebody without ending them, and is how half the cast fights.
+    restraint: opts.restraint ?? (opts.stakes === 'spar' ? 0.5 : 1),
     // Tournament rules. A ring changes what winning means: you do not have to
     // put somebody down, you have to put them outside.
     ringOut: !!(opts.context && opts.context.ringOut),
@@ -7508,16 +7600,25 @@ function createBattle(state, rng, opts = {}) {
   };
 }
 
-function effectivePower(side) {
+function effectivePower(side, battle) {
   const form = side.form ? getTransformation(side.form) : null;
   const mult = form ? form.mult : 1;
   const condition = clamp(0.45 + (side.hp / side.hpMax) * 0.55, 0.45, 1);
   const kiFactor = clamp(0.6 + (side.ki / Math.max(1, side.kiMax)) * 0.4, 0.6, 1);
-  return Math.max(1, side.basePower * mult * condition * kiFactor);
+  // Whatever you are keeping in reserve does not land on them.
+  const held = battle && side === battle.me ? (battle.restraint ?? 1) : 1;
+  return Math.max(1, side.basePower * mult * condition * kiFactor * held);
 }
 
-function ratioOf(attacker, defender) {
-  return effectivePower(attacker) / Math.max(1, effectivePower(defender));
+/** The gap that decides whether somebody can be touched at all. */
+function speedGap(a, b) {
+  const mine = (a.speedStat ?? 50) * (a.form ? 1.4 : 1);
+  const theirs = (b.speedStat ?? 50) * (b.form ? 1.4 : 1);
+  return mine / Math.max(1, theirs);
+}
+
+function ratioOf(attacker, defender, battle) {
+  return effectivePower(attacker, battle) / Math.max(1, effectivePower(defender, battle));
 }
 
 /** Damage scaling: power dominates, but never to the point of certainty. */
@@ -7573,7 +7674,33 @@ function battleActions(state, battle) {
   }
 
   out.push({ id: 'guard', kind: 'defend', label: 'Guard', hint: 'Cut the next hit hard, recover stamina' });
-  out.push({ id: 'charge', kind: 'defend', label: 'Charge ki', hint: 'Big ki gain, and they get a free swing' });
+  // Charging is not a free hit for them if you are far enough ahead: at that
+  // gap you are simply not where the punch lands.
+  const foe = battle.them;
+  const edge = speedGap(me, foe) * Math.pow(ratioOf(me, foe, battle), 0.25);
+  out.push({
+    id: 'charge', kind: 'defend', label: 'Charge ki',
+    hint: edge > 1.8 ? 'You can afford to. They will not reach you.'
+      : edge > 1.2 ? 'Risky. You are faster, but not by much.'
+        : 'Big ki gain, and they get a free swing.',
+  });
+
+  // How much of yourself you are using. This is how you test somebody, drag a
+  // fight out, or stop pretending.
+  const held = battle.restraint ?? 1;
+  const steps = [
+    { v: 0.25, label: 'Barely trying', hint: 'A quarter of you. They will think they are doing well.' },
+    { v: 0.5, label: 'Hold back', hint: 'Half. Enough to test them properly.' },
+    { v: 0.75, label: 'Most of it', hint: 'Nearly everything.' },
+    { v: 1, label: 'Stop holding back', hint: 'All of it. No more of this.' },
+  ];
+  for (const step of steps) {
+    if (Math.abs(step.v - held) < 0.01) continue;
+    out.push({
+      id: 'restraint:' + step.v, kind: 'stance',
+      label: step.label, hint: step.hint,
+    });
+  }
 
   for (const key of Object.keys(STANCES)) {
     if (key === me.stance) continue;
@@ -7634,6 +7761,11 @@ function battleActions(state, battle) {
   if (battle.stakes !== 'spar') {
     out.push({ id: 'surrender', kind: 'move', label: 'Yield', hint: 'Stop fighting. Hope they accept it.' });
   }
+  if (battle.them.voice) {
+    for (const r of REPLIES) {
+      out.push({ id: 'say:' + r.id, kind: 'talk', label: r.label, hint: r.text || 'Let it stand.' });
+    }
+  }
 
   return out;
 }
@@ -7671,7 +7803,7 @@ function applyUpkeep(side, lines) {
 function strike(attacker, defender, battle, rng, spec) {
   const stance = stanceOf(attacker);
   const dstance = stanceOf(defender);
-  const ratio = ratioOf(attacker, defender);
+  const ratio = ratioOf(attacker, defender, battle);
 
   let hitChance = (spec.hit ?? 0.85) * stance.atk;
   hitChance -= dstance.dodge;
@@ -7736,7 +7868,7 @@ function foeTurn(state, battle, rng) {
   const me = battle.me;
   const lines = [];
   const hurt = them.hp / them.hpMax;
-  const losing = ratioOf(them, me) < 0.8;
+  const losing = ratioOf(them, me, battle) < 0.8;
 
   // Escalate: transform when hurt or outmatched.
   if (them.forms.length && !them.form && (hurt < 0.6 || losing) && rng.chance(0.55)) {
@@ -7756,7 +7888,7 @@ function foeTurn(state, battle, rng) {
   if (battle.ringOut && !battle.over) {
     const meOff = me.staggered > 0 || me.blinded > 0 || me.hp <= me.hpMax * 0.45;
     if (meOff && rng.chance(0.42)) {
-      const chance = clamp(0.3 + Math.pow(ratioOf(them, me), 0.3) * 0.28
+      const chance = clamp(0.3 + Math.pow(ratioOf(them, me, battle), 0.3) * 0.28
         + (me.staggered ? 0.18 : 0) + (1 - me.hp / me.hpMax) * 0.22, 0.1, 0.9);
       if (rng.chance(chance)) {
         lines.push(`${them.name} gets under you and puts you over the edge. You land outside the ring.`);
@@ -7816,7 +7948,7 @@ function finish(state, battle, rng, outcome) {
   }
   if (outcome === 'lost') {
     c.flags.fury = true;
-    if (ratioOf(battle.them, battle.me) > 4) c.flags.humiliated = true;
+    if (ratioOf(battle.them, battle.me, battle) > 4) c.flags.humiliated = true;
     if (battle.protecting) c.flags.protected_someone = true;
   }
   return battle;
@@ -7856,13 +7988,53 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
         me.formName = form.name;
         me.ki = Math.max(0, me.ki - form.drain);
         lines.push(`${form.name}. ${form.desc}`);
-        if (them.hp / them.hpMax > 0.5) lines.push(`${them.name} ${rng.pick(['takes a step back', 'stops smiling', 'says nothing', 'looks at you differently'])}.`);
+        const said = voiceLine(battle, rng, 'form');
+        if (said) lines.push(said);
+        else if (them.hp / them.hpMax > 0.5) {
+          lines.push(`${them.name} ${rng.pick(['takes a step back', 'stops smiling', 'says nothing', 'looks at you differently'])}.`);
+        }
       }
     }
+  } else if (actionId.startsWith('say:')) {
+    const reply = REPLIES.find((r) => r.id === actionId.slice(4));
+    if (reply) {
+      if (reply.text) lines.push(`You: ${reply.text}`);
+      const e = reply.effect;
+      if (e.theirRage) {
+        them.stance = e.theirRage > 0 ? 'aggressive' : 'defensive';
+        lines.push(e.theirRage > 0
+          ? `${them.name} comes at you harder for that.`
+          : `${them.name} steadies. Whatever that was, it landed.`);
+      }
+      if (e.myFocus) me.ki = clamp(me.ki + e.myFocus, 0, me.kiMax);
+      if (e.surrender && them.hp / them.hpMax < 0.4 && rng.chance(e.surrender * 3)) {
+        lines.push(`${them.name} stops. "...All right. All right."`);
+        return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
+      }
+    }
+  } else if (actionId.startsWith('restraint:')) {
+    const to = Number(actionId.slice(10));
+    const was = battle.restraint ?? 1;
+    battle.restraint = clamp(to, 0.15, 1);
+    lines.push(to > was
+      ? rng.pick([
+        'You stop holding back.',
+        'You stop being careful with them.',
+        'Whatever you were keeping back, you stop keeping it back.',
+      ])
+      : rng.pick([
+        'You ease off. Let us see what they do with the room.',
+        'You take it down a level and wait.',
+        'You stop trying to finish it.',
+      ]));
+    if (to < was && them.hp / them.hpMax > 0.5) {
+      lines.push(voiceLine(battle, rng, 'insulted') || `${them.name} notices, and does not thank you for it.`);
+    }
+    skipFoe = false;
   } else if (actionId === 'ringout') {
     // Strength and technique against their weight and whatever balance they
     // have left. Failing it puts you in a bad spot, which is the trade.
-    const ratio = ratioOf(me, them);
+    const ratio = ratioOf(me, them, battle);
     const chance = clamp(0.32 + Math.pow(ratio, 0.3) * 0.28
       + (them.staggered ? 0.18 : 0) + (them.blinded ? 0.14 : 0)
       + (1 - them.hp / them.hpMax) * 0.25, 0.1, 0.94);
@@ -7926,10 +8098,24 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
     me.stamina = clamp(me.stamina + 22, 0, me.staminaMax);
     lines.push('You cover up and wait for it.');
   } else if (actionId === 'charge') {
-    me.ki = clamp(me.ki + 34, 0, me.kiMax);
-    me.charged = Math.min(3, me.charged + 1);
-    freeSwing = true;
-    lines.push('You plant your feet and pull everything inward. The air goes tight.');
+    // Somebody far enough ahead in speed and power simply is not there when
+    // the punch arrives. This is the whole point of Ultra Instinct.
+    const edge = speedGap(me, them) * Math.pow(ratioOf(me, them, battle), 0.25);
+    if (edge > 1.8 || (me.form && /Ultra Instinct/.test(me.formName || ''))) {
+      me.ki = clamp(me.ki + 34 + Math.round(c.stats.kiControl * 0.4), 0, me.kiMax);
+      lines.push(rng.pick([
+        'You stand still and gather. They come, and you are not where they swing.',
+        'You do not even watch them. Your body moves and the rest of you charges.',
+        `${them.name} throws everything at where you were.`,
+      ]));
+      me.charged = Math.min(3, me.charged + 1);
+      skipFoe = true;
+    } else {
+      me.ki = clamp(me.ki + 34, 0, me.kiMax);
+      me.charged = Math.min(3, me.charged + 1);
+      freeSwing = true;
+      lines.push('You plant your feet and pull everything inward. The air goes tight.');
+    }
   } else if (actionId === 'senzu') {
     if (c.senzu > 0) {
       c.senzu -= 1;
@@ -7946,7 +8132,7 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
     lines.push('You take hold of them and the city is simply not there any more. Bare rock, no witnesses, nothing left to break that matters.');
   } else if (actionId === 'flee') {
     const speedEdge = (c.stats.speed || 50) / 100 + (c.techniques.includes('instant_transmission') ? 1 : 0);
-    const chance = clamp(0.25 + speedEdge * 0.4 - Math.log10(Math.max(1, ratioOf(them, me))) * 0.2, 0.05, 0.95);
+    const chance = clamp(0.25 + speedEdge * 0.4 - Math.log10(Math.max(1, ratioOf(them, me, battle))) * 0.2, 0.05, 0.95);
     if (rng.chance(chance)) {
       lines.push('You break off and go, and they do not follow.');
       return { lines, over: true, outcome: finish(state, battle, rng, 'fled').outcome };
@@ -7964,6 +8150,8 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
   }
 
   if (them.hp <= 0) {
+    const parting = voiceLine(battle, rng, 'beaten');
+    if (parting) lines.push(parting);
     lines.push(`${them.name} goes down and does not get back up.`);
     return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
   }
@@ -7978,6 +8166,13 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
   if (me.hp <= 0) {
     lines.push('Everything goes white at the edges.');
     return { lines, over: true, outcome: finish(state, battle, rng, 'lost').outcome };
+  }
+
+  // They talk while it happens, which is most of what a Dragon Ball fight is.
+  if (battle.round % 3 === 0) {
+    const state2 = them.hp / them.hpMax;
+    const said = voiceLine(battle, rng, state2 < 0.35 ? 'losing' : me.hp / me.hpMax < 0.45 ? 'winning' : 'hurt');
+    if (said) lines.push(said);
   }
 
   applyUpkeep(me, lines);
@@ -8002,23 +8197,23 @@ function battleStatus(battle) {
       hp: Math.round(battle.me.hp), ki: Math.round(battle.me.ki),
       stamina: Math.round(battle.me.stamina), kiMax: Math.round(battle.me.kiMax),
       form: battle.me.formName, stance: STANCES[battle.me.stance].name,
-      power: Math.round(effectivePower(battle.me)),
+      power: Math.round(effectivePower(battle.me, battle)),
     },
     them: {
       name: battle.them.name,
       hp: Math.round(battle.them.hp), ki: Math.round(battle.them.ki),
       form: battle.them.formName, stance: STANCES[battle.them.stance].name,
-      power: Math.round(effectivePower(battle.them)),
-      tier: powerTier(effectivePower(battle.them)),
+      power: Math.round(effectivePower(battle.them, battle)),
+      tier: powerTier(effectivePower(battle.them, battle)),
     },
     destruction: Math.round(battle.destruction),
     civilians: battle.civilians,
-    gap: ratioOf(battle.me, battle.them),
+    gap: ratioOf(battle.me, battle.them, battle),
   };
 }
 
 function describeMatchup(battle) {
-  const r = ratioOf(battle.me, battle.them);
+  const r = ratioOf(battle.me, battle.them, battle);
   if (r > 30) return 'They are not in your class and you both know it.';
   if (r > 6) return 'You are clearly stronger.';
   if (r > 1.6) return 'You have the edge.';
@@ -8173,7 +8368,7 @@ function autoResolve(state, rng, battle) {
   }
   return battle;
 }
-  return { STANCES, createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, autoResolve };
+  return { voiceLine, REPLIES, STANCES, createBattle, speedGap, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, autoResolve };
 })();
 
 /* ==== engine/events/helpers.js ==== */
@@ -8391,6 +8586,18 @@ function tierOf(power) {
  * the UI (the soak harness, tests, background brackets). Either way the caller
  * gets a `text` it can show and the world gets the same consequences.
  */
+/** How somebody sounds in a fight, taken from who they are. */
+function voiceFor(foe, ctx) {
+  const canon = foe.canonId ? getCanon(foe.canonId) : null;
+  const temperament = (canon && canon.temperament) || foe.temperament || '';
+  const tags = (canon && canon.tags) || foe.tags || [];
+  if (/cruel|cold|capricious|vain/.test(temperament) || tags.includes('villain') || tags.includes('emperor')) return 'cruel';
+  if (/cheerful|earnest|childish|warm|brash/.test(temperament) || tags.includes('comic')) return 'cheerful';
+  if (/proud|fierce|prickly|unstable/.test(temperament) || tags.includes('rival') || tags.includes('saiyan')) return 'proud';
+  if (/timid|shy|coward/.test(temperament)) return 'frightened';
+  return 'professional';
+}
+
 function offerBattle(ctx, foe, opts = {}) {
   const spec = {
     foe,
@@ -8399,6 +8606,8 @@ function offerBattle(ctx, foe, opts = {}) {
     protecting: !!opts.protecting,
     placeId: opts.placeId || ctx.character.placeId,
     intro: opts.intro || '',
+    voice: opts.voice || voiceFor(foe, ctx),
+    speedStat: foe.speedStat ?? (foe.stats && foe.stats.speed) ?? 50,
     context: {
       reason: opts.reason || 'fight',
       npcId: opts.npcId || foe.npcId || null,
@@ -16519,6 +16728,311 @@ registerEvents([
 ]);
 })();
 
+/* ==== engine/conversation.js ==== */
+const __mod_engine_conversation_js = (function () {
+// What you talk about, and how it sounds.
+//
+// Every conversation in the game used to read the same: two people of
+// unspecified ages sitting somewhere having an uncomplicated afternoon. A
+// nought-year-old was catching up with their mother like old friends.
+//
+// A conversation now has a topic, and which topics are open depends on how old
+// you are, who they are to you, how well you know each other, and what species
+// you both are. A small child asks their father to show them something. A
+// grown one who left comes back and asks about the planet.
+
+const { clamp } = __mod_engine_rng_js;
+const { render } = __mod_engine_text_js;
+const { maturity, getRace } = __mod_data_races_js;
+const { getCanon } = __mod_data_canon_js;
+const { getPlace } = __mod_data_places_js;
+const { eraName } = __mod_data_timeline_js;
+
+/**
+ * Topics. `when` decides whether a topic is open at all; `weight` decides how
+ * likely it is to come up when the game picks for you.
+ *
+ *   minAge / maxAge  - your biological age
+ *   relations        - who they have to be to you
+ *   reveals          - what you learn: knowledge, a fact, a technique, a stat
+ */
+const TOPICS = [
+  // ------------------------------------------------------ very small
+  {
+    id: 'be_carried', name: 'Be near them', minAge: 0, maxAge: 3, weight: 8,
+    relations: ['parent', 'sibling', 'mentor', 'friend'],
+    lines: [
+      '{You do not have words yet|Nothing is said, because you cannot|You have no idea what any of it means}. '
+      + '{[who] talks anyway, the whole time|[who] carries you about and keeps up a commentary|[who] tells you things you will not remember}.',
+      '{You are handed between people|Somebody is always holding you|You sleep through most of it}. '
+      + '{[who] is the one who is always there|You know [who] by smell before you know them by face}.',
+    ],
+    effect: { closeness: 12, trust: 8, happiness: 6 },
+  },
+  {
+    id: 'tantrum', name: 'Make it their problem', minAge: 1, maxAge: 5, weight: 5,
+    relations: ['parent', 'sibling'],
+    lines: [
+      '{You scream until something happens|You will not be put down|You have discovered volume}. '
+      + '{[who] holds out for about nine minutes|It works, which teaches you something unhelpful|[who] does not give in, and you respect that later}.',
+    ],
+    effect: { closeness: 3, tension: 5, happiness: 4 },
+  },
+  {
+    id: 'show_me', name: 'Ask them to show you something', minAge: 3, maxAge: 13, weight: 9,
+    relations: ['parent', 'sibling', 'mentor', 'friend'],
+    lines: [
+      '{You want to see it again|You ask about forty times|You will not stop asking}. '
+      + '{[who] shows you how to hold your hands|[who] makes you do it slowly, which is unbearable|[who] laughs and shows you anyway}. '
+      + '{You get it wrong for a year|It is the first real thing anybody teaches you|You practise it on a wall until somebody stops you}.',
+    ],
+    effect: { closeness: 10, respect: 6 },
+    teaches: 'stat',
+  },
+  {
+    id: 'why_questions', name: 'Ask why about everything', minAge: 3, maxAge: 10, weight: 7,
+    relations: ['parent', 'sibling', 'mentor', 'friend', 'acquaintance'],
+    lines: [
+      '{You ask why until they run out|Every answer produces two more questions|You are relentless}. '
+      + '{[who] gets as far as the third why and gives up|[who] answers all of them, seriously, which nobody has ever done for them|[who] starts making things up around the fifth one}.',
+    ],
+    effect: { closeness: 8, stats: { intellect: 2 } },
+  },
+
+  // ---------------------------------------------------------- growing up
+  {
+    id: 'ask_about_race', name: 'Ask what we are', minAge: 6, weight: 8,
+    relations: ['parent', 'sibling', 'mentor', 'elder'],
+    sameRace: true,
+    lines: [
+      '{You want to know what we are|You have worked out you are not like the others here|Somebody said a word and you want to know what it meant}. '
+      + '[who] {tells you properly|takes a long time getting to it|does not soften any of it}. [loreLine]',
+    ],
+    effect: { closeness: 8, knowledge: 1, stats: { intellect: 2 } },
+    lore: 'race',
+  },
+  {
+    id: 'ask_before', name: 'Ask what it was like before', minAge: 8, weight: 9,
+    relations: ['parent', 'sibling', 'mentor', 'elder', 'friend'],
+    lines: [
+      '{You ask about before you were born|You want to know what it was like|You have never asked and you ask now}. '
+      + '[who] {is quiet for a while first|starts somewhere else entirely and works back|answers like they have been waiting years for somebody to ask}. [loreLine]',
+    ],
+    effect: { closeness: 12, trust: 8, knowledge: 1 },
+    lore: 'past',
+  },
+  {
+    id: 'ask_about_them', name: 'Ask about them, not you', minAge: 10, weight: 8,
+    relations: ['parent', 'sibling', 'mentor', 'friend', 'spouse', 'lover', 'student', 'acquaintance'],
+    lines: [
+      '{You ask about them for once|It occurs to you that you have never asked|You want to know who they were before you}. '
+      + '[who] {is thrown by it|talks for two hours|tells you one thing and then stops, and the one thing is enormous}. [selfLine]',
+    ],
+    effect: { closeness: 14, trust: 12, knowledge: 1 },
+    lore: 'self',
+  },
+  {
+    id: 'argue', name: 'Have it out', minAge: 12, weight: 6,
+    relations: ['parent', 'sibling', 'spouse', 'rival', 'friend'],
+    lines: [
+      '{It has been building|You say the thing you have been not saying|Neither of you was planning this}. '
+      + '{It goes badly and then it goes somewhere|You both say too much|Somebody walks out and comes back}. '
+      + '{You understand each other better and like each other less|It clears something|Nothing is resolved and everything is different}.',
+    ],
+    effect: { closeness: 6, tension: -14, trust: 10, happiness: -6 },
+  },
+  {
+    id: 'advice', name: 'Ask what you should do', minAge: 12, weight: 7,
+    relations: ['parent', 'mentor', 'elder', 'friend', 'spouse'],
+    lines: [
+      '{You do not know what to do and you say so|You ask outright|It costs you something to ask}. '
+      + '[who] {does not tell you what to do, which is worse|tells you exactly what to do and is right|says the thing you already knew}.',
+    ],
+    effect: { closeness: 10, trust: 10, stats: { discipline: 2, intellect: 2 } },
+  },
+
+  // ------------------------------------------------------------- grown
+  {
+    id: 'catch_up', name: 'Catch up', minAge: 17, weight: 8,
+    relations: ['parent', 'sibling', 'friend', 'mentor', 'student', 'acquaintance'],
+    needsGap: true,
+    lines: [
+      '{You have not seen them in years|It has been long enough to be awkward|You almost do not go}. '
+      + '{You pick it up somewhere near where you left it|They look older and so do you|The first ten minutes are terrible and then it is fine}. '
+      + '{Neither of you says the years out loud|You leave meaning to come back sooner|It is easier than you had made it in your head}.',
+    ],
+    effect: { closeness: 16, trust: 8, happiness: 10 },
+  },
+  {
+    id: 'talk_shop', name: 'Talk about the work', minAge: 15, weight: 7,
+    relations: ['mentor', 'student', 'rival', 'friend', 'spouse'],
+    lines: [
+      '{You talk about it properly|Two people who do the same thing, talking about the thing|It gets technical fast}. '
+      + '{You disagree about something small for an hour|They are right about one thing and you will not admit it|You both come away with something}.',
+    ],
+    effect: { closeness: 8, respect: 12, stats: { technique: 2, kiControl: 1 } },
+  },
+  {
+    id: 'the_world', name: 'Talk about what is happening', minAge: 12, weight: 7,
+    relations: ['parent', 'sibling', 'friend', 'mentor', 'spouse', 'acquaintance', 'student', 'rival'],
+    lines: [
+      '{You talk about what is going on|Neither of you can do anything about any of it|It is all anyone is talking about}. '
+      + '[worldLine] {Neither of you has a plan|They are more frightened than they are letting on|You are both pretending this is a normal conversation}.',
+    ],
+    effect: { closeness: 8, stats: { intellect: 2 } },
+    lore: 'world',
+  },
+  {
+    id: 'the_dead', name: 'Talk about the ones who are gone', minAge: 12, weight: 6,
+    relations: ['parent', 'sibling', 'spouse', 'friend', 'mentor'],
+    needsDead: true,
+    lines: [
+      '{Their name comes up|Somebody mentions them and the room changes|You bring it up, which surprises you both}. '
+      + '{You talk about [lost] for a long time|Neither of you cries and it is close|You laugh about something they did, which helps}. '
+      + '{It is the first time either of you has said the name out loud in years|You should do this more often|Nobody else remembers them the same way}.',
+    ],
+    effect: { closeness: 20, trust: 16, happiness: -4 },
+  },
+  {
+    id: 'quiet', name: 'Sit with them and say nothing', minAge: 14, weight: 5,
+    relations: ['spouse', 'lover', 'parent', 'friend', 'sibling', 'mentor'],
+    lines: [
+      '{Neither of you says much|You sit outside until it gets dark|It is not a conversation and it is not nothing}. '
+      + '{This is what it is with them|You do not have to be interesting|It is the easiest hour of your week}.',
+    ],
+    effect: { closeness: 12, trust: 10, happiness: 12 },
+  },
+  {
+    id: 'children_talk', name: 'Talk about the children', minAge: 20, weight: 6,
+    relations: ['spouse', 'parent', 'sibling'],
+    needsChild: true,
+    lines: [
+      '{You talk about [child]|Neither of you knows what you are doing|You compare notes on somebody who cannot hear you}. '
+      + '{They are worried about something you had not noticed|You agree on almost nothing and it does not matter|It turns out you are both frightened of the same thing}.',
+    ],
+    effect: { closeness: 14, trust: 12 },
+  },
+  {
+    id: 'old_talk', name: 'Talk like people who have known each other a long time', minAge: 45, weight: 6,
+    relations: ['spouse', 'friend', 'sibling', 'rival', 'mentor', 'student'],
+    lines: [
+      '{You have had this conversation eleven times|Neither of you minds|It is not about the content}. '
+      + '{They finish two of your sentences and get one wrong|You have run out of new things and it is fine|There is nobody left who remembers what you both remember}.',
+    ],
+    effect: { closeness: 14, trust: 12, happiness: 10 },
+  },
+];
+
+/** Filled in from the world, so a topic says something true. */
+function loreFor(state, npc, kind) {
+  const c = state.character;
+  const year = c.birthYear + c.age;
+  const race = getRace(c.raceId);
+
+  if (kind === 'race') {
+    return {
+      saiyan: `"We were a warrior race. We were also somebody else's army, and most people leave that part out. `
+        + `Before the Cold Empire there was Sadala, and before Sadala there was a Saiyan called Yamoshi who went further than anyone since. `
+        + `They still tell it as a warning."`,
+      halfsaiyan: `"Half of you comes from a people who conquered for a living, and the other half from a planet that never noticed. `
+        + `That is not a weakness. Every one of you has gone further than the pure-blooded ones expected."`,
+      namekian: `"We were one people on one world and then we were almost none. Everything you know, somebody chose to keep. `
+        + `The dragon, the language, the way you hold your hands - all of it came through a very narrow gap."`,
+      frostdemon: `"Our family has ruled longer than most species have existed. That is not a boast, it is a burden, `
+        + `and it is why nobody in it has ever had to work at anything."`,
+      earthling: `"We are not the strongest thing on this planet, let alone off it. What we have is technique, `
+        + `and about four hundred years of people refusing to accept that."`,
+      majin: `"There was one of you before there was anything else. That is as much as anybody will tell you, `
+        + `and most of them will not say it twice."`,
+      android: `"Somebody built you and had reasons. Those reasons were theirs, not yours."`,
+      shinjin: `"We are grown from a tree, and the tree is older than the universe it stands in."`,
+    }[c.raceId] || `"There is not much written down about what we are. Most of what I know, somebody told me the way I am telling you."`;
+  }
+
+  if (kind === 'past') {
+    if (c.flags.homeworld_destroyed) {
+      return `"There was a planet. Red sky, gravity that would put you on your knees, and about a million of us. `
+        + `It is not there any more and nobody talks about the day properly. I was not on it. That is the whole reason I am here."`;
+    }
+    return `"${eraName(year - c.age)}. It was quieter, or it was not and I was younger. `
+      + `Half the people I could name for you are dead and the other half you have met."`;
+  }
+
+  if (kind === 'self') {
+    const canon = npc.canonId ? getCanon(npc.canonId) : null;
+    if (canon && canon.personality) return `"${canon.personality}"`;
+    const bits = [];
+    if (npc.kin && npc.kin.lost) bits.push(`They mention ${npc.kin.lost} once and do not go back to it.`);
+    if (npc.goal) bits.push(`What they want, it turns out, is ${npc.goal}.`);
+    if (npc.wall) bits.push('They admit they have been stuck on the same thing for years.');
+    return bits.join(' ') || 'It turns out you had them completely wrong about one thing.';
+  }
+
+  if (kind === 'world') {
+    const place = getPlace(c.placeId);
+    return `${eraName(year)}. ${place.desc}`;
+  }
+  return '';
+}
+
+/**
+ * The topics open between these two people right now. Order is by weight, so
+ * the caller can offer the whole list or let the game pick.
+ */
+function topicsFor(state, npc) {
+  const c = state.character;
+  const bio = maturity(c);
+  const year = c.birthYear + c.age;
+  const gap = year - (npc.lastSeen || year);
+  const dead = Object.values(state.npcs).filter((n) => !n.alive);
+  const kids = Object.values(state.npcs).filter((n) => n.alive && n.relation === 'child');
+
+  return TOPICS.filter((t) => {
+    if (bio < (t.minAge ?? 0)) return false;
+    if (t.maxAge !== undefined && bio > t.maxAge) return false;
+    if (t.relations && !t.relations.includes(npc.relation)) return false;
+    if (t.sameRace && npc.raceId !== c.raceId) return false;
+    if (t.needsDead && !dead.length) return false;
+    if (t.needsChild && !kids.length) return false;
+    if (t.needsGap && gap < 3) return false;
+    return true;
+  }).sort((a, b) => (b.weight || 1) - (a.weight || 1));
+}
+
+/** Have the conversation. Returns text and the changes to apply. */
+function converse(state, rng, npc, topicId) {
+  const topic = TOPICS.find((t) => t.id === topicId) || topicsFor(state, npc)[0];
+  if (!topic) return null;
+  const c = state.character;
+  const dead = Object.values(state.npcs).filter((n) => !n.alive);
+  const kids = Object.values(state.npcs).filter((n) => n.alive && n.relation === 'child');
+
+  const view = {
+    who: npc.name,
+    lost: dead.length ? rng.pick(dead).name : 'them',
+    child: kids.length ? rng.pick(kids).name : 'the child',
+    loreLine: topic.lore ? loreFor(state, npc, topic.lore) : '',
+    selfLine: topic.lore === 'self' ? loreFor(state, npc, 'self') : '',
+    worldLine: topic.lore === 'world' ? loreFor(state, npc, 'world') : '',
+  };
+  const text = render(rng.pick(topic.lines), view, rng);
+  npc.lastSeen = c.birthYear + c.age;
+  return { topic, text, effect: topic.effect || {} };
+}
+
+/** A one-line description of what this topic is, for the button. */
+function topicHint(state, npc, topic) {
+  const bio = maturity(state.character);
+  if (topic.maxAge !== undefined && topic.maxAge <= 5) return 'You have no words yet.';
+  if (topic.lore === 'race') return `What ${getRace(state.character.raceId).short}s are.`;
+  if (topic.lore === 'past') return 'What it was like before you.';
+  if (topic.lore === 'self') return `Who ${npc.name} was before you.`;
+  if (topic.id === 'catch_up') return 'It has been years.';
+  return topic.name;
+}
+  return { TOPICS, topicsFor, converse, topicHint };
+})();
+
 /* ==== engine/trials.js ==== */
 const __mod_engine_trials_js = (function () {
 // Trials: the small playable tests that sit behind training, learning a
@@ -16556,6 +17070,20 @@ const TRIAL_KINDS = {
     blurb: 'Push, and choose when to stop. Every push is worth more and costs more.',
     stat: 'discipline',
   },
+  // Meditation is not a test of reflex or grit. It is a test of not doing the
+  // thing you keep doing, which needs its own shape.
+  stillness: {
+    name: 'Stillness',
+    blurb: 'Your mind will drift. Notice it and come back, without chasing it.',
+    stat: 'kiControl',
+  },
+  // A Great Ape is a transformation you are inside rather than one you use.
+  // The minigame is not about winning; it is about steering.
+  rampage: {
+    name: 'The Moon',
+    blurb: 'You are ten times the size and none of the mind. Steer what you can.',
+    stat: 'discipline',
+  },
 };
 
 /** Which trial suits which kind of work. */
@@ -16563,7 +17091,7 @@ const STAT_TRIALS = {
   strength: { kind: 'push', method: 'Weighted holds and throws until the arms give out.' },
   speed: { kind: 'timing', method: 'Catching thrown stones blindfolded.' },
   technique: { kind: 'sequence', method: 'Forms, drilled until the sequence is automatic.' },
-  kiControl: { kind: 'timing', method: 'Holding a ki sphere at an exact size for as long as it takes.' },
+  kiControl: { kind: 'stillness', method: 'Sitting with it until the noise stops being interesting.' },
   durability: { kind: 'endurance', method: 'Standing in it and refusing to fall over.' },
   intellect: { kind: 'sequence', method: 'Reading, calculating, and remembering what you read.' },
   charisma: { kind: 'sequence', method: 'Talking to people on purpose, which is its own discipline.' },
@@ -16905,6 +17433,7 @@ const { unlockableForms, tryUnlockForm, nearbyForms } = __mod_engine_progression
 const { getPlace, PLACES } = __mod_data_places_js;
 const { shopStock, getItem, ITEMS } = __mod_data_items_js;
 const { buyItem, valueHere, hasItem } = __mod_engine_inventory_js;
+const { topicsFor, converse } = __mod_engine_conversation_js;
 const { currencyFor, formatMoney, balance } = __mod_data_currency_js;
 const { CAREERS, getCareer, careersFor } = __mod_data_jobs_js;
 const { getRace, hasPerk } = __mod_data_races_js;
@@ -16976,11 +17505,19 @@ const ACTIONS = [
   },
   {
     id: 'meditate', maxPerYear: 4, minMaturity: 5, tooYoung: 'Sitting still on purpose is beyond you yet.', slots: 1, name: 'Meditate', cat: 'mind', cost: 'A season',
-    desc: 'Ki control, discipline and a calmer head.',
+    desc: 'Ki control, discipline and a calmer head. Harder than it sounds.',
     available: () => true,
     run: (s, rng) => {
-      adjust(s, { stats: { kiControl: 2, discipline: 2, intellect: 1 }, happiness: 6, ki: 999, health: 4 });
-      return { text: render(`{You sit for a long time|Nothing but breathing|You stop|Stillness}. {Your ki settles|The noise drops away|Something unknots}.`, {}, rng) };
+      const difficulty = clamp(1 + Math.floor((s.character.stats.kiControl || 50) / 24), 1, 5);
+      const trial = startTrial(s, rng, {
+        kind: 'stillness',
+        difficulty,
+        purpose: 'training',
+        label: 'Stillness',
+        blurb: 'Your mind will drift. Notice it and come back, without chasing it.',
+        payload: { stat: 'kiControl' },
+      });
+      return { text: 'You sit down and stop doing anything, which is the difficult part.', trial };
     },
   },
   {
@@ -17014,7 +17551,7 @@ const ACTIONS = [
       const form = getTransformation(formId);
       if (!form) return { text: 'There is nothing to reach for.' };
       const trial = startTrial(s, rng, {
-        kind: form.tier >= 8 ? 'endurance' : 'push',
+        kind: form.id === 'oozaru' || form.id === 'golden_oozaru' ? 'rampage' : form.tier >= 8 ? 'endurance' : 'push',
         difficulty: clamp(Math.ceil(form.tier / 2.6), 1, 5),
         purpose: 'form',
         label: form.name,
@@ -17152,14 +17689,34 @@ const ACTIONS = [
     id: 'spend_time', maxPerYear: 6, slots: 1, name: 'Spend time with someone', cat: 'social', cost: 'A season',
     desc: 'Closeness is the only thing that does not decay on its own.',
     available: (s) => livingNpcs(s).length > 0,
-    options: (s) => livingNpcs(s).slice(0, 20).map((n) => ({ id: n.id, label: n.name, hint: `${relationLabel(n)} - bond ${bondScore(n)}` })),
+    options: (s) => livingNpcs(s).slice(0, 20).map((n) => {
+      const open = topicsFor(s, n);
+      return {
+        id: n.id,
+        label: n.name,
+        hint: open.length
+          ? `${relationLabel(n)} - ${open[0].name.toLowerCase()}`
+          : `${relationLabel(n)} - nothing to say yet`,
+      };
+    }),
     run: (s, rng, params) => {
       const npc = params && params.option ? findNpc(s, params.option) : null;
       if (!npc) return { text: 'There is nobody in particular.' };
-      npc.closeness = clamp(npc.closeness + rng.int(8, 18), 0, 100);
-      npc.tension = clamp(npc.tension - rng.int(2, 8), 0, 100);
-      adjust(s, { happiness: 8 });
-      return { text: render(`{You spend the season with|You go and see|You make time for} ${npc.name}. {It is uncomplicated|Neither of you talks about anything important|It helps}.`, {}, rng) };
+      // What you can talk about depends on how old you are and who they are.
+      const out = converse(s, rng, npc);
+      if (!out) {
+        npc.closeness = clamp(npc.closeness + rng.int(4, 9), 0, 100);
+        adjust(s, { happiness: 5 });
+        return { text: render(`{You are near them for a while|Nothing is said|You keep them company}.`, {}, rng) };
+      }
+      const e = out.effect;
+      if (e.closeness) npc.closeness = clamp(npc.closeness + e.closeness, 0, 100);
+      if (e.trust) npc.trust = clamp((npc.trust ?? 30) + e.trust, 0, 100);
+      if (e.respect) npc.respect = clamp((npc.respect || 0) + e.respect, 0, 100);
+      if (e.tension) npc.tension = clamp((npc.tension || 0) + e.tension, 0, 100);
+      if (e.knowledge) npc.knowledge = Math.min(4, (npc.knowledge || 0) + e.knowledge);
+      adjust(s, { happiness: e.happiness ?? 6, stats: e.stats || {} });
+      return { text: out.text };
     },
   },
   {
@@ -19039,7 +19596,10 @@ function playTrial(trial, onDone) {
   stage.innerHTML = '';
   foot.innerHTML = '';
 
-  const runners = { timing: runTiming, sequence: runSequence, endurance: runEndurance, push: runPush };
+  const runners = {
+    timing: runTiming, sequence: runSequence, endurance: runEndurance, push: runPush,
+    stillness: runStillness, rampage: runRampage,
+  };
   (runners[trial.kind] || runTiming)(trial, stage, foot, onDone);
 }
 
@@ -19274,6 +19834,157 @@ function runPush(trial, stage, foot, onDone) {
   foot.appendChild(bank);
 
   update();
+}
+
+
+// ---------------------------------------------------------- stillness
+
+/**
+ * Meditation. A thought drifts in; you tap to let it go. Tapping when nothing
+ * is there is chasing it, which costs you. Doing nothing while a thought sits
+ * costs you more. The difficulty is that most of the time the right move is
+ * to do nothing at all.
+ */
+function runStillness(trial, stage, foot, onDone) {
+  const rounds = Math.max(6, trial.rounds * 2);
+  let round = 0;
+  let score = 0;
+  let thought = null;
+  let raf = null;
+  let stop = false;
+
+  const ring = mk('div', 'still-ring');
+  const inner = mk('div', 'still-inner');
+  ring.appendChild(inner);
+  stage.appendChild(ring);
+  const label = mk('div', 'still-label', 'Breathe.');
+  stage.appendChild(label);
+  const tally = mk('div', 'push-meter', `0 of ${rounds}`);
+  stage.appendChild(tally);
+
+  const btn = mk('button', 'primary-btn', 'Let it go');
+  btn.type = 'button';
+  foot.appendChild(btn);
+
+  const settle = (good, why) => {
+    score += good;
+    round += 1;
+    thought = null;
+    inner.classList.remove('lit');
+    label.textContent = why;
+    tally.textContent = `${round} of ${rounds}`;
+    if (round >= rounds) {
+      stop = true;
+      if (raf) cancelAnimationFrame(raf);
+      finishScreen(stage, foot, Math.max(0, score / rounds), onDone);
+    }
+  };
+
+  btn.addEventListener('click', () => {
+    if (stop) return;
+    if (thought) settle(1, 'Gone. Back to the breath.');
+    else settle(0, 'Nothing was there. You went looking.');
+  });
+
+  let last = performance.now();
+  let wait = 900 + Math.random() * 1800;
+  const tick = (now) => {
+    if (stop) return;
+    const dt = now - last;
+    last = now;
+    if (!thought) {
+      wait -= dt;
+      if (wait <= 0) {
+        thought = { life: 1100 - trial.difficulty * 110 };
+        inner.classList.add('lit');
+        label.textContent = 'Something has your attention.';
+      }
+    } else {
+      thought.life -= dt;
+      if (thought.life <= 0) {
+        settle(0.15, 'It carried you off. You come back late.');
+        wait = 700 + Math.random() * 1600;
+      }
+    }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+}
+
+// ------------------------------------------------------------ rampage
+
+/**
+ * The Great Ape. You are not fighting anything; you are trying to steer forty
+ * tonnes of yourself away from the things you would regret. Each beat offers
+ * two directions and you pick, with your grip slipping the whole time.
+ */
+function runRampage(trial, stage, foot, onDone) {
+  const beats = Math.max(5, trial.rounds + 3);
+  const TARGETS = [
+    ['A ridge line', 'A lit town', 0],
+    ['Open water', 'The camp you came from', 0],
+    ['The empty quarter', 'The people who found you', 0],
+    ['A mountain', 'The road out', 0],
+    ['Nothing at all', 'Whoever is shouting your name', 0],
+    ['The far side of the valley', 'The nearest thing that moves', 0],
+  ];
+  let beat = 0;
+  let held = 0;
+  let grip = 1;
+
+  const bar = mk('div', 'endurance-bar');
+  const fill = mk('div', 'endurance-fill');
+  bar.appendChild(fill);
+  stage.appendChild(bar);
+  const scene = mk('div', 'trial-readout');
+  stage.appendChild(scene);
+  const meter = mk('div', 'push-meter', 'Your grip on yourself');
+  stage.appendChild(meter);
+
+  const render = () => {
+    fill.style.width = Math.max(0, grip * 100) + '%';
+    fill.style.background = grip > 0.6 ? 'var(--ki)' : grip > 0.3 ? 'var(--gold)' : 'var(--blood)';
+    meter.textContent = grip > 0.6 ? 'You are still in there.'
+      : grip > 0.3 ? 'It is getting away from you.' : 'There is almost nothing of you left in this.';
+  };
+
+  const step = () => {
+    if (beat >= beats) {
+      finishScreen(stage, foot, held / beats, onDone);
+      return;
+    }
+    const pair = TARGETS[beat % TARGETS.length];
+    const flip = Math.random() < 0.5;
+    const options = flip ? [pair[1], pair[0]] : [pair[0], pair[1]];
+    const safeIndex = flip ? 1 : 0;
+    scene.textContent = `Something is in front of you. ${options[0]}, or ${options[1]}.`;
+    foot.innerHTML = '';
+    options.forEach((label, i) => {
+      const b = mk('button', 'choice', '');
+      b.type = 'button';
+      b.appendChild(mk('span', 'choice-label', label));
+      b.addEventListener('click', () => {
+        // The worse your grip, the more likely the ape decides for you.
+        const yours = Math.random() < grip;
+        const chose = yours ? i : Math.floor(Math.random() * 2);
+        if (chose === safeIndex) {
+          held += yours ? 1 : 0.5;
+          scene.textContent = 'You turn. Nothing there but rock.';
+        } else {
+          scene.textContent = yours
+            ? 'You go through it. You will find out what was in it later.'
+            : 'You do not turn. You watch yourself not turn.';
+        }
+        grip = Math.max(0.05, grip - (0.06 + trial.difficulty * 0.03));
+        beat += 1;
+        render();
+        setTimeout(step, 550);
+      });
+      foot.appendChild(b);
+    });
+  };
+  render();
+  step();
 }
   return { playTrial };
 })();
@@ -21135,6 +21846,7 @@ const BATTLE_TABS = [
   { id: 'ki', label: 'Ki', kinds: ['ki'] },
   { id: 'form', label: 'Form', kinds: ['form'] },
   { id: 'stance', label: 'Stance', kinds: ['stance'] },
+  { id: 'talk', label: 'Say', kinds: ['talk'] },
   { id: 'other', label: 'Other', kinds: ['defend', 'item', 'move'] },
 ];
 
@@ -21190,7 +21902,11 @@ function renderBattle() {
   $('my-hp').style.width = Math.max(0, st.me.hp) + '%';
   $('my-ki').style.width = Math.max(0, (st.me.ki / Math.max(1, st.me.kiMax)) * 100) + '%';
   $('my-sta').style.width = Math.max(0, st.me.stamina) + '%';
-  $('my-state').textContent = [st.me.form, st.me.stance].filter(Boolean).join(' - ');
+  const held = BATTLE.restraint ?? 1;
+  $('my-state').textContent = [
+    st.me.form, st.me.stance,
+    held < 1 ? `holding back (${Math.round(held * 100)}%)` : null,
+  ].filter(Boolean).join(' - ');
 
   const tabs = $('battle-tabs');
   tabs.innerHTML = '';

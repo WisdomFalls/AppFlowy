@@ -29,7 +29,10 @@ export function playTrial(trial, onDone) {
   stage.innerHTML = '';
   foot.innerHTML = '';
 
-  const runners = { timing: runTiming, sequence: runSequence, endurance: runEndurance, push: runPush };
+  const runners = {
+    timing: runTiming, sequence: runSequence, endurance: runEndurance, push: runPush,
+    stillness: runStillness, rampage: runRampage,
+  };
   (runners[trial.kind] || runTiming)(trial, stage, foot, onDone);
 }
 
@@ -264,4 +267,155 @@ function runPush(trial, stage, foot, onDone) {
   foot.appendChild(bank);
 
   update();
+}
+
+
+// ---------------------------------------------------------- stillness
+
+/**
+ * Meditation. A thought drifts in; you tap to let it go. Tapping when nothing
+ * is there is chasing it, which costs you. Doing nothing while a thought sits
+ * costs you more. The difficulty is that most of the time the right move is
+ * to do nothing at all.
+ */
+function runStillness(trial, stage, foot, onDone) {
+  const rounds = Math.max(6, trial.rounds * 2);
+  let round = 0;
+  let score = 0;
+  let thought = null;
+  let raf = null;
+  let stop = false;
+
+  const ring = mk('div', 'still-ring');
+  const inner = mk('div', 'still-inner');
+  ring.appendChild(inner);
+  stage.appendChild(ring);
+  const label = mk('div', 'still-label', 'Breathe.');
+  stage.appendChild(label);
+  const tally = mk('div', 'push-meter', `0 of ${rounds}`);
+  stage.appendChild(tally);
+
+  const btn = mk('button', 'primary-btn', 'Let it go');
+  btn.type = 'button';
+  foot.appendChild(btn);
+
+  const settle = (good, why) => {
+    score += good;
+    round += 1;
+    thought = null;
+    inner.classList.remove('lit');
+    label.textContent = why;
+    tally.textContent = `${round} of ${rounds}`;
+    if (round >= rounds) {
+      stop = true;
+      if (raf) cancelAnimationFrame(raf);
+      finishScreen(stage, foot, Math.max(0, score / rounds), onDone);
+    }
+  };
+
+  btn.addEventListener('click', () => {
+    if (stop) return;
+    if (thought) settle(1, 'Gone. Back to the breath.');
+    else settle(0, 'Nothing was there. You went looking.');
+  });
+
+  let last = performance.now();
+  let wait = 900 + Math.random() * 1800;
+  const tick = (now) => {
+    if (stop) return;
+    const dt = now - last;
+    last = now;
+    if (!thought) {
+      wait -= dt;
+      if (wait <= 0) {
+        thought = { life: 1100 - trial.difficulty * 110 };
+        inner.classList.add('lit');
+        label.textContent = 'Something has your attention.';
+      }
+    } else {
+      thought.life -= dt;
+      if (thought.life <= 0) {
+        settle(0.15, 'It carried you off. You come back late.');
+        wait = 700 + Math.random() * 1600;
+      }
+    }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+}
+
+// ------------------------------------------------------------ rampage
+
+/**
+ * The Great Ape. You are not fighting anything; you are trying to steer forty
+ * tonnes of yourself away from the things you would regret. Each beat offers
+ * two directions and you pick, with your grip slipping the whole time.
+ */
+function runRampage(trial, stage, foot, onDone) {
+  const beats = Math.max(5, trial.rounds + 3);
+  const TARGETS = [
+    ['A ridge line', 'A lit town', 0],
+    ['Open water', 'The camp you came from', 0],
+    ['The empty quarter', 'The people who found you', 0],
+    ['A mountain', 'The road out', 0],
+    ['Nothing at all', 'Whoever is shouting your name', 0],
+    ['The far side of the valley', 'The nearest thing that moves', 0],
+  ];
+  let beat = 0;
+  let held = 0;
+  let grip = 1;
+
+  const bar = mk('div', 'endurance-bar');
+  const fill = mk('div', 'endurance-fill');
+  bar.appendChild(fill);
+  stage.appendChild(bar);
+  const scene = mk('div', 'trial-readout');
+  stage.appendChild(scene);
+  const meter = mk('div', 'push-meter', 'Your grip on yourself');
+  stage.appendChild(meter);
+
+  const render = () => {
+    fill.style.width = Math.max(0, grip * 100) + '%';
+    fill.style.background = grip > 0.6 ? 'var(--ki)' : grip > 0.3 ? 'var(--gold)' : 'var(--blood)';
+    meter.textContent = grip > 0.6 ? 'You are still in there.'
+      : grip > 0.3 ? 'It is getting away from you.' : 'There is almost nothing of you left in this.';
+  };
+
+  const step = () => {
+    if (beat >= beats) {
+      finishScreen(stage, foot, held / beats, onDone);
+      return;
+    }
+    const pair = TARGETS[beat % TARGETS.length];
+    const flip = Math.random() < 0.5;
+    const options = flip ? [pair[1], pair[0]] : [pair[0], pair[1]];
+    const safeIndex = flip ? 1 : 0;
+    scene.textContent = `Something is in front of you. ${options[0]}, or ${options[1]}.`;
+    foot.innerHTML = '';
+    options.forEach((label, i) => {
+      const b = mk('button', 'choice', '');
+      b.type = 'button';
+      b.appendChild(mk('span', 'choice-label', label));
+      b.addEventListener('click', () => {
+        // The worse your grip, the more likely the ape decides for you.
+        const yours = Math.random() < grip;
+        const chose = yours ? i : Math.floor(Math.random() * 2);
+        if (chose === safeIndex) {
+          held += yours ? 1 : 0.5;
+          scene.textContent = 'You turn. Nothing there but rock.';
+        } else {
+          scene.textContent = yours
+            ? 'You go through it. You will find out what was in it later.'
+            : 'You do not turn. You watch yourself not turn.';
+        }
+        grip = Math.max(0.05, grip - (0.06 + trial.difficulty * 0.03));
+        beat += 1;
+        render();
+        setTimeout(step, 550);
+      });
+      foot.appendChild(b);
+    });
+  };
+  render();
+  step();
 }

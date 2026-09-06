@@ -761,3 +761,15 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
   background: var(--ground); color: var(--ink-2); white-space: nowrap;
 }
 .mini:hover { border-color: var(--gi); color: var(--gi); }
+
+.still-ring {
+  width: 150px; height: 150px; border-radius: 50%;
+  border: 2px solid var(--line); display: grid; place-items: center;
+}
+.still-inner {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--line); transition: all .5s ease;
+}
+.still-inner.lit { width: 84px; height: 84px; background: var(--gi); }
+.still-label { font-size: 15.5px; color: var(--ink-2); text-align: center; min-height: 2.4em; }
+@media (prefers-reduced-motion: reduce) { .still-inner { transition: none; } }

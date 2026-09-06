@@ -15,6 +15,74 @@ import { getRace, hasPerk } from '../data/races.js';
 import { numberish } from './text.js';
 import { damageGear } from './inventory.js';
 
+/**
+ * What people say mid-fight. Nobody in this setting fights silently: they
+ * comment on a form, they gloat, they concede, they get insulted at being
+ * held back against. The bank is keyed by what just happened and picked from
+ * by the speaker's temperament.
+ */
+const VOICE = {
+  proud: {
+    form: ['"So that is what you have been hiding."', '"Do it again. Slower."', '"Finally."'],
+    hurt: ['"That one counted."', '"Good. Again."', 'They spit and do not look away.'],
+    winning: ['"Is this all of it?"', '"You are not going to reach me."', '"Stand up."'],
+    losing: ['"I am not finished."', '"You have not won anything yet."', 'They will not go down and will not say why.'],
+    insulted: ['"Do not do that." Their voice has changed. "Do not hold back on me."', '"I know what you are doing. Stop it."'],
+    beaten: ['"...Fine. You were better."', 'They laugh, which is somehow worse.'],
+  },
+  cheerful: {
+    form: ['"Whoa! What is that one?"', '"That is amazing. Can you teach me?"', 'They are grinning at it.'],
+    hurt: ['"Okay! Okay. That hurt."', '"You are strong!"', 'They shake it off, delighted.'],
+    winning: ['"Come on, you can do better than that!"', '"This is fun!"'],
+    losing: ['"I am not done yet!"', '"Just getting warmed up."'],
+    insulted: ['"You are going easy on me. Do not do that, it is boring."'],
+    beaten: ['"That was great. Let us do it again some time."'],
+  },
+  cruel: {
+    form: ['"How quaint."', '"Do you think that changes anything?"', 'They look bored.'],
+    hurt: ['Their face does something unpleasant.', '"You will regret that."'],
+    winning: ['"I want you to understand how far apart we are."', '"Beg. It will not help."'],
+    losing: ['"This is not possible."', '"You are nothing. You are NOTHING."'],
+    insulted: ['"Restraint? From you?" They are furious.'],
+    beaten: ['"This is not over. It is never over."'],
+  },
+  professional: {
+    form: ['They note it and adjust.', '"Interesting. Not enough."'],
+    hurt: ['They acknowledge it with a nod.', 'They reassess, visibly.'],
+    winning: ['"You are outmatched. I would stop."'],
+    losing: ['They stop talking entirely.'],
+    insulted: ['"Fight properly or do not fight."'],
+    beaten: ['"Noted." They mean it.'],
+  },
+  frightened: {
+    form: ['"What ARE you?"', 'They take a step back and do not know they did.'],
+    hurt: ['They make a sound they did not intend to.'],
+    winning: ['"Stay down. Please stay down."'],
+    losing: ['"Wait — wait, listen —"'],
+    insulted: ['"Why are you playing with me?"'],
+    beaten: ['They are already apologising.'],
+  },
+};
+
+/** Something to say, if this fighter is the sort who says things. */
+export function voiceLine(battle, rng, kind) {
+  const v = battle.them.voice;
+  if (!v) return null;
+  const bank = VOICE[v] || VOICE.professional;
+  const set = bank[kind];
+  if (!set || !set.length) return null;
+  if (!rng.chance(0.55)) return null;
+  return `${battle.them.name}: ${rng.pick(set)}`.replace(/^([^:]+): (They|Their)/, '$2');
+}
+
+/** What you can say back, given what just happened. */
+export const REPLIES = [
+  { id: 'taunt', label: 'Taunt them', text: '"Is that it?"', effect: { theirRage: 12, myFocus: 0 } },
+  { id: 'respect', label: 'Give them their due', text: '"You are better than they said."', effect: { theirRage: -10, myFocus: 4 } },
+  { id: 'warn', label: 'Warn them off', text: '"Walk away. I am asking once."', effect: { theirRage: -6, surrender: 0.12 } },
+  { id: 'silent', label: 'Say nothing', text: '', effect: { myFocus: 6 } },
+];
+
 export const STANCES = {
   neutral: { name: 'Neutral', desc: 'No commitment either way.', atk: 1, def: 1, dodge: 0, kiRegen: 1, stamRegen: 1 },
   aggressive: { name: 'Aggressive', desc: 'Hit harder. Get hit harder.', atk: 1.38, def: 0.72, dodge: -0.05, kiRegen: 0.8, stamRegen: 0.8 },
@@ -58,6 +126,10 @@ function sideTemplate(name, power, opts = {}) {
     techniques: opts.techniques || [],
     forms: opts.forms || [],
     raceId: opts.raceId || 'other',
+    speedStat: opts.speedStat ?? 50,
+    instinct: opts.instinct ?? 50,
+    // What they say when things happen. Filled in by the caller.
+    voice: opts.voice || null,
   };
 }
 
@@ -69,6 +141,8 @@ export function createBattle(state, rng, opts = {}) {
   const foeSpec = opts.foe || { name: 'a stranger', power: combatPower(c) };
 
   const me = sideTemplate(c.name, combatPower(c, { form: null }), {
+    speedStat: c.stats.speed,
+    instinct: c.battleInstinct ?? 50,
     ki: c.vitals.ki,
     kiMax: Math.max(20, c.vitals.kiMax),
     infiniteStamina: hasPerk(c, 'infiniteStamina'),
@@ -81,6 +155,9 @@ export function createBattle(state, rng, opts = {}) {
   me.hpMax = 100;
 
   const them = sideTemplate(foeSpec.name, Math.max(1, foeSpec.power), {
+    speedStat: foeSpec.speedStat ?? 50,
+    instinct: foeSpec.instinct ?? 50,
+    voice: foeSpec.voice || null,
     techniques: foeSpec.techniques || [],
     forms: foeSpec.forms || [],
     raceId: foeSpec.raceId || 'other',
@@ -108,6 +185,9 @@ export function createBattle(state, rng, opts = {}) {
     fled: false,
     surrendered: false,
     protecting: !!opts.protecting,
+    // How much of yourself you are using. Holding back keeps a fight going,
+    // tests somebody without ending them, and is how half the cast fights.
+    restraint: opts.restraint ?? (opts.stakes === 'spar' ? 0.5 : 1),
     // Tournament rules. A ring changes what winning means: you do not have to
     // put somebody down, you have to put them outside.
     ringOut: !!(opts.context && opts.context.ringOut),
@@ -116,16 +196,25 @@ export function createBattle(state, rng, opts = {}) {
   };
 }
 
-function effectivePower(side) {
+function effectivePower(side, battle) {
   const form = side.form ? getTransformation(side.form) : null;
   const mult = form ? form.mult : 1;
   const condition = clamp(0.45 + (side.hp / side.hpMax) * 0.55, 0.45, 1);
   const kiFactor = clamp(0.6 + (side.ki / Math.max(1, side.kiMax)) * 0.4, 0.6, 1);
-  return Math.max(1, side.basePower * mult * condition * kiFactor);
+  // Whatever you are keeping in reserve does not land on them.
+  const held = battle && side === battle.me ? (battle.restraint ?? 1) : 1;
+  return Math.max(1, side.basePower * mult * condition * kiFactor * held);
 }
 
-function ratioOf(attacker, defender) {
-  return effectivePower(attacker) / Math.max(1, effectivePower(defender));
+/** The gap that decides whether somebody can be touched at all. */
+export function speedGap(a, b) {
+  const mine = (a.speedStat ?? 50) * (a.form ? 1.4 : 1);
+  const theirs = (b.speedStat ?? 50) * (b.form ? 1.4 : 1);
+  return mine / Math.max(1, theirs);
+}
+
+function ratioOf(attacker, defender, battle) {
+  return effectivePower(attacker, battle) / Math.max(1, effectivePower(defender, battle));
 }
 
 /** Damage scaling: power dominates, but never to the point of certainty. */
@@ -181,7 +270,33 @@ export function battleActions(state, battle) {
   }
 
   out.push({ id: 'guard', kind: 'defend', label: 'Guard', hint: 'Cut the next hit hard, recover stamina' });
-  out.push({ id: 'charge', kind: 'defend', label: 'Charge ki', hint: 'Big ki gain, and they get a free swing' });
+  // Charging is not a free hit for them if you are far enough ahead: at that
+  // gap you are simply not where the punch lands.
+  const foe = battle.them;
+  const edge = speedGap(me, foe) * Math.pow(ratioOf(me, foe, battle), 0.25);
+  out.push({
+    id: 'charge', kind: 'defend', label: 'Charge ki',
+    hint: edge > 1.8 ? 'You can afford to. They will not reach you.'
+      : edge > 1.2 ? 'Risky. You are faster, but not by much.'
+        : 'Big ki gain, and they get a free swing.',
+  });
+
+  // How much of yourself you are using. This is how you test somebody, drag a
+  // fight out, or stop pretending.
+  const held = battle.restraint ?? 1;
+  const steps = [
+    { v: 0.25, label: 'Barely trying', hint: 'A quarter of you. They will think they are doing well.' },
+    { v: 0.5, label: 'Hold back', hint: 'Half. Enough to test them properly.' },
+    { v: 0.75, label: 'Most of it', hint: 'Nearly everything.' },
+    { v: 1, label: 'Stop holding back', hint: 'All of it. No more of this.' },
+  ];
+  for (const step of steps) {
+    if (Math.abs(step.v - held) < 0.01) continue;
+    out.push({
+      id: 'restraint:' + step.v, kind: 'stance',
+      label: step.label, hint: step.hint,
+    });
+  }
 
   for (const key of Object.keys(STANCES)) {
     if (key === me.stance) continue;
@@ -242,6 +357,11 @@ export function battleActions(state, battle) {
   if (battle.stakes !== 'spar') {
     out.push({ id: 'surrender', kind: 'move', label: 'Yield', hint: 'Stop fighting. Hope they accept it.' });
   }
+  if (battle.them.voice) {
+    for (const r of REPLIES) {
+      out.push({ id: 'say:' + r.id, kind: 'talk', label: r.label, hint: r.text || 'Let it stand.' });
+    }
+  }
 
   return out;
 }
@@ -279,7 +399,7 @@ function applyUpkeep(side, lines) {
 function strike(attacker, defender, battle, rng, spec) {
   const stance = stanceOf(attacker);
   const dstance = stanceOf(defender);
-  const ratio = ratioOf(attacker, defender);
+  const ratio = ratioOf(attacker, defender, battle);
 
   let hitChance = (spec.hit ?? 0.85) * stance.atk;
   hitChance -= dstance.dodge;
@@ -344,7 +464,7 @@ function foeTurn(state, battle, rng) {
   const me = battle.me;
   const lines = [];
   const hurt = them.hp / them.hpMax;
-  const losing = ratioOf(them, me) < 0.8;
+  const losing = ratioOf(them, me, battle) < 0.8;
 
   // Escalate: transform when hurt or outmatched.
   if (them.forms.length && !them.form && (hurt < 0.6 || losing) && rng.chance(0.55)) {
@@ -364,7 +484,7 @@ function foeTurn(state, battle, rng) {
   if (battle.ringOut && !battle.over) {
     const meOff = me.staggered > 0 || me.blinded > 0 || me.hp <= me.hpMax * 0.45;
     if (meOff && rng.chance(0.42)) {
-      const chance = clamp(0.3 + Math.pow(ratioOf(them, me), 0.3) * 0.28
+      const chance = clamp(0.3 + Math.pow(ratioOf(them, me, battle), 0.3) * 0.28
         + (me.staggered ? 0.18 : 0) + (1 - me.hp / me.hpMax) * 0.22, 0.1, 0.9);
       if (rng.chance(chance)) {
         lines.push(`${them.name} gets under you and puts you over the edge. You land outside the ring.`);
@@ -424,7 +544,7 @@ function finish(state, battle, rng, outcome) {
   }
   if (outcome === 'lost') {
     c.flags.fury = true;
-    if (ratioOf(battle.them, battle.me) > 4) c.flags.humiliated = true;
+    if (ratioOf(battle.them, battle.me, battle) > 4) c.flags.humiliated = true;
     if (battle.protecting) c.flags.protected_someone = true;
   }
   return battle;
@@ -464,13 +584,53 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
         me.formName = form.name;
         me.ki = Math.max(0, me.ki - form.drain);
         lines.push(`${form.name}. ${form.desc}`);
-        if (them.hp / them.hpMax > 0.5) lines.push(`${them.name} ${rng.pick(['takes a step back', 'stops smiling', 'says nothing', 'looks at you differently'])}.`);
+        const said = voiceLine(battle, rng, 'form');
+        if (said) lines.push(said);
+        else if (them.hp / them.hpMax > 0.5) {
+          lines.push(`${them.name} ${rng.pick(['takes a step back', 'stops smiling', 'says nothing', 'looks at you differently'])}.`);
+        }
       }
     }
+  } else if (actionId.startsWith('say:')) {
+    const reply = REPLIES.find((r) => r.id === actionId.slice(4));
+    if (reply) {
+      if (reply.text) lines.push(`You: ${reply.text}`);
+      const e = reply.effect;
+      if (e.theirRage) {
+        them.stance = e.theirRage > 0 ? 'aggressive' : 'defensive';
+        lines.push(e.theirRage > 0
+          ? `${them.name} comes at you harder for that.`
+          : `${them.name} steadies. Whatever that was, it landed.`);
+      }
+      if (e.myFocus) me.ki = clamp(me.ki + e.myFocus, 0, me.kiMax);
+      if (e.surrender && them.hp / them.hpMax < 0.4 && rng.chance(e.surrender * 3)) {
+        lines.push(`${them.name} stops. "...All right. All right."`);
+        return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
+      }
+    }
+  } else if (actionId.startsWith('restraint:')) {
+    const to = Number(actionId.slice(10));
+    const was = battle.restraint ?? 1;
+    battle.restraint = clamp(to, 0.15, 1);
+    lines.push(to > was
+      ? rng.pick([
+        'You stop holding back.',
+        'You stop being careful with them.',
+        'Whatever you were keeping back, you stop keeping it back.',
+      ])
+      : rng.pick([
+        'You ease off. Let us see what they do with the room.',
+        'You take it down a level and wait.',
+        'You stop trying to finish it.',
+      ]));
+    if (to < was && them.hp / them.hpMax > 0.5) {
+      lines.push(voiceLine(battle, rng, 'insulted') || `${them.name} notices, and does not thank you for it.`);
+    }
+    skipFoe = false;
   } else if (actionId === 'ringout') {
     // Strength and technique against their weight and whatever balance they
     // have left. Failing it puts you in a bad spot, which is the trade.
-    const ratio = ratioOf(me, them);
+    const ratio = ratioOf(me, them, battle);
     const chance = clamp(0.32 + Math.pow(ratio, 0.3) * 0.28
       + (them.staggered ? 0.18 : 0) + (them.blinded ? 0.14 : 0)
       + (1 - them.hp / them.hpMax) * 0.25, 0.1, 0.94);
@@ -534,10 +694,24 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
     me.stamina = clamp(me.stamina + 22, 0, me.staminaMax);
     lines.push('You cover up and wait for it.');
   } else if (actionId === 'charge') {
-    me.ki = clamp(me.ki + 34, 0, me.kiMax);
-    me.charged = Math.min(3, me.charged + 1);
-    freeSwing = true;
-    lines.push('You plant your feet and pull everything inward. The air goes tight.');
+    // Somebody far enough ahead in speed and power simply is not there when
+    // the punch arrives. This is the whole point of Ultra Instinct.
+    const edge = speedGap(me, them) * Math.pow(ratioOf(me, them, battle), 0.25);
+    if (edge > 1.8 || (me.form && /Ultra Instinct/.test(me.formName || ''))) {
+      me.ki = clamp(me.ki + 34 + Math.round(c.stats.kiControl * 0.4), 0, me.kiMax);
+      lines.push(rng.pick([
+        'You stand still and gather. They come, and you are not where they swing.',
+        'You do not even watch them. Your body moves and the rest of you charges.',
+        `${them.name} throws everything at where you were.`,
+      ]));
+      me.charged = Math.min(3, me.charged + 1);
+      skipFoe = true;
+    } else {
+      me.ki = clamp(me.ki + 34, 0, me.kiMax);
+      me.charged = Math.min(3, me.charged + 1);
+      freeSwing = true;
+      lines.push('You plant your feet and pull everything inward. The air goes tight.');
+    }
   } else if (actionId === 'senzu') {
     if (c.senzu > 0) {
       c.senzu -= 1;
@@ -554,7 +728,7 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
     lines.push('You take hold of them and the city is simply not there any more. Bare rock, no witnesses, nothing left to break that matters.');
   } else if (actionId === 'flee') {
     const speedEdge = (c.stats.speed || 50) / 100 + (c.techniques.includes('instant_transmission') ? 1 : 0);
-    const chance = clamp(0.25 + speedEdge * 0.4 - Math.log10(Math.max(1, ratioOf(them, me))) * 0.2, 0.05, 0.95);
+    const chance = clamp(0.25 + speedEdge * 0.4 - Math.log10(Math.max(1, ratioOf(them, me, battle))) * 0.2, 0.05, 0.95);
     if (rng.chance(chance)) {
       lines.push('You break off and go, and they do not follow.');
       return { lines, over: true, outcome: finish(state, battle, rng, 'fled').outcome };
@@ -572,6 +746,8 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
   }
 
   if (them.hp <= 0) {
+    const parting = voiceLine(battle, rng, 'beaten');
+    if (parting) lines.push(parting);
     lines.push(`${them.name} goes down and does not get back up.`);
     return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
   }
@@ -586,6 +762,13 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
   if (me.hp <= 0) {
     lines.push('Everything goes white at the edges.');
     return { lines, over: true, outcome: finish(state, battle, rng, 'lost').outcome };
+  }
+
+  // They talk while it happens, which is most of what a Dragon Ball fight is.
+  if (battle.round % 3 === 0) {
+    const state2 = them.hp / them.hpMax;
+    const said = voiceLine(battle, rng, state2 < 0.35 ? 'losing' : me.hp / me.hpMax < 0.45 ? 'winning' : 'hurt');
+    if (said) lines.push(said);
   }
 
   applyUpkeep(me, lines);
@@ -610,23 +793,23 @@ export function battleStatus(battle) {
       hp: Math.round(battle.me.hp), ki: Math.round(battle.me.ki),
       stamina: Math.round(battle.me.stamina), kiMax: Math.round(battle.me.kiMax),
       form: battle.me.formName, stance: STANCES[battle.me.stance].name,
-      power: Math.round(effectivePower(battle.me)),
+      power: Math.round(effectivePower(battle.me, battle)),
     },
     them: {
       name: battle.them.name,
       hp: Math.round(battle.them.hp), ki: Math.round(battle.them.ki),
       form: battle.them.formName, stance: STANCES[battle.them.stance].name,
-      power: Math.round(effectivePower(battle.them)),
-      tier: powerTier(effectivePower(battle.them)),
+      power: Math.round(effectivePower(battle.them, battle)),
+      tier: powerTier(effectivePower(battle.them, battle)),
     },
     destruction: Math.round(battle.destruction),
     civilians: battle.civilians,
-    gap: ratioOf(battle.me, battle.them),
+    gap: ratioOf(battle.me, battle.them, battle),
   };
 }
 
 export function describeMatchup(battle) {
-  const r = ratioOf(battle.me, battle.them);
+  const r = ratioOf(battle.me, battle.them, battle);
   if (r > 30) return 'They are not in your class and you both know it.';
   if (r > 6) return 'You are clearly stronger.';
   if (r > 1.6) return 'You have the edge.';

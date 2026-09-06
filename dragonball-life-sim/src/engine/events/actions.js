@@ -13,6 +13,7 @@ import { unlockableForms, tryUnlockForm, nearbyForms } from '../progression.js';
 import { getPlace, PLACES } from '../../data/places.js';
 import { shopStock, getItem, ITEMS } from '../../data/items.js';
 import { buyItem, valueHere, hasItem } from '../inventory.js';
+import { topicsFor, converse } from '../conversation.js';
 import { currencyFor, formatMoney, balance } from '../../data/currency.js';
 import { CAREERS, getCareer, careersFor } from '../../data/jobs.js';
 import { getRace, hasPerk } from '../../data/races.js';
@@ -85,11 +86,19 @@ export const ACTIONS = [
   },
   {
     id: 'meditate', maxPerYear: 4, minMaturity: 5, tooYoung: 'Sitting still on purpose is beyond you yet.', slots: 1, name: 'Meditate', cat: 'mind', cost: 'A season',
-    desc: 'Ki control, discipline and a calmer head.',
+    desc: 'Ki control, discipline and a calmer head. Harder than it sounds.',
     available: () => true,
     run: (s, rng) => {
-      adjust(s, { stats: { kiControl: 2, discipline: 2, intellect: 1 }, happiness: 6, ki: 999, health: 4 });
-      return { text: render(`{You sit for a long time|Nothing but breathing|You stop|Stillness}. {Your ki settles|The noise drops away|Something unknots}.`, {}, rng) };
+      const difficulty = clamp(1 + Math.floor((s.character.stats.kiControl || 50) / 24), 1, 5);
+      const trial = startTrial(s, rng, {
+        kind: 'stillness',
+        difficulty,
+        purpose: 'training',
+        label: 'Stillness',
+        blurb: 'Your mind will drift. Notice it and come back, without chasing it.',
+        payload: { stat: 'kiControl' },
+      });
+      return { text: 'You sit down and stop doing anything, which is the difficult part.', trial };
     },
   },
   {
@@ -123,7 +132,7 @@ export const ACTIONS = [
       const form = getTransformation(formId);
       if (!form) return { text: 'There is nothing to reach for.' };
       const trial = startTrial(s, rng, {
-        kind: form.tier >= 8 ? 'endurance' : 'push',
+        kind: form.id === 'oozaru' || form.id === 'golden_oozaru' ? 'rampage' : form.tier >= 8 ? 'endurance' : 'push',
         difficulty: clamp(Math.ceil(form.tier / 2.6), 1, 5),
         purpose: 'form',
         label: form.name,
@@ -261,14 +270,34 @@ export const ACTIONS = [
     id: 'spend_time', maxPerYear: 6, slots: 1, name: 'Spend time with someone', cat: 'social', cost: 'A season',
     desc: 'Closeness is the only thing that does not decay on its own.',
     available: (s) => livingNpcs(s).length > 0,
-    options: (s) => livingNpcs(s).slice(0, 20).map((n) => ({ id: n.id, label: n.name, hint: `${relationLabel(n)} - bond ${bondScore(n)}` })),
+    options: (s) => livingNpcs(s).slice(0, 20).map((n) => {
+      const open = topicsFor(s, n);
+      return {
+        id: n.id,
+        label: n.name,
+        hint: open.length
+          ? `${relationLabel(n)} - ${open[0].name.toLowerCase()}`
+          : `${relationLabel(n)} - nothing to say yet`,
+      };
+    }),
     run: (s, rng, params) => {
       const npc = params && params.option ? findNpc(s, params.option) : null;
       if (!npc) return { text: 'There is nobody in particular.' };
-      npc.closeness = clamp(npc.closeness + rng.int(8, 18), 0, 100);
-      npc.tension = clamp(npc.tension - rng.int(2, 8), 0, 100);
-      adjust(s, { happiness: 8 });
-      return { text: render(`{You spend the season with|You go and see|You make time for} ${npc.name}. {It is uncomplicated|Neither of you talks about anything important|It helps}.`, {}, rng) };
+      // What you can talk about depends on how old you are and who they are.
+      const out = converse(s, rng, npc);
+      if (!out) {
+        npc.closeness = clamp(npc.closeness + rng.int(4, 9), 0, 100);
+        adjust(s, { happiness: 5 });
+        return { text: render(`{You are near them for a while|Nothing is said|You keep them company}.`, {}, rng) };
+      }
+      const e = out.effect;
+      if (e.closeness) npc.closeness = clamp(npc.closeness + e.closeness, 0, 100);
+      if (e.trust) npc.trust = clamp((npc.trust ?? 30) + e.trust, 0, 100);
+      if (e.respect) npc.respect = clamp((npc.respect || 0) + e.respect, 0, 100);
+      if (e.tension) npc.tension = clamp((npc.tension || 0) + e.tension, 0, 100);
+      if (e.knowledge) npc.knowledge = Math.min(4, (npc.knowledge || 0) + e.knowledge);
+      adjust(s, { happiness: e.happiness ?? 6, stats: e.stats || {} });
+      return { text: out.text };
     },
   },
   {

@@ -1870,6 +1870,7 @@ const BATTLE_TABS = [
   { id: 'ki', label: 'Ki', kinds: ['ki'] },
   { id: 'form', label: 'Form', kinds: ['form'] },
   { id: 'stance', label: 'Stance', kinds: ['stance'] },
+  { id: 'talk', label: 'Say', kinds: ['talk'] },
   { id: 'other', label: 'Other', kinds: ['defend', 'item', 'move'] },
 ];
 
@@ -1925,7 +1926,11 @@ function renderBattle() {
   $('my-hp').style.width = Math.max(0, st.me.hp) + '%';
   $('my-ki').style.width = Math.max(0, (st.me.ki / Math.max(1, st.me.kiMax)) * 100) + '%';
   $('my-sta').style.width = Math.max(0, st.me.stamina) + '%';
-  $('my-state').textContent = [st.me.form, st.me.stance].filter(Boolean).join(' - ');
+  const held = BATTLE.restraint ?? 1;
+  $('my-state').textContent = [
+    st.me.form, st.me.stance,
+    held < 1 ? `holding back (${Math.round(held * 100)}%)` : null,
+  ].filter(Boolean).join(' - ');
 
   const tabs = $('battle-tabs');
   tabs.innerHTML = '';

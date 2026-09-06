@@ -33,6 +33,20 @@ export const TRIAL_KINDS = {
     blurb: 'Push, and choose when to stop. Every push is worth more and costs more.',
     stat: 'discipline',
   },
+  // Meditation is not a test of reflex or grit. It is a test of not doing the
+  // thing you keep doing, which needs its own shape.
+  stillness: {
+    name: 'Stillness',
+    blurb: 'Your mind will drift. Notice it and come back, without chasing it.',
+    stat: 'kiControl',
+  },
+  // A Great Ape is a transformation you are inside rather than one you use.
+  // The minigame is not about winning; it is about steering.
+  rampage: {
+    name: 'The Moon',
+    blurb: 'You are ten times the size and none of the mind. Steer what you can.',
+    stat: 'discipline',
+  },
 };
 
 /** Which trial suits which kind of work. */
@@ -40,7 +54,7 @@ export const STAT_TRIALS = {
   strength: { kind: 'push', method: 'Weighted holds and throws until the arms give out.' },
   speed: { kind: 'timing', method: 'Catching thrown stones blindfolded.' },
   technique: { kind: 'sequence', method: 'Forms, drilled until the sequence is automatic.' },
-  kiControl: { kind: 'timing', method: 'Holding a ki sphere at an exact size for as long as it takes.' },
+  kiControl: { kind: 'stillness', method: 'Sitting with it until the noise stops being interesting.' },
   durability: { kind: 'endurance', method: 'Standing in it and refusing to fall over.' },
   intellect: { kind: 'sequence', method: 'Reading, calculating, and remembering what you read.' },
   charisma: { kind: 'sequence', method: 'Talking to people on purpose, which is its own discipline.' },

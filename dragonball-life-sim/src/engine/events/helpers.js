@@ -211,6 +211,18 @@ export function tierOf(power) {
  * the UI (the soak harness, tests, background brackets). Either way the caller
  * gets a `text` it can show and the world gets the same consequences.
  */
+/** How somebody sounds in a fight, taken from who they are. */
+function voiceFor(foe, ctx) {
+  const canon = foe.canonId ? getCanon(foe.canonId) : null;
+  const temperament = (canon && canon.temperament) || foe.temperament || '';
+  const tags = (canon && canon.tags) || foe.tags || [];
+  if (/cruel|cold|capricious|vain/.test(temperament) || tags.includes('villain') || tags.includes('emperor')) return 'cruel';
+  if (/cheerful|earnest|childish|warm|brash/.test(temperament) || tags.includes('comic')) return 'cheerful';
+  if (/proud|fierce|prickly|unstable/.test(temperament) || tags.includes('rival') || tags.includes('saiyan')) return 'proud';
+  if (/timid|shy|coward/.test(temperament)) return 'frightened';
+  return 'professional';
+}
+
 export function offerBattle(ctx, foe, opts = {}) {
   const spec = {
     foe,
@@ -219,6 +231,8 @@ export function offerBattle(ctx, foe, opts = {}) {
     protecting: !!opts.protecting,
     placeId: opts.placeId || ctx.character.placeId,
     intro: opts.intro || '',
+    voice: opts.voice || voiceFor(foe, ctx),
+    speedStat: foe.speedStat ?? (foe.stats && foe.stats.speed) ?? 50,
     context: {
       reason: opts.reason || 'fight',
       npcId: opts.npcId || foe.npcId || null,
