@@ -162,42 +162,42 @@ export const TRANSFORMATIONS = [
 
   // ------------------------------------------------------------ Frost Demon
   {
-    id: 'fd_second', name: 'Second Form', ladder: ['frostdemon'], tier: 2,
+    id: 'fd_second', name: 'Second Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 2,
     mult: 2.6, drain: 3, control: -10, strain: 2,
     req: { power: 5000 },
     hint: 'Let the armour crack and let yourself grow.',
     desc: 'Taller, hornier, considerably less polite.',
   },
   {
-    id: 'fd_third', name: 'Third Form', ladder: ['frostdemon'], tier: 3,
+    id: 'fd_third', name: 'Third Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 3,
     mult: 6, drain: 5, control: -18, strain: 3,
     req: { parent: 'fd_second', power: 40000 },
     hint: 'An ugly, transitional shape most of your kind skip.',
     desc: 'An elongated skull and a body built entirely for killing.',
   },
   {
-    id: 'fd_final', name: 'Final Form', ladder: ['frostdemon'], tier: 5,
+    id: 'fd_final', name: 'Final Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 5,
     mult: 20, drain: 1.5, control: 25, strain: 0,
     req: { parent: 'fd_third', power: 120000 },
     hint: 'The small, smooth, perfect one. This is what you actually are.',
     desc: 'Compact, white, and holding back most of it out of habit.',
   },
   {
-    id: 'fd_hundred', name: '100% Full Power', ladder: ['frostdemon'], tier: 7,
+    id: 'fd_hundred', name: '100% Full Power', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 7,
     mult: 60, drain: 16, control: -10, strain: 12,
     req: { parent: 'fd_final', stat: { durability: 60 } },
     hint: 'Stop suppressing. It burns through you fast.',
     desc: 'Swollen with your own power, and losing it by the second.',
   },
   {
-    id: 'golden', name: 'Golden Form', ladder: ['frostdemon'], tier: 9,
+    id: 'golden', name: 'Golden Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 9,
     mult: 1400, drain: 20, control: 5, strain: 14,
     req: { parent: 'fd_final', custom: 'trained_at_all', stat: { discipline: 45 } },
     hint: 'Four months of actual training would do it. Four months.',
     desc: 'Gold and violet. Enormous, and it eats your stamina alive until you master it.',
   },
   {
-    id: 'black_form', name: 'Black Form', ladder: ['frostdemon'], tier: 12,
+    id: 'black_form', name: 'Black Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 12,
     mult: 20000, drain: 8, control: 30, strain: 6,
     req: { parent: 'golden', stat: { discipline: 80 }, custom: 'extreme_isolation_training' },
     hint: 'Ten years in a chamber where nothing lives. Come out different.',
@@ -229,28 +229,28 @@ export const TRANSFORMATIONS = [
 
   // --------------------------------------------------------------- Android
   {
-    id: 'overclock', name: 'Overclock', ladder: ['android', 'tuffle'], tier: 3,
+    id: 'overclock', name: 'Overclock', ladder: ['android', 'tuffle', 'half_android', 'frost_android'], tier: 3,
     mult: 3.5, drain: 10, control: -5, strain: 14,
     req: { stat: { intellect: 50 } },
     hint: 'Push the reactor past its rated output and hope the frame holds.',
     desc: 'Your coolant is boiling and your output has never been higher.',
   },
   {
-    id: 'core_mk2', name: 'Power Core Mk-II', ladder: ['android', 'tuffle'], tier: 6,
+    id: 'core_mk2', name: 'Power Core Mk-II', ladder: ['android', 'tuffle', 'half_android', 'frost_android'], tier: 6,
     mult: 26, drain: 0, control: 0, strain: 0,
     req: { custom: 'upgrade_2' },
     hint: 'Find a lab and a very good engineer. Possibly yourself.',
     desc: 'A permanent hardware upgrade. No aura, no drain, just more of you.',
   },
   {
-    id: 'core_mk3', name: 'Infinite Core', ladder: ['android', 'tuffle'], tier: 9,
+    id: 'core_mk3', name: 'Infinite Core', ladder: ['android', 'tuffle', 'half_android', 'frost_android'], tier: 9,
     mult: 700, drain: 0, control: 0, strain: 0,
     req: { parent: 'core_mk2', custom: 'upgrade_3' },
     hint: 'The blueprint that killed the man who drew it.',
     desc: 'Limitless energy in a frame that was never meant to carry it.',
   },
   {
-    id: 'hell_mode', name: 'Hell Mode', ladder: ['android', 'bioandroid', 'tuffle'], tier: 11,
+    id: 'hell_mode', name: 'Hell Mode', ladder: ['android', 'bioandroid', 'tuffle', 'half_android', 'frost_android'], tier: 11,
     mult: 3000, drain: 30, control: -20, strain: 30,
     req: { parent: 'core_mk3', anyFlag: ['betrayed', 'creator_dead'] },
     hint: 'Remove every safety limiter your maker installed.',

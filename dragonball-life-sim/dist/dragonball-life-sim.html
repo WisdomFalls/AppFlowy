@@ -1810,6 +1810,79 @@ const RACES = [
     startingTechniques: [],
     notes: 'A vendetta you did not choose, and a knack for learning from anyone who will teach.',
   },
+
+  // ------------------------------------------------------------ half-breeds
+  // Half-Saiyan proved the shape works: two lines that would not otherwise
+  // mix, stats interpolated between the parents, and a transformation ladder
+  // stitched together out of both sides' forms rather than invented fresh.
+  // These are the same idea applied past Saiyan and Human - Android 17 and 18
+  // were the other half-breed the source material actually gave a name to,
+  // and the logic that makes one half-breed possible does not stop there.
+  {
+    id: 'half_android',
+    name: 'Half-Android',
+    short: 'Half-Android',
+    blurb: 'Augmented rather than built. Fully human where it counts, and no longer entirely, underneath.',
+    homeworlds: ['red_ribbon_lab', 'east_city', 'west_city'],
+    base: { strength: 52, speed: 51, technique: 55, kiControl: 44, durability: 55, intellect: 62, charisma: 51, discipline: 58 },
+    growth: { power: 0.88, technique: 1.2, kiControl: 0.95, discipline: 1.18 },
+    startPower: [50, 400],
+    lifespan: [150, 300],
+    agingRate: 0.4,
+    maturityRate: 1.2,
+    appetite: 0.6,
+    perks: ['techniqueGenius', 'luck', 'socialAnimal', 'upgradeable'],
+    transformLadder: 'half_android',
+    naming: 'earthling',
+    tags: ['mortal', 'earthling', 'artificial'],
+    hairColours: ['black', 'blonde', 'silver', 'brown', 'white'],
+    startingTechniques: [],
+    notes: 'You age slowly and take a beating well, and you are still entirely yourself doing it.',
+  },
+  {
+    id: 'half_frostkin',
+    name: 'Half-Frostkin',
+    short: 'Half-Frostkin',
+    blurb: 'Human on one side, an emperor\'s bloodline on the other. Neither half asked the other\'s permission.',
+    homeworlds: ['east_city', 'west_city', 'planet_frieza_79'],
+    base: { strength: 53, speed: 53, technique: 53, kiControl: 59, durability: 52, intellect: 59, charisma: 54, discipline: 40 },
+    growth: { power: 1.02, technique: 1.15, kiControl: 1.22, discipline: 0.98 },
+    startPower: [30, 300],
+    lifespan: [110, 180],
+    agingRate: 0.75,
+    maturityRate: 1.15,
+    appetite: 0.8,
+    perks: ['innatePower', 'techniqueGenius', 'luck'],
+    transformLadder: 'half_frostkin',
+    naming: 'earthling',
+    tags: ['mortal', 'earthling', 'imperial'],
+    hairColours: ['black', 'brown', 'white', 'silver'],
+    startingTechniques: [],
+    hasTail: true,
+    notes: 'Some of what you were born with, you did not have to train for. Most of it, you still do.',
+  },
+  {
+    id: 'frost_android',
+    name: 'Frost-Android',
+    short: 'Frost-Android',
+    blurb: 'Imperial bloodline and Red Ribbon engineering in the same body. Neither program was designed to share.',
+    homeworlds: ['planet_frieza_79', 'red_ribbon_lab'],
+    base: { strength: 65, speed: 62, technique: 48, kiControl: 45, durability: 67, intellect: 63, charisma: 47, discipline: 42 },
+    growth: { power: 1.05, technique: 0.93, kiControl: 0.78, discipline: 0.9 },
+    startPower: [300, 3000],
+    lifespan: [250, 500],
+    agingRate: 0.3,
+    maturityRate: 1.5,
+    appetite: 0.4,
+    perks: ['innatePower', 'upgradeable', 'coldLogic', 'survivesAnything'],
+    transformLadder: 'frost_android',
+    naming: 'android',
+    tags: ['mortal', 'imperial', 'artificial'],
+    hairColours: ['none (chitin and bio-armour)', 'silver', 'synthetic auburn'],
+    startingTechniques: [],
+    hasTail: true,
+    notes: 'Two separate reasons to underestimate you, and both of them are wrong.',
+  },
 ];
 
 const RACE_BY_ID = Object.fromEntries(RACES.map((r) => [r.id, r]));
@@ -2631,42 +2704,42 @@ const TRANSFORMATIONS = [
 
   // ------------------------------------------------------------ Frost Demon
   {
-    id: 'fd_second', name: 'Second Form', ladder: ['frostdemon'], tier: 2,
+    id: 'fd_second', name: 'Second Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 2,
     mult: 2.6, drain: 3, control: -10, strain: 2,
     req: { power: 5000 },
     hint: 'Let the armour crack and let yourself grow.',
     desc: 'Taller, hornier, considerably less polite.',
   },
   {
-    id: 'fd_third', name: 'Third Form', ladder: ['frostdemon'], tier: 3,
+    id: 'fd_third', name: 'Third Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 3,
     mult: 6, drain: 5, control: -18, strain: 3,
     req: { parent: 'fd_second', power: 40000 },
     hint: 'An ugly, transitional shape most of your kind skip.',
     desc: 'An elongated skull and a body built entirely for killing.',
   },
   {
-    id: 'fd_final', name: 'Final Form', ladder: ['frostdemon'], tier: 5,
+    id: 'fd_final', name: 'Final Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 5,
     mult: 20, drain: 1.5, control: 25, strain: 0,
     req: { parent: 'fd_third', power: 120000 },
     hint: 'The small, smooth, perfect one. This is what you actually are.',
     desc: 'Compact, white, and holding back most of it out of habit.',
   },
   {
-    id: 'fd_hundred', name: '100% Full Power', ladder: ['frostdemon'], tier: 7,
+    id: 'fd_hundred', name: '100% Full Power', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 7,
     mult: 60, drain: 16, control: -10, strain: 12,
     req: { parent: 'fd_final', stat: { durability: 60 } },
     hint: 'Stop suppressing. It burns through you fast.',
     desc: 'Swollen with your own power, and losing it by the second.',
   },
   {
-    id: 'golden', name: 'Golden Form', ladder: ['frostdemon'], tier: 9,
+    id: 'golden', name: 'Golden Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 9,
     mult: 1400, drain: 20, control: 5, strain: 14,
     req: { parent: 'fd_final', custom: 'trained_at_all', stat: { discipline: 45 } },
     hint: 'Four months of actual training would do it. Four months.',
     desc: 'Gold and violet. Enormous, and it eats your stamina alive until you master it.',
   },
   {
-    id: 'black_form', name: 'Black Form', ladder: ['frostdemon'], tier: 12,
+    id: 'black_form', name: 'Black Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 12,
     mult: 20000, drain: 8, control: 30, strain: 6,
     req: { parent: 'golden', stat: { discipline: 80 }, custom: 'extreme_isolation_training' },
     hint: 'Ten years in a chamber where nothing lives. Come out different.',
@@ -2698,28 +2771,28 @@ const TRANSFORMATIONS = [
 
   // --------------------------------------------------------------- Android
   {
-    id: 'overclock', name: 'Overclock', ladder: ['android', 'tuffle'], tier: 3,
+    id: 'overclock', name: 'Overclock', ladder: ['android', 'tuffle', 'half_android', 'frost_android'], tier: 3,
     mult: 3.5, drain: 10, control: -5, strain: 14,
     req: { stat: { intellect: 50 } },
     hint: 'Push the reactor past its rated output and hope the frame holds.',
     desc: 'Your coolant is boiling and your output has never been higher.',
   },
   {
-    id: 'core_mk2', name: 'Power Core Mk-II', ladder: ['android', 'tuffle'], tier: 6,
+    id: 'core_mk2', name: 'Power Core Mk-II', ladder: ['android', 'tuffle', 'half_android', 'frost_android'], tier: 6,
     mult: 26, drain: 0, control: 0, strain: 0,
     req: { custom: 'upgrade_2' },
     hint: 'Find a lab and a very good engineer. Possibly yourself.',
     desc: 'A permanent hardware upgrade. No aura, no drain, just more of you.',
   },
   {
-    id: 'core_mk3', name: 'Infinite Core', ladder: ['android', 'tuffle'], tier: 9,
+    id: 'core_mk3', name: 'Infinite Core', ladder: ['android', 'tuffle', 'half_android', 'frost_android'], tier: 9,
     mult: 700, drain: 0, control: 0, strain: 0,
     req: { parent: 'core_mk2', custom: 'upgrade_3' },
     hint: 'The blueprint that killed the man who drew it.',
     desc: 'Limitless energy in a frame that was never meant to carry it.',
   },
   {
-    id: 'hell_mode', name: 'Hell Mode', ladder: ['android', 'bioandroid', 'tuffle'], tier: 11,
+    id: 'hell_mode', name: 'Hell Mode', ladder: ['android', 'bioandroid', 'tuffle', 'half_android', 'frost_android'], tier: 11,
     mult: 3000, drain: 30, control: -20, strain: 30,
     req: { parent: 'core_mk3', anyFlag: ['betrayed', 'creator_dead'] },
     hint: 'Remove every safety limiter your maker installed.',
@@ -3512,13 +3585,20 @@ const NAME_TABLES = {
   yardratian: [YARDRAT_ROOTS, YARDRAT_TAILS],
   cerealian: [CEREAL_ROOTS, CEREAL_TAILS],
   tuffle: [TUFFLE_ROOTS, TUFFLE_TAILS],
+  half_frostkin: [FROST_ROOTS.concat(EARTH_ROOTS), FROST_TAILS.concat(EARTH_TAILS)],
+  half_android: [EARTH_ROOTS, EARTH_TAILS],
   other: [EARTH_ROOTS, EARTH_TAILS],
 };
 
 function generateName(rng, raceId) {
-  if (raceId === 'android') {
+  if (raceId === 'android' || (raceId === 'half_android' && rng.chance(0.2))) {
     return rng.chance(0.5)
       ? `${rng.pick(ANDROID_PREFIX)} ${rng.int(2, 99)}`
+      : `${rng.pick(ANDROID_SUFFIX)}-${rng.int(1, 40)}`;
+  }
+  if (raceId === 'frost_android') {
+    return rng.chance(0.5)
+      ? rng.pick(FROST_ROOTS) + rng.pick(FROST_TAILS)
       : `${rng.pick(ANDROID_SUFFIX)}-${rng.int(1, 40)}`;
   }
   if (raceId === 'bioandroid') {
@@ -3563,6 +3643,9 @@ const TITLES = {
   tuffle: ['Chief Engineer', 'Archivist', 'Survivor', 'Machine-Wright'],
   yardratian: ['Spirit Adept', 'Elder', 'Wanderer'],
   cerealian: ['Bounty Hunter', 'Survivor', 'Scavenger', 'Last Son'],
+  half_android: ['Field Unit', 'Escaped Asset', 'Student', 'Delivery Driver'],
+  half_frostkin: ['Heir', 'Exile', 'Wanderer', 'Sensei'],
+  frost_android: ['Prototype', 'Security Model', 'Governor', 'Escaped Asset'],
   other: ['Mercenary', 'Trader', 'Pilot', 'Nomad'],
 };
 
@@ -4755,6 +4838,15 @@ function upbringingWeights(raceId, year) {
       break;
     case 'cerealian':
       Object.assign(w, { saiyan_creche: 0, conquered: 10, exile: 6, self_raised: 5, animals: 2, farm: 3, city: 2, street: 2, royal: 0.5, wealthy: 0.5 });
+      break;
+    case 'half_android':
+      Object.assign(w, { saiyan_creche: 0, lab: 6, city: 6, wealthy: 3, foster: 4, street: 2, self_raised: 2, farm: 1, temple: 0, royal: 0 });
+      break;
+    case 'half_frostkin':
+      Object.assign(w, { saiyan_creche: 0, city: 5, exile: 5, wealthy: 4, foster: 3, warrior_clan: 2, royal: 1, temple: 1, animals: 0.5 });
+      break;
+    case 'frost_android':
+      Object.assign(w, { saiyan_creche: 0, lab: 8, exile: 6, royal: 3, self_raised: 3, city: 1, wealthy: 1, farm: 0, temple: 0, street: 1 });
       break;
     default:
       break;
@@ -6026,6 +6118,9 @@ const SPECIES_LOOK = {
   tuffle: { skin: 'grey', hairStyle: 'cropped', hairColour: 'brown', outfit: 'lab', eyeColour: 'brown', face: 'round' },
   yardratian: { skin: 'blue', hairStyle: 'bald', hairColour: 'white', outfit: 'namek_robe', eyeColour: 'black', face: 'long' },
   cerealian: { skin: 'tan', hairStyle: 'long', hairColour: 'white', outfit: 'coat', eyeColour: 'grey', face: 'angular' },
+  half_android: { skin: 'light', hairStyle: 'sidepart', hairColour: 'blonde', outfit: 'casual', eyeColour: 'blue', face: 'square' },
+  half_frostkin: { skin: 'light', hairStyle: 'cropped', hairColour: 'white', outfit: 'gi_orange', eyeColour: 'red', face: 'angular' },
+  frost_android: { skin: 'pale', hairStyle: 'bald', hairColour: 'silver', outfit: 'none', eyeColour: 'red', face: 'angular' },
   other: { skin: 'tan', hairStyle: 'cropped', hairColour: 'black', outfit: 'coat', eyeColour: 'black', face: 'square' },
 };
 
@@ -6349,8 +6444,17 @@ function makeChild(rng, character, partner, year) {
   let raceId = character.raceId;
   const p = partner ? partner.raceId : character.raceId;
   const mix = [character.raceId, p].sort().join('+');
+  const ANDROID_KIN = ['android', 'bioandroid', 'half_android', 'frost_android'];
+  const FROST_KIN = ['frostdemon', 'half_frostkin', 'frost_android'];
+  const isEarthlingLike = (r) => r === 'earthling' || r === 'halfsaiyan';
   if (mix === 'earthling+saiyan' || mix === 'earthling+halfsaiyan' || mix === 'halfsaiyan+saiyan') raceId = 'halfsaiyan';
   else if (character.raceId === 'halfsaiyan' && p === 'halfsaiyan') raceId = 'halfsaiyan';
+  else if (isEarthlingLike(character.raceId) && ANDROID_KIN.includes(p)) raceId = 'half_android';
+  else if (isEarthlingLike(p) && ANDROID_KIN.includes(character.raceId)) raceId = 'half_android';
+  else if (isEarthlingLike(character.raceId) && FROST_KIN.includes(p)) raceId = 'half_frostkin';
+  else if (isEarthlingLike(p) && FROST_KIN.includes(character.raceId)) raceId = 'half_frostkin';
+  else if (FROST_KIN.includes(character.raceId) && ANDROID_KIN.includes(p)) raceId = 'frost_android';
+  else if (FROST_KIN.includes(p) && ANDROID_KIN.includes(character.raceId)) raceId = 'frost_android';
   else if (p && rng.chance(0.5)) raceId = p;
 
   const child = makeNpc(rng, {

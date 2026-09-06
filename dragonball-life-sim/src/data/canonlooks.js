@@ -424,6 +424,9 @@ export const SPECIES_LOOK = {
   tuffle: { skin: 'grey', hairStyle: 'cropped', hairColour: 'brown', outfit: 'lab', eyeColour: 'brown', face: 'round' },
   yardratian: { skin: 'blue', hairStyle: 'bald', hairColour: 'white', outfit: 'namek_robe', eyeColour: 'black', face: 'long' },
   cerealian: { skin: 'tan', hairStyle: 'long', hairColour: 'white', outfit: 'coat', eyeColour: 'grey', face: 'angular' },
+  half_android: { skin: 'light', hairStyle: 'sidepart', hairColour: 'blonde', outfit: 'casual', eyeColour: 'blue', face: 'square' },
+  half_frostkin: { skin: 'light', hairStyle: 'cropped', hairColour: 'white', outfit: 'gi_orange', eyeColour: 'red', face: 'angular' },
+  frost_android: { skin: 'pale', hairStyle: 'bald', hairColour: 'silver', outfit: 'none', eyeColour: 'red', face: 'angular' },
   other: { skin: 'tan', hairStyle: 'cropped', hairColour: 'black', outfit: 'coat', eyeColour: 'black', face: 'square' },
 };
 

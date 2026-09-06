@@ -60,13 +60,20 @@ const NAME_TABLES = {
   yardratian: [YARDRAT_ROOTS, YARDRAT_TAILS],
   cerealian: [CEREAL_ROOTS, CEREAL_TAILS],
   tuffle: [TUFFLE_ROOTS, TUFFLE_TAILS],
+  half_frostkin: [FROST_ROOTS.concat(EARTH_ROOTS), FROST_TAILS.concat(EARTH_TAILS)],
+  half_android: [EARTH_ROOTS, EARTH_TAILS],
   other: [EARTH_ROOTS, EARTH_TAILS],
 };
 
 export function generateName(rng, raceId) {
-  if (raceId === 'android') {
+  if (raceId === 'android' || (raceId === 'half_android' && rng.chance(0.2))) {
     return rng.chance(0.5)
       ? `${rng.pick(ANDROID_PREFIX)} ${rng.int(2, 99)}`
+      : `${rng.pick(ANDROID_SUFFIX)}-${rng.int(1, 40)}`;
+  }
+  if (raceId === 'frost_android') {
+    return rng.chance(0.5)
+      ? rng.pick(FROST_ROOTS) + rng.pick(FROST_TAILS)
       : `${rng.pick(ANDROID_SUFFIX)}-${rng.int(1, 40)}`;
   }
   if (raceId === 'bioandroid') {
@@ -111,6 +118,9 @@ export const TITLES = {
   tuffle: ['Chief Engineer', 'Archivist', 'Survivor', 'Machine-Wright'],
   yardratian: ['Spirit Adept', 'Elder', 'Wanderer'],
   cerealian: ['Bounty Hunter', 'Survivor', 'Scavenger', 'Last Son'],
+  half_android: ['Field Unit', 'Escaped Asset', 'Student', 'Delivery Driver'],
+  half_frostkin: ['Heir', 'Exile', 'Wanderer', 'Sensei'],
+  frost_android: ['Prototype', 'Security Model', 'Governor', 'Escaped Asset'],
   other: ['Mercenary', 'Trader', 'Pilot', 'Nomad'],
 };
 

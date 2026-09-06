@@ -295,8 +295,17 @@ export function makeChild(rng, character, partner, year) {
   let raceId = character.raceId;
   const p = partner ? partner.raceId : character.raceId;
   const mix = [character.raceId, p].sort().join('+');
+  const ANDROID_KIN = ['android', 'bioandroid', 'half_android', 'frost_android'];
+  const FROST_KIN = ['frostdemon', 'half_frostkin', 'frost_android'];
+  const isEarthlingLike = (r) => r === 'earthling' || r === 'halfsaiyan';
   if (mix === 'earthling+saiyan' || mix === 'earthling+halfsaiyan' || mix === 'halfsaiyan+saiyan') raceId = 'halfsaiyan';
   else if (character.raceId === 'halfsaiyan' && p === 'halfsaiyan') raceId = 'halfsaiyan';
+  else if (isEarthlingLike(character.raceId) && ANDROID_KIN.includes(p)) raceId = 'half_android';
+  else if (isEarthlingLike(p) && ANDROID_KIN.includes(character.raceId)) raceId = 'half_android';
+  else if (isEarthlingLike(character.raceId) && FROST_KIN.includes(p)) raceId = 'half_frostkin';
+  else if (isEarthlingLike(p) && FROST_KIN.includes(character.raceId)) raceId = 'half_frostkin';
+  else if (FROST_KIN.includes(character.raceId) && ANDROID_KIN.includes(p)) raceId = 'frost_android';
+  else if (FROST_KIN.includes(p) && ANDROID_KIN.includes(character.raceId)) raceId = 'frost_android';
   else if (p && rng.chance(0.5)) raceId = p;
 
   const child = makeNpc(rng, {
