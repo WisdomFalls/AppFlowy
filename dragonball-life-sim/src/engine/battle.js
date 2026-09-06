@@ -14,6 +14,7 @@ import { getPlace } from '../data/places.js';
 import { getRace, hasPerk } from '../data/races.js';
 import { numberish } from './text.js';
 import { damageGear } from './inventory.js';
+import { spreadWord, DEED_SCALE } from './settlement.js';
 
 /**
  * What people say mid-fight. Nobody in this setting fights silently: they
@@ -863,6 +864,15 @@ export function battleAftermath(state, rng, battle, opts = {}) {
   }
 
   if (outcome === 'won') {
+    // How far the story travels depends on what you beat, not on you.
+    const theirs = battle.them.basePower || 1;
+    const scale = theirs > 1e12 ? DEED_SCALE.god_beaten
+      : theirs > 1e8 ? DEED_SCALE.city
+        : theirs > 1e5 ? DEED_SCALE.tournament : DEED_SCALE.street;
+    const word = spreadWord(state, { scale });
+    if (word.gained > 100000) {
+      lines.push(`Word of this reaches about ${numberish(word.gained)} people who were not there.`);
+    }
     c.fame = clamp(c.fame + (opts.fameGain ?? 4), 0, 100);
   } else if (outcome === 'lost' && battle.stakes === 'lethal' && rng.chance(0.55)) {
     return { lines, text: lines.join(' '), death: `Killed by ${battle.them.name}` };

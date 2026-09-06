@@ -7400,6 +7400,358 @@ function repairItem(state, itemId) {
   return { SLOTS, itemSlot, inventoryOf, ensureBag, findEntry, hasItem, addItem, removeItem, toggleWorn, valueHere, sellItem, buyItem, npcBag, knownItems, requestItem, giveItem, damageGear, repairItem };
 })();
 
+/* ==== data/planets.js ==== */
+const __mod_data_planets_js = (function () {
+// Worlds, as places with politics rather than backdrops. Each has people on it,
+// a law, somebody who defends it, and a distance from everywhere else.
+
+const PLANETS = [
+  {
+    id: 'earth', name: 'Earth', distance: 0,
+    inhabitants: 'Humans, mostly, plus a handful of things that are not',
+    population: 'billions', tech: 'capsule-age', alignment: 'peaceful',
+    law: 'Evil is feared and answered. Someone always comes.',
+    defenders: ['goku', 'piccolo', 'vegeta', 'gohan', 'android_18', 'krillin'],
+    flora: 'Forests, oceans, and dinosaurs nobody got round to removing.',
+    strength: 'A handful of fighters here can destroy the planet. The rest cannot fight at all.',
+  },
+  {
+    id: 'planet_vegeta', name: 'Planet Vegeta', distance: 8,
+    inhabitants: 'Saiyans, and the Tuffles they replaced',
+    population: 'thousands', tech: 'imperial vassal', alignment: 'conquering',
+    law: 'Strength decides. There is no second rule.',
+    defenders: ['nappa', 'bardock'],
+    flora: 'Red grass, hard ground, and nothing that has not learned to fight back.',
+    strength: 'Everyone can fight. Most of them are worse at it than they believe.',
+  },
+  {
+    id: 'sadala', name: 'Planet Sadala', distance: 40,
+    inhabitants: 'Saiyans who never became conquerors',
+    population: 'millions', tech: 'modern', alignment: 'proud',
+    law: 'Honour duels, formally supervised.',
+    defenders: ['cabba', 'caulifla', 'kale'],
+    flora: 'Farmland, mountains, and stadiums.',
+    strength: 'A warrior culture with rules, which makes it more dangerous, not less.',
+  },
+  {
+    id: 'namek', name: 'Planet Namek', distance: 12,
+    inhabitants: 'Namekians, in villages of a hundred or so',
+    population: 'thousands', tech: 'none to speak of', alignment: 'peaceful',
+    law: 'Elders decide. Violence is close to unthinkable.',
+    defenders: ['nail', 'moori'],
+    flora: 'Blue grass, three suns, and no night at all.',
+    strength: 'Warrior-types are formidable. There are very few of them.',
+  },
+  {
+    id: 'new_namek', name: 'New Namek', distance: 14, inhabitants: 'Namekians, rebuilding',
+    population: 'thousands', tech: 'none to speak of', alignment: 'peaceful',
+    law: 'Elders decide, and this time they keep a watch posted.',
+    defenders: ['moori'], flora: 'The same blue grass, grown from seed.',
+    strength: 'They have learned to be careful.',
+  },
+  {
+    id: 'yardrat', name: 'Planet Yardrat', distance: 22,
+    inhabitants: 'Yardratians, small and unhurried',
+    population: 'millions', tech: 'spiritual', alignment: 'pacifist',
+    law: 'Nobody is made to do anything.',
+    defenders: ['yardrat_elder'],
+    flora: 'Low domes, terraces, and gardens grown for the shape of them.',
+    strength: 'Almost no muscle. Techniques nobody else in the universe has.',
+  },
+  {
+    id: 'cereal', name: 'Planet Cereal', distance: 30,
+    inhabitants: 'Two Cerealians, and the ruins of everyone else',
+    population: 'a handful', tech: 'scavenged', alignment: 'grieving',
+    law: 'There is nobody left to make one.',
+    defenders: [], flora: 'Dust, wind, and the outlines of towns.',
+    strength: 'One survivor with a grudge and a dragon of his own.',
+  },
+  {
+    id: 'frieza_79', name: 'Planet Frieza 79', distance: 18,
+    inhabitants: 'Frieza Force garrison, various species',
+    population: 'tens of thousands', tech: 'imperial', alignment: 'imperial',
+    law: 'Rank. Anything a superior wants is legal.',
+    defenders: ['zarbon', 'dodoria'],
+    flora: 'Nothing grows. Everything is shipped in.',
+    strength: 'Individually unimpressive. There are a great many of them.',
+  },
+  {
+    id: 'void', name: 'Deep Space', distance: 25, inhabitants: 'Whoever is passing through',
+    population: 'none', tech: 'none', alignment: 'indifferent',
+    law: 'None whatsoever.', defenders: [], flora: 'Nothing.',
+    strength: 'Empty, until it is not.',
+  },
+  {
+    id: 'otherworld', name: 'The Other World', distance: 100, inhabitants: 'The dead',
+    population: 'uncountable', tech: 'divine', alignment: 'divine',
+    law: 'King Yemma decides, and there is no appeal.', defenders: ['king_kai', 'supreme_kai'],
+    flora: 'Cloud, mostly.', strength: 'Everyone here has already died once.',
+  },
+];
+
+const PLANET_BY_ID = Object.fromEntries(PLANETS.map((p) => [p.id, p]));
+
+function getPlanet(id) {
+  return PLANET_BY_ID[id] || PLANET_BY_ID.earth;
+}
+
+/** Rough travel years between two worlds, by method. */
+function travelYears(fromId, toId, method) {
+  const a = getPlanet(fromId);
+  const b = getPlanet(toId);
+  const gap = Math.abs((a.distance || 0) - (b.distance || 0)) + (a.id === b.id ? 0 : 6);
+  switch (method) {
+    case 'instant': return 0;
+    case 'ship': return Math.max(0, Math.round(gap / 12));
+    case 'pod': return Math.max(1, Math.round(gap / 7));
+    case 'flight': return Math.max(2, Math.round(gap / 3));
+    default: return Math.max(1, Math.round(gap / 8));
+  }
+}
+
+const TRAVEL_METHODS = [
+  {
+    id: 'instant', name: 'Instant Transmission', needs: 'the technique',
+    blurb: 'Lock onto a signature and be there. No time passes at all.',
+  },
+  {
+    id: 'ship', name: 'Capsule spaceship', needs: 'a ship',
+    blurb: 'Months, sometimes a year. There is a kitchen and a gravity setting.',
+  },
+  {
+    id: 'pod', name: 'Attack pod', needs: 'a pod',
+    blurb: 'You sleep through it. Years go past while you do.',
+  },
+  {
+    id: 'flight', name: 'Fly there yourself', needs: 'enormous speed',
+    blurb: 'It can be done. It takes a very long time and you arrive hungry.',
+  },
+];
+  return { PLANETS, PLANET_BY_ID, getPlanet, travelYears, TRAVEL_METHODS };
+})();
+
+/* ==== engine/settlement.js ==== */
+const __mod_engine_settlement_js = (function () {
+// Somewhere to live, and what your name is worth.
+//
+// Two systems that both answer the same question: where do you actually
+// belong. A home is a place on a world that is yours, however you got it. A
+// reputation is what people on worlds you have never visited think of you,
+// and it is not capped at a hundred.
+
+const { clamp } = __mod_engine_rng_js;
+const { getPlace, PLACES } = __mod_data_places_js;
+const { getPlanet, PLANETS } = __mod_data_planets_js;
+const { currencyFor, priceIn, canAfford, debit, formatMoney, balance } = __mod_data_currency_js;
+const { numberish } = __mod_engine_text_js;
+
+// ------------------------------------------------------------------ homes
+
+const HOME_KINDS = [
+  {
+    id: 'shack', name: 'A shack you put up yourself', cost: 12000, comfort: 4, iq: 0,
+    desc: 'Four walls, mostly. It keeps rain out and nothing else.',
+  },
+  {
+    id: 'house', name: 'An ordinary house', cost: 220000, comfort: 12, iq: 0,
+    desc: 'Neighbours, a roof that works, and somewhere to put things.',
+  },
+  {
+    id: 'capsule', name: 'A capsule house', cost: 380000, comfort: 14, iq: 0,
+    desc: 'A whole house in your pocket, assuming you remember which pocket.',
+  },
+  {
+    id: 'compound', name: 'A compound', cost: 2400000, comfort: 20, train: 1.15, iq: 0,
+    desc: 'Walls, land, and nobody within shouting distance.',
+  },
+  {
+    id: 'estate', name: 'An estate', cost: 18000000, comfort: 28, train: 1.2, fame: 6, iq: 0,
+    desc: 'More rooms than you will use and a name people recognise.',
+  },
+  {
+    id: 'fortress', name: 'A fortress', cost: 90000000, comfort: 24, train: 1.35, fame: 12, iq: 30,
+    desc: 'Built to survive somebody landing on it. Somebody probably will.',
+  },
+];
+
+function homeOf(state) {
+  return state.character.home || null;
+}
+
+/** Everything you could do about somewhere to live, here, now. */
+function homeOptions(state) {
+  const c = state.character;
+  const place = getPlace(c.placeId);
+  const cur = currencyFor(place.planet);
+  const out = [];
+  for (const kind of HOME_KINDS) {
+    const price = priceIn(kind.cost, cur.id);
+    out.push({
+      id: 'buy:' + kind.id, kind, how: 'buy',
+      label: `Buy ${kind.name.toLowerCase()}`,
+      hint: `${formatMoney(price, cur.id)}. ${kind.desc}`,
+      price, currency: cur.id,
+      disabled: !canAfford(c, cur.id, price),
+    });
+    // Building costs a fraction of the price and a year of your attention,
+    // and needs a head for it or somebody who has one.
+    const buildPrice = Math.round(price * 0.35);
+    const smart = (c.iq || 100) >= 105 || (kind.iq && (c.iq || 100) >= kind.iq + 90);
+    out.push({
+      id: 'build:' + kind.id, kind, how: 'build',
+      label: `Build ${kind.name.toLowerCase()}`,
+      hint: smart
+        ? `${formatMoney(buildPrice, cur.id)} in materials. You can work it out.`
+        : `${formatMoney(buildPrice, cur.id)} in materials, and you would need help.`,
+      price: buildPrice, currency: cur.id, needsHelp: !smart,
+      disabled: !canAfford(c, cur.id, buildPrice),
+    });
+  }
+  out.push({
+    id: 'take', how: 'take',
+    label: 'Take one that is already standing',
+    hint: 'Somebody lives there now. That is the whole problem with it.',
+    price: 0, currency: cur.id,
+  });
+  return out;
+}
+
+function settleHome(state, rng, optionId, helperNpc) {
+  const c = state.character;
+  const place = getPlace(c.placeId);
+  const cur = currencyFor(place.planet);
+  const opts = homeOptions(state);
+  const opt = opts.find((o) => o.id === optionId);
+  if (!opt) return { ok: false, text: 'Nothing comes of it.' };
+
+  if (opt.how === 'take') {
+    const held = clamp(0.3 + Math.log10(Math.max(1, c.power)) / 14, 0.2, 0.95);
+    if (!rng.chance(held)) {
+      return { ok: false, text: 'Whoever lives there has friends, and the friends arrive first. You leave it.' };
+    }
+    c.home = {
+      kind: 'taken', name: 'A house that was somebody else\'s', placeId: c.placeId,
+      planet: place.planet, comfort: 10, since: c.birthYear + c.age, stolen: true,
+    };
+    c.karma = clamp(c.karma - 22, -100, 100);
+    return {
+      ok: true, stolen: true,
+      text: 'You take it. They do not argue for long, and the neighbours stop making eye contact with you within a week.',
+    };
+  }
+
+  if (!canAfford(c, cur.id, opt.price)) {
+    return { ok: false, text: `That costs ${formatMoney(opt.price, cur.id)}. You do not have it.` };
+  }
+  debit(c, cur.id, opt.price);
+
+  if (opt.how === 'build') {
+    const helped = !!helperNpc;
+    const ok = !opt.needsHelp || helped;
+    if (!ok) {
+      return {
+        ok: false,
+        text: 'You get about a third of the way up and it comes down in the night. The materials are gone.',
+      };
+    }
+    c.home = {
+      kind: opt.kind.id, name: opt.kind.name, placeId: c.placeId, planet: place.planet,
+      comfort: opt.kind.comfort, train: opt.kind.train, since: c.birthYear + c.age,
+      built: true, helper: helperNpc ? helperNpc.name : null,
+    };
+    return {
+      ok: true, built: true,
+      text: helperNpc
+        ? `${helperNpc.name} does the parts you would have got wrong, and lets you think you did them. It stands.`
+        : 'It takes most of a year and it stands when you are finished, which is more than you expected.',
+    };
+  }
+
+  c.home = {
+    kind: opt.kind.id, name: opt.kind.name, placeId: c.placeId, planet: place.planet,
+    comfort: opt.kind.comfort, train: opt.kind.train, since: c.birthYear + c.age,
+  };
+  if (opt.kind.fame) c.fame = clamp(c.fame + opt.kind.fame, 0, 100);
+  return { ok: true, text: `${opt.kind.name}. ${opt.kind.desc}` };
+}
+
+/** What living somewhere does for you, per year. */
+function homeBonus(state) {
+  const home = homeOf(state);
+  if (!home) return { comfort: 0, train: 1 };
+  const here = getPlace(state.character.placeId).planet === home.planet;
+  return {
+    comfort: here ? home.comfort : Math.round(home.comfort * 0.25),
+    train: here ? (home.train || 1) : 1,
+    here,
+  };
+}
+
+// ------------------------------------------------------------ reputation
+
+/**
+ * Reputation is not a percentage. It is how many people have heard, which
+ * on a galactic scale runs to the billions and beyond, and it spreads from
+ * whatever you did and how strong you were when you did it.
+ */
+function reputationOf(state) {
+  const c = state.character;
+  return {
+    reach: c.reputation || 0,
+    karma: c.karma || 0,
+    label: reputationLabel(c.reputation || 0, c.karma || 0),
+  };
+}
+
+const REACH_STEPS = [
+  [0, 'Nobody', 'Nobody has heard of you.'],
+  [200, 'Locally known', 'People in this district know the name.'],
+  [20000, 'Known on this world', 'You get recognised in cities you have never visited.'],
+  [4000000, 'Known on several worlds', 'Traders carry the name between systems.'],
+  [900000000, 'Known across the sector', 'Whole populations have an opinion about you.'],
+  [80000000000, 'Known across the galaxy', 'There are worlds that have never seen you and are frightened anyway.'],
+  [2000000000000, 'Known to the universe', 'Your name has reached places light has not.'],
+  [Infinity, 'Known past this universe', 'Other universes have your file.'],
+];
+
+function reputationLabel(reach, karma) {
+  let step = REACH_STEPS[0];
+  for (const s of REACH_STEPS) { if (reach >= s[0]) step = s; }
+  const tone = karma <= -55 ? 'feared' : karma <= -20 ? 'distrusted' : karma >= 55 ? 'loved' : karma >= 20 ? 'liked' : 'known';
+  return { reach: step[1], line: step[2], tone, text: `${step[1]}, and ${tone}.` };
+}
+
+/**
+ * Something happened and people heard about it. `scale` is roughly how many
+ * people could have witnessed or been told, and power decides how far the
+ * story travels beyond that.
+ */
+function spreadWord(state, opts = {}) {
+  const c = state.character;
+  const power = Math.max(1, c.power || 1);
+  const reachFromPower = Math.pow(Math.log10(power) + 1, 4.2) * 40;
+  const gained = Math.round((opts.scale || 1) * reachFromPower * (opts.multiplier || 1));
+  c.reputation = Math.max(0, (c.reputation || 0) + gained);
+  if (opts.karma) c.karma = clamp(c.karma + opts.karma, -100, 100);
+  // Fame stays as the 0-100 local figure everything else already reads.
+  c.fame = clamp(c.fame + Math.min(12, Math.round(Math.log10(Math.max(10, gained)) * 1.6)), 0, 100);
+  return { gained, total: c.reputation, label: reputationLabel(c.reputation, c.karma) };
+}
+
+/** Scales for the things that generate a reputation, so callers stay honest. */
+const DEED_SCALE = {
+  street: 0.4,
+  tournament: 6,
+  city: 30,
+  world_saved: 900,
+  world_ruled: 1200,
+  world_destroyed: 4000,
+  god_beaten: 9000,
+  universe: 40000,
+};
+  return { HOME_KINDS, homeOf, homeOptions, settleHome, homeBonus, reputationOf, reputationLabel, spreadWord, DEED_SCALE };
+})();
+
 /* ==== engine/battle.js ==== */
 const __mod_engine_battle_js = (function () {
 // Turn-based combat.
@@ -7418,6 +7770,7 @@ const { getPlace } = __mod_data_places_js;
 const { getRace, hasPerk } = __mod_data_races_js;
 const { numberish } = __mod_engine_text_js;
 const { damageGear } = __mod_engine_inventory_js;
+const { spreadWord, DEED_SCALE } = __mod_engine_settlement_js;
 
 /**
  * What people say mid-fight. Nobody in this setting fights silently: they
@@ -8267,6 +8620,15 @@ function battleAftermath(state, rng, battle, opts = {}) {
   }
 
   if (outcome === 'won') {
+    // How far the story travels depends on what you beat, not on you.
+    const theirs = battle.them.basePower || 1;
+    const scale = theirs > 1e12 ? DEED_SCALE.god_beaten
+      : theirs > 1e8 ? DEED_SCALE.city
+        : theirs > 1e5 ? DEED_SCALE.tournament : DEED_SCALE.street;
+    const word = spreadWord(state, { scale });
+    if (word.gained > 100000) {
+      lines.push(`Word of this reaches about ${numberish(word.gained)} people who were not there.`);
+    }
     c.fame = clamp(c.fame + (opts.fameGain ?? 4), 0, 100);
   } else if (outcome === 'lost' && battle.stakes === 'lethal' && rng.chance(0.55)) {
     return { lines, text: lines.join(' '), death: `Killed by ${battle.them.name}` };
@@ -9580,14 +9942,102 @@ const CAREERS = [
   },
 ];
 
+// Off-world work. Earth's fifteen careers are Earth's; a Saiyan settlement
+// hands out ranks, the Frieza Force hands out postings, and Namek does not
+// have jobs in the sense the word usually means.
+CAREERS.push(
+  {
+    id: 'saiyan_rank', name: 'The Saiyan Register', field: 'martial',
+    where: ['saiyan'], planets: ['planet_vegeta', 'sadala'], req: { strength: 35 }, karma: -8,
+    blurb: 'Graded at birth, ranked by what you take, and paid in Battle Merit.',
+    currency: 'merit',
+    rungs: [
+      { title: 'Low-Class Conscript', pay: 30, req: {} },
+      { title: 'Clearing Team Lead', pay: 90, req: { strength: 50, years: 3 } },
+      { title: 'Mid-Class Warrior', pay: 260, req: { strength: 62, durability: 55, years: 6 } },
+      { title: 'Elite', pay: 800, req: { strength: 75, technique: 60, fame: 25, years: 11 } },
+      { title: 'Elite Commander', pay: 2400, req: { strength: 85, charisma: 60, fame: 45, years: 17 } },
+    ],
+  },
+  {
+    id: 'force_posting', name: 'Frieza Force Service', field: 'martial',
+    where: ['imperial'], planets: ['frieza_79', 'void'], req: { discipline: 30 }, karma: -14,
+    blurb: 'A number instead of a posting, a scouter, and a quota nobody explains.',
+    currency: 'scrip',
+    rungs: [
+      { title: 'Conscript', pay: 40, req: {} },
+      { title: 'Trooper', pay: 130, req: { strength: 45, years: 2 } },
+      { title: 'Squad Leader', pay: 420, req: { strength: 58, charisma: 45, years: 5 } },
+      { title: 'Sector Officer', pay: 1400, req: { strength: 70, intellect: 55, years: 10 } },
+      { title: 'Sector Commander', pay: 5000, req: { strength: 82, charisma: 60, fame: 40, years: 16 } },
+    ],
+  },
+  {
+    id: 'namek_elder', name: 'The Village', field: 'spiritual',
+    where: ['namek', 'sacred'], planets: ['namek', 'new_namek'], req: { kiControl: 35 }, karma: 12,
+    blurb: 'Namekians do not have jobs. They have what the village needs, and somebody who does it.',
+    currency: 'water',
+    rungs: [
+      { title: 'Of the Village', pay: 4, req: {} },
+      { title: 'Warrior-Type', pay: 12, req: { strength: 45, years: 3 } },
+      { title: 'Keeper of the Well', pay: 30, req: { kiControl: 60, intellect: 55, years: 8 } },
+      { title: 'Village Elder', pay: 70, req: { kiControl: 72, charisma: 60, years: 15 } },
+      { title: 'Eldest', pay: 160, req: { kiControl: 85, intellect: 70, fame: 30, years: 24 } },
+    ],
+  },
+  {
+    id: 'yardrat_teacher', name: 'The Yardrat Discipline', field: 'spiritual',
+    where: ['spirit'], planets: ['yardrat'], req: { kiControl: 45 }, karma: 8,
+    blurb: 'Teaching a technique that takes most people a decade to hold in their head.',
+    currency: 'shard',
+    rungs: [
+      { title: 'Student of the Discipline', pay: 2, req: {} },
+      { title: 'Practitioner', pay: 8, req: { kiControl: 60, years: 4 } },
+      { title: 'Teacher', pay: 22, req: { kiControl: 75, intellect: 60, years: 10 } },
+      { title: 'Keeper of the Method', pay: 60, req: { kiControl: 88, years: 20 } },
+    ],
+  },
+  {
+    id: 'patrol_officer', name: 'The Galactic Patrol', field: 'law',
+    where: ['civilised', 'urban', 'imperial', 'tech'], req: { discipline: 40 }, karma: 15,
+    blurb: 'Understaffed, generally decent, and two centuries behind the things it polices.',
+    rungs: [
+      { title: 'Cadet', pay: 22000, req: {} },
+      { title: 'Officer', pay: 70000, req: { discipline: 55, years: 3 } },
+      { title: 'Senior Officer', pay: 190000, req: { discipline: 65, intellect: 55, years: 8 } },
+      { title: 'Marshal', pay: 600000, req: { discipline: 78, strength: 65, fame: 30, years: 15 } },
+      { title: 'Elite Marshal', pay: 1800000, req: { discipline: 88, strength: 78, fame: 50, years: 22 } },
+    ],
+  },
+  {
+    id: 'otherworld_work', name: 'Other World Administration', field: 'spiritual',
+    where: ['otherworld', 'judgement'], planets: ['otherworld'], req: { discipline: 30 }, karma: 6,
+    blurb: 'The afterlife has an administration, and the administration has vacancies.',
+    currency: 'favour',
+    rungs: [
+      { title: 'Queue Marshal', pay: 5, req: {} },
+      { title: 'Ogre\'s Assistant', pay: 14, req: { strength: 45, years: 3 } },
+      { title: 'Ledger Keeper', pay: 40, req: { intellect: 60, years: 8 } },
+      { title: 'Yemma\'s Clerk', pay: 110, req: { intellect: 72, discipline: 65, years: 14 } },
+    ],
+  },
+);
+
 const CAREER_BY_ID = Object.fromEntries(CAREERS.map((c) => [c.id, c]));
 
 function getCareer(id) {
   return CAREER_BY_ID[id];
 }
 
-function careersFor(character, placeTags) {
+function careersFor(character, placeTags, planetId) {
   return CAREERS.filter((c) => {
+    // A career tied to particular worlds is not available anywhere else, and
+    // Earth's careers are not available off Earth.
+    if (c.planets && planetId && !c.planets.includes(planetId)) return false;
+    if (!c.planets && planetId && planetId !== 'earth'
+      && !c.where.some((w) => ['imperial', 'tech', 'civilised', 'urban', 'saiyan', 'spirit', 'sacred', 'otherworld'].includes(w))) {
+      return false;
+    }
     if (!c.where.some((w) => placeTags.includes(w))) return false;
     for (const [stat, min] of Object.entries(c.req)) {
       if ((character.stats[stat] || 0) < min) return false;
@@ -9743,7 +10193,7 @@ registerEvents([
     minBioAge: 15, maxBioAge: 66,
     when: (ctx) => !ctx.character.career,
     slots: (ctx) => {
-      const options = careersFor(ctx.character, ctx.place.tags);
+      const options = careersFor(ctx.character, ctx.place.tags, ctx.place.planet);
       if (!options.length) return null;
       const career = ctx.rng.pick(options);
       return { careerId: career.id, careerName: career.name, rung: career.rungs[0].title, pay: career.rungs[0].pay };
@@ -12358,6 +12808,7 @@ const { combatPower, winChance, powerTier } = __mod_engine_stats_js;
 const { CANON, canonAlive, canonPower, getCanon } = __mod_data_canon_js;
 const { generateFullName } = __mod_data_names_js;
 const { getRace } = __mod_data_races_js;
+const { spreadWord, DEED_SCALE } = __mod_engine_settlement_js;
 const { universeFighters, multiverseField } = __mod_data_universes_js;
 
 // ------------------------------------------------------------------ formats
@@ -12971,6 +13422,10 @@ function topConsequence(state, rng, t) {
 function settle(state, t, rng = null) {
   const result = payout(state, t);
   const c = state.character;
+  // Winning in front of a crowd is how most people become known.
+  spreadWord(state, {
+    scale: DEED_SCALE.tournament * (result.won ? 3 : 1) * (t.formatId === 'top' ? 900 : 1),
+  });
   c.zeni += result.zeni;
   c.fame = clamp(c.fame + result.fame, 0, 100);
   c.vitals.happiness = clamp(c.vitals.happiness + result.happiness, 0, 100);
@@ -13429,136 +13884,6 @@ registerEvents([
     ],
   },
 ]);
-})();
-
-/* ==== data/planets.js ==== */
-const __mod_data_planets_js = (function () {
-// Worlds, as places with politics rather than backdrops. Each has people on it,
-// a law, somebody who defends it, and a distance from everywhere else.
-
-const PLANETS = [
-  {
-    id: 'earth', name: 'Earth', distance: 0,
-    inhabitants: 'Humans, mostly, plus a handful of things that are not',
-    population: 'billions', tech: 'capsule-age', alignment: 'peaceful',
-    law: 'Evil is feared and answered. Someone always comes.',
-    defenders: ['goku', 'piccolo', 'vegeta', 'gohan', 'android_18', 'krillin'],
-    flora: 'Forests, oceans, and dinosaurs nobody got round to removing.',
-    strength: 'A handful of fighters here can destroy the planet. The rest cannot fight at all.',
-  },
-  {
-    id: 'planet_vegeta', name: 'Planet Vegeta', distance: 8,
-    inhabitants: 'Saiyans, and the Tuffles they replaced',
-    population: 'thousands', tech: 'imperial vassal', alignment: 'conquering',
-    law: 'Strength decides. There is no second rule.',
-    defenders: ['nappa', 'bardock'],
-    flora: 'Red grass, hard ground, and nothing that has not learned to fight back.',
-    strength: 'Everyone can fight. Most of them are worse at it than they believe.',
-  },
-  {
-    id: 'sadala', name: 'Planet Sadala', distance: 40,
-    inhabitants: 'Saiyans who never became conquerors',
-    population: 'millions', tech: 'modern', alignment: 'proud',
-    law: 'Honour duels, formally supervised.',
-    defenders: ['cabba', 'caulifla', 'kale'],
-    flora: 'Farmland, mountains, and stadiums.',
-    strength: 'A warrior culture with rules, which makes it more dangerous, not less.',
-  },
-  {
-    id: 'namek', name: 'Planet Namek', distance: 12,
-    inhabitants: 'Namekians, in villages of a hundred or so',
-    population: 'thousands', tech: 'none to speak of', alignment: 'peaceful',
-    law: 'Elders decide. Violence is close to unthinkable.',
-    defenders: ['nail', 'moori'],
-    flora: 'Blue grass, three suns, and no night at all.',
-    strength: 'Warrior-types are formidable. There are very few of them.',
-  },
-  {
-    id: 'new_namek', name: 'New Namek', distance: 14, inhabitants: 'Namekians, rebuilding',
-    population: 'thousands', tech: 'none to speak of', alignment: 'peaceful',
-    law: 'Elders decide, and this time they keep a watch posted.',
-    defenders: ['moori'], flora: 'The same blue grass, grown from seed.',
-    strength: 'They have learned to be careful.',
-  },
-  {
-    id: 'yardrat', name: 'Planet Yardrat', distance: 22,
-    inhabitants: 'Yardratians, small and unhurried',
-    population: 'millions', tech: 'spiritual', alignment: 'pacifist',
-    law: 'Nobody is made to do anything.',
-    defenders: ['yardrat_elder'],
-    flora: 'Low domes, terraces, and gardens grown for the shape of them.',
-    strength: 'Almost no muscle. Techniques nobody else in the universe has.',
-  },
-  {
-    id: 'cereal', name: 'Planet Cereal', distance: 30,
-    inhabitants: 'Two Cerealians, and the ruins of everyone else',
-    population: 'a handful', tech: 'scavenged', alignment: 'grieving',
-    law: 'There is nobody left to make one.',
-    defenders: [], flora: 'Dust, wind, and the outlines of towns.',
-    strength: 'One survivor with a grudge and a dragon of his own.',
-  },
-  {
-    id: 'frieza_79', name: 'Planet Frieza 79', distance: 18,
-    inhabitants: 'Frieza Force garrison, various species',
-    population: 'tens of thousands', tech: 'imperial', alignment: 'imperial',
-    law: 'Rank. Anything a superior wants is legal.',
-    defenders: ['zarbon', 'dodoria'],
-    flora: 'Nothing grows. Everything is shipped in.',
-    strength: 'Individually unimpressive. There are a great many of them.',
-  },
-  {
-    id: 'void', name: 'Deep Space', distance: 25, inhabitants: 'Whoever is passing through',
-    population: 'none', tech: 'none', alignment: 'indifferent',
-    law: 'None whatsoever.', defenders: [], flora: 'Nothing.',
-    strength: 'Empty, until it is not.',
-  },
-  {
-    id: 'otherworld', name: 'The Other World', distance: 100, inhabitants: 'The dead',
-    population: 'uncountable', tech: 'divine', alignment: 'divine',
-    law: 'King Yemma decides, and there is no appeal.', defenders: ['king_kai', 'supreme_kai'],
-    flora: 'Cloud, mostly.', strength: 'Everyone here has already died once.',
-  },
-];
-
-const PLANET_BY_ID = Object.fromEntries(PLANETS.map((p) => [p.id, p]));
-
-function getPlanet(id) {
-  return PLANET_BY_ID[id] || PLANET_BY_ID.earth;
-}
-
-/** Rough travel years between two worlds, by method. */
-function travelYears(fromId, toId, method) {
-  const a = getPlanet(fromId);
-  const b = getPlanet(toId);
-  const gap = Math.abs((a.distance || 0) - (b.distance || 0)) + (a.id === b.id ? 0 : 6);
-  switch (method) {
-    case 'instant': return 0;
-    case 'ship': return Math.max(0, Math.round(gap / 12));
-    case 'pod': return Math.max(1, Math.round(gap / 7));
-    case 'flight': return Math.max(2, Math.round(gap / 3));
-    default: return Math.max(1, Math.round(gap / 8));
-  }
-}
-
-const TRAVEL_METHODS = [
-  {
-    id: 'instant', name: 'Instant Transmission', needs: 'the technique',
-    blurb: 'Lock onto a signature and be there. No time passes at all.',
-  },
-  {
-    id: 'ship', name: 'Capsule spaceship', needs: 'a ship',
-    blurb: 'Months, sometimes a year. There is a kitchen and a gravity setting.',
-  },
-  {
-    id: 'pod', name: 'Attack pod', needs: 'a pod',
-    blurb: 'You sleep through it. Years go past while you do.',
-  },
-  {
-    id: 'flight', name: 'Fly there yourself', needs: 'enormous speed',
-    blurb: 'It can be done. It takes a very long time and you arrive hungry.',
-  },
-];
-  return { PLANETS, PLANET_BY_ID, getPlanet, travelYears, TRAVEL_METHODS };
 })();
 
 /* ==== engine/events/wishes.js ==== */
@@ -15360,6 +15685,670 @@ registerEvents([
         changes: apply(c2, { karma: -4 }) };
       } },
     ],
+  },
+]);
+})();
+
+/* ==== engine/events/growingup.js ==== */
+const __mod_engine_events_growingup_js = (function () {
+// The things a life teaches you whether or not you go looking.
+//
+// Flight is the obvious one: in this setting nobody who fights walks anywhere
+// after a certain point, and learning it is a moment rather than a purchase.
+// Contacting somebody on another world is the other: once the galaxy is big,
+// keeping a relationship alive across it has to be possible.
+
+const { registerEvents, npcSlot } = __mod_engine_generator_js;
+const { apply, fact, relate, trainYear, powerLine, findNpc, stranger, meetCanon } = __mod_engine_events_helpers_js;
+const { combatPower } = __mod_engine_stats_js;
+const { getPlace, PLACES } = __mod_data_places_js;
+const { PLANETS } = __mod_data_planets_js;
+const { getTechnique } = __mod_data_techniques_js;
+const { currencyFor, formatMoney, canAfford, debit, priceIn } = __mod_data_currency_js;
+const { maturity } = __mod_data_races_js;
+const { numberish } = __mod_engine_text_js;
+const { clamp } = __mod_engine_rng_js;
+
+/** People you know who are not on this world. */
+function offWorld(ctx) {
+  const here = getPlace(ctx.character.placeId).planet;
+  return Object.values(ctx.state.npcs).filter((n) => {
+    if (!n.alive) return false;
+    const p = getPlace(n.placeId || 'east_city');
+    return p && p.planet !== here && (n.closeness || 0) > 25;
+  });
+}
+
+registerEvents([
+  // ------------------------------------------------------------- flight
+  {
+    id: 'learn_flight', noFatigue: true, tags: ['training', 'milestone'], weight: 90,
+    minBioAge: 7,
+    when: (ctx) => !ctx.character.techniques.includes('bukujutsu')
+      && ctx.character.stats.kiControl >= 28
+      && !ctx.character.inAfterlife,
+    slots: (ctx) => {
+      const teachers = Object.values(ctx.state.npcs).filter((n) => n.alive
+        && (n.techniques || []).includes('bukujutsu') && (n.closeness || 0) > 30);
+      const who = teachers.length ? ctx.rng.pick(teachers) : null;
+      return {
+        who: who ? who.name : null,
+        npcId: who ? who.id : null,
+        drop: ctx.rng.pick(['a barn roof', 'a cliff nobody sensible goes near', 'the top of a water tower',
+          'a rock in the middle of a river', 'a ledge you got onto and cannot get off']),
+      };
+    },
+    title: 'Off The Ground',
+    text: (ctx, s) => (s.who
+      ? `{[who] has been doing it in front of you for years|You ask [who] how|You have watched [who] do it and never asked}.
+         {"It is not jumping"|"Stop trying to push off anything"|"You are already doing most of it"}.
+         {They make you stand on [drop] until you work it out|It takes an afternoon and then a month|You fall a great deal}.`
+      : `{Nobody teaches you|You work it out on your own, badly|It happens by accident}.
+         {You come off [drop] and do not land|Something catches, about a metre up|For four seconds you are not touching anything}.
+         {You come down hard|You land on your face|It is the most frightening thing that has ever happened to you}.`),
+    choices: (ctx, s) => [
+      { id: 'stick', label: 'Keep at it until it holds', effect: (c2, sl) => {
+        c2.character.techniques.push('bukujutsu');
+        c2.state.stats.techniquesLearned = (c2.state.stats.techniquesLearned || 0) + 1;
+        if (sl.npcId) relate(c2, findNpc(c2.state, sl.npcId), { closeness: 12, respect: 10 });
+        fact(c2, 'Learned to fly.', { type: 'technique', weight: 7, tags: ['milestone'] });
+        return { text: `{It takes months and then it is simply something you can do|`
+          + `One morning you get up and do not put your feet down|You stop noticing that you are doing it}. `
+          + `{Walking anywhere feels absurd now|The world is a different size|You will never lose this}.`,
+        changes: apply(c2, { stats: { kiControl: 5, speed: 3, discipline: 2 }, happiness: 18 }) };
+      } },
+      { id: 'later', label: 'Leave it for now', danger: false, effect: (c2) => ({
+        text: `{You put it down|It frightens you and you do not say so|There is time}. `
+          + `{You walk everywhere for another few years|It will come back around|Somebody laughs at you for it later}.`,
+        changes: apply(c2, { happiness: -4 }),
+      }) },
+    ],
+  },
+
+  // ------------------------------------------------- talking across space
+  {
+    id: 'long_distance', tags: ['social', 'world'], weight: 26,
+    minBioAge: 12,
+    when: (ctx) => offWorld(ctx).length > 0,
+    slots: (ctx) => {
+      const away = offWorld(ctx);
+      if (!away.length) return null;
+      const npc = ctx.rng.weighted(away, (n) => 1 + (n.closeness || 0) / 20);
+      const gap = ctx.year - (npc.lastSeen || ctx.year);
+      return { ...npcSlot(npc), gap: Math.max(1, gap), where: getPlace(npc.placeId || 'east_city').name };
+    },
+    title: (ctx, s) => `Word From ${s.npcName}`,
+    text: `{It takes a while to reach you|The signal is bad and it is them|Somebody hands you a message that has been three months in transit}.
+      [npcName], on [where]. {[gap] years since you were in the same room|You have not spoken in [gap] years|It has been [gap] years}.`,
+    choices: (ctx, s) => [
+      { id: 'answer', label: 'Answer properly', effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        relate(c2, npc, { closeness: 14, trust: 10 });
+        if (npc) npc.lastSeen = c2.year;
+        return { text: `{You send back more than you meant to|It takes three attempts to say anything true|`
+          + `You talk into the thing for an hour and send all of it}. `
+          + `{The reply comes back months later and is worth the wait|You do this now, every year|It is not the same and it is something}.`,
+        changes: apply(c2, { happiness: 14 }) };
+      } },
+      { id: 'go', label: 'Go and see them', hint: 'It is a long way.', effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        const dest = getPlace(npc && npc.placeId ? npc.placeId : 'east_city');
+        const instant = c2.character.techniques.includes('instant_transmission');
+        if (instant) {
+          c2.character.placeId = dest.id;
+          if (npc) { npc.lastSeen = c2.year; relate(c2, npc, { closeness: 22, trust: 14 }); }
+          return { text: `{You lock onto them and go|It takes no time at all, which never stops being strange|`
+            + `You are there before you have finished deciding}. {They are not ready for you|`
+            + `They put food in front of you within four minutes|You stay a while}.`,
+          changes: apply(c2, { happiness: 22 }) };
+        }
+        const cur = currencyFor(getPlace(c2.character.placeId).planet);
+        const fare = priceIn(400000, cur.id);
+        if (!canAfford(c2.character, cur.id, fare)) {
+          return { text: `{Passage costs ${formatMoney(fare, cur.id)} and you do not have it|`
+            + `You price it up and put it away|There is no way to get there this year}.`,
+          changes: apply(c2, { happiness: -8 }) };
+        }
+        debit(c2.character, cur.id, fare);
+        c2.character.placeId = dest.id;
+        if (npc) { npc.lastSeen = c2.year; relate(c2, npc, { closeness: 26, trust: 18 }); }
+        return { text: `{You buy passage and spend most of a year asleep|`
+          + `${formatMoney(fare, cur.id)}, and a berth the size of a coffin|You go}. `
+          + `{They do not know you are coming|They are older than the last picture|You should have done this sooner}.`,
+        changes: apply(c2, { happiness: 24 }) };
+      } },
+      { id: 'nothing', label: 'Leave it unanswered', effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        relate(c2, npc, { closeness: -10, trust: -8 });
+        return { text: `{You mean to answer|You draft something and do not send it|You put it somewhere and it stays there}. `
+          + `{Another year goes by|They stop sending|Neither of you says anything about it afterwards}.`,
+        changes: apply(c2, { happiness: -6 }) };
+      } },
+    ],
+  },
+
+  // -------------------------------------------- somewhere to train properly
+  {
+    id: 'build_chamber', noFatigue: true, tags: ['world', 'training', 'property'], weight: 22,
+    minBioAge: 18,
+    when: (ctx) => !ctx.character.flags.has_chamber && ctx.character.home
+      && combatPower(ctx.character) > 100000,
+    slots: (ctx) => {
+      const smart = Object.values(ctx.state.npcs).filter((n) => n.alive
+        && ((n.stats && n.stats.intellect >= 75) || n.canonId === 'bulma' || n.canonId === 'gero')
+        && (n.closeness || 0) > 30);
+      return {
+        who: smart.length ? ctx.rng.pick(smart).name : null,
+        npcId: smart.length ? smart[0].id : null,
+        mine: ctx.character.iq >= 130,
+      };
+    },
+    title: 'A Room That Runs Faster',
+    text: (ctx, s) => `{You have been thinking about it for years|It comes up because you have run out of places to train|
+      Somebody mentions the Lookout and you cannot stop thinking about it}.
+      A room with its own gravity and its own clock. ${s.mine
+    ? '{You could build it|You have worked out most of it already|The maths is not beyond you}.'
+    : s.who
+      ? '{[who] could build it|You could not begin to build it. [who] could|[who] laughs and then stops laughing and starts sketching}.'
+      : '{You would need somebody far cleverer than you|There is nobody within reach who could|You do not know anyone who could build it}.'}`,
+    choices: (ctx, s) => {
+      const list = [];
+      const cur = currencyFor(getPlace(ctx.character.placeId).planet);
+      const cost = priceIn(14000000, cur.id);
+      if (s.mine) {
+        list.push({
+          id: 'build_self', label: `Build it yourself - ${formatMoney(cost, cur.id)}`,
+          effect: (c2) => {
+            if (!canAfford(c2.character, cur.id, cost)) {
+              return { text: `You cost it out. ${formatMoney(cost, cur.id)}. You are a long way short.`, changes: [] };
+            }
+            debit(c2.character, cur.id, cost);
+            c2.character.flags.has_chamber = true;
+            c2.character.chamber = { built: true, rate: 2.6, aging: 1.6 };
+            fact(c2, 'Built a training chamber that runs faster than the world outside it.',
+              { type: 'property', weight: 8, tags: ['training'] });
+            return { text: `{It takes two years and most of your money|`
+              + `You get the gravity right before you get the clock right|Nothing explodes, which surprises everybody}. `
+              + `{A day in there is a week out here|You will age faster than the people waiting outside|That is the trade}.`,
+            changes: apply(c2, { happiness: 20, stats: { intellect: 4 } }) };
+          },
+        });
+      }
+      if (s.who) {
+        const helped = Math.round(cost * 1.5);
+        list.push({
+          id: 'hire', label: `Ask ${s.who} to build it - ${formatMoney(helped, cur.id)}`,
+          effect: (c2, sl) => {
+            if (!canAfford(c2.character, cur.id, helped)) {
+              return { text: `${sl.who} quotes you ${formatMoney(helped, cur.id)} and does not negotiate.`, changes: [] };
+            }
+            debit(c2.character, cur.id, helped);
+            const npc = sl.npcId ? findNpc(c2.state, sl.npcId) : null;
+            if (npc) relate(c2, npc, { closeness: 10, respect: 8 });
+            c2.character.flags.has_chamber = true;
+            c2.character.chamber = { built: true, rate: 3.1, aging: 1.7, by: sl.who };
+            fact(c2, `${sl.who} built them a training chamber.`, { type: 'property', weight: 8, tags: ['training'] });
+            return { text: `{It arrives in pieces and goes up in a week|${sl.who} is insulted you thought it would be hard|`
+              + `They bill you twice and it is worth it}. {A day in there is more than a week out here|`
+              + `You are going to get old in that room|It is the best thing you have ever bought}.`,
+            changes: apply(c2, { happiness: 22 }) };
+          },
+        });
+      }
+      list.push({
+        id: 'lookout', label: 'Go and ask to use the one that exists',
+        hint: 'The Lookout. They do not lend it to just anybody.',
+        effect: (c2) => {
+          const worthy = (c2.character.karma || 0) > 10 || (c2.character.fame || 0) > 40;
+          if (!worthy) {
+            return { text: `{They hear you out|Somebody very polite explains that it is not available|`
+              + `The answer is no and it is final}. {You are not the sort of person they lend it to|`
+              + `Not yet|Come back when you have done something}.`, changes: apply(c2, { happiness: -8 }) };
+          }
+          c2.character.flags.chamber_access = true;
+          fact(c2, 'Was given access to the Hyperbolic Time Chamber.',
+            { type: 'property', weight: 7, tags: ['training'] });
+          return { text: `{They agree, with conditions|You are given two days and told what happens if you take three|`
+            + `Somebody walks you up and does not speak the whole way}. {A year inside for a day out here|`
+            + `Nobody has ever come out of it the same|You are told exactly how many times you may use it}.`,
+          changes: apply(c2, { happiness: 16 }) };
+        },
+      });
+      list.push({
+        id: 'no', label: 'Train outside like everybody else',
+        effect: (c2) => {
+          const t = trainYear(c2, { intensity: 1.4 });
+          return { text: `{You have a mountain and that is enough|`
+            + `Rooms that cheat time are for people who are behind|You get on with it}. ${powerLine(t.gained)}`,
+          changes: [] };
+        },
+      });
+      return list;
+    },
+  },
+]);
+})();
+
+/* ==== data/factions.js ==== */
+const __mod_data_factions_js = (function () {
+// The organisations.
+//
+// The universe had exactly one power in it: the Frieza Force, mentioned by
+// name in a handful of events. Everything else that happened to you happened
+// because of a stranger with no affiliation. These are the standing forces -
+// who they are, what they want, what they wear, and whether they are coming
+// for you or for somebody else.
+//
+// A faction has squads, and squads have their own strength and their own
+// reason to be somewhere, so an encounter is with the Ginyu Force rather than
+// with "the Frieza Force" in the abstract.
+
+const FACTIONS = [
+  {
+    id: 'frieza_force',
+    name: 'The Frieza Force',
+    emblem: 'A stylised horn over a planet, stamped on every chestplate.',
+    leader: 'frieza',
+    colours: ['#4b3f6b', '#d8dde6'],
+    alignment: -75,
+    from: 762, until: 780,
+    scope: 'galaxy',
+    goal: 'Clear worlds, sell worlds, and answer to one person.',
+    stance: 'hostile',
+    recruits: true,
+    desc: 'A planet-brokerage with an army. Most of its people are conscripts from worlds it took, which is the part nobody says out loud.',
+    squads: [
+      { name: 'the Ginyu Force', power: 12, note: 'Five specialists who pose before they fight and mean every second of it.', elite: true },
+      { name: 'a purge squad', power: 1, note: 'Low-class troops with scouters and a quota.' },
+      { name: 'a garrison detachment', power: 0.5, note: 'Bored, badly paid, and a long way from anywhere.' },
+      { name: 'an appraisal team', power: 0.3, note: 'They are here to value the planet, not to fight for it.' },
+      { name: 'an elite guard', power: 6, note: 'Personally selected. They do not carry scouters.' },
+    ],
+  },
+  {
+    id: 'red_ribbon',
+    name: 'The Red Ribbon Army',
+    emblem: 'A red ribbon, worn at the shoulder. Every officer is a colour.',
+    leader: 'gero',
+    colours: ['#a8352f', '#2f2f38'],
+    alignment: -55,
+    from: 745, until: 760,
+    scope: 'planet', planet: 'earth',
+    goal: 'Find the Dragon Balls first, and build whatever is needed to keep them.',
+    stance: 'hostile',
+    recruits: true,
+    desc: 'A private army with a research division that has outgrown it. The soldiers are ordinary. The things the research division builds are not.',
+    squads: [
+      { name: 'a Red Ribbon patrol', power: 0.4, note: 'Rifles, jeeps, and no idea what they are dealing with.' },
+      { name: 'an officer and his detachment', power: 1.5, note: 'Named after a colour and furious about it.' },
+      { name: 'a prototype', power: 8, note: 'Something out of the research wing that has not been signed off.' },
+    ],
+  },
+  {
+    id: 'red_ribbon_new',
+    name: 'Red Ribbon, Reformed',
+    emblem: 'The old ribbon on a corporate letterhead.',
+    leader: null,
+    colours: ['#a8352f', '#d8dde6'],
+    alignment: -40,
+    from: 781,
+    scope: 'planet', planet: 'earth',
+    goal: 'Finish the grandfather\'s work with a budget and a press office.',
+    stance: 'hostile',
+    recruits: true,
+    desc: 'A grandson with a grudge, a real company behind him, and two androids who are better people than their employers.',
+    squads: [
+      { name: 'a corporate security team', power: 0.6, note: 'Contractors. They will stop if it stops being worth it.' },
+      { name: 'the Gamma units', power: 10, note: 'Two of them, both convinced they are the heroes, and not entirely wrong.' },
+    ],
+  },
+  {
+    id: 'saiyan_army',
+    name: 'The Saiyan Army',
+    emblem: 'The royal crest of Vegeta, on armour that stretches to fit anyone.',
+    leader: null,
+    colours: ['#3a4250', '#c9a227'],
+    alignment: -50,
+    until: 737,
+    scope: 'galaxy',
+    goal: 'Take worlds for the Cold Empire and be paid in rank.',
+    stance: 'neutral',
+    recruits: true,
+    desc: 'Under contract to people who despise them, and about four years from finding out how that ends.',
+    squads: [
+      { name: 'a low-class clearing team', power: 0.6, note: 'Sent to worlds nobody expects them to come back from.' },
+      { name: 'an elite pair', power: 5, note: 'Two of them, and that is considered generous.' },
+      { name: 'a royal escort', power: 9, note: 'They answer to the King and to nobody on this rock.' },
+    ],
+  },
+  {
+    id: 'saiyan_remnant',
+    name: 'The Restoration Council',
+    emblem: 'The old crest, re-cut badly, on whatever they could find.',
+    leader: null,
+    colours: ['#3a4250', '#a8352f'],
+    alignment: -15,
+    from: 738,
+    scope: 'galaxy',
+    goal: 'Rebuild a people, by whatever means the register permits.',
+    stance: 'depends',
+    recruits: true,
+    desc: 'What is left, trying to reconstitute the institutions of a dead planet on borrowed ground.',
+    squads: [
+      { name: 'a Council escort', power: 2, note: 'Paperwork, and six people to make the paperwork stick.' },
+      { name: 'a recovery team', power: 4, note: 'They are looking for survivors, and they are not asking.' },
+    ],
+  },
+  {
+    id: 'galactic_patrol',
+    name: 'The Galactic Patrol',
+    emblem: 'A white star on blue, and a badge that opens most doors.',
+    leader: null,
+    colours: ['#2f5bb7', '#e8e2d6'],
+    alignment: 65,
+    from: 740,
+    scope: 'galaxy',
+    goal: 'Keep the worst things in the Galactic Prison and the rest of it quiet.',
+    stance: 'lawful',
+    recruits: true,
+    desc: 'Chronically understaffed, generally decent, and about two centuries behind the things it polices.',
+    squads: [
+      { name: 'a patrol officer', power: 0.8, note: 'One person, a badge, and enormous optimism.' },
+      { name: 'an arrest detail', power: 3, note: 'They have read your file and brought enough people.' },
+      { name: 'an elite marshal', power: 11, note: 'Sent when the file is bad enough.' },
+    ],
+  },
+  {
+    id: 'crane_school',
+    name: 'The Crane School',
+    emblem: 'A crane in flight, embroidered small.',
+    leader: 'crane_hermit',
+    colours: ['#3c3229', '#8a6f4a'],
+    alignment: -30,
+    from: 730, until: 775,
+    scope: 'planet', planet: 'earth',
+    goal: 'Prove the Turtle School wrong, and take contracts on the side.',
+    stance: 'rival',
+    recruits: true,
+    desc: 'A legitimate martial arts school that also, quietly, takes assassination work.',
+    squads: [
+      { name: 'a Crane student', power: 0.5, note: 'Technically excellent and morally unbothered.' },
+      { name: 'a contracted killer', power: 2.5, note: 'They were paid before they arrived.' },
+    ],
+  },
+  {
+    id: 'turtle_school',
+    name: 'The Turtle School',
+    emblem: 'A shell, worn on the back, twenty kilos of it.',
+    leader: 'roshi',
+    colours: ['#e2762f', '#2c4d9e'],
+    alignment: 60,
+    from: 700,
+    scope: 'planet', planet: 'earth',
+    goal: 'Teach anybody who does the milk round first.',
+    stance: 'friendly',
+    recruits: true,
+    desc: 'Three hundred years old, four students at a time, and the strongest tradition on the planet.',
+    squads: [
+      { name: 'a Turtle student', power: 0.7, note: 'They will insist on introducing the school first.' },
+    ],
+  },
+  {
+    id: 'pride_troopers',
+    name: 'The Pride Troopers',
+    emblem: 'A stylised P, and a pose to go with it.',
+    leader: null,
+    colours: ['#c0392b', '#e8e2d6'],
+    alignment: 80,
+    from: 778,
+    scope: 'universe', universe: 11,
+    goal: 'Justice, meant entirely literally, across a whole universe.',
+    stance: 'lawful',
+    recruits: false,
+    desc: 'Universe 11\'s standing force. They announce themselves, they mean all of it, and they are stronger than they have any right to be.',
+    squads: [
+      { name: 'a Pride Trooper', power: 14, note: 'They will explain what justice is before they start.' },
+      { name: 'a Trooper squad', power: 25, note: 'Four of them, in formation, entirely sincere.' },
+    ],
+  },
+  {
+    id: 'bandits',
+    name: 'The Wastes Crews',
+    emblem: 'Whatever they painted on the side of the truck.',
+    leader: null,
+    colours: ['#6b5a3a', '#a8352f'],
+    alignment: -35,
+    scope: 'planet', planet: 'earth',
+    goal: 'Take enough to eat and not get noticed by anybody who matters.',
+    stance: 'hostile',
+    recruits: true,
+    desc: 'Desert crews working roads nobody polices. Most of them would rather not fight you.',
+    squads: [
+      { name: 'a road crew', power: 0.2, note: 'Six of them and one working rifle.' },
+      { name: 'a desert bandit', power: 0.4, note: 'Fast, hungry, and better than they look.' },
+    ],
+  },
+  {
+    id: 'demon_realm',
+    name: 'The Demon Realm',
+    emblem: 'A sigil that hurts slightly to look at.',
+    leader: 'dabura',
+    colours: ['#4b2a5a', '#a8352f'],
+    alignment: -80,
+    from: 770,
+    scope: 'galaxy',
+    goal: 'Get back out, and take the rest of it with them.',
+    stance: 'hostile',
+    recruits: false,
+    desc: 'Not from here, not interested in negotiating, and only occasionally able to reach this side.',
+    squads: [
+      { name: 'a demon scout', power: 3, note: 'Testing whether the way through holds.' },
+      { name: 'a demon warband', power: 9, note: 'The way through held.' },
+    ],
+  },
+];
+
+const FACTION_BY_ID = Object.fromEntries(FACTIONS.map((f) => [f.id, f]));
+
+function getFaction(id) {
+  return FACTION_BY_ID[id];
+}
+
+/** Factions that exist in this year, and could plausibly be where you are. */
+function factionsPresent(year, planetId, universe = 7) {
+  return FACTIONS.filter((f) => {
+    if (f.from && year < f.from) return false;
+    if (f.until && year > f.until) return false;
+    if (f.scope === 'planet' && f.planet !== planetId) return false;
+    if (f.scope === 'universe' && f.universe !== universe) return false;
+    return true;
+  });
+}
+
+/**
+ * Why they are here. A faction turns up for its own reasons; whether that
+ * involves you depends on what you have been doing.
+ */
+function factionIntent(faction, character) {
+  const karma = character.karma || 0;
+  const fame = character.fame || 0;
+  if (faction.stance === 'lawful') {
+    if (karma < -35 && fame > 25) return 'arrest';
+    if (karma > 30) return 'ally';
+    return 'passing';
+  }
+  if (faction.stance === 'hostile') {
+    if (fame > 45) return 'target';
+    return karma > 40 ? 'target' : 'passing';
+  }
+  if (faction.stance === 'friendly') return karma >= 0 ? 'recruit' : 'wary';
+  if (faction.stance === 'rival') return fame > 20 ? 'test' : 'passing';
+  return 'passing';
+}
+  return { FACTIONS, FACTION_BY_ID, getFaction, factionsPresent, factionIntent };
+})();
+
+/* ==== engine/events/forces.js ==== */
+const __mod_engine_events_forces_js = (function () {
+// Somebody else's organisation, arriving.
+//
+// Every threat in the game used to be a stranger with no affiliation. These
+// are the standing forces turning up for their own reasons - to recruit, to
+// arrest, to test, to collect - with their own colours and their own squads.
+
+const { registerEvents } = __mod_engine_generator_js;
+const { apply, fact, relate, stranger, offerBattle, trainYear, powerLine, moveTo } = __mod_engine_events_helpers_js;
+const { combatPower, powerTier } = __mod_engine_stats_js;
+const { FACTIONS, factionsPresent, factionIntent, getFaction } = __mod_data_factions_js;
+const { getPlace } = __mod_data_places_js;
+const { generateFullName } = __mod_data_names_js;
+const { spreadWord, DEED_SCALE } = __mod_engine_settlement_js;
+const { currencyFor, credit, formatMoney } = __mod_data_currency_js;
+const { worldPowerBaseline } = __mod_data_timeline_js;
+const { numberish } = __mod_engine_text_js;
+const { clamp } = __mod_engine_rng_js;
+
+function pickForce(ctx) {
+  const here = getPlace(ctx.character.placeId);
+  const options = factionsPresent(ctx.year, here.planet);
+  if (!options.length) return null;
+  const faction = ctx.rng.pick(options);
+  const squad = ctx.rng.pick(faction.squads);
+  // A martial arts school on Earth does not scale with the galactic power
+  // curve. Only the forces that operate at that level do.
+  const galactic = Math.max(50, worldPowerBaseline(ctx.year));
+  const baseline = faction.scope === 'planet' ? Math.min(galactic, 400 + ctx.year * 2) : galactic;
+  return {
+    faction,
+    squad,
+    intent: factionIntent(faction, ctx.character),
+    power: Math.round(baseline * squad.power * ctx.rng.float(0.6, 1.6)),
+    arrival: faction.scope === 'planet'
+      ? ctx.rng.pick(['They walk in', 'A truck stops at the edge of town', 'They are simply there one morning',
+        'Somebody knocks', 'They come up the road on foot'])
+      : ctx.rng.pick(['They come down in the morning', 'You see the ships first',
+        'Something enters the atmosphere and does not slow down', 'Three pods, and they land badly on purpose']),
+    officer: generateFullName(ctx.rng, ctx.rng.pick(['other', 'earthling', 'saiyan', 'frostdemon'])),
+  };
+}
+
+const INTENT_TEXT = {
+  target: `{They are here for you|Somebody gave them your description|They are not asking anybody else questions}.`,
+  arrest: `{They have read your file|There is a warrant and it has your name on it|They are polite about it, which is worse}.`,
+  recruit: `{They want you|Somebody has been watching you fight|They have brought paperwork}.`,
+  ally: `{They are not here for you|They want help and are too proud to say so|They ask, eventually}.`,
+  test: `{They want to see what you are|It is a challenge, dressed up|Somebody wants to know if the rumours hold}.`,
+  wary: `{They are watching you|Nobody says anything|They give you a wide berth and keep giving it}.`,
+  passing: `{They are here for something else entirely|It has nothing to do with you|You happen to be standing there}.`,
+};
+
+registerEvents([
+  {
+    id: 'force_arrives', tags: ['world', 'faction'], weight: 34,
+    minBioAge: 8,
+    when: (ctx) => !ctx.character.inAfterlife && factionsPresent(ctx.year, ctx.place.planet).length > 0,
+    slots: (ctx) => {
+      const found = pickForce(ctx);
+      if (!found) return null;
+      return {
+        factionId: found.faction.id,
+        factionName: found.faction.name,
+        emblem: found.faction.emblem,
+        squad: found.squad.name,
+        squadNote: found.squad.note,
+        intent: found.intent,
+        power: found.power,
+        tier: powerTier(found.power),
+        officer: found.officer,
+        arrival: found.arrival,
+        goal: found.faction.goal,
+      };
+    },
+    title: (ctx, s) => `${s.squad.charAt(0).toUpperCase()}${s.squad.slice(1)}`,
+    text: (ctx, s) => `[arrival].
+      [factionName]. [emblem] [squadNote]
+      ${INTENT_TEXT[s.intent] || INTENT_TEXT.passing} {[tier], as far as you can tell|They are [tier]|You put them at [tier]}.`,
+    choices: (ctx, s) => {
+      const list = [];
+      const faction = getFaction(s.factionId);
+
+      list.push({
+        id: 'fight', label: 'Meet them', danger: true,
+        hint: 'All of them, if it comes to it.',
+        effect: (c2, sl) => offerBattle(c2, {
+          name: sl.squad.replace(/^an? /, '').replace(/^the /, 'The '),
+          power: sl.power, raceId: 'other',
+          voice: faction && faction.alignment < -40 ? 'cruel' : 'professional',
+        }, {
+          reason: 'faction', stakes: sl.intent === 'test' ? 'serious' : 'lethal',
+          intro: `${sl.factionName}. ${sl.officer} is the one doing the talking, right up until they are not.`,
+          context: { factionId: sl.factionId },
+        }),
+      });
+
+      if (s.intent === 'recruit' || (faction && faction.recruits && s.intent === 'passing')) {
+        list.push({
+          id: 'join', label: `Sign on with ${s.factionName}`,
+          hint: s.goal,
+          effect: (c2, sl) => {
+            c2.character.faction = sl.factionId;
+            const cur = currencyFor(getPlace(c2.character.placeId).planet);
+            credit(c2.character, cur.id, 2000);
+            const f = getFaction(sl.factionId);
+            fact(c2, `Signed on with ${sl.factionName}.`, { type: 'faction', weight: 8, tags: ['faction'] });
+            const t = trainYear(c2, { intensity: 1.5, placeMult: 1.3 });
+            return { text: `{They take your name and give you a number|`
+              + `Somebody hands you the colours and does not explain them|You are in by the afternoon}. `
+              + `{The work is exactly what it looks like|Nobody asks you what you think about any of it|`
+              + `You are fed, paid and pointed at things}. ${powerLine(t.gained)}`,
+            changes: apply(c2, { karma: f ? Math.round(f.alignment / 8) : 0, fame: 6 }) };
+          },
+        });
+      }
+
+      if (s.intent === 'arrest') {
+        list.push({
+          id: 'surrender', label: 'Go with them',
+          effect: (c2, sl) => {
+            c2.character.flags.arrested = true;
+            const years = c2.rng.int(1, 4);
+            moveTo(c2, 'galactic_prison');
+            c2.character.age += years;
+            fact(c2, `${sl.factionName} took them in. ${years} years.`,
+              { type: 'history', weight: 7, tags: ['prison'] });
+            return { text: `{You go quietly|There is no version of this where you win|You put your hands out}. `
+              + `{${years} years|It is not as bad as the stories and it is bad enough|`
+              + `You come out older and considerably harder}.`,
+            changes: apply(c2, { happiness: -20, fame: 8, stats: { durability: 6, discipline: 5, charisma: -4 } }) };
+          },
+        });
+      }
+
+      if (s.intent === 'ally' || s.intent === 'passing' || s.intent === 'wary') {
+        list.push({
+          id: 'help', label: 'Give them a hand',
+          effect: (c2, sl) => {
+            const f = getFaction(sl.factionId);
+            const rep = spreadWord(c2.state, { scale: DEED_SCALE.city * 0.4, karma: f && f.alignment > 0 ? 6 : -4 });
+            return { text: `{You help|It costs you a season and nothing else|They did not expect it}. `
+              + `{Word gets round|Somebody in [factionName] owes you now|They will remember, which cuts both ways}. `
+              + `Heard of by about ${numberish(rep.gained)} more people.`,
+            changes: apply(c2, { happiness: 8 }),
+            view: { factionName: sl.factionName } };
+          },
+        });
+      }
+
+      list.push({
+        id: 'avoid', label: 'Be somewhere else',
+        effect: (c2) => {
+          const t = trainYear(c2, { intensity: 1.2 });
+          return { text: `{You are not there when they arrive|You go up the mountain and stay there|`
+            + `Whatever it is, it is not your problem}. ${powerLine(t.gained)}`, changes: [] };
+        },
+      });
+      return list;
+    },
   },
 ]);
 })();
@@ -17330,6 +18319,11 @@ const PLANET_ACTS = {
 
 /** Do something to a world, and let the world answer. */
 function actOnWorld(state, rng, planetId, act) {
+  // Whatever you do to a world, the rest of the universe hears about it.
+  const scale = { rule: DEED_SCALE.world_ruled, purge: DEED_SCALE.world_destroyed,
+    protect: DEED_SCALE.world_saved, recruit: DEED_SCALE.city }[act] || DEED_SCALE.city;
+  const karma = { rule: -10, purge: -45, protect: 20, recruit: -2 }[act] || 0;
+  spreadWord(state, { scale, karma });
   const planet = getPlanet(planetId);
   const record = worldRecord(state, planetId);
   const effect = PLANET_ACTS[act] || PLANET_ACTS.recruit;
@@ -17434,6 +18428,7 @@ const { getPlace, PLACES } = __mod_data_places_js;
 const { shopStock, getItem, ITEMS } = __mod_data_items_js;
 const { buyItem, valueHere, hasItem } = __mod_engine_inventory_js;
 const { topicsFor, converse } = __mod_engine_conversation_js;
+const { homeOptions, settleHome, homeOf } = __mod_engine_settlement_js;
 const { currencyFor, formatMoney, balance } = __mod_data_currency_js;
 const { CAREERS, getCareer, careersFor } = __mod_data_jobs_js;
 const { getRace, hasPerk } = __mod_data_races_js;
@@ -17904,7 +18899,7 @@ const ACTIONS = [
     id: 'find_work', maxPerYear: 2, minMaturity: 13, tooYoung: 'Nobody will hire you yet.', slots: 1, name: 'Look for work', cat: 'world', cost: 'A season',
     desc: 'Zeni buys gravity chambers.',
     available: (s) => !s.character.career && !s.character.inAfterlife,
-    options: (s) => careersFor(s.character, getPlace(s.character.placeId).tags)
+    options: (s) => careersFor(s.character, getPlace(s.character.placeId).tags, getPlace(s.character.placeId).planet)
       .map((c) => ({ id: c.id, label: c.name, hint: `${zeni(c.rungs[0].pay)}/yr - ${c.blurb}` })),
     run: (s, rng, params) => {
       const career = params && params.option ? getCareer(params.option) : null;
@@ -17943,6 +18938,30 @@ const ACTIONS = [
       if (!res.ok) return { text: res.text };
       adjust(s, { happiness: 4 });
       fact(s, `Bought ${getItem(id).name}.`, { type: 'item', weight: 2, tags: ['asset'] });
+      return { text: res.text };
+    },
+  },
+  {
+    id: 'settle_down', maxPerYear: 1, minMaturity: 16, tooYoung: 'Somebody else decides where you sleep.',
+    slots: 2, name: 'Settle somewhere', cat: 'world', cost: 'Most of the year',
+    desc: 'Somewhere on this world that is yours. Buy it, build it, or take it.',
+    available: (s) => !s.character.inAfterlife,
+    options: (s) => homeOptions(s).map((o) => ({
+      id: o.id, label: o.label, hint: o.hint, disabled: !!o.disabled,
+    })),
+    run: (s, rng, params) => {
+      const id = params && params.option;
+      if (!id) return { text: 'You look at nothing in particular.' };
+      // Building something you cannot design needs somebody who can.
+      const helper = Object.values(s.npcs).find((n) => n.alive
+        && (n.closeness || 0) > 40 && n.stats && n.stats.intellect >= 70);
+      const res = settleHome(s, rng, id, id.startsWith('build:') ? helper : null);
+      if (res.ok) {
+        fact(s, res.stolen ? `Took a house on ${getPlace(s.character.placeId).name}.`
+          : `Settled on ${getPlace(s.character.placeId).name}.`,
+        { type: 'property', weight: 7, tags: ['home'] });
+        adjust(s, { happiness: res.stolen ? 6 : 18 });
+      }
       return { text: res.text };
     },
   },
@@ -18923,6 +19942,8 @@ function importString(text) {
 /* ==== game.js ==== */
 const __mod_game_js = (function () {
 // Public game API. Importing this registers every event pack.
+
+
 
 
 
@@ -20013,6 +21034,7 @@ const { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere, repair
 const { currencyFor, balance, formatMoney, exchange, CURRENCIES } = __mod_data_currency_js;
 const { getItem } = __mod_data_items_js;
 const { TRAITS, getTrait, TRAIT_KINDS } = __mod_data_traits_js;
+const { reputationOf, homeOf, homeBonus } = __mod_engine_settlement_js;
 const { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSense } = __mod_engine_perception_js;
 const { getRng, saveRng } = __mod_engine_state_js;
 const { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } = __mod_engine_battle_js;
@@ -20227,7 +21249,8 @@ function renderHud() {
   // The money in your hand is the money of the world you are standing on.
   const localCur = currencyFor(getPlace(c.placeId).planet);
   add(localCur.short, Math.round(balance(c, localCur.id)).toLocaleString('en-US'));
-  add('Fame', Math.round(c.fame));
+  const rep = reputationOf(GAME);
+  add('Known to', rep.reach > 999 ? numberish(rep.reach) : Math.round(rep.reach));
   add('Karma', Math.round(c.karma), c.karma > 20 ? 'good' : c.karma < -20 ? 'bad' : '');
   if (c.career) add('Job', c.career.title);
   if (c.senzu) add('Senzu', c.senzu, 'good');

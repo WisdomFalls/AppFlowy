@@ -78,6 +78,11 @@ const PLANET_ACTS = {
 
 /** Do something to a world, and let the world answer. */
 export function actOnWorld(state, rng, planetId, act) {
+  // Whatever you do to a world, the rest of the universe hears about it.
+  const scale = { rule: DEED_SCALE.world_ruled, purge: DEED_SCALE.world_destroyed,
+    protect: DEED_SCALE.world_saved, recruit: DEED_SCALE.city }[act] || DEED_SCALE.city;
+  const karma = { rule: -10, purge: -45, protect: 20, recruit: -2 }[act] || 0;
+  spreadWord(state, { scale, karma });
   const planet = getPlanet(planetId);
   const record = worldRecord(state, planetId);
   const effect = PLANET_ACTS[act] || PLANET_ACTS.recruit;

@@ -13,6 +13,7 @@ import { combatPower, winChance, powerTier } from './stats.js';
 import { CANON, canonAlive, canonPower, getCanon } from '../data/canon.js';
 import { generateFullName } from '../data/names.js';
 import { getRace } from '../data/races.js';
+import { spreadWord, DEED_SCALE } from './settlement.js';
 import { universeFighters, multiverseField } from '../data/universes.js';
 
 // ------------------------------------------------------------------ formats
@@ -626,6 +627,10 @@ export function topConsequence(state, rng, t) {
 export function settle(state, t, rng = null) {
   const result = payout(state, t);
   const c = state.character;
+  // Winning in front of a crowd is how most people become known.
+  spreadWord(state, {
+    scale: DEED_SCALE.tournament * (result.won ? 3 : 1) * (t.formatId === 'top' ? 900 : 1),
+  });
   c.zeni += result.zeni;
   c.fame = clamp(c.fame + result.fame, 0, 100);
   c.vitals.happiness = clamp(c.vitals.happiness + result.happiness, 0, 100);

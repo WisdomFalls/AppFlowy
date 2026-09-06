@@ -173,14 +173,102 @@ export const CAREERS = [
   },
 ];
 
+// Off-world work. Earth's fifteen careers are Earth's; a Saiyan settlement
+// hands out ranks, the Frieza Force hands out postings, and Namek does not
+// have jobs in the sense the word usually means.
+CAREERS.push(
+  {
+    id: 'saiyan_rank', name: 'The Saiyan Register', field: 'martial',
+    where: ['saiyan'], planets: ['planet_vegeta', 'sadala'], req: { strength: 35 }, karma: -8,
+    blurb: 'Graded at birth, ranked by what you take, and paid in Battle Merit.',
+    currency: 'merit',
+    rungs: [
+      { title: 'Low-Class Conscript', pay: 30, req: {} },
+      { title: 'Clearing Team Lead', pay: 90, req: { strength: 50, years: 3 } },
+      { title: 'Mid-Class Warrior', pay: 260, req: { strength: 62, durability: 55, years: 6 } },
+      { title: 'Elite', pay: 800, req: { strength: 75, technique: 60, fame: 25, years: 11 } },
+      { title: 'Elite Commander', pay: 2400, req: { strength: 85, charisma: 60, fame: 45, years: 17 } },
+    ],
+  },
+  {
+    id: 'force_posting', name: 'Frieza Force Service', field: 'martial',
+    where: ['imperial'], planets: ['frieza_79', 'void'], req: { discipline: 30 }, karma: -14,
+    blurb: 'A number instead of a posting, a scouter, and a quota nobody explains.',
+    currency: 'scrip',
+    rungs: [
+      { title: 'Conscript', pay: 40, req: {} },
+      { title: 'Trooper', pay: 130, req: { strength: 45, years: 2 } },
+      { title: 'Squad Leader', pay: 420, req: { strength: 58, charisma: 45, years: 5 } },
+      { title: 'Sector Officer', pay: 1400, req: { strength: 70, intellect: 55, years: 10 } },
+      { title: 'Sector Commander', pay: 5000, req: { strength: 82, charisma: 60, fame: 40, years: 16 } },
+    ],
+  },
+  {
+    id: 'namek_elder', name: 'The Village', field: 'spiritual',
+    where: ['namek', 'sacred'], planets: ['namek', 'new_namek'], req: { kiControl: 35 }, karma: 12,
+    blurb: 'Namekians do not have jobs. They have what the village needs, and somebody who does it.',
+    currency: 'water',
+    rungs: [
+      { title: 'Of the Village', pay: 4, req: {} },
+      { title: 'Warrior-Type', pay: 12, req: { strength: 45, years: 3 } },
+      { title: 'Keeper of the Well', pay: 30, req: { kiControl: 60, intellect: 55, years: 8 } },
+      { title: 'Village Elder', pay: 70, req: { kiControl: 72, charisma: 60, years: 15 } },
+      { title: 'Eldest', pay: 160, req: { kiControl: 85, intellect: 70, fame: 30, years: 24 } },
+    ],
+  },
+  {
+    id: 'yardrat_teacher', name: 'The Yardrat Discipline', field: 'spiritual',
+    where: ['spirit'], planets: ['yardrat'], req: { kiControl: 45 }, karma: 8,
+    blurb: 'Teaching a technique that takes most people a decade to hold in their head.',
+    currency: 'shard',
+    rungs: [
+      { title: 'Student of the Discipline', pay: 2, req: {} },
+      { title: 'Practitioner', pay: 8, req: { kiControl: 60, years: 4 } },
+      { title: 'Teacher', pay: 22, req: { kiControl: 75, intellect: 60, years: 10 } },
+      { title: 'Keeper of the Method', pay: 60, req: { kiControl: 88, years: 20 } },
+    ],
+  },
+  {
+    id: 'patrol_officer', name: 'The Galactic Patrol', field: 'law',
+    where: ['civilised', 'urban', 'imperial', 'tech'], req: { discipline: 40 }, karma: 15,
+    blurb: 'Understaffed, generally decent, and two centuries behind the things it polices.',
+    rungs: [
+      { title: 'Cadet', pay: 22000, req: {} },
+      { title: 'Officer', pay: 70000, req: { discipline: 55, years: 3 } },
+      { title: 'Senior Officer', pay: 190000, req: { discipline: 65, intellect: 55, years: 8 } },
+      { title: 'Marshal', pay: 600000, req: { discipline: 78, strength: 65, fame: 30, years: 15 } },
+      { title: 'Elite Marshal', pay: 1800000, req: { discipline: 88, strength: 78, fame: 50, years: 22 } },
+    ],
+  },
+  {
+    id: 'otherworld_work', name: 'Other World Administration', field: 'spiritual',
+    where: ['otherworld', 'judgement'], planets: ['otherworld'], req: { discipline: 30 }, karma: 6,
+    blurb: 'The afterlife has an administration, and the administration has vacancies.',
+    currency: 'favour',
+    rungs: [
+      { title: 'Queue Marshal', pay: 5, req: {} },
+      { title: 'Ogre\'s Assistant', pay: 14, req: { strength: 45, years: 3 } },
+      { title: 'Ledger Keeper', pay: 40, req: { intellect: 60, years: 8 } },
+      { title: 'Yemma\'s Clerk', pay: 110, req: { intellect: 72, discipline: 65, years: 14 } },
+    ],
+  },
+);
+
 export const CAREER_BY_ID = Object.fromEntries(CAREERS.map((c) => [c.id, c]));
 
 export function getCareer(id) {
   return CAREER_BY_ID[id];
 }
 
-export function careersFor(character, placeTags) {
+export function careersFor(character, placeTags, planetId) {
   return CAREERS.filter((c) => {
+    // A career tied to particular worlds is not available anywhere else, and
+    // Earth's careers are not available off Earth.
+    if (c.planets && planetId && !c.planets.includes(planetId)) return false;
+    if (!c.planets && planetId && planetId !== 'earth'
+      && !c.where.some((w) => ['imperial', 'tech', 'civilised', 'urban', 'saiyan', 'spirit', 'sacred', 'otherworld'].includes(w))) {
+      return false;
+    }
     if (!c.where.some((w) => placeTags.includes(w))) return false;
     for (const [stat, min] of Object.entries(c.req)) {
       if ((character.stats[stat] || 0) < min) return false;

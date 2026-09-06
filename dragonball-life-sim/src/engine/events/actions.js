@@ -14,6 +14,7 @@ import { getPlace, PLACES } from '../../data/places.js';
 import { shopStock, getItem, ITEMS } from '../../data/items.js';
 import { buyItem, valueHere, hasItem } from '../inventory.js';
 import { topicsFor, converse } from '../conversation.js';
+import { homeOptions, settleHome, homeOf } from '../settlement.js';
 import { currencyFor, formatMoney, balance } from '../../data/currency.js';
 import { CAREERS, getCareer, careersFor } from '../../data/jobs.js';
 import { getRace, hasPerk } from '../../data/races.js';
@@ -485,7 +486,7 @@ export const ACTIONS = [
     id: 'find_work', maxPerYear: 2, minMaturity: 13, tooYoung: 'Nobody will hire you yet.', slots: 1, name: 'Look for work', cat: 'world', cost: 'A season',
     desc: 'Zeni buys gravity chambers.',
     available: (s) => !s.character.career && !s.character.inAfterlife,
-    options: (s) => careersFor(s.character, getPlace(s.character.placeId).tags)
+    options: (s) => careersFor(s.character, getPlace(s.character.placeId).tags, getPlace(s.character.placeId).planet)
       .map((c) => ({ id: c.id, label: c.name, hint: `${zeni(c.rungs[0].pay)}/yr - ${c.blurb}` })),
     run: (s, rng, params) => {
       const career = params && params.option ? getCareer(params.option) : null;
@@ -524,6 +525,30 @@ export const ACTIONS = [
       if (!res.ok) return { text: res.text };
       adjust(s, { happiness: 4 });
       fact(s, `Bought ${getItem(id).name}.`, { type: 'item', weight: 2, tags: ['asset'] });
+      return { text: res.text };
+    },
+  },
+  {
+    id: 'settle_down', maxPerYear: 1, minMaturity: 16, tooYoung: 'Somebody else decides where you sleep.',
+    slots: 2, name: 'Settle somewhere', cat: 'world', cost: 'Most of the year',
+    desc: 'Somewhere on this world that is yours. Buy it, build it, or take it.',
+    available: (s) => !s.character.inAfterlife,
+    options: (s) => homeOptions(s).map((o) => ({
+      id: o.id, label: o.label, hint: o.hint, disabled: !!o.disabled,
+    })),
+    run: (s, rng, params) => {
+      const id = params && params.option;
+      if (!id) return { text: 'You look at nothing in particular.' };
+      // Building something you cannot design needs somebody who can.
+      const helper = Object.values(s.npcs).find((n) => n.alive
+        && (n.closeness || 0) > 40 && n.stats && n.stats.intellect >= 70);
+      const res = settleHome(s, rng, id, id.startsWith('build:') ? helper : null);
+      if (res.ok) {
+        fact(s, res.stolen ? `Took a house on ${getPlace(s.character.placeId).name}.`
+          : `Settled on ${getPlace(s.character.placeId).name}.`,
+        { type: 'property', weight: 7, tags: ['home'] });
+        adjust(s, { happiness: res.stolen ? 6 : 18 });
+      }
       return { text: res.text };
     },
   },

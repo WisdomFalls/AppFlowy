@@ -142,7 +142,7 @@ registerEvents([
     minBioAge: 15, maxBioAge: 66,
     when: (ctx) => !ctx.character.career,
     slots: (ctx) => {
-      const options = careersFor(ctx.character, ctx.place.tags);
+      const options = careersFor(ctx.character, ctx.place.tags, ctx.place.planet);
       if (!options.length) return null;
       const career = ctx.rng.pick(options);
       return { careerId: career.id, careerName: career.name, rung: career.rungs[0].title, pay: career.rungs[0].pay };

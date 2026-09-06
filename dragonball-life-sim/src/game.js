@@ -12,6 +12,8 @@ import './engine/events/wishes.js';
 import './engine/events/canonlife.js';
 import './engine/events/saiyanpolitics.js';
 import './engine/events/otherworld.js';
+import './engine/events/growingup.js';
+import './engine/events/forces.js';
 import './engine/events/afterlife.js';
 import './engine/events/actions.js';
 

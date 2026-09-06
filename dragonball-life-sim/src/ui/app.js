@@ -33,6 +33,7 @@ import { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere,
 import { currencyFor, balance, formatMoney, exchange, CURRENCIES } from '../data/currency.js';
 import { getItem } from '../data/items.js';
 import { TRAITS, getTrait, TRAIT_KINDS } from '../data/traits.js';
+import { reputationOf, homeOf, homeBonus } from '../engine/settlement.js';
 import { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSense } from '../engine/perception.js';
 import { getRng, saveRng } from '../engine/state.js';
 import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } from '../engine/battle.js';
@@ -251,7 +252,8 @@ function renderHud() {
   // The money in your hand is the money of the world you are standing on.
   const localCur = currencyFor(getPlace(c.placeId).planet);
   add(localCur.short, Math.round(balance(c, localCur.id)).toLocaleString('en-US'));
-  add('Fame', Math.round(c.fame));
+  const rep = reputationOf(GAME);
+  add('Known to', rep.reach > 999 ? numberish(rep.reach) : Math.round(rep.reach));
   add('Karma', Math.round(c.karma), c.karma > 20 ? 'good' : c.karma < -20 ? 'bad' : '');
   if (c.career) add('Job', c.career.title);
   if (c.senzu) add('Senzu', c.senzu, 'good');

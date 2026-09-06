@@ -1,0 +1,254 @@
+// The organisations.
+//
+// The universe had exactly one power in it: the Frieza Force, mentioned by
+// name in a handful of events. Everything else that happened to you happened
+// because of a stranger with no affiliation. These are the standing forces -
+// who they are, what they want, what they wear, and whether they are coming
+// for you or for somebody else.
+//
+// A faction has squads, and squads have their own strength and their own
+// reason to be somewhere, so an encounter is with the Ginyu Force rather than
+// with "the Frieza Force" in the abstract.
+
+export const FACTIONS = [
+  {
+    id: 'frieza_force',
+    name: 'The Frieza Force',
+    emblem: 'A stylised horn over a planet, stamped on every chestplate.',
+    leader: 'frieza',
+    colours: ['#4b3f6b', '#d8dde6'],
+    alignment: -75,
+    from: 762, until: 780,
+    scope: 'galaxy',
+    goal: 'Clear worlds, sell worlds, and answer to one person.',
+    stance: 'hostile',
+    recruits: true,
+    desc: 'A planet-brokerage with an army. Most of its people are conscripts from worlds it took, which is the part nobody says out loud.',
+    squads: [
+      { name: 'the Ginyu Force', power: 12, note: 'Five specialists who pose before they fight and mean every second of it.', elite: true },
+      { name: 'a purge squad', power: 1, note: 'Low-class troops with scouters and a quota.' },
+      { name: 'a garrison detachment', power: 0.5, note: 'Bored, badly paid, and a long way from anywhere.' },
+      { name: 'an appraisal team', power: 0.3, note: 'They are here to value the planet, not to fight for it.' },
+      { name: 'an elite guard', power: 6, note: 'Personally selected. They do not carry scouters.' },
+    ],
+  },
+  {
+    id: 'red_ribbon',
+    name: 'The Red Ribbon Army',
+    emblem: 'A red ribbon, worn at the shoulder. Every officer is a colour.',
+    leader: 'gero',
+    colours: ['#a8352f', '#2f2f38'],
+    alignment: -55,
+    from: 745, until: 760,
+    scope: 'planet', planet: 'earth',
+    goal: 'Find the Dragon Balls first, and build whatever is needed to keep them.',
+    stance: 'hostile',
+    recruits: true,
+    desc: 'A private army with a research division that has outgrown it. The soldiers are ordinary. The things the research division builds are not.',
+    squads: [
+      { name: 'a Red Ribbon patrol', power: 0.4, note: 'Rifles, jeeps, and no idea what they are dealing with.' },
+      { name: 'an officer and his detachment', power: 1.5, note: 'Named after a colour and furious about it.' },
+      { name: 'a prototype', power: 8, note: 'Something out of the research wing that has not been signed off.' },
+    ],
+  },
+  {
+    id: 'red_ribbon_new',
+    name: 'Red Ribbon, Reformed',
+    emblem: 'The old ribbon on a corporate letterhead.',
+    leader: null,
+    colours: ['#a8352f', '#d8dde6'],
+    alignment: -40,
+    from: 781,
+    scope: 'planet', planet: 'earth',
+    goal: 'Finish the grandfather\'s work with a budget and a press office.',
+    stance: 'hostile',
+    recruits: true,
+    desc: 'A grandson with a grudge, a real company behind him, and two androids who are better people than their employers.',
+    squads: [
+      { name: 'a corporate security team', power: 0.6, note: 'Contractors. They will stop if it stops being worth it.' },
+      { name: 'the Gamma units', power: 10, note: 'Two of them, both convinced they are the heroes, and not entirely wrong.' },
+    ],
+  },
+  {
+    id: 'saiyan_army',
+    name: 'The Saiyan Army',
+    emblem: 'The royal crest of Vegeta, on armour that stretches to fit anyone.',
+    leader: null,
+    colours: ['#3a4250', '#c9a227'],
+    alignment: -50,
+    until: 737,
+    scope: 'galaxy',
+    goal: 'Take worlds for the Cold Empire and be paid in rank.',
+    stance: 'neutral',
+    recruits: true,
+    desc: 'Under contract to people who despise them, and about four years from finding out how that ends.',
+    squads: [
+      { name: 'a low-class clearing team', power: 0.6, note: 'Sent to worlds nobody expects them to come back from.' },
+      { name: 'an elite pair', power: 5, note: 'Two of them, and that is considered generous.' },
+      { name: 'a royal escort', power: 9, note: 'They answer to the King and to nobody on this rock.' },
+    ],
+  },
+  {
+    id: 'saiyan_remnant',
+    name: 'The Restoration Council',
+    emblem: 'The old crest, re-cut badly, on whatever they could find.',
+    leader: null,
+    colours: ['#3a4250', '#a8352f'],
+    alignment: -15,
+    from: 738,
+    scope: 'galaxy',
+    goal: 'Rebuild a people, by whatever means the register permits.',
+    stance: 'depends',
+    recruits: true,
+    desc: 'What is left, trying to reconstitute the institutions of a dead planet on borrowed ground.',
+    squads: [
+      { name: 'a Council escort', power: 2, note: 'Paperwork, and six people to make the paperwork stick.' },
+      { name: 'a recovery team', power: 4, note: 'They are looking for survivors, and they are not asking.' },
+    ],
+  },
+  {
+    id: 'galactic_patrol',
+    name: 'The Galactic Patrol',
+    emblem: 'A white star on blue, and a badge that opens most doors.',
+    leader: null,
+    colours: ['#2f5bb7', '#e8e2d6'],
+    alignment: 65,
+    from: 740,
+    scope: 'galaxy',
+    goal: 'Keep the worst things in the Galactic Prison and the rest of it quiet.',
+    stance: 'lawful',
+    recruits: true,
+    desc: 'Chronically understaffed, generally decent, and about two centuries behind the things it polices.',
+    squads: [
+      { name: 'a patrol officer', power: 0.8, note: 'One person, a badge, and enormous optimism.' },
+      { name: 'an arrest detail', power: 3, note: 'They have read your file and brought enough people.' },
+      { name: 'an elite marshal', power: 11, note: 'Sent when the file is bad enough.' },
+    ],
+  },
+  {
+    id: 'crane_school',
+    name: 'The Crane School',
+    emblem: 'A crane in flight, embroidered small.',
+    leader: 'crane_hermit',
+    colours: ['#3c3229', '#8a6f4a'],
+    alignment: -30,
+    from: 730, until: 775,
+    scope: 'planet', planet: 'earth',
+    goal: 'Prove the Turtle School wrong, and take contracts on the side.',
+    stance: 'rival',
+    recruits: true,
+    desc: 'A legitimate martial arts school that also, quietly, takes assassination work.',
+    squads: [
+      { name: 'a Crane student', power: 0.5, note: 'Technically excellent and morally unbothered.' },
+      { name: 'a contracted killer', power: 2.5, note: 'They were paid before they arrived.' },
+    ],
+  },
+  {
+    id: 'turtle_school',
+    name: 'The Turtle School',
+    emblem: 'A shell, worn on the back, twenty kilos of it.',
+    leader: 'roshi',
+    colours: ['#e2762f', '#2c4d9e'],
+    alignment: 60,
+    from: 700,
+    scope: 'planet', planet: 'earth',
+    goal: 'Teach anybody who does the milk round first.',
+    stance: 'friendly',
+    recruits: true,
+    desc: 'Three hundred years old, four students at a time, and the strongest tradition on the planet.',
+    squads: [
+      { name: 'a Turtle student', power: 0.7, note: 'They will insist on introducing the school first.' },
+    ],
+  },
+  {
+    id: 'pride_troopers',
+    name: 'The Pride Troopers',
+    emblem: 'A stylised P, and a pose to go with it.',
+    leader: null,
+    colours: ['#c0392b', '#e8e2d6'],
+    alignment: 80,
+    from: 778,
+    scope: 'universe', universe: 11,
+    goal: 'Justice, meant entirely literally, across a whole universe.',
+    stance: 'lawful',
+    recruits: false,
+    desc: 'Universe 11\'s standing force. They announce themselves, they mean all of it, and they are stronger than they have any right to be.',
+    squads: [
+      { name: 'a Pride Trooper', power: 14, note: 'They will explain what justice is before they start.' },
+      { name: 'a Trooper squad', power: 25, note: 'Four of them, in formation, entirely sincere.' },
+    ],
+  },
+  {
+    id: 'bandits',
+    name: 'The Wastes Crews',
+    emblem: 'Whatever they painted on the side of the truck.',
+    leader: null,
+    colours: ['#6b5a3a', '#a8352f'],
+    alignment: -35,
+    scope: 'planet', planet: 'earth',
+    goal: 'Take enough to eat and not get noticed by anybody who matters.',
+    stance: 'hostile',
+    recruits: true,
+    desc: 'Desert crews working roads nobody polices. Most of them would rather not fight you.',
+    squads: [
+      { name: 'a road crew', power: 0.2, note: 'Six of them and one working rifle.' },
+      { name: 'a desert bandit', power: 0.4, note: 'Fast, hungry, and better than they look.' },
+    ],
+  },
+  {
+    id: 'demon_realm',
+    name: 'The Demon Realm',
+    emblem: 'A sigil that hurts slightly to look at.',
+    leader: 'dabura',
+    colours: ['#4b2a5a', '#a8352f'],
+    alignment: -80,
+    from: 770,
+    scope: 'galaxy',
+    goal: 'Get back out, and take the rest of it with them.',
+    stance: 'hostile',
+    recruits: false,
+    desc: 'Not from here, not interested in negotiating, and only occasionally able to reach this side.',
+    squads: [
+      { name: 'a demon scout', power: 3, note: 'Testing whether the way through holds.' },
+      { name: 'a demon warband', power: 9, note: 'The way through held.' },
+    ],
+  },
+];
+
+export const FACTION_BY_ID = Object.fromEntries(FACTIONS.map((f) => [f.id, f]));
+
+export function getFaction(id) {
+  return FACTION_BY_ID[id];
+}
+
+/** Factions that exist in this year, and could plausibly be where you are. */
+export function factionsPresent(year, planetId, universe = 7) {
+  return FACTIONS.filter((f) => {
+    if (f.from && year < f.from) return false;
+    if (f.until && year > f.until) return false;
+    if (f.scope === 'planet' && f.planet !== planetId) return false;
+    if (f.scope === 'universe' && f.universe !== universe) return false;
+    return true;
+  });
+}
+
+/**
+ * Why they are here. A faction turns up for its own reasons; whether that
+ * involves you depends on what you have been doing.
+ */
+export function factionIntent(faction, character) {
+  const karma = character.karma || 0;
+  const fame = character.fame || 0;
+  if (faction.stance === 'lawful') {
+    if (karma < -35 && fame > 25) return 'arrest';
+    if (karma > 30) return 'ally';
+    return 'passing';
+  }
+  if (faction.stance === 'hostile') {
+    if (fame > 45) return 'target';
+    return karma > 40 ? 'target' : 'passing';
+  }
+  if (faction.stance === 'friendly') return karma >= 0 ? 'recruit' : 'wary';
+  if (faction.stance === 'rival') return fame > 20 ? 'test' : 'passing';
+  return 'passing';
+}
