@@ -17,6 +17,9 @@ const CUSTOM = {
     return ['earth', 'planet_vegeta', 'sadala'].includes(p.planet);
   },
   ssj_hours: (state) => !!state.character.flags.ssj_mastery,
+  ssb_hours: (state) => !!state.character.flags.ssb_mastery,
+  blue_refined: (state) => !!state.character.flags.brink_of_death
+    && (state.character.flags.hardTrainingYears || 0) >= 2,
   god_ritual: (state) => !!state.character.flags.god_ritual
     || state.character.mentors.includes('whis') || state.character.mentors.includes('beerus'),
   destroyer_path: (state) => !!state.character.flags.destroyer_training

@@ -488,6 +488,11 @@ function passiveYear(state, rng) {
     c.flags.ssjYears = (c.flags.ssjYears || 0) + 1;
     if (c.flags.ssjYears >= 3 && c.stats.discipline > 55) c.flags.ssj_mastery = true;
   }
+  // Living in Blue is how the flicker finally stops.
+  if (c.transformations.includes('ssb') && (c.flags.ssbYears || 0) < 99) {
+    c.flags.ssbYears = (c.flags.ssbYears || 0) + 1;
+    if (c.flags.ssbYears >= 3 && c.stats.discipline > 60 && c.stats.kiControl > 85) c.flags.ssb_mastery = true;
+  }
 
   return entries;
 }

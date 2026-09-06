@@ -2662,6 +2662,13 @@ const TRANSFORMATIONS = [
     desc: 'A Super Saiyan the size of a building. Nothing survives underneath it.',
   },
   {
+    id: 'false_ssj', name: 'False Super Saiyan', ladder: ['saiyan', 'halfsaiyan'], tier: 4.5, temporary: true,
+    mult: 18, drain: 7, control: -40, strain: 5,
+    req: { power: 15000, anyFlag: ['grief', 'rage_awakened', 'watched_friend_die'] },
+    hint: 'Reach for Super Saiyan before you are actually strong enough to hold it.',
+    desc: 'Reddish hair, blank pupil-less eyes, a scream that will not stay lit. Gone as fast as it came.',
+  },
+  {
     id: 'ssj', name: 'Super Saiyan', ladder: ['saiyan', 'halfsaiyan'], tier: 5,
     mult: 50, drain: 3, control: -10, strain: 2,
     req: { power: 30000, anyFlag: ['grief', 'rage_awakened', 'watched_friend_die', 'brink_of_death'] },
@@ -2669,11 +2676,25 @@ const TRANSFORMATIONS = [
     desc: 'Gold hair, green eyes, and a rage that finally has somewhere to go.',
   },
   {
+    id: 'ssj_grade2', name: 'Super Saiyan Grade 2', ladder: ['saiyan', 'halfsaiyan'], tier: 5.4,
+    mult: 75, drain: 4, control: -20, strain: 3,
+    req: { parent: 'ssj', power: 45000, stat: { discipline: 40 } },
+    hint: 'Push Super Saiyan past its resting point and let the muscle catch up to the power.',
+    desc: 'Thicker, harder, gold hair a little wilder. More bulk than finesse, and it shows.',
+  },
+  {
+    id: 'ssj_grade3', name: 'Super Saiyan Grade 3', ladder: ['saiyan', 'halfsaiyan'], tier: 5.6,
+    mult: 95, drain: 9, control: -45, strain: 10,
+    req: { parent: 'ssj_grade2', power: 90000, stat: { durability: 55 } },
+    hint: 'Keep pushing the mass. Eventually speed is the price you pay for it.',
+    desc: 'Immense, veins standing out, a solid gold mane. Overwhelming power dragging a body too heavy to keep up with it.',
+  },
+  {
     id: 'ssj_full', name: 'Full-Power Super Saiyan', ladder: ['saiyan', 'halfsaiyan'], tier: 6,
     mult: 60, drain: 0.6, control: 10, strain: 0,
     req: { parent: 'ssj', stat: { discipline: 60 }, custom: 'ssj_hours' },
     hint: 'Live in Super Saiyan until it stops costing you anything.',
-    desc: 'You stopped transforming and started simply being this.',
+    desc: 'You stopped transforming and started simply being this - all of the power, none of the bulk or the strain.',
   },
   {
     id: 'ssj2', name: 'Super Saiyan 2', ladder: ['saiyan', 'halfsaiyan'], tier: 7,
@@ -2704,6 +2725,20 @@ const TRANSFORMATIONS = [
     desc: 'Divine ki wearing a Super Saiyan over it. Perfect control, ruinous cost.',
   },
   {
+    id: 'ssb_mastered', name: 'Mastered Super Saiyan Blue', ladder: ['saiyan', 'halfsaiyan'], tier: 10.3,
+    mult: 3200, drain: 1, control: 30, strain: 0,
+    req: { parent: 'ssb', stat: { kiControl: 90 }, custom: 'ssb_hours' },
+    hint: 'Live in Blue until the aura stops flickering and simply stays.',
+    desc: 'The same divine-Saiyan hybrid, held with no strain and no flicker at all. This is no longer a stretch for you.',
+  },
+  {
+    id: 'ssb_evolution', name: 'Super Saiyan Blue Evolution', ladder: ['saiyan', 'halfsaiyan'], tier: 10.4,
+    mult: 3800, drain: 7, control: 20, strain: 4,
+    req: { parent: 'ssb', stat: { kiControl: 88, discipline: 75 }, custom: 'blue_refined' },
+    hint: 'Refine Blue yourself, through desperation in a fight rather than a teacher’s lesson.',
+    desc: 'A deeper, near-black blue aura, sharper and meaner than the form you were taught. Nobody showed you this part.',
+  },
+  {
     id: 'ssb_kaioken', name: 'Blue Kaio-ken', ladder: ['saiyan', 'halfsaiyan'], tier: 11,
     mult: 6000, drain: 26, control: 0, strain: 22,
     req: { parent: 'ssb', techniques: ['kaioken'], stat: { discipline: 85 } },
@@ -2725,9 +2760,16 @@ const TRANSFORMATIONS = [
     desc: 'Silver-edged hair. Your body moves before you decide to.',
   },
   {
+    id: 'ui_perfected', name: 'Ultra Instinct', ladder: ['saiyan', 'halfsaiyan', 'earthling', 'namekian', 'cerealian', 'yardratian'], tier: 12.5,
+    mult: 14000, drain: 17, control: 50, strain: 14,
+    req: { parent: 'ui_sign', power: 60000000, stat: { kiControl: 92 }, anyFlag: ['brink_of_death', 'protected_someone'] },
+    hint: 'Push past Sign under real, mortal pressure. The instinct finishes completing itself.',
+    desc: 'Silver hair fully lit, the flicker gone. Not yet the total stillness, but the technique is whole.',
+  },
+  {
     id: 'ui_mastered', name: 'Mastered Ultra Instinct', ladder: ['saiyan', 'halfsaiyan', 'earthling', 'namekian', 'cerealian', 'yardratian'], tier: 13,
     mult: 25000, drain: 15, control: 60, strain: 12,
-    req: { parent: 'ui_sign', mentors: ['whis'], stat: { kiControl: 95, discipline: 90 } },
+    req: { parent: 'ui_perfected', mentors: ['whis'], stat: { kiControl: 95, discipline: 90 } },
     hint: 'Silver hair and a completely empty mind. Almost nobody gets here.',
     desc: 'Silver hair, silver eyes, and total stillness. You do not think. You simply act.',
   },
@@ -4937,15 +4979,21 @@ function faceExpression(mood, cx, eyeY, mouthY, browColour) {
  */
 const FORM_VISUALS = {
   golden_oozaru: { aura: '#ffd24a' },
+  false_ssj: { hair: '#c65a3a', eyes: '#3a2018', aura: '#e07a4a', lift: 'mild' },
   ssj: { hair: '#f2cf4a', eyes: '#3ecf4a', aura: '#ffd24a', lift: 'strong' },
+  ssj_grade2: { hair: '#f2cf4a', eyes: '#3ecf4a', aura: '#ffd24a', lift: 'strong' },
+  ssj_grade3: { hair: '#eec53f', eyes: '#3ecf4a', aura: '#ffcf3a', lift: 'strong' },
   ssj_full: { hair: '#f2cf4a', eyes: '#3ecf4a', aura: '#ffd24a', lift: 'strong' },
   ssj2: { hair: '#f5d65a', eyes: '#3ecf4a', aura: '#ffe066', lift: 'strong' },
   ssj3: { hair: '#f5d65a', eyes: '#3ecf4a', aura: '#ffe066', lift: 'extreme' },
   ssg: { hair: '#b3324c', eyes: '#ff9fb0', aura: '#ff5f7a', lift: 'mild' },
   ssb: { hair: '#3f7fe0', eyes: '#bfe4ff', aura: '#4fa8ff', lift: 'mild' },
+  ssb_mastered: { hair: '#4a8bef', eyes: '#d6f0ff', aura: '#5fb4ff', lift: 'mild' },
+  ssb_evolution: { hair: '#22468f', eyes: '#9fd0ff', aura: '#1f4fc4', lift: 'mild' },
   ssb_kaioken: { hair: '#3f7fe0', eyes: '#bfe4ff', aura: '#ff4d4d', lift: 'mild' },
   ultra_ego: { eyes: '#ff3355', aura: '#ff2f55', lift: 'mild' },
   ui_sign: { hair: '#cfd3de', eyes: '#dfe7ef', aura: '#dfe7ef', lift: 'mild' },
+  ui_perfected: { hair: '#dee1e9', eyes: '#e8edf5', aura: '#e8edf5', lift: 'mild' },
   ui_mastered: { hair: '#e4e7ee', eyes: '#eef2f8', aura: '#eef2f8', lift: 'mild' },
   legendary_ss: { hair: '#8ee85a', eyes: '#c8ffb0', aura: '#8bffb0', lift: 'extreme' },
   kaioken: { aura: '#ff4d4d' },
@@ -13175,6 +13223,9 @@ const CUSTOM = {
     return ['earth', 'planet_vegeta', 'sadala'].includes(p.planet);
   },
   ssj_hours: (state) => !!state.character.flags.ssj_mastery,
+  ssb_hours: (state) => !!state.character.flags.ssb_mastery,
+  blue_refined: (state) => !!state.character.flags.brink_of_death
+    && (state.character.flags.hardTrainingYears || 0) >= 2,
   god_ritual: (state) => !!state.character.flags.god_ritual
     || state.character.mentors.includes('whis') || state.character.mentors.includes('beerus'),
   destroyer_path: (state) => !!state.character.flags.destroyer_training
@@ -20802,6 +20853,11 @@ function passiveYear(state, rng) {
   if (c.transformations.includes('ssj') && (c.flags.ssjYears || 0) < 99) {
     c.flags.ssjYears = (c.flags.ssjYears || 0) + 1;
     if (c.flags.ssjYears >= 3 && c.stats.discipline > 55) c.flags.ssj_mastery = true;
+  }
+  // Living in Blue is how the flicker finally stops.
+  if (c.transformations.includes('ssb') && (c.flags.ssbYears || 0) < 99) {
+    c.flags.ssbYears = (c.flags.ssbYears || 0) + 1;
+    if (c.flags.ssbYears >= 3 && c.stats.discipline > 60 && c.stats.kiControl > 85) c.flags.ssb_mastery = true;
   }
 
   return entries;
