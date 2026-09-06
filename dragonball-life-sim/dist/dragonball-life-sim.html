@@ -4688,10 +4688,13 @@ function hairPath(style, headTop, cx, headR, headH) {
     }
     case 'long':
     case 'ponytail':
-      // A dome with a parted fringe, rather than a helmet.
+      // A dome with a parted fringe, rather than a helmet. Kept well clear
+      // of the eyebrow line (brow+12 at its closest, for a raised-brow grin)
+      // - this used to dip to brow+18 and read as a dark bar swallowing the
+      // eyebrows instead of a fringe sitting above them.
       return `${domePath(sk, 3, 4, 4)}
-        M${sk.left + 2} ${sk.brow + 2} Q${sk.cx - 6} ${sk.brow + 12} ${sk.cx + 6} ${sk.brow + 14}
-        Q${sk.cx - 10} ${sk.brow + 18} ${sk.left} ${sk.brow + 12} Z`;
+        M${sk.left + 2} ${sk.brow + 1} Q${sk.cx - 6} ${sk.brow + 5} ${sk.cx + 6} ${sk.brow + 6}
+        Q${sk.cx - 10} ${sk.brow + 8} ${sk.left} ${sk.brow + 5} Z`;
     case 'braid':
       return domePath(sk, 3, 4, 4);
     case 'bob':
@@ -4741,8 +4744,11 @@ function hairPath(style, headTop, cx, headR, headH) {
       // Shorter than cropped, near the scalp.
       return domePath(sk, 0.4);
     case 'sidepart':
-      // One side swept up and back, the other combed down and lower.
-      return domePath(sk, 2.5, 2, 12);
+      // One side swept up and back, the other combed down and lower - kept
+      // shy of brow+12 (the eyebrow line at its closest, on a raised-brow
+      // grin) so the lower side reads as a longer fringe, not a bar drawn
+      // across the eyebrows.
+      return domePath(sk, 2.5, 2, 6);
     default:
       return '';
   }
