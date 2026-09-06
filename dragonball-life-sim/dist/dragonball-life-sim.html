@@ -5089,17 +5089,22 @@ function portraitSvg(character, opts = {}) {
   const jawTaper = fem ? 8 : 4;
   const mood = expressionFor(character, opts);
 
-  // How kept-together they are, in colour. Health and mood show up on the
-  // clothes before anybody says a word.
+  // How kept-together they are. This used to just darken every surface by
+  // one flat amount, which read as a colour filter rather than a body that
+  // has not been looked after - so the clothes keep their real colour and
+  // neglect shows up instead as patchy dirt, tired skin and undone hair,
+  // each scaled to how bad things have actually gotten.
   const grime = groomingLevel(character);
-  const bodyColour = grime ? shade(outfit.main || skin, -0.11 * grime) : (outfit.main || skin);
-  const trimColour = grime ? shade(outfit.trim || '#c9a227', -0.14 * grime) : (outfit.trim || '#c9a227');
+  const bodyColour = outfit.main || skin;
+  const trimColour = outfit.trim || '#c9a227';
 
   const visuals = opts.form ? (FORM_VISUALS[opts.form.id] || formVisualsFallback(opts.form)) : null;
   const finalHair = visuals && visuals.hair ? visuals.hair : hairColour;
   const finalEyeColour = visuals && visuals.eyes ? visuals.eyes : eyeColour;
   const auraColour = visuals ? visuals.aura : null;
   if (visuals && visuals.skin) skin = visuals.skin;
+  // Sallow, tired skin at the higher grooming tiers - not washed, not fed.
+  if (grime >= 2) skin = shade(skin, -0.05 * (grime - 1));
   // A transformed character's hair does not lie the way it usually does -
   // scaled and lifted from a point near the crown so it reads as standing
   // up (or, for the calmer forms, just faintly raised) regardless of which
@@ -5222,12 +5227,26 @@ function portraitSvg(character, opts = {}) {
       parts.push(`<path d="M${cx - shoulderWidth + 2} ${chin + 34} q${shoulderWidth} -22 ${shoulderWidth * 2 - 4} 0"
         fill="none" stroke="${trimColour}" stroke-width="6"/>`);
     }
+    if (grime >= 1) {
+      // Dirt does not sit evenly across a body - it collects at the hems,
+      // the elbows, wherever a hand keeps touching. Scattered patches read
+      // as neglect; one flat tint read as a colour filter.
+      const spots = [
+        [hip * 0.55, H - 22], [-waist * 0.5, waistY + 4], [shoulderWidth - 20, chin + 40],
+        [-(shoulderWidth - 22), chin + 34], [waist * 0.15, waistY - 12], [-hip * 0.3, H - 40],
+      ];
+      const patchCount = grime === 1 ? 2 : grime === 2 ? 4 : 6;
+      for (let i = 0; i < patchCount; i++) {
+        const [ox, oy] = spots[i % spots.length];
+        const jig = (i * 7) % 5;
+        parts.push(`<ellipse cx="${cx + ox + jig}" cy="${oy - jig}" rx="${4 + (i % 3)}" ry="${3 + (i % 2)}"
+          fill="${shade(bodyColour, -0.32)}" opacity="${0.22 + grime * 0.08}"/>`);
+      }
+    }
     if (grime >= 2) {
-      // A tear at the hem and a couple of smudges, for a body that has just
-      // been through something.
+      // A tear at the hem, for a body that has just been through something.
       parts.push(`<path d="M${cx + hip - 10} ${H - 4} l6 -10 l4 8 l7 -12"
         fill="none" stroke="${shade(bodyColour, -0.4)}" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>`);
-      parts.push(`<ellipse cx="${cx - waist * 0.4}" cy="${waistY}" rx="7" ry="5" fill="${shade(bodyColour, -0.3)}" opacity="0.35"/>`);
     }
   }
 
@@ -5299,6 +5318,15 @@ function portraitSvg(character, opts = {}) {
   // A shade off the hair, so the brows do not merge into the hairline.
   const browColour = hasHair ? shade(finalHair, -0.25) : 'rgba(0,0,0,.32)';
   parts.push(faceExpression(mood, cx, eyeY, headTop + 52, browColour));
+
+  if (grime >= 2) {
+    // Not washed, not rested. Shadows under the eyes read as a body running
+    // on nothing, rather than another dark patch glued onto the clothes.
+    for (const side of [-1, 1]) {
+      parts.push(`<ellipse cx="${cx + side * eyeGap}" cy="${eyeY + 7}" rx="7" ry="3.2"
+        fill="${shade(skin, -0.28)}" opacity="${grime === 2 ? 0.35 : 0.5}"/>`);
+    }
+  }
 
   drawMarks(parts, character, { cx, headTop, headH, headR, chin, eyeY, eyeColour: finalEyeColour, skin, shoulderWidth, H });
   drawAccessories(parts, character, {
