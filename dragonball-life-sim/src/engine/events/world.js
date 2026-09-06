@@ -3,6 +3,7 @@
 // and the timeline records the divergence either way.
 
 import { registerEvents, npcSlot } from '../generator.js';
+import { clamp } from '../rng.js';
 import { apply, fact, stranger, relate, thread, trainYear, powerLine, meetCanon, canonHere,
   odds, killNpc, findNpc, scaledFoePower, moveTo, setWorldFlag, offerBattle } from './helpers.js';
 import { fight, narrateFight, describeGap, runTournament, buildField } from '../combat.js';
@@ -475,7 +476,12 @@ registerEvents([
       return base.concat([{ id: 'feed', label: 'Offer them food', effect: (c2, sl) => {
         const npc = meetCanon(c2, sl.godId, 'acquaintance');
         const cost = c2.rng.int(5000, 80000);
-        const great = odds(c2, 0.3 + (c2.character.luck || 50) / 300 + (c2.character.stats.charisma || 50) / 500);
+        // A god's palate is not moved by luck or charm nearly as much as by
+        // whether the food is actually good, which is what cookingSkill tracks.
+        const skill = c2.character.flags.cookingSkill || 0;
+        const great = odds(c2, 0.1 + skill / 130 + (c2.character.luck || 50) / 500 + (c2.character.stats.charisma || 50) / 600);
+        // Cooking for a god who has eaten everything is itself an education.
+        c2.character.flags.cookingSkill = clamp(skill + c2.rng.int(1, 3), 0, 100);
         if (great) {
           relate(c2, npc, { closeness: 25, respect: 20 });
           if (!c2.character.mentors.includes(sl.godId)) c2.character.mentors.push(sl.godId);

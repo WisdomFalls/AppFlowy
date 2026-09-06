@@ -532,6 +532,24 @@ export const ACTIONS = [
     },
   },
   {
+    id: 'cook_meal', maxPerYear: 4, minMaturity: 4, tooYoung: 'You would burn the kitchen down.', slots: 1, name: 'Cook something', cat: 'world', cost: 'A moment',
+    desc: 'Practice in the kitchen. Do it enough and you stop being someone who burns water.',
+    available: (s) => !s.character.inAfterlife,
+    run: (s, rng) => {
+      const skill = s.character.flags.cookingSkill || 0;
+      const difficulty = clamp(1 + Math.floor(skill / 24), 1, 5);
+      const trial = startTrial(s, rng, {
+        kind: 'sequence',
+        difficulty,
+        purpose: 'cooking',
+        label: 'Cooking',
+        blurb: 'Read the recipe once, then work it from memory, in order, before anything burns.',
+        payload: {},
+      });
+      return { text: 'You get out what you have and try to make something worth eating.', trial };
+    },
+  },
+  {
     id: 'shop', maxPerYear: 5, minMaturity: 5, tooYoung: 'Somebody else buys your things.', slots: 0, name: 'Go shopping', cat: 'world', cost: 'A moment',
     desc: 'Gear, property and transport.',
     available: (s) => !s.character.inAfterlife,

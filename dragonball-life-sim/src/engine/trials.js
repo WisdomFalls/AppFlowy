@@ -155,6 +155,15 @@ export function resolveTrial(state, rng, trial, score) {
     adjust(state, { health: -8, stats: { discipline: 2 } });
     lines.push(`${form.name}: mastery ${total}%.`);
     if (total >= 100) lines.push('It costs you nothing to hold now. It is simply how you stand.');
+  } else if (trial.purpose === 'cooking') {
+    // A regular-life skill, not a combat one: it climbs slowly no matter the
+    // grade, but a clean run climbs it faster than a sloppy one.
+    const before = c.flags.cookingSkill || 0;
+    const gain = Math.round(1 + trial.difficulty * result.mult);
+    c.flags.cookingSkill = clamp(before + gain, 0, 100);
+    adjust(state, { happiness: Math.round(2 + 3 * result.mult) });
+    lines.push(`Cooking: ${Math.round(c.flags.cookingSkill)}/100.`);
+    if (before < 100 && c.flags.cookingSkill >= 100) lines.push('You could cook this in your sleep now.');
   }
 
   return { ...result, lines, text: lines.join(' ') };
