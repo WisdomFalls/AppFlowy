@@ -16472,6 +16472,11 @@ function mournNpc(state, rng, npc, cause) {
   adjust(state, { happiness: hit });
   if (kin || bond > 60) c.flags.grief = true;
   if (kin && !present) c.flags.was_not_there = true;
+  // Grief is bereavement generally; this is specifically what it is to have
+  // been standing there for it. Transformations gate on it (False Super
+  // Saiyan and Super Saiyan among them) but nothing ever actually set it -
+  // this is the moment the flag's name describes.
+  if ((kin || bond > 60) && present) c.flags.watched_friend_die = true;
   return { kind: 'loss', text };
 }
 
