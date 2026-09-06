@@ -13,6 +13,11 @@ export const HAIR_STYLES = [
   { id: 'bald', name: 'Shaved bald' },
   { id: 'braid', name: 'Single braid' },
   { id: 'topknot', name: 'Topknot' },
+  { id: 'flame', name: 'Swept-back flame' },
+  { id: 'pigtails', name: 'Twin tails' },
+  { id: 'afro', name: 'Afro' },
+  { id: 'buzz', name: 'Buzzed' },
+  { id: 'sidepart', name: 'Neat side-part' },
 ];
 
 export const HAIR_COLOURS = [
@@ -238,8 +243,11 @@ function domePath(sk, lift = 3, dropL = 0, dropR = 0) {
 
 /** A point on the dome, for hanging spikes and fringes off it. */
 function onDome(sk, t, lift = 3) {
-  // t: 0 at the left temple, 1 at the right.
-  const angle = Math.PI * (1 - t);
+  // t: 0 at the left temple, 1 at the right. This was inverted - the first
+  // spike root landed near the right temple while every path starts at the
+  // left edge, so the renderer drew a straight chord clean across the face
+  // to reach it, right through the eyebrows.
+  const angle = Math.PI * t;
   return {
     x: sk.cx - Math.cos(angle) * (sk.r + lift * 0.4),
     y: sk.temple - Math.sin(angle) * (sk.temple - (sk.top - lift)),
@@ -269,6 +277,16 @@ function hairBackPath(style, headTop, cx, headR, headH) {
     case 'bob':
       return `M${L - 3} ${y} Q${sk.cx} ${sk.top - 4} ${R + 3} ${y}
         L${R + 4} ${y + 40} L${L - 4} ${y + 40} Z`;
+    case 'pigtails': {
+      // Gathered at each temple rather than the crown, and falling either side.
+      const left = `M${L + 2} ${sk.temple - 6} Q${L - 9} ${sk.temple - 2} ${L - 11} ${sk.temple + 16}
+        L${L - 13} ${sk.temple + 58} L${L - 3} ${sk.temple + 60}
+        L${L + 1} ${sk.temple + 18} Q${L + 10} ${sk.temple + 4} ${L + 2} ${sk.temple - 6} Z`;
+      const right = `M${R - 2} ${sk.temple - 6} Q${R + 9} ${sk.temple - 2} ${R + 11} ${sk.temple + 16}
+        L${R + 13} ${sk.temple + 58} L${R + 3} ${sk.temple + 60}
+        L${R - 1} ${sk.temple + 18} Q${R - 10} ${sk.temple + 4} ${R - 2} ${sk.temple - 6} Z`;
+      return `${left} ${right}`;
+    }
     default:
       return '';
   }
@@ -330,6 +348,38 @@ function hairPath(style, headTop, cx, headR, headH) {
       return `${domePath(sk, 3)}
         M${sk.cx - 11} ${crest.y + 2} C${sk.cx - 14} ${crest.y - 22} ${sk.cx + 14} ${crest.y - 22} ${sk.cx + 11} ${crest.y + 2} Z`;
     }
+    case 'flame': {
+      // Swept back and low at the sides, a widow's peak at the centre, and a
+      // small crown of tall points concentrated over the forehead rather than
+      // spread evenly - the shape that reads as "Vegeta" and not "Goku".
+      const roots = [0.32, 0.44, 0.56, 0.68];
+      const heights = [30, 43, 41, 27];
+      const sideA = onDome(sk, 0.14, 2);
+      const sideB = onDome(sk, 0.86, 2);
+      let d = `M${sk.left - 1} ${sk.brow} L${sideA.x} ${sideA.y - 4}`;
+      for (let i = 0; i < roots.length; i++) {
+        const a = onDome(sk, roots[i], 3);
+        const b = onDome(sk, Math.min(1, roots[i] + 0.1), 3);
+        const lean = (roots[i] - 0.5) * 10;
+        d += ` L${a.x + lean} ${a.y - heights[i]} L${b.x} ${b.y}`;
+      }
+      d += ` L${sideB.x} ${sideB.y - 4} L${sk.right + 1} ${sk.brow}`;
+      d += ` Q${sk.cx} ${sk.brow + 15} ${sk.left - 1} ${sk.brow} Z`;
+      return d;
+    }
+    case 'pigtails':
+      // Short and close on top; the tails themselves hang behind the face.
+      return domePath(sk, 2, 3, 3);
+    case 'afro': {
+      // A rounded cloud well clear of the skull outline, not a fitted dome.
+      return domePath(sk, 24);
+    }
+    case 'buzz':
+      // Shorter than cropped, near the scalp.
+      return domePath(sk, 0.4);
+    case 'sidepart':
+      // One side swept up and back, the other combed down and lower.
+      return domePath(sk, 2.5, 2, 12);
     default:
       return '';
   }
@@ -377,6 +427,9 @@ export function npcPortrait(npc, opts = {}) {
     vitals: npc.vitals || { health: 90, happiness: 60 },
     stats: npc.stats || {},
     karma: npc.karma || 0,
+    traits: npc.traits || [],
+    tags: npc.tags || [],
+    canonTags: npc.canonTags || [],
     flags: {},
   }, opts);
 }
@@ -395,20 +448,86 @@ export const EXPRESSIONS = [
 ];
 
 /**
+ * A resting face, read off temperament rather than the moment. Frieza does
+ * not grin when he is pleased with himself, he smirks - and NPCs never had a
+ * `karma` field for the old check to key off, so every one of them fell
+ * through to it regardless and Frieza smiled like Goku whenever happy.
+ */
+const RESTING_BIAS = {
+  // self-satisfied or superior - a smirk, not an open smile
+  cruel: 'smug', sly: 'smug', scheming: 'smug', smug: 'smug', preening: 'smug', vain: 'smug',
+  cocky: 'smug', haughty: 'smug', imperious: 'smug', mercenary: 'smug', proud: 'smug', bold: 'smug',
+  urbane: 'smug', capricious: 'smug', boastful: 'smug', devious: 'smug', greedy: 'smug', evil: 'smug',
+  cunning: 'smug',
+  // hostile or dangerous - a scowl
+  brutal: 'scowl', spiteful: 'scowl', bullying: 'scowl', fierce: 'scowl', volatile: 'scowl',
+  unstable: 'scowl', grim: 'scowl', hard: 'scowl', severe: 'scowl', cold: 'scowl', blustering: 'scowl',
+  booming: 'scowl', brash: 'scowl', impatient: 'scowl', petulant: 'scowl', vengeful: 'scowl',
+  jealous: 'scowl',
+  // warm and open - a real grin
+  cheerful: 'grin', jolly: 'grin', warm: 'grin', sweet: 'grin', kind: 'grin', boisterous: 'grin',
+  jokey: 'grin', easygoing: 'grin', gentle: 'grin', earnest: 'grin', childlike: 'grin', childish: 'grin',
+  good: 'grin', funny: 'grin', generous: 'grin', brave: 'grin', loyal: 'grin',
+  // composed
+  serene: 'serene', stoic: 'serene', quiet: 'serene', placid: 'serene', ancient: 'serene',
+  grave: 'serene', calm: 'serene', patient: 'serene', protective: 'serene',
+  // deadpan
+  professional: 'focused', dry: 'focused', blunt: 'focused', flippant: 'focused', sharp: 'focused',
+  obsessive: 'focused', curious: 'focused', seeker: 'focused', superstitious: 'focused',
+};
+
+/** The first temperament word this character carries that has a resting face. */
+function restingBias(character) {
+  const words = [
+    ...(character.traits || []),
+    ...(character.tags || []),
+    ...(character.canonTags || []),
+  ];
+  for (const w of words) if (RESTING_BIAS[w]) return RESTING_BIAS[w];
+  return null;
+}
+
+/**
+ * How kept-together somebody looks, 0 (fine) to 3 (wrecked). Not a costume
+ * choice - read off the same vitals and flags that already drive the
+ * expression, so a body that has just been through something shows it on the
+ * hair and the clothes before anybody says a word.
+ */
+function groomingLevel(character) {
+  const v = character.vitals || {};
+  const f = character.flags || {};
+  let messy = 0;
+  if (v.health !== undefined && v.health < 45) messy += 1;
+  if (v.happiness !== undefined && v.happiness < 30) messy += 1;
+  if (f.brink_of_death || f.homeless || f.wretched || f.collateral || f.starved) messy += 1;
+  if (f.fury || f.humiliated) messy += 1;
+  return Math.min(3, messy);
+}
+
+/**
  * What the face is doing, read off the live character rather than chosen.
- * Health first, because a body at ten per cent does not smirk.
+ * Health first, because a body at ten per cent does not smirk. Temperament
+ * decides what "pleased" and "displeased" look like before the state machine
+ * defaults to the generic grin or scowl.
  */
 export function expressionFor(character, opts = {}) {
   if (opts.expression) return opts.expression;
   const v = character.vitals || {};
   const f = character.flags || {};
+  const bias = restingBias(character);
   if (opts.form) return 'rage';
   if (v.health !== undefined && v.health < 25) return 'tired';
-  if (f.fury || f.humiliated) return 'rage';
+  if (f.fury || f.humiliated) return bias === 'smug' ? 'smug' : 'rage';
   if (f.brink_of_death) return 'shock';
-  if (v.happiness !== undefined && v.happiness < 25) return 'sad';
+  if (v.happiness !== undefined && v.happiness < 25) return (bias === 'scowl' || bias === 'smug') ? bias : 'sad';
+  if (((character.karma || 0) < -40) || bias === 'smug') {
+    // Content and cruel is a smirk. Nothing about being satisfied with
+    // yourself for the wrong reasons should read as an open, honest grin.
+    if (v.happiness !== undefined && v.happiness > 55) return 'smug';
+  }
+  if (bias === 'scowl' && v.happiness !== undefined && v.happiness < 55) return 'scowl';
   if (v.happiness !== undefined && v.happiness > 82) return 'grin';
-  if ((character.karma || 0) < -40) return 'smug';
+  if (bias) return bias;
   if ((character.stats && character.stats.discipline) > 75) return 'serene';
   if (v.happiness !== undefined && v.happiness > 62) return 'focused';
   return 'neutral';
@@ -523,6 +642,12 @@ export function portraitSvg(character, opts = {}) {
   const jawTaper = fem ? 8 : 4;
   const mood = expressionFor(character, opts);
 
+  // How kept-together they are, in colour. Health and mood show up on the
+  // clothes before anybody says a word.
+  const grime = groomingLevel(character);
+  const bodyColour = grime ? shade(outfit.main || skin, -0.11 * grime) : (outfit.main || skin);
+  const trimColour = grime ? shade(outfit.trim || '#c9a227', -0.14 * grime) : (outfit.trim || '#c9a227');
+
   const goldHair = opts.form && /Super Saiyan|Golden/.test(opts.form.name);
   const finalHair = goldHair ? '#f2cf4a' : hairColour;
   const auraColour = !opts.form ? null
@@ -546,12 +671,21 @@ export function portraitSvg(character, opts = {}) {
   parts.push(`<rect width="${W}" height="${H}" fill="url(#pg-bg)"/>`);
   if (auraColour) parts.push(`<rect width="${W}" height="${H}" fill="url(#pg-aura)"/>`);
 
-  // Saiyan tail, behind the body and sized to it.
+  // A tail, behind the body and sized to it. Not every tail is the same
+  // tail: a Saiyan's is a furred coil, a Frost Demon's is smooth chitin
+  // tapering to a point, and it should read as the right species' at a glance.
   if (character.tail) {
     const reach = 34 * stage.body + 8;
-    parts.push(`<path d="M${cx + shoulderWidth - 6} ${H - 10} C${cx + shoulderWidth + reach} ${H - 60 * stage.body - 10}
-      ${cx + shoulderWidth + reach * 0.3} ${chin + 30} ${cx + shoulderWidth - 14} ${chin + 34}"
-      fill="none" stroke="#7a4a24" stroke-width="${6 * stage.body + 3}" stroke-linecap="round"/>`);
+    const path = `M${cx + shoulderWidth - 6} ${H - 10} C${cx + shoulderWidth + reach} ${H - 60 * stage.body - 10}
+      ${cx + shoulderWidth + reach * 0.3} ${chin + 30} ${cx + shoulderWidth - 14} ${chin + 34}`;
+    if (race === 'frostdemon') {
+      const tailColour = shade(skin, -0.08);
+      parts.push(`<path d="${path}" fill="none" stroke="${tailColour}" stroke-width="${5 * stage.body + 2}" stroke-linecap="round"/>`);
+      // A darker tip, the way Frieza's tail reads on screen.
+      parts.push(`<circle cx="${cx + shoulderWidth - 14}" cy="${chin + 34}" r="${3.4 * stage.body + 1.5}" fill="${shade(skin, -0.35)}"/>`);
+    } else {
+      parts.push(`<path d="${path}" fill="none" stroke="#7a4a24" stroke-width="${6 * stage.body + 3}" stroke-linecap="round"/>`);
+    }
   }
 
   // Hair that hangs down goes behind everything else.
@@ -562,6 +696,24 @@ export function portraitSvg(character, opts = {}) {
     if (back) parts.push(`<path d="${back.replace(/\s+/g, ' ')}" fill="${finalHair}" opacity="0.92"/>`);
   }
 
+  // Arms. There were none - the body was a torso silhouette with nothing
+  // hanging off the shoulders, for every build and both sexes. Drawn behind
+  // the torso fill so the shoulder seam is where the torso curve already is,
+  // with no gap and no double edge.
+  const armReach = (fem ? 11 : 14) * sexScale;
+  for (const side of [-1, 1]) {
+    const sx = cx + side * (shoulderWidth - 6);
+    const ex = cx + side * (shoulderWidth + armReach - 2);
+    const mx = cx + side * (shoulderWidth + armReach);
+    parts.push(`<path d="M${sx} ${chin + 22}
+      C${mx} ${chin + 40} ${mx - side * 4} ${chin + 96} ${ex} ${H}
+      L${cx + side * (shoulderWidth - 18)} ${H}
+      C${cx + side * (shoulderWidth - 10)} ${chin + 96} ${sx - side * 6} ${chin + 40} ${cx + side * (shoulderWidth - 16)} ${chin + 22} Z"
+      fill="${bodyColour}"/>`);
+    // Wrist and hand, in skin, where the sleeve runs out.
+    parts.push(`<ellipse cx="${cx + side * (shoulderWidth + armReach * 0.5 - 6)}" cy="${H - 8}" rx="9" ry="11" fill="${skin}"/>`);
+  }
+
   // Torso and clothing.
   const waistY = chin + 74;
   parts.push(`<path d="M${cx - hip} ${H}
@@ -570,22 +722,49 @@ export function portraitSvg(character, opts = {}) {
     Q${cx} ${chin + 2} ${cx + shoulderWidth - 6} ${chin + 26}
     C${cx + shoulderWidth} ${chin + 44} ${cx + waist} ${waistY - 22} ${cx + waist} ${waistY}
     C${cx + waist} ${waistY + 14} ${cx + hip} ${H - 30} ${cx + hip} ${H} Z"
-    fill="${outfit.main || skin}"/>`);
+    fill="${bodyColour}"/>`);
   if (fem && stage.id !== 'teen') {
-    // A chest, shaped by build rather than uniform.
-    const bust = { small: 7, wiry: 8, lean: 9, balanced: 11, stocky: 13, massive: 14 }[build] || 11;
-    const by = chin + 40;
-    parts.push(`<path d="M${cx - shoulderWidth + 12} ${by - 6}
-      q${bust} ${bust + 4} ${bust * 2} 0 M${cx + shoulderWidth - 12} ${by - 6}
-      q${-bust} ${bust + 4} ${-bust * 2} 0"
-      fill="none" stroke="${shade(outfit.main || skin, -0.22)}" stroke-width="2.2" stroke-linecap="round"/>`);
+    // A chest, as an actual bump in the silhouette rather than a stroke that
+    // read as a crease in the fabric. Sized off its own rolled trait, not off
+    // build - a wiry frame and a heavy one can each land anywhere on it, so a
+    // wide chest over a narrow waist is a real combination rather than a
+    // contradiction the renderer could not produce.
+    const bustSize = Math.max(0.5, Math.min(1.8, a.bust ?? 1));
+    const by = chin + 44;
+    // Where the torso's own outline already sits at chest height (a linear
+    // reading of the bezier between the shoulder point and the waist point),
+    // so the bulge has a real baseline to push past rather than a guess that
+    // usually landed inside the existing fill and never showed.
+    const torsoEdgeAtChest = shoulderWidth - (shoulderWidth - waist) * 0.375;
+    const bulge = (bustSize - 0.5) * 15 * stage.body;
+    const outerEdge = torsoEdgeAtChest + bulge;
+    const rx = Math.max(6, bulge * 0.85 + 5);
+    const ry = rx * 1.18;
+    const bxOff = outerEdge - rx;
+    for (const bside of [-1, 1]) {
+      const bx = cx + bside * bxOff;
+      parts.push(`<ellipse cx="${bx}" cy="${by}" rx="${rx}" ry="${ry}" fill="${bodyColour}"/>`);
+      // A highlight near the top and a shadow along the underside, so it
+      // reads as a curve rather than a flat disc glued to the chest.
+      parts.push(`<ellipse cx="${bx - bside * rx * 0.22}" cy="${by - ry * 0.3}" rx="${rx * 0.4}" ry="${ry * 0.32}"
+        fill="${shade(bodyColour, 0.14)}" opacity="0.4"/>`);
+      parts.push(`<path d="M${bx - rx * 0.75} ${by + ry * 0.35} Q${bx} ${by + ry * 0.85} ${bx + rx * 0.75} ${by + ry * 0.35}"
+        fill="none" stroke="${shade(bodyColour, -0.28)}" stroke-width="2" stroke-linecap="round" opacity="0.55"/>`);
+    }
   }
   if (outfit.main) {
     parts.push(`<path d="M${cx - 16} ${chin + 14} L${cx} ${chin + 44} L${cx + 16} ${chin + 14}
-      L${cx + 26} ${chin + 22} L${cx} ${H} L${cx - 26} ${chin + 22} Z" fill="${outfit.trim}" opacity="0.9"/>`);
+      L${cx + 26} ${chin + 22} L${cx} ${H} L${cx - 26} ${chin + 22} Z" fill="${trimColour}" opacity="0.9"/>`);
     if (outfit.id.startsWith('armour')) {
       parts.push(`<path d="M${cx - shoulderWidth + 2} ${chin + 34} q${shoulderWidth} -22 ${shoulderWidth * 2 - 4} 0"
-        fill="none" stroke="${outfit.trim}" stroke-width="6"/>`);
+        fill="none" stroke="${trimColour}" stroke-width="6"/>`);
+    }
+    if (grime >= 2) {
+      // A tear at the hem and a couple of smudges, for a body that has just
+      // been through something.
+      parts.push(`<path d="M${cx + hip - 10} ${H - 4} l6 -10 l4 8 l7 -12"
+        fill="none" stroke="${shade(bodyColour, -0.4)}" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>`);
+      parts.push(`<ellipse cx="${cx - waist * 0.4}" cy="${waistY}" rx="7" ry="5" fill="${shade(bodyColour, -0.3)}" opacity="0.35"/>`);
     }
   }
 
@@ -623,6 +802,17 @@ export function portraitSvg(character, opts = {}) {
     const d = hairPath(style, headTop, cx, headR, headH);
     if (d) {
       parts.push(`<path d="${d.replace(/\s+/g, ' ')}" fill="${finalHair}" stroke="${shade(finalHair, 0.22)}" stroke-width="1"/>`);
+    }
+    if (grime >= 1) {
+      // A few strands out of place. Not a haircut, a body that has not had
+      // the chance to look after itself.
+      const strandColour = shade(finalHair, -0.1);
+      const strands = grime + 1;
+      for (let i = 0; i < strands; i++) {
+        const sxp = cx - headR * 0.6 + (headR * 1.2 * i) / Math.max(1, strands - 1);
+        parts.push(`<path d="M${sxp} ${headTop - 2} q${(i % 2 ? 6 : -6)} -10 ${(i % 2 ? -3 : 3)} -18"
+          fill="none" stroke="${strandColour}" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/>`);
+      }
     }
   }
 
@@ -890,6 +1080,10 @@ export function defaultAppearance(rng, raceId) {
     buildShape: 'balanced',
     heightCm: rng.int(150, 200),
     weightKg: rng.int(48, 110),
+    // Rolled independently of build, so a narrow frame and a heavy one can
+    // each land anywhere on this - a wide chest over a slim waist is a real
+    // body, not a contradiction.
+    bust: Math.round(rng.gauss(1, 0.28, 0.55, 1.75) * 100) / 100,
     stance: rng.pick(STANCES).id,
     stanceName: '',
   };

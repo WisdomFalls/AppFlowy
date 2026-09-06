@@ -2,7 +2,7 @@
 
 import { Rng, clamp, hashSeed } from './rng.js';
 import { createMemory, addFact } from './memory.js';
-import { RACES, getRace, UPBRINGINGS, BODY_TYPES, TEMPERAMENTS, hasPerk, maturity } from '../data/races.js';
+import { RACES, getRace, UPBRINGINGS, BODY_TYPES, TEMPERAMENTS, hasPerk, maturity, raceHasTail } from '../data/races.js';
 import { getPlace } from '../data/places.js';
 import { eraName, worldPowerBaseline } from '../data/timeline.js';
 import { generateFullName } from '../data/names.js';
@@ -137,7 +137,7 @@ export function createGame(creation, seedInput) {
     senzu: 0,
 
     mentors: [],
-    tail: race.perks.includes('oozaru'),
+    tail: raceHasTail(creation.raceId),
     flags: {},
     achievements: [],
     lifeExpectancy: 80,

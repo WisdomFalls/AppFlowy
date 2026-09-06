@@ -22,7 +22,7 @@ export const CANON_LOOKS = {
   },
   vegeta: {
     sex: 'male', skin: 'light', face: 'angular', eyeShape: 'sharp', eyeColour: 'black',
-    hairStyle: 'spiked', hairColour: 'black', outfit: 'armour_saiyan', buildShape: 'stocky',
+    hairStyle: 'flame', hairColour: 'black', outfit: 'armour_saiyan', buildShape: 'stocky',
     accessories: ['scouter'], marks: [],
     eras: [
       { from: 762, accessories: [] },

@@ -8,7 +8,7 @@ import { addFact, recallSummary } from './memory.js';
 import { relationshipTick, progressNpc, makeNpc, makeChild } from './npc.js';
 import { ladderFor } from '../data/transformations.js';
 import { TECHNIQUES } from '../data/techniques.js';
-import { getRace, hasPerk, maturity } from '../data/races.js';
+import { getRace, hasPerk, maturity, raceHasTail } from '../data/races.js';
 import { getPlace } from '../data/places.js';
 import { TIMELINE, eraName, worldPowerBaseline } from '../data/timeline.js';
 import { agingDecay, naturalDeathChance, combatPower, powerTier, kiMaxFor, lifeExpectancy, zenkaiBoost, STAT_KEYS } from './stats.js';
@@ -735,7 +735,7 @@ export function beginLegacy(state) {
     flags: { heir_of: old.name },
     traits: [],
     achievements: [],
-    tail: getRace(heir.raceId).perks.includes('oozaru'),
+    tail: raceHasTail(heir.raceId),
   };
   next.vitals.kiMax = kiMaxFor(next);
   next.vitals.ki = next.vitals.kiMax;

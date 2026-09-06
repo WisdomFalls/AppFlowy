@@ -12,7 +12,7 @@ import { apply, fact, setWorldFlag, relate } from './helpers.js';
 import { WISHES, WISH_GROUPS, DRAGONS, interpretWishLocally, WISH_BY_ID } from '../../data/items.js';
 import { dragonFor, beginSummon, wishGranted, dismissDragon, summonActive, ballsHeld } from '../dragonballs.js';
 import { TECHNIQUES, getTechnique } from '../../data/techniques.js';
-import { RACES, getRace } from '../../data/races.js';
+import { RACES, getRace, raceHasTail } from '../../data/races.js';
 import { PLANETS } from '../../data/planets.js';
 import { CANON, canonAlive, canonPower } from '../../data/canon.js';
 import { nearbyForms } from '../progression.js';
@@ -178,7 +178,7 @@ function grant(ctx, wish, targetId) {
       const race = getRace(targetId) || RACES.find((r) => r.id !== c.raceId);
       const old = getRace(c.raceId);
       c.raceId = race.id;
-      c.tail = race.perks.includes('oozaru');
+      c.tail = raceHasTail(c.raceId);
       c.transformations = c.transformations.filter((id) => {
         const f = getTransformation(id);
         return f && (!f.races || f.races.includes(race.id));

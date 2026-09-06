@@ -4,7 +4,7 @@
 
 import { clamp } from './rng.js';
 import { generateFullName, generateTitle, generateEpithet, generateSignatureName } from '../data/names.js';
-import { RACES, getRace } from '../data/races.js';
+import { RACES, getRace, raceHasTail } from '../data/races.js';
 import { getCanon, canonPower, canonAlive } from '../data/canon.js';
 import { getPlace } from '../data/places.js';
 import { canonLook, SPECIES_LOOK } from '../data/canonlooks.js';
@@ -60,7 +60,8 @@ const GOALS = ['to be the strongest', 'to find their missing sibling', 'to open 
   'to beat you specifically', 'to earn a name worth saying'];
 
 /** A brand new person, appropriate to the era and place. */
-const NPC_HAIR = ['spiked', 'wild', 'long', 'ponytail', 'bob', 'cropped', 'mohawk', 'bald', 'braid', 'topknot'];
+const NPC_HAIR = ['spiked', 'wild', 'long', 'ponytail', 'bob', 'cropped', 'mohawk', 'bald', 'braid', 'topknot',
+  'flame', 'pigtails', 'afro', 'buzz', 'sidepart'];
 const NPC_MARKS = ['scar_cheek', 'scar_brow', 'burn_arm', 'dots', 'tattoo_arm', 'birthmark', 'missing_ear'];
 const NPC_ACC = ['headband', 'bandana', 'glasses', 'earring', 'necklace', 'wristbands', 'scarf', 'hat', 'cape'];
 
@@ -92,6 +93,8 @@ export function makeAppearance(rng, raceId, sex) {
     weightKg: Math.round(rng.gauss(base[1], 8, 20, 300)),
     marks: rng.chance(0.35) ? [rng.pick(NPC_MARKS)] : [],
     accessories: rng.chance(0.4) ? [rng.pick(NPC_ACC)] : [],
+    // Rolled independently of build, same as the player.
+    bust: Math.round(rng.gauss(1, 0.28, 0.55, 1.75) * 100) / 100,
     // Some people change how they look; most do not.
     vain: rng.chance(0.22),
   };
@@ -168,6 +171,7 @@ export function makeNpc(rng, opts = {}) {
     hasDragonBall: false,
     wall: null,
     growthFocus: rng.pick(['power', 'technique', 'family', 'money', 'peace']),
+    tail: raceHasTail(raceId),
   };
   return npc;
 }
@@ -229,6 +233,7 @@ export function makeCanonNpc(rng, canonId, year, relation = 'acquaintance') {
     personality: c.personality,
     quirk: c.quirk,
     canonTags: c.tags,
+    tail: raceHasTail(c.race),
   };
 }
 
@@ -320,7 +325,8 @@ const FOCUS_PATHS = ['power', 'technique', 'family', 'money', 'peace'];
  *
  * Returns a line of news when something happened worth hearing about.
  */
-const DRIFT_HAIR = ['spiked', 'wild', 'long', 'ponytail', 'bob', 'cropped', 'mohawk', 'bald', 'braid', 'topknot'];
+const DRIFT_HAIR = ['spiked', 'wild', 'long', 'ponytail', 'bob', 'cropped', 'mohawk', 'bald', 'braid', 'topknot',
+  'flame', 'pigtails', 'afro', 'buzz', 'sidepart'];
 
 /**
  * People change how they look. Not often, and mostly the ones who care: a new

@@ -6,7 +6,7 @@
 // wish - that costs something else.
 
 import { clamp } from './rng.js';
-import { getRace, hasPerk } from '../data/races.js';
+import { getRace, hasPerk, raceHasTail } from '../data/races.js';
 
 export const INJURIES = {
   lost_arm: {
@@ -216,7 +216,7 @@ export function restoreBody(state) {
     }
     undoLedger(c, e.statLedger);
     if (e.powerLedger) c.power = Math.max(1, c.power + e.powerLedger);
-    if (e.id === 'lost_tail' && getRace(c.raceId).perks.includes('oozaru')) c.tail = true;
+    if (e.id === 'lost_tail' && raceHasTail(c.raceId)) c.tail = true;
     if (spec.mark) c.scars = (c.scars || []).filter((s) => s.mark !== spec.mark);
     const part = e.prosthetic ? PROSTHETICS[e.prosthetic] : null;
     if (part && part.mark) c.scars = (c.scars || []).filter((s) => s.mark !== part.mark);

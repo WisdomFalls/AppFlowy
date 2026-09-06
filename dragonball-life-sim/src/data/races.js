@@ -100,6 +100,10 @@ export const RACES = [
     maturityRate: 1.4,
     appetite: 0.6,
     perks: ['innatePower', 'suppressionForms', 'vacuumProof', 'arrogance', 'survivesAnything'],
+    // A tail, same as the species standing next to them on the ship. It does
+    // not do anything - there is no Great Ape on this ladder - but it should
+    // be drawn.
+    hasTail: true,
     transformLadder: 'frostdemon',
     naming: 'frostdemon',
     tags: ['mortal', 'imperial'],
@@ -276,6 +280,19 @@ export function hasPerk(character, perk) {
   const race = getRace(character.raceId);
   if (race.perks.includes(perk)) return true;
   return Array.isArray(character.extraPerks) && character.extraPerks.includes(perk);
+}
+
+/**
+ * Who has a tail, drawn on the portrait. Not the same question as who can go
+ * Great Ape with it - a Saiyan's tail is both a body part and a mechanic
+ * (`oozaru` gates on it), a Frost Demon's is a body part and nothing else,
+ * because the transformation ladder that would ask for it is never on their
+ * ladder in the first place.
+ */
+export function raceHasTail(raceId) {
+  const race = getRace(raceId);
+  if (!race) return false;
+  return race.perks.includes('oozaru') || !!race.hasTail;
 }
 
 // Upbringings replace the usual life-sim "starting family wealth" roll with
