@@ -338,15 +338,22 @@ registerEvents([
         voice: dragon.voice,
         already: summon ? summon.used.length : 0,
         left: summon ? summon.remaining : dragon.wishes,
+        zeno: !!(summon && summon.zenoGifted),
       };
     },
-    title: (ctx, s) => (s.already ? `[dragon] Is Still Here` : 'Summoning'),
-    text: (ctx, s) => (s.already
-      ? `[dragon] {has not gone|is still uncoiled across the sky|waits}. {[left] wishes left|You have [left] more|Two more, and then stone}.
-         ${s.voice ? `You speak into [voice].` : ''}`
-      : `Seven balls in a circle, and {the sky goes black|the sun goes out|the clouds come apart}.
-         [dragon] {rises|uncoils|fills the sky}, and there is [voice].
-         {"State your wish"|"Speak. I will grant [left]"|"You have summoned me. Make it quick"}.`),
+    title: (ctx, s) => (s.zeno ? 'What Do You Want' : s.already ? `[dragon] Is Still Here` : 'Summoning'),
+    text: (ctx, s) => (s.zeno
+      ? `Not seven balls. Not a circle, not a sky going dark. {Somebody a great deal higher up than any dragon simply asks|`
+        + `The offer does not come with a ceremony|There is no summoning, because nobody needed to summon anything}. `
+        + `You beat everyone. Every universe, every fighter, down to nobody but you. `
+        + `{"So. What do you want," and it is not a threat|"Name it. Whatever it is." Nothing about this is gated|`
+        + `"You earned an answer with no exceptions in it. Use it or do not"}.`
+      : s.already
+        ? `[dragon] {has not gone|is still uncoiled across the sky|waits}. {[left] wishes left|You have [left] more|Two more, and then stone}.
+           ${s.voice ? `You speak into [voice].` : ''}`
+        : `Seven balls in a circle, and {the sky goes black|the sun goes out|the clouds come apart}.
+           [dragon] {rises|uncoils|fills the sky}, and there is [voice].
+           {"State your wish"|"Speak. I will grant [left]"|"You have summoned me. Make it quick"}.`),
     choices: (ctx, s) => {
       const dragon = dragonFor(ctx.state);
       const pool = usableWishes(ctx.state, dragon);

@@ -15,6 +15,15 @@ import { UNIVERSES, universeFighters, getUniverse } from '../data/universes.js';
 import { canonAvailable, canonPower } from '../data/canon.js';
 import { combatPower } from './stats.js';
 import { addFact } from './memory.js';
+import { livingNpcs } from './state.js';
+import { generateFullName } from '../data/names.js';
+
+const FILLER_NOTES = [
+  'One of the ones nobody wrote a name down for. Still eighty people on the stage.',
+  'Never fought anyone famous. Still made the team.',
+  'A whole life led up to standing here, same as everybody else on this stage.',
+  'Nobody in the crowd knows this name yet.',
+];
 
 export const RULES = [
   'Ring-out only. Nobody is killed and nobody is meant to be.',
@@ -42,34 +51,79 @@ function fighterFrom(spec, universe) {
 }
 
 /**
+ * Ten to a team, always - the number canon actually used. A universe's data
+ * rarely names ten fighters, so whatever is left after the named roster is
+ * filled with people the story never got around to naming. They still count.
+ */
+function fillToTen(rng, roster, universeNumber, universeName) {
+  const out = roster.slice();
+  let i = out.length;
+  while (out.length < 10) {
+    const power = out.length
+      ? Math.round((roster[roster.length - 1]?.power || 1e9) * rng.float(0.05, 0.4))
+      : Math.round(1e9 * rng.float(0.3, 1.2));
+    out.push(fighterFrom({
+      id: `filler_${universeNumber}_${i}`,
+      name: generateFullName(rng, 'other'),
+      power: Math.max(1, power),
+      flavour: rng.pick(FILLER_NOTES),
+    }, universeNumber));
+    i += 1;
+  }
+  return out;
+}
+
+/**
  * Build the stage. The player's universe is whichever one they belong to;
- * everybody else is drawn from the universes that actually competed.
+ * everybody else is drawn from the universes that actually competed - all
+ * eight of them, ten fighters each, eighty on the stage, the actual shape of
+ * the thing rather than a scaled-down stand-in for it.
  */
 export function startSurvival(state, rng, opts = {}) {
   const c = state.character;
   const year = c.birthYear + c.age;
   const myUniverse = opts.universe ?? 7;
-  const perTeam = opts.perTeam ?? 4;
+  const perTeam = 10;
 
   const teams = [];
   const competing = UNIVERSES.filter((u) => u.competed);
   for (const u of competing) {
-    const roster = universeFighters(u.id, year)
+    const named = universeFighters(u.id, year)
       .slice(0, perTeam)
       .map((f, i) => fighterFrom({ ...f, id: `${u.id}_${i}` }, u.number));
-    if (roster.length) teams.push({ universe: u.number, id: u.id, name: u.name, epithet: u.epithet, fighters: roster });
+    const roster = fillToTen(rng, named, u.number, u.name);
+    teams.push({ universe: u.number, id: u.id, name: u.name, epithet: u.epithet, fighters: roster });
   }
 
-  // Your side: you, plus whoever from the series is alive and would be sent.
-  const mates = canonAvailable(year, (x) => x.tags.some((t) => ['hero', 'rival', 'antihero', 'ally'].includes(t))
+  // Your side: the canon cast who would actually be sent, then - if there is
+  // still room - whoever in your own life is strong and trusted enough to
+  // stand there too. Nobody unproven gets a seat; power without your trust
+  // does not buy one either.
+  const canonMates = canonAvailable(year, (x) => x.tags.some((t) => ['hero', 'rival', 'antihero', 'ally'].includes(t))
     && !x.tags.some((t) => ['divine', 'destroyer', 'angel', 'omniking', 'dragon'].includes(t)))
     .sort((a, b) => canonPower(b, year) - canonPower(a, year))
-    .slice(0, perTeam)
+    .slice(0, perTeam - 1)
     .map((x, i) => fighterFrom({ id: 'ally_' + i, name: x.name, power: canonPower(x, year), flavour: x.quirk }, myUniverse));
 
-  const me = fighterFrom({ id: 'me', name: c.name, power: combatPower(c) }, myUniverse);
+  const myPower = combatPower(c);
+  const trusted = livingNpcs(state)
+    .filter((n) => (n.closeness || 0) > 60 && (n.trust ?? 0) > 55 && (n.power || 0) > myPower * 0.15)
+    .sort((a, b) => (b.power || 0) - (a.power || 0));
+
+  const mates = canonMates.slice();
+  for (const npc of trusted) {
+    if (mates.length >= perTeam - 1) break;
+    if (mates.some((m) => m.name === npc.name)) continue;
+    mates.push(fighterFrom({
+      id: 'trusted_' + npc.id, name: npc.name, power: npc.power || 1,
+      flavour: 'Not from any story anybody else knows. Yours.',
+    }, myUniverse));
+  }
+
+  const me = fighterFrom({ id: 'me', name: c.name, power: myPower }, myUniverse);
   me.isPlayer = true;
-  teams.unshift({ universe: myUniverse, id: 'u' + myUniverse, name: `Universe ${myUniverse}`, epithet: 'yours', fighters: [me, ...mates] });
+  const myRoster = fillToTen(rng, [me, ...mates], myUniverse, `Universe ${myUniverse}`);
+  teams.unshift({ universe: myUniverse, id: 'u' + myUniverse, name: `Universe ${myUniverse}`, epithet: 'yours', fighters: myRoster });
 
   return {
     minute: 0,
@@ -83,6 +137,7 @@ export function startSurvival(state, rng, opts = {}) {
     erased: [],
     knockedOut: 0,
     saved: 0,
+    spectating: false,
   };
 }
 
@@ -111,8 +166,20 @@ export function endangered(board) {
 export function survivalActions(board) {
   const out = [];
   const me = board.me;
+  if (board.over) return out;
+
+  // Going out does not end the tournament for you, it changes what you can
+  // do in it. Eighty people do not stop fighting because one of them landed
+  // wrong - you watch the rest of it happen from the edge of the stage,
+  // the way it actually went for everyone who was eliminated early.
+  if (me.out) {
+    return [{
+      id: 'watch', kind: 'watch', label: 'Watch from the edge',
+      hint: 'You are out. Your universe is not, not yet. See how it goes.',
+    }];
+  }
+
   const foes = opponents(board).sort((a, b) => a.power - b.power);
-  if (me.out || board.over) return out;
 
   // Somebody you can plausibly move. Attacking upward is how you lose a round
   // and your footing at the same time.
@@ -237,24 +304,37 @@ export function survivalTurn(state, board, rng, actionId) {
       'You stay out of it. Somewhere behind you, two universes stop existing.',
     ]));
     if (rng.chance(0.3)) lines.push('Somebody very high up notices you doing nothing, and remembers.');
+  } else if (actionId === 'watch') {
+    lines.push(rng.pick([
+      'You watch it from the edge, same as everyone else who has already gone over.',
+      'Being out does not mean being gone. You are still watching your universe fight for its life.',
+      'You do not get another turn in this. You get a very good seat.',
+    ]));
   }
 
   // Everything else on the stage happens whether you look at it or not.
   lines.push(...backgroundMinute(board, rng));
 
-  // Being outnumbered on your own side costs you footing every minute.
-  const mine = myTeam(board).fighters.filter((f) => !f.out).length;
-  const others = opponents(board).length;
-  if (others > mine * 3 && rng.chance(0.35)) {
-    me.grip = clamp(me.grip - rng.int(6, 15), 0, 100);
-    lines.push('There are too many of them and not enough of you. You lose ground you did not choose to lose.');
-  }
-  if (me.grip <= 0) {
-    eject(board, me, null);
-    lines.push('Your foot finds nothing. That is the tournament, for you.');
+  if (!me.out) {
+    // Being outnumbered on your own side costs you footing every minute.
+    const mine = myTeam(board).fighters.filter((f) => !f.out).length;
+    const others = opponents(board).length;
+    if (others > mine * 3 && rng.chance(0.35)) {
+      me.grip = clamp(me.grip - rng.int(6, 15), 0, 100);
+      lines.push('There are too many of them and not enough of you. You lose ground you did not choose to lose.');
+    }
+    if (me.grip <= 0) {
+      eject(board, me, null);
+      lines.push('Your foot finds nothing. That is the tournament, for you. You are not done watching, though.');
+    }
   }
 
-  if (board.minute >= board.minutes || me.out || opponents(board).length === 0) {
+  // The clock, a true sole survivor across all eighty, or your own universe
+  // going out entirely - any of those and it is actually over. Your own
+  // elimination alone is not one of them any more.
+  const everyoneUp = standing(board);
+  const myGone = myTeam(board).fighters.every((f) => f.out);
+  if (board.minute >= board.minutes || everyoneUp.length <= 1 || myGone) {
     finishSurvival(state, board);
     return { lines: lines.concat(board.log.slice(-1)), over: true, outcome: board.outcome };
   }
@@ -289,8 +369,18 @@ function finishSurvival(state, board) {
   const c = state.character;
   const mine = myTeam(board);
   const alive = mine.fighters.filter((f) => !f.out);
+  const everyoneUp = standing(board);
 
-  if (board.me.out && alive.length === 0) {
+  if (everyoneUp.length === 1 && everyoneUp[0] === board.me) {
+    // Not "your universe survived" - you personally are the only person left
+    // standing on the stage, out of all eighty. That is the one outcome the
+    // whole tournament was actually for, and it pays out accordingly.
+    board.outcome = 'solo';
+    c.flags.won_tournament_of_power = true;
+    c.flags.top_sole_survivor = true;
+    state.world.summon = { dragon: 'super', remaining: 1, used: [], group: null, zenoGifted: true };
+    board.log.push('There is nobody else on the stage. Nobody. Somebody a great deal higher up than any dragon is already asking what you want.');
+  } else if (board.me.out && alive.length === 0) {
     board.outcome = 'erased';
     board.log.push(`${mine.name} has nobody left. There is a moment where everything is very bright, and then there is not a Universe ${board.myUniverse}.`);
   } else if (board.me.out) {
@@ -299,7 +389,7 @@ function finishSurvival(state, board) {
   } else if (opponents(board).length === 0) {
     board.outcome = 'won';
     c.flags.won_tournament_of_power = true;
-    board.log.push('There is nobody else on the stage. You are the last one standing in front of everything there is.');
+    board.log.push(`Every other universe is gone from the stage. ${mine.name} is still standing - not just you. That is enough to keep the lights on.`);
   } else {
     board.outcome = 'survived';
     board.log.push(`The clock runs out. ${mine.name} finishes with ${alive.length} still standing. That is enough.`);
@@ -307,7 +397,9 @@ function finishSurvival(state, board) {
 
   addFact(state.memory, {
     type: 'tournament', year: c.birthYear + c.age, weight: 10, tags: ['tournament', 'top'],
-    text: board.outcome === 'won'
+    text: board.outcome === 'solo'
+      ? 'Was the last one standing in the Tournament of Power. Every universe, every fighter. Just them.'
+      : board.outcome === 'won'
       ? 'Won the Tournament of Power outright.'
       : board.outcome === 'erased'
         ? 'Was on the stage when their universe was erased.'

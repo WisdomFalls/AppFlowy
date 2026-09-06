@@ -1958,9 +1958,10 @@ function renderSurvival() {
   $('surv-clock').textContent = `${String(mins).padStart(2, '0')}:00`;
   $('surv-sub').textContent = st.over
     ? {
-      won: 'You are the last one standing.',
+      solo: 'You are the last one standing. Out of all of it. A wish is waiting.',
+      won: 'Every other universe is gone. Yours is still here.',
       survived: 'The clock ran out and your universe is still here.',
-      out: 'You are off the stage.',
+      out: 'You are off the stage. Your universe is not, yet.',
       erased: 'There is no Universe 7 any more.',
     }[st.outcome] || 'Over.'
     : `${st.teams.reduce((n, t) => n + t.up, 0)} still standing - `
