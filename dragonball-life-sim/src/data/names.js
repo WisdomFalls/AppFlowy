@@ -43,6 +43,9 @@ const CEREAL_TAILS = ['olah', 'meel', 'i', 'nolo', 'ey', 'e', 'o', 't', 's', 'ee
 const TUFFLE_ROOTS = ['Rai', 'Hatch', 'Bab', 'Dr. Kol', 'Vor', 'Nex', 'Cir', 'Pol', 'Ax', 'Tuf'];
 const TUFFLE_TAILS = ['chi', 'iyack', 'y', 'ex', 'tan', 'us', 'cuit', 'ymer', 'ion', 'fle'];
 
+const KRYLL_ROOTS = ['Kr', 'Xar', 'Vrik', 'Chit', 'Skel', 'Thrax', 'Klik', 'Zrat', 'Kess', 'Vrax'];
+const KRYLL_TAILS = ['ik', 'ax', 'oss', 'eth', 'ux', 'iss', 'ok', 'ith', 'ass', 'ex'];
+
 const ANDROID_PREFIX = ['Android', 'Unit', 'Model', 'Prototype', 'Series', 'Specimen'];
 const ANDROID_SUFFIX = ['DX', 'MK', 'RR', 'ZX', 'HV', 'NX'];
 
@@ -62,6 +65,7 @@ const NAME_TABLES = {
   tuffle: [TUFFLE_ROOTS, TUFFLE_TAILS],
   half_frostkin: [FROST_ROOTS.concat(EARTH_ROOTS), FROST_TAILS.concat(EARTH_TAILS)],
   half_android: [EARTH_ROOTS, EARTH_TAILS],
+  kryllian: [KRYLL_ROOTS, KRYLL_TAILS],
   other: [EARTH_ROOTS, EARTH_TAILS],
 };
 
@@ -121,6 +125,7 @@ export const TITLES = {
   half_android: ['Field Unit', 'Escaped Asset', 'Student', 'Delivery Driver'],
   half_frostkin: ['Heir', 'Exile', 'Wanderer', 'Sensei'],
   frost_android: ['Prototype', 'Security Model', 'Governor', 'Escaped Asset'],
+  kryllian: ['Hive-Speaker', 'Broodward', 'Outrider', 'Unbonded'],
   other: ['Mercenary', 'Trader', 'Pilot', 'Nomad'],
 };
 

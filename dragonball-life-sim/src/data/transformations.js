@@ -109,21 +109,21 @@ export const TRANSFORMATIONS = [
 
   // -------------------------------------------------------------- Earthling
   {
-    id: 'kaioken', name: 'Kaio-ken', ladder: ['earthling', 'saiyan', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle'], tier: 3,
+    id: 'kaioken', name: 'Kaio-ken', ladder: ['earthling', 'saiyan', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'kryllian'], tier: 3,
     mult: 3, drain: 6, control: 0, strain: 9,
     req: { techniques: ['kaioken'] },
     hint: 'Train under King Kai in the Other World, or find someone he taught.',
     desc: 'A crimson aura and a body being asked to do more than it can.',
   },
   {
-    id: 'kaioken_x10', name: 'Kaio-ken x10', ladder: ['earthling', 'saiyan', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle'], tier: 6,
+    id: 'kaioken_x10', name: 'Kaio-ken x10', ladder: ['earthling', 'saiyan', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'kryllian'], tier: 6,
     mult: 10, drain: 18, control: -10, strain: 25,
     req: { parent: 'kaioken', stat: { durability: 70, discipline: 65 } },
     hint: 'Survive the Kaio-ken often enough that your body stops tearing.',
     desc: 'Ten times over. Every use costs you something you do not get back.',
   },
   {
-    id: 'potential_unleashed', name: 'Potential Unleashed', ladder: ['earthling', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'shinjin'], tier: 8,
+    id: 'potential_unleashed', name: 'Potential Unleashed', ladder: ['earthling', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'shinjin', 'kryllian'], tier: 8,
     mult: 45, drain: 0.5, control: 25, strain: 0,
     req: { custom: 'unlock_ritual' },
     hint: 'A very old Kai, a very long ritual, and someone willing to dance for a day.',

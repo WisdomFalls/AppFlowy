@@ -74,12 +74,13 @@ const NPC_ACC = ['headband', 'bandana', 'glasses', 'earring', 'necklace', 'wrist
  */
 export function makeAppearance(rng, raceId, sex) {
   const sp = SPECIES_LOOK[raceId] || SPECIES_LOOK.other;
-  const hairless = ['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(raceId);
+  const hairless = ['namekian', 'frostdemon', 'majin', 'bioandroid', 'kryllian'].includes(raceId);
   const build = rng.pick(['small', 'wiry', 'lean', 'balanced', 'balanced', 'stocky', 'massive']);
   const base = {
     saiyan: [168, 66], halfsaiyan: [170, 64], earthling: [168, 62], namekian: [196, 78],
     frostdemon: [158, 52], majin: [180, 96], android: [170, 64], bioandroid: [198, 92],
     shinjin: [150, 46], tuffle: [140, 40], yardratian: [146, 38], cerealian: [172, 66],
+    kryllian: [174, 70],
   }[raceId] || [168, 64];
   return {
     skin: sp.skin,
@@ -193,6 +194,7 @@ function pickRaceFor(rng, opts) {
     tuffle: 1.5,
     yardratian: tags.includes('spirit') ? 60 : 1,
     cerealian: 1.5,
+    kryllian: tags.includes('hivekind') ? 70 : 0.5,
   };
   return rng.weighted(RACES.map((r) => r.id), (id) => weights[id] ?? 1);
 }

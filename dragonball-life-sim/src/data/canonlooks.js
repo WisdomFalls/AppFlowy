@@ -427,6 +427,7 @@ export const SPECIES_LOOK = {
   half_android: { skin: 'light', hairStyle: 'sidepart', hairColour: 'blonde', outfit: 'casual', eyeColour: 'blue', face: 'square' },
   half_frostkin: { skin: 'light', hairStyle: 'cropped', hairColour: 'white', outfit: 'gi_orange', eyeColour: 'red', face: 'angular' },
   frost_android: { skin: 'pale', hairStyle: 'bald', hairColour: 'silver', outfit: 'none', eyeColour: 'red', face: 'angular' },
+  kryllian: { skin: 'brown', hairStyle: 'bald', hairColour: 'black', outfit: 'none', eyeColour: 'black', face: 'angular' },
   other: { skin: 'tan', hairStyle: 'cropped', hairColour: 'black', outfit: 'coat', eyeColour: 'black', face: 'square' },
 };
 

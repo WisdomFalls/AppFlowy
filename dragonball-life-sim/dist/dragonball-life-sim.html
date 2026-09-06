@@ -1889,6 +1889,29 @@ const RACES = [
     hasTail: true,
     notes: 'Two separate reasons to underestimate you, and both of them are wrong.',
   },
+
+  // ------------------------------------------------------------ new worlds
+  {
+    id: 'kryllian',
+    name: 'Kryllian',
+    short: 'Kryllian',
+    blurb: 'Chitin, not skin, and a hive that never fully stops talking to you. You are never really alone, for better and worse.',
+    homeworlds: ['kryllos'],
+    base: { strength: 58, speed: 55, technique: 48, kiControl: 45, durability: 68, intellect: 52, charisma: 30, discipline: 62 },
+    growth: { power: 1.05, technique: 0.95, kiControl: 0.85, discipline: 1.1 },
+    startPower: [80, 700],
+    lifespan: [90, 160],
+    agingRate: 0.9,
+    maturityRate: 1.3,
+    appetite: 1.4,
+    perks: ['regeneration', 'fastLearner', 'hiveMind', 'chitinArmour'],
+    transformLadder: 'kryllian',
+    naming: 'kryllian',
+    tags: ['mortal', 'hivekind'],
+    hairColours: ['none (chitin does not grow hair)'],
+    startingTechniques: [],
+    notes: 'The hive knows what you know. Most Kryllians find that a comfort. You may not.',
+  },
 ];
 
 const RACE_BY_ID = Object.fromEntries(RACES.map((r) => [r.id, r]));
@@ -2000,6 +2023,9 @@ const PLACES = [
   { id: 'planet_frieza_79', name: 'Planet Frieza 79', planet: 'frieza_79', danger: 5, training: 1.8, tags: ['imperial', 'jobs', 'highgrav'], desc: 'One of hundreds of identical garrison worlds, numbered rather than named.' },
   { id: 'yardrat', name: 'Planet Yardrat', planet: 'yardrat', danger: 2, training: 2.1, tags: ['spirit', 'teachers', 'quiet'], desc: 'Small people, enormous techniques, and an unshakeable calm about all of it.' },
   { id: 'cereal', name: 'Planet Cereal', planet: 'cereal', danger: 3, training: 1.4, tags: ['ruins', 'dragonballs', 'farm', 'conquered'], desc: 'Ruins, dust, longgrain in the fields nobody has taken yet, and a dragon nobody outside the system has heard of.' },
+  { id: 'kryllos', name: 'Kryllos', planet: 'kryllos', danger: 4, training: 1.6, tags: ['wild', 'hivekind'], desc: 'Red dust and hive-mounds to the horizon. Every Kryllian you meet already knows you are here.' },
+  { id: 'verdana', name: 'The Verdana Concourse', planet: 'verdana', danger: 2, training: 1.1, tags: ['urban', 'civilised', 'jobs', 'tournament'], desc: 'A trade city grown into a jungle canopy. A dozen species, one currency board, and no questions asked.' },
+  { id: 'coldrift', name: 'Coldrift Mining Colony', planet: 'coldrift', danger: 5, training: 1.7, tags: ['imperial', 'jobs', 'highgrav', 'cold'], desc: 'Ice, crystal dust, and a quota that does not care how many shifts you have already worked.' },
   { id: 'kai_planet', name: "King Kai's Planet", planet: 'otherworld', danger: 2, training: 3.5, tags: ['divine', 'otherworld', 'highgrav', 'mentor'], desc: 'Ten times gravity on a rock the size of a football pitch, with a monkey and a cricket.' },
   { id: 'sacred_world', name: 'Sacred World of the Kais', planet: 'otherworld', danger: 3, training: 3.0, tags: ['divine', 'otherworld', 'sacred'], desc: 'Where the Z-Sword is stuck in a rock and the trees are all wrong.' },
   { id: 'beerus_world', name: "Beerus's World", planet: 'otherworld', danger: 8, training: 6.0, tags: ['divine', 'destroyer', 'extreme'], desc: 'A pillar in an empty sky, a sleeping cat, and his impossibly polite attendant.' },
@@ -2657,21 +2683,21 @@ const TRANSFORMATIONS = [
 
   // -------------------------------------------------------------- Earthling
   {
-    id: 'kaioken', name: 'Kaio-ken', ladder: ['earthling', 'saiyan', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle'], tier: 3,
+    id: 'kaioken', name: 'Kaio-ken', ladder: ['earthling', 'saiyan', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'kryllian'], tier: 3,
     mult: 3, drain: 6, control: 0, strain: 9,
     req: { techniques: ['kaioken'] },
     hint: 'Train under King Kai in the Other World, or find someone he taught.',
     desc: 'A crimson aura and a body being asked to do more than it can.',
   },
   {
-    id: 'kaioken_x10', name: 'Kaio-ken x10', ladder: ['earthling', 'saiyan', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle'], tier: 6,
+    id: 'kaioken_x10', name: 'Kaio-ken x10', ladder: ['earthling', 'saiyan', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'kryllian'], tier: 6,
     mult: 10, drain: 18, control: -10, strain: 25,
     req: { parent: 'kaioken', stat: { durability: 70, discipline: 65 } },
     hint: 'Survive the Kaio-ken often enough that your body stops tearing.',
     desc: 'Ten times over. Every use costs you something you do not get back.',
   },
   {
-    id: 'potential_unleashed', name: 'Potential Unleashed', ladder: ['earthling', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'shinjin'], tier: 8,
+    id: 'potential_unleashed', name: 'Potential Unleashed', ladder: ['earthling', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'shinjin', 'kryllian'], tier: 8,
     mult: 45, drain: 0.5, control: 25, strain: 0,
     req: { custom: 'unlock_ritual' },
     hint: 'A very old Kai, a very long ritual, and someone willing to dance for a day.',
@@ -3905,6 +3931,9 @@ const CEREAL_TAILS = ['olah', 'meel', 'i', 'nolo', 'ey', 'e', 'o', 't', 's', 'ee
 const TUFFLE_ROOTS = ['Rai', 'Hatch', 'Bab', 'Dr. Kol', 'Vor', 'Nex', 'Cir', 'Pol', 'Ax', 'Tuf'];
 const TUFFLE_TAILS = ['chi', 'iyack', 'y', 'ex', 'tan', 'us', 'cuit', 'ymer', 'ion', 'fle'];
 
+const KRYLL_ROOTS = ['Kr', 'Xar', 'Vrik', 'Chit', 'Skel', 'Thrax', 'Klik', 'Zrat', 'Kess', 'Vrax'];
+const KRYLL_TAILS = ['ik', 'ax', 'oss', 'eth', 'ux', 'iss', 'ok', 'ith', 'ass', 'ex'];
+
 const ANDROID_PREFIX = ['Android', 'Unit', 'Model', 'Prototype', 'Series', 'Specimen'];
 const ANDROID_SUFFIX = ['DX', 'MK', 'RR', 'ZX', 'HV', 'NX'];
 
@@ -3924,6 +3953,7 @@ const NAME_TABLES = {
   tuffle: [TUFFLE_ROOTS, TUFFLE_TAILS],
   half_frostkin: [FROST_ROOTS.concat(EARTH_ROOTS), FROST_TAILS.concat(EARTH_TAILS)],
   half_android: [EARTH_ROOTS, EARTH_TAILS],
+  kryllian: [KRYLL_ROOTS, KRYLL_TAILS],
   other: [EARTH_ROOTS, EARTH_TAILS],
 };
 
@@ -3983,6 +4013,7 @@ const TITLES = {
   half_android: ['Field Unit', 'Escaped Asset', 'Student', 'Delivery Driver'],
   half_frostkin: ['Heir', 'Exile', 'Wanderer', 'Sensei'],
   frost_android: ['Prototype', 'Security Model', 'Governor', 'Escaped Asset'],
+  kryllian: ['Hive-Speaker', 'Broodward', 'Outrider', 'Unbonded'],
   other: ['Mercenary', 'Trader', 'Pilot', 'Nomad'],
 };
 
@@ -5184,6 +5215,9 @@ function upbringingWeights(raceId, year) {
       break;
     case 'frost_android':
       Object.assign(w, { saiyan_creche: 0, lab: 8, exile: 6, royal: 3, self_raised: 3, city: 1, wealthy: 1, farm: 0, temple: 0, street: 1 });
+      break;
+    case 'kryllian':
+      Object.assign(w, { saiyan_creche: 0, warrior_clan: 10, self_raised: 1, foster: 1, exile: 3, city: 0.5, temple: 2, animals: 2, farm: 1, wealthy: 0, royal: 0 });
       break;
     default:
       break;
@@ -6458,6 +6492,7 @@ const SPECIES_LOOK = {
   half_android: { skin: 'light', hairStyle: 'sidepart', hairColour: 'blonde', outfit: 'casual', eyeColour: 'blue', face: 'square' },
   half_frostkin: { skin: 'light', hairStyle: 'cropped', hairColour: 'white', outfit: 'gi_orange', eyeColour: 'red', face: 'angular' },
   frost_android: { skin: 'pale', hairStyle: 'bald', hairColour: 'silver', outfit: 'none', eyeColour: 'red', face: 'angular' },
+  kryllian: { skin: 'brown', hairStyle: 'bald', hairColour: 'black', outfit: 'none', eyeColour: 'black', face: 'angular' },
   other: { skin: 'tan', hairStyle: 'cropped', hairColour: 'black', outfit: 'coat', eyeColour: 'black', face: 'square' },
 };
 
@@ -6560,12 +6595,13 @@ const NPC_ACC = ['headband', 'bandana', 'glasses', 'earring', 'necklace', 'wrist
  */
 function makeAppearance(rng, raceId, sex) {
   const sp = SPECIES_LOOK[raceId] || SPECIES_LOOK.other;
-  const hairless = ['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(raceId);
+  const hairless = ['namekian', 'frostdemon', 'majin', 'bioandroid', 'kryllian'].includes(raceId);
   const build = rng.pick(['small', 'wiry', 'lean', 'balanced', 'balanced', 'stocky', 'massive']);
   const base = {
     saiyan: [168, 66], halfsaiyan: [170, 64], earthling: [168, 62], namekian: [196, 78],
     frostdemon: [158, 52], majin: [180, 96], android: [170, 64], bioandroid: [198, 92],
     shinjin: [150, 46], tuffle: [140, 40], yardratian: [146, 38], cerealian: [172, 66],
+    kryllian: [174, 70],
   }[raceId] || [168, 64];
   return {
     skin: sp.skin,
@@ -6679,6 +6715,7 @@ function pickRaceFor(rng, opts) {
     tuffle: 1.5,
     yardratian: tags.includes('spirit') ? 60 : 1,
     cerealian: 1.5,
+    kryllian: tags.includes('hivekind') ? 70 : 0.5,
   };
   return rng.weighted(RACES.map((r) => r.id), (id) => weights[id] ?? 1);
 }
@@ -8639,6 +8676,33 @@ const PLANETS = [
     defenders: ['zarbon', 'dodoria'],
     flora: 'Nothing grows. Everything is shipped in.',
     strength: 'Individually unimpressive. There are a great many of them.',
+  },
+  {
+    id: 'kryllos', name: 'Kryllos', distance: 26,
+    inhabitants: 'Kryllians, in hives of thousands',
+    population: 'millions', tech: 'grown, not built', alignment: 'collective',
+    law: 'The hive decides. There is no such thing as one Kryllian asking a question alone.',
+    defenders: ['kryllian_warden'],
+    flora: 'Red dust, spined trees, and hive-mounds visible from orbit.',
+    strength: 'Nobody here is individually terrifying. Everybody here is never alone.',
+  },
+  {
+    id: 'verdana', name: 'Verdana', distance: 20,
+    inhabitants: 'Whoever is trading this week',
+    population: 'millions', tech: 'bazaar-modern', alignment: 'mercantile',
+    law: 'Whatever the Concourse says it is. Money settles most disputes before they start.',
+    defenders: [],
+    flora: 'Terraced jungle, grown up around a trade concourse the size of a city.',
+    strength: 'A dozen species and no standing army. Everyone here is armed and nobody wants the trouble.',
+  },
+  {
+    id: 'coldrift', name: 'Coldrift', distance: 21,
+    inhabitants: 'A Frieza Force mining detachment and the people they work to death',
+    population: 'thousands', tech: 'imperial', alignment: 'imperial',
+    law: 'Quota. Everything else is negotiable.',
+    defenders: [],
+    flora: 'Ice sheets over a crystal seam. Nothing grows; a great deal is dug up.',
+    strength: 'A garrison thin enough that the mines matter more than the soldiers guarding them.',
   },
   // The universes next door. Reachable only by Kai Kai, an angel, or a pass
   // that a god of destruction has personally signed off on.
@@ -14250,6 +14314,13 @@ const UNIVERSES = [
     ],
   },
   {
+    id: 'u5', number: 5, name: 'Universe 5', epithet: 'the quiet universe',
+    mortalLevel: 'mid', erased: false, competed: false,
+    destroyer: 'Arak', angel: 'Sorrel', kai: 'Aros',
+    flavour: 'Never fielded in the Tournament of Power, and nobody outside it seems to know why. Arak does not explain himself.',
+    fighters: [],
+  },
+  {
     id: 'u6', number: 6, name: 'Universe 6', epithet: 'the twin universe',
     mortalLevel: 'mid', erased: false, competed: true,
     destroyer: 'Champa', angel: 'Vados', kai: 'Fuwa',
@@ -14276,6 +14347,13 @@ const UNIVERSES = [
     ],
   },
   {
+    id: 'u8', number: 8, name: 'Universe 8', epithet: 'the unraced universe',
+    mortalLevel: 'mid', erased: false, competed: false,
+    destroyer: 'Liquiir', angel: 'Helles', kai: 'Ain',
+    flavour: 'Also skipped the Tournament of Power. Liquiir is said to have declined the invitation personally, which nobody else has ever done.',
+    fighters: [],
+  },
+  {
     id: 'u10', number: 10, name: 'Universe 10', epithet: 'the universe of muscle',
     mortalLevel: 'low', erased: true, competed: true,
     destroyer: 'Rumsshi', angel: 'Cukatail', kai: 'Gowasu',
@@ -14297,6 +14375,13 @@ const UNIVERSES = [
       { name: 'Dyspo', power: 6e12, race: 'other', note: 'Faster than anything else in the ring.' },
       { name: 'Kahseral', power: 2e12, race: 'other', note: 'Leads by standing in front of people.' },
     ],
+  },
+  {
+    id: 'u12', number: 12, name: 'Universe 12', epithet: 'the mirror universe',
+    mortalLevel: 'mid', erased: false, competed: false,
+    destroyer: 'Mule', angel: 'Cinnamon', kai: 'Jaki',
+    flavour: 'A universe that, by every measure anyone has ever taken, is almost exactly Universe 7. Nobody finds that as reassuring as it should be.',
+    fighters: [],
   },
 ];
 

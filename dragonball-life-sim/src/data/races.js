@@ -331,6 +331,29 @@ export const RACES = [
     hasTail: true,
     notes: 'Two separate reasons to underestimate you, and both of them are wrong.',
   },
+
+  // ------------------------------------------------------------ new worlds
+  {
+    id: 'kryllian',
+    name: 'Kryllian',
+    short: 'Kryllian',
+    blurb: 'Chitin, not skin, and a hive that never fully stops talking to you. You are never really alone, for better and worse.',
+    homeworlds: ['kryllos'],
+    base: { strength: 58, speed: 55, technique: 48, kiControl: 45, durability: 68, intellect: 52, charisma: 30, discipline: 62 },
+    growth: { power: 1.05, technique: 0.95, kiControl: 0.85, discipline: 1.1 },
+    startPower: [80, 700],
+    lifespan: [90, 160],
+    agingRate: 0.9,
+    maturityRate: 1.3,
+    appetite: 1.4,
+    perks: ['regeneration', 'fastLearner', 'hiveMind', 'chitinArmour'],
+    transformLadder: 'kryllian',
+    naming: 'kryllian',
+    tags: ['mortal', 'hivekind'],
+    hairColours: ['none (chitin does not grow hair)'],
+    startingTechniques: [],
+    notes: 'The hive knows what you know. Most Kryllians find that a comfort. You may not.',
+  },
 ];
 
 export const RACE_BY_ID = Object.fromEntries(RACES.map((r) => [r.id, r]));

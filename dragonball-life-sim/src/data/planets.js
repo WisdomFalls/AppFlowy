@@ -71,6 +71,33 @@ export const PLANETS = [
     flora: 'Nothing grows. Everything is shipped in.',
     strength: 'Individually unimpressive. There are a great many of them.',
   },
+  {
+    id: 'kryllos', name: 'Kryllos', distance: 26,
+    inhabitants: 'Kryllians, in hives of thousands',
+    population: 'millions', tech: 'grown, not built', alignment: 'collective',
+    law: 'The hive decides. There is no such thing as one Kryllian asking a question alone.',
+    defenders: ['kryllian_warden'],
+    flora: 'Red dust, spined trees, and hive-mounds visible from orbit.',
+    strength: 'Nobody here is individually terrifying. Everybody here is never alone.',
+  },
+  {
+    id: 'verdana', name: 'Verdana', distance: 20,
+    inhabitants: 'Whoever is trading this week',
+    population: 'millions', tech: 'bazaar-modern', alignment: 'mercantile',
+    law: 'Whatever the Concourse says it is. Money settles most disputes before they start.',
+    defenders: [],
+    flora: 'Terraced jungle, grown up around a trade concourse the size of a city.',
+    strength: 'A dozen species and no standing army. Everyone here is armed and nobody wants the trouble.',
+  },
+  {
+    id: 'coldrift', name: 'Coldrift', distance: 21,
+    inhabitants: 'A Frieza Force mining detachment and the people they work to death',
+    population: 'thousands', tech: 'imperial', alignment: 'imperial',
+    law: 'Quota. Everything else is negotiable.',
+    defenders: [],
+    flora: 'Ice sheets over a crystal seam. Nothing grows; a great deal is dug up.',
+    strength: 'A garrison thin enough that the mines matter more than the soldiers guarding them.',
+  },
   // The universes next door. Reachable only by Kai Kai, an angel, or a pass
   // that a god of destruction has personally signed off on.
   {

@@ -48,6 +48,13 @@ export const UNIVERSES = [
     ],
   },
   {
+    id: 'u5', number: 5, name: 'Universe 5', epithet: 'the quiet universe',
+    mortalLevel: 'mid', erased: false, competed: false,
+    destroyer: 'Arak', angel: 'Sorrel', kai: 'Aros',
+    flavour: 'Never fielded in the Tournament of Power, and nobody outside it seems to know why. Arak does not explain himself.',
+    fighters: [],
+  },
+  {
     id: 'u6', number: 6, name: 'Universe 6', epithet: 'the twin universe',
     mortalLevel: 'mid', erased: false, competed: true,
     destroyer: 'Champa', angel: 'Vados', kai: 'Fuwa',
@@ -74,6 +81,13 @@ export const UNIVERSES = [
     ],
   },
   {
+    id: 'u8', number: 8, name: 'Universe 8', epithet: 'the unraced universe',
+    mortalLevel: 'mid', erased: false, competed: false,
+    destroyer: 'Liquiir', angel: 'Helles', kai: 'Ain',
+    flavour: 'Also skipped the Tournament of Power. Liquiir is said to have declined the invitation personally, which nobody else has ever done.',
+    fighters: [],
+  },
+  {
     id: 'u10', number: 10, name: 'Universe 10', epithet: 'the universe of muscle',
     mortalLevel: 'low', erased: true, competed: true,
     destroyer: 'Rumsshi', angel: 'Cukatail', kai: 'Gowasu',
@@ -95,6 +109,13 @@ export const UNIVERSES = [
       { name: 'Dyspo', power: 6e12, race: 'other', note: 'Faster than anything else in the ring.' },
       { name: 'Kahseral', power: 2e12, race: 'other', note: 'Leads by standing in front of people.' },
     ],
+  },
+  {
+    id: 'u12', number: 12, name: 'Universe 12', epithet: 'the mirror universe',
+    mortalLevel: 'mid', erased: false, competed: false,
+    destroyer: 'Mule', angel: 'Cinnamon', kai: 'Jaki',
+    flavour: 'A universe that, by every measure anyone has ever taken, is almost exactly Universe 7. Nobody finds that as reassuring as it should be.',
+    fighters: [],
   },
 ];
 
