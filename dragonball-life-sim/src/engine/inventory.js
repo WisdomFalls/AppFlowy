@@ -20,7 +20,7 @@ function slotOf(item) {
   if (!item) return 'none';
   if (item.cat === 'accessory') return ['acc_hat', 'acc_bandana', 'acc_headband', 'acc_sunglasses', 'acc_glasses'].includes(item.id) ? 'head' : 'trinket';
   if (item.id === 'battle_armour' || item.id === 'weighted_clothing' || item.id === 'turtle_shell') return 'body';
-  if (item.id === 'z_sword' || item.id === 'power_pole') return 'held';
+  if (item.cat === 'weapon') return 'held';
   if (item.id === 'scouter') return 'head';
   if (item.id === 'potara' || item.id === 'time_ring' || item.id === 'championship_belt') return 'trinket';
   return 'none';

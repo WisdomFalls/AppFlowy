@@ -42,10 +42,30 @@ export const ITEMS = [
     desc: 'Universe 10. One bead per year of discipline, and a god who counts them.' },
   { id: 'halo_polish', name: 'Halo Polish', cat: 'consumable', cost: 100, use: { happiness: 8 },
     desc: 'Sold in the Other World by somebody who has been dead a very long time and is bored.' },
-  { id: 'z_sword', name: 'The Z-Sword', cat: 'gear', cost: 0, passive: { attack: 25, unique: true },
+  { id: 'z_sword', name: 'The Z-Sword', cat: 'weapon', weaponType: 'blade', cost: 0, passive: { attack: 25, unique: true },
     desc: 'Stuck in a rock on the Sacred World for generations. Heavier than it has any right to be.' },
-  { id: 'power_pole', name: 'Power Pole', cat: 'gear', cost: 0, passive: { attack: 10, reach: 0.3 },
+  { id: 'power_pole', name: 'Power Pole', cat: 'weapon', weaponType: 'blunt', cost: 0, passive: { attack: 10, reach: 0.3 },
     desc: 'Extends from here to the Lookout, if you ask it nicely.' },
+  // Weapons. Not what wins the fight by itself - a blade is a multiplier on
+  // whoever is holding it, same as everything else in this game.
+  { id: 'training_knife', name: 'Training Knife', cat: 'weapon', weaponType: 'blade', cost: 800, passive: { attack: 4 },
+    desc: 'Dull enough to practise with, sharp enough to remind you not to.' },
+  { id: 'bo_staff', name: 'Bo Staff', cat: 'weapon', weaponType: 'blunt', cost: 1500, passive: { attack: 6 },
+    desc: 'The oldest weapon there is: a stick, and someone who knows what to do with it.' },
+  { id: 'hunting_blade', name: 'Hunting Blade', cat: 'weapon', weaponType: 'blade', cost: 3200, passive: { attack: 9 },
+    desc: 'Balanced for throwing or holding. Whoever sold it to you asked no questions.' },
+  { id: 'dual_shortswords', name: 'Dual Shortswords', cat: 'weapon', weaponType: 'blade', cost: 12000, passive: { attack: 15 },
+    desc: 'One in each hand, for someone who never learned to fight with just one.' },
+  { id: 'war_hammer', name: 'War Hammer', cat: 'weapon', weaponType: 'blunt', cost: 18000, passive: { attack: 20, speedPenalty: 3 },
+    desc: 'Slow to swing and unarguable when it lands.' },
+  { id: 'energy_blaster', name: 'Energy Blaster', cat: 'weapon', weaponType: 'ranged', cost: 35000, passive: { attack: 17 },
+    desc: 'A sidearm that does what a scouted-in ki blast does, for someone who has not got one yet.' },
+  { id: 'battle_rifle', name: 'Frieza Force Battle Rifle', cat: 'weapon', weaponType: 'ranged', cost: 90000, passive: { attack: 30 },
+    desc: 'Standard issue for the soldiers not expected to throw a punch. Loud, and it does not need to sleep.' },
+  { id: 'namekian_spear', name: 'Namekian War Spear', cat: 'weapon', weaponType: 'blade', cost: 0, passive: { attack: 22 },
+    desc: 'Grown, not forged, from the same stuff as a Namekian house. Reach nobody else\'s weapon has.' },
+  { id: 'destructo_discs_kit', name: 'Throwing Disc Set', cat: 'weapon', weaponType: 'thrown', cost: 26000, passive: { attack: 14 },
+    desc: 'Ki-edged and razor-thin. Cuts through nearly anything, including the wielder\'s confidence the first few tries.' },
 
   // Transport
   { id: 'hovercar', name: 'Hovercar', cat: 'transport', cost: 180000, passive: { travel: 1 }, desc: 'Standard, dull, reliable.' },
@@ -111,11 +131,11 @@ export const LOCAL_GOODS = {
   earth: ['capsule_house', 'dragon_radar_kit'],
   planet_vegeta: ['battle_armour', 'scouter', 'attack_ball', 'merit_sigil'],
   sadala: ['battle_armour', 'sadala_ration'],
-  namek: ['namek_jar', 'ajisa_seed'],
-  new_namek: ['namek_jar', 'ajisa_seed'],
+  namek: ['namek_jar', 'ajisa_seed', 'namekian_spear'],
+  new_namek: ['namek_jar', 'ajisa_seed', 'namekian_spear'],
   yardrat: ['yardrat_text', 'spirit_silk'],
   cereal: ['cereal_grain'],
-  frieza_79: ['scouter', 'battle_armour', 'force_rations', 'field_medkit'],
+  frieza_79: ['scouter', 'battle_armour', 'force_rations', 'field_medkit', 'battle_rifle'],
   u11_world: ['pride_uniform'],
   u10_world: ['devotion_beads'],
   otherworld: ['halo_polish'],
@@ -133,7 +153,7 @@ export function shopStock(placeTags, planetId) {
     namek: ['transport', 'property', 'accessory'],
     new_namek: ['transport', 'property'],
     void: ['property'],
-    otherworld: ['transport', 'property', 'gear', 'accessory'],
+    otherworld: ['transport', 'property', 'gear', 'accessory', 'weapon'],
     planet_vegeta: ['property', 'accessory'],
     yardrat: ['transport', 'property'],
   }[planetId] || [];
@@ -149,6 +169,8 @@ export function shopStock(placeTags, planetId) {
     if (i.cat === 'property' && !placeTags.includes('civilised') && !placeTags.includes('urban')) return false;
     if ((i.id === 'scouter' || i.id === 'battle_armour') && !placeTags.includes('imperial') && !placeTags.includes('tech')) return false;
     if ((i.id === 'gravity_chamber' || i.id === 'spaceship' || i.id === 'gravity_capsule') && !placeTags.includes('tech')) return false;
+    if (i.cat === 'weapon' && !placeTags.includes('civilised') && !placeTags.includes('urban') && !placeTags.includes('tournament') && !placeTags.includes('imperial')) return false;
+    if ((i.weaponType === 'ranged') && !placeTags.includes('tech') && !placeTags.includes('imperial')) return false;
     return true;
   });
   // Local goods first: they are the reason to shop here rather than anywhere.

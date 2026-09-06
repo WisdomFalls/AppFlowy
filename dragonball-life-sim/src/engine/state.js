@@ -34,6 +34,7 @@ export function defaultCreation(rng) {
     upbringingId: rng.pick(UPBRINGINGS).id,
     temperamentId: rng.pick(TEMPERAMENTS).id,
     bodyId: rng.pick(BODY_TYPES).id,
+    fightingStyle: rng.pick(['martial_arts', 'martial_arts', 'weapons', 'both']),
     hair: rng.pick(race.hairColours.length ? race.hairColours : APPEARANCE.hair),
     eyes: rng.pick(APPEARANCE.eyes),
     marking: rng.pick(APPEARANCE.marking),
@@ -138,6 +139,7 @@ export function createGame(creation, seedInput) {
 
     mentors: [],
     tail: raceHasTail(creation.raceId),
+    fightingStyle: ['martial_arts', 'weapons', 'both'].includes(creation.fightingStyle) ? creation.fightingStyle : 'martial_arts',
     flags: {},
     achievements: [],
     lifeExpectancy: 80,

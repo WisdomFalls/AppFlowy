@@ -8,6 +8,7 @@ import { traitEffect } from '../data/traits.js';
 import { getRace, hasPerk } from '../data/races.js';
 import { getTransformation } from '../data/transformations.js';
 import { techniquePower } from '../data/techniques.js';
+import { getItem } from '../data/items.js';
 import { ceilingDamping, masteryMult } from './mastery.js';
 
 export const STAT_KEYS = ['strength', 'speed', 'technique', 'kiControl', 'durability', 'intellect', 'charisma', 'discipline'];
@@ -102,6 +103,31 @@ export function bestForm(character) {
   return best;
 }
 
+/** The weapon a character currently has worn in the held slot, if any. */
+export function equippedWeapon(character) {
+  for (const entry of character.bag || []) {
+    if (!entry.worn) continue;
+    const item = getItem(entry.id);
+    if (item && item.cat === 'weapon') return { entry, item };
+  }
+  return null;
+}
+
+/**
+ * How much a wielded weapon actually adds. A martial artist who picks one up
+ * gets a fraction of it - it is not the training they built their fight
+ * around - while someone who trained with a blade or a gun gets the whole
+ * thing, worn condition and all.
+ */
+export function weaponAttackBonus(character) {
+  const wielded = equippedWeapon(character);
+  if (!wielded) return 0;
+  const base = (wielded.item.passive && wielded.item.passive.attack) || 0;
+  const wear = clamp((wielded.entry.condition ?? 100) / 100, 0.15, 1);
+  const styleMult = character.fightingStyle === 'martial_arts' ? 0.35 : 1;
+  return base * wear * styleMult;
+}
+
 /**
  * Combat power. Base power scaled by form, condition and technique library.
  * `form` may be forced; otherwise the best available form is used.
@@ -113,10 +139,15 @@ export function combatPower(character, opts = {}) {
   const health = clamp(character.vitals.health / Math.max(1, character.vitals.healthMax || 100), 0.25, 1);
   const ki = clamp(0.55 + (character.vitals.ki / Math.max(1, character.vitals.kiMax)) * 0.45, 0.4, 1);
   const tech = techniquePower(character);
-  const techFactor = 1 + (tech.atk + tech.def + tech.speed) / 260;
+  const weaponBonus = weaponAttackBonus(character);
+  const techFactor = 1 + (tech.atk + tech.def + tech.speed + weaponBonus) / 260;
   const skill = 1 + ((character.stats.technique + character.stats.kiControl) / 200) * 0.5;
+  // Someone who leans on a weapon and has not got one out is fighting below
+  // their own style; a martial artist and someone trained in both never lose
+  // anything for having empty hands.
+  const disarmed = character.fightingStyle === 'weapons' && !equippedWeapon(character) ? 0.9 : 1;
   const condition = opts.ignoreCondition ? 1 : health * ki;
-  return Math.max(1, character.power * mult * techFactor * skill * condition);
+  return Math.max(1, character.power * mult * techFactor * skill * condition * disarmed);
 }
 
 /** A readable descriptor, because raw power levels stop meaning much at 1e12. */

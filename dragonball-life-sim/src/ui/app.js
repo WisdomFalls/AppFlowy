@@ -177,6 +177,25 @@ function renderCreation() {
     sexes.appendChild(b);
   }
 
+  const styles = $('opt-style');
+  if (styles) {
+    styles.innerHTML = '';
+    for (const sy of [['martial_arts', 'Martial Arts'], ['weapons', 'Weapons'], ['both', 'Both']]) {
+      const b = el('button', 'opt' + (DRAFT.fightingStyle === sy[0] ? ' on' : ''), sy[1]);
+      b.type = 'button';
+      b.addEventListener('click', () => { DRAFT.fightingStyle = sy[0]; renderCreation(); });
+      styles.appendChild(b);
+    }
+  }
+  const styleNote = $('style-note');
+  if (styleNote) {
+    styleNote.textContent = DRAFT.fightingStyle === 'weapons'
+      ? 'You fight best with something in your hand, and worse without one.'
+      : DRAFT.fightingStyle === 'both'
+        ? 'Fists or a blade, it makes no difference to you.'
+        : 'Your body is the weapon. Anything you pick up helps less than it would someone else.';
+  }
+
   const seed = $('in-seed');
   if (seed) seed.value = DRAFT.seed || '';
 }
@@ -1195,6 +1214,25 @@ function panelInventory() {
   const planet = getPlace(c.placeId).planet;
   const cur = currencyFor(planet);
   const { body } = sheetShell('What you carry', `${formatMoney(balance(c, cur.id), cur.id)}`);
+
+  body.appendChild(el('div', 'group-label', 'Fighting style'));
+  const styleRow = el('div', 'opts');
+  const STYLE_LABELS = { martial_arts: 'Martial Arts', weapons: 'Weapons', both: 'Both' };
+  for (const sy of ['martial_arts', 'weapons', 'both']) {
+    const b = el('button', 'opt' + ((c.fightingStyle || 'martial_arts') === sy ? ' on' : ''), STYLE_LABELS[sy]);
+    b.type = 'button';
+    b.addEventListener('click', () => {
+      c.fightingStyle = sy;
+      flash(sy === 'weapons' ? 'You start leaning on steel over your fists.'
+        : sy === 'both' ? 'You train to be equally dangerous either way.'
+        : 'You put the weapon down and go back to relying on yourself.');
+      renderHud();
+      panelInventory();
+    });
+    styleRow.appendChild(b);
+  }
+  body.appendChild(styleRow);
+  body.appendChild(el('p', 'row-note', 'What you fight with, not just what you carry. Retraining takes a season to fully settle in.'));
 
   // Every purse with something in it, because money does not travel.
   const purses = Object.values(CURRENCIES)
@@ -2442,6 +2480,7 @@ function startGame() {
     name: DRAFT.name,
     raceId: DRAFT.raceId,
     sex: DRAFT.sex,
+    fightingStyle: DRAFT.fightingStyle,
     upbringingId: DRAFT.upbringingId,
     temperamentId: DRAFT.temperamentId,
     bodyId: DRAFT.bodyId,

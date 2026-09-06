@@ -11,8 +11,17 @@ import { limitFor } from './economy.js';
 import { render } from './text.js';
 import { adjust, findNpc, currentYear, addNpc } from './state.js';
 import { addFact } from './memory.js';
-import { combatPower } from './stats.js';
+import { combatPower, weaponAttackBonus } from './stats.js';
 import { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild } from './npc.js';
+import { npcBag } from './inventory.js';
+
+/** An NPC's power as it actually shows up in a fight - their base, plus
+ * whatever a weapon they have out actually does for them. Nobody rolls a
+ * bag until it matters, so this is where that first happens for a foe. */
+function npcFightPower(rng, npc) {
+  npcBag(rng, npc);
+  return Math.round(npc.power * (1 + weaponAttackBonus(npc) / 260));
+}
 import { TECH_BY_ID } from '../data/techniques.js';
 import { getRace } from '../data/races.js';
 import { getPlace } from '../data/places.js';
@@ -337,7 +346,7 @@ export const SOCIAL_ACTIONS = [
       text: `You say it out loud, in front of whoever is there. ${npc.name} does not refuse.`,
       battle: {
         foe: {
-          name: npc.name, power: npc.power, npcId: npc.id, raceId: npc.raceId,
+          name: npc.name, power: npcFightPower(rng, npc), npcId: npc.id, raceId: npc.raceId,
           techniques: npc.techniques || [], forms: npc.transformations || [],
         },
         stakes: 'lethal', reason: 'duel',
@@ -354,7 +363,7 @@ export const SOCIAL_ACTIONS = [
       text: `${npc.name} is already stretching.`,
       battle: {
         foe: {
-          name: npc.name, power: npc.power, npcId: npc.id, raceId: npc.raceId,
+          name: npc.name, power: npcFightPower(rng, npc), npcId: npc.id, raceId: npc.raceId,
           techniques: npc.techniques || [], forms: npc.transformations || [],
         },
         stakes: 'spar', reason: 'spar',
