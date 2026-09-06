@@ -14876,7 +14876,18 @@ function finishSurvival(state, board) {
   } else if (opponents(board).length === 0) {
     board.outcome = 'won';
     c.flags.won_tournament_of_power = true;
-    board.log.push(`Every other universe is gone from the stage. ${mine.name} is still standing - not just you. That is enough to keep the lights on.`);
+    // The tournament was for one wish per winning universe, not one per sole
+    // survivor - Universe 7 won as a team in the source material, and the
+    // team decided together (or didn't) who spoke for it. Whoever from your
+    // own life is still standing beside you gets tracked here so that
+    // decision can actually be made instead of assumed.
+    state.world.summon = { dragon: 'super', remaining: 1, used: [], group: null, zenoGifted: true };
+    board.teamSurvivorIds = alive
+      .filter((f) => f !== board.me && typeof f.id === 'string' && f.id.startsWith('trusted_'))
+      .map((f) => f.id.slice('trusted_'.length));
+    board.log.push(board.teamSurvivorIds.length
+      ? `Every other universe is gone from the stage. ${mine.name} is still standing - ${alive.length} of you, not just you. One dragon, one wish, and whoever speaks for the rest.`
+      : `Every other universe is gone from the stage. ${mine.name} is still standing - not just you. That is enough to keep the lights on.`);
   } else {
     board.outcome = 'survived';
     board.log.push(`The clock runs out. ${mine.name} finishes with ${alive.length} still standing. That is enough.`);
@@ -14893,6 +14904,40 @@ function finishSurvival(state, board) {
         : `Fought in the Tournament of Power. ${board.knockedOut} eliminations, ${board.erased.length} universes gone.`,
   });
   return board;
+}
+
+/**
+ * A team win only produces one wish, and board.teamSurvivorIds is whoever
+ * from your own life is still standing to have an opinion about it. The
+ * wish itself works exactly the same either way - you still speak it -
+ * but sharing it keeps the people who earned it with you, and taking it
+ * alone costs you something real with them and your own name for it.
+ */
+function resolveTeamWish(state, board, share) {
+  const ids = board.teamSurvivorIds || [];
+  const names = [];
+  for (const id of ids) {
+    const npc = state.npcs[id];
+    if (!npc || !npc.alive) continue;
+    names.push(npc.name);
+    if (share) {
+      npc.closeness = clamp((npc.closeness || 0) + 12, 0, 100);
+      npc.trust = clamp((npc.trust ?? 30) + 10, 0, 100);
+    } else {
+      npc.closeness = clamp((npc.closeness || 0) - 25, 0, 100);
+      npc.trust = clamp((npc.trust ?? 30) - 20, 0, 100);
+      npc.tension = clamp((npc.tension || 0) + 30, 0, 100);
+    }
+  }
+  if (!share) state.character.karma = clamp((state.character.karma || 0) - 8, -100, 100);
+  if (!names.length) {
+    return share
+      ? 'Nobody else from your life made it this far. The wish is yours by default.'
+      : 'Nobody else from your life made it this far. There was nobody to take it from.';
+  }
+  return share
+    ? `You put it to ${names.join(' and ')} first. Whatever gets wished for, it is agreed on.`
+    : `You do not ask ${names.join(' and ')}. The wish is yours before they can object.`;
 }
 
 /** The board, flattened for the UI. */
@@ -14918,7 +14963,7 @@ function survivalStatus(board) {
     })),
   };
 }
-  return { RULES, startSurvival, allFighters, standing, myTeam, opponents, endangered, survivalActions, survivalTurn, survivalStatus };
+  return { RULES, startSurvival, allFighters, standing, myTeam, opponents, endangered, survivalActions, survivalTurn, resolveTeamWish, survivalStatus };
 })();
 
 /* ==== engine/dragonballs.js ==== */
@@ -25034,7 +25079,7 @@ const { injuryList } = __mod_engine_body_js;
 const { worldManifest } = __mod_engine_worlds_js;
 const { factionsPresent } = __mod_data_factions_js;
 const { getPlanet } = __mod_data_planets_js;
-const { startSurvival, survivalActions, survivalTurn, survivalStatus, RULES } = __mod_engine_survival_js;
+const { startSurvival, survivalActions, survivalTurn, survivalStatus, resolveTeamWish, RULES } = __mod_engine_survival_js;
 const { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } = __mod_engine_battle_js;
 const { costLabel, limitFor, usedThisYear, yearCapacity } = __mod_engine_economy_js;
 const { ballsHeld, ballManifest, pingSquare, GRID } = __mod_engine_dragonballs_js;
@@ -27022,6 +27067,31 @@ function renderSurvival() {
   const wrap = $('surv-actions');
   wrap.innerHTML = '';
   if (st.over) {
+    if (SURVIVAL.outcome === 'won' && SURVIVAL.teamSurvivorIds && SURVIVAL.teamSurvivorIds.length
+      && !SURVIVAL.wishDecided) {
+      const names = SURVIVAL.teamSurvivorIds.map((id) => GAME.npcs[id]?.name).filter(Boolean).join(' and ');
+      wrap.appendChild(el('p', 'row-note',
+        `${names || 'The others'} made it too. One wish, and everyone still standing has an opinion about it.`));
+      const share = el('button', 'primary-btn', 'Decide it together');
+      share.type = 'button';
+      share.addEventListener('click', () => {
+        const text = resolveTeamWish(GAME, SURVIVAL, true);
+        SURVIVAL.wishDecided = true;
+        pushSurvivalLines([text]);
+        renderSurvival();
+      });
+      wrap.appendChild(share);
+      const steal = el('button', 'ghost-btn danger', 'Take it for yourself');
+      steal.type = 'button';
+      steal.addEventListener('click', () => {
+        const text = resolveTeamWish(GAME, SURVIVAL, false);
+        SURVIVAL.wishDecided = true;
+        pushSurvivalLines([text]);
+        renderSurvival();
+      });
+      wrap.appendChild(steal);
+      return;
+    }
     const done = el('button', 'primary-btn', 'Leave the stage');
     done.type = 'button';
     done.addEventListener('click', () => {

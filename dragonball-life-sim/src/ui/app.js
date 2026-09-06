@@ -41,7 +41,7 @@ import { injuryList } from '../engine/body.js';
 import { worldManifest } from '../engine/worlds.js';
 import { factionsPresent } from '../data/factions.js';
 import { getPlanet } from '../data/planets.js';
-import { startSurvival, survivalActions, survivalTurn, survivalStatus, RULES } from '../engine/survival.js';
+import { startSurvival, survivalActions, survivalTurn, survivalStatus, resolveTeamWish, RULES } from '../engine/survival.js';
 import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } from '../engine/battle.js';
 import { costLabel, limitFor, usedThisYear, yearCapacity } from '../engine/economy.js';
 import { ballsHeld, ballManifest, pingSquare, GRID } from '../engine/dragonballs.js';
@@ -2033,6 +2033,31 @@ function renderSurvival() {
   const wrap = $('surv-actions');
   wrap.innerHTML = '';
   if (st.over) {
+    if (SURVIVAL.outcome === 'won' && SURVIVAL.teamSurvivorIds && SURVIVAL.teamSurvivorIds.length
+      && !SURVIVAL.wishDecided) {
+      const names = SURVIVAL.teamSurvivorIds.map((id) => GAME.npcs[id]?.name).filter(Boolean).join(' and ');
+      wrap.appendChild(el('p', 'row-note',
+        `${names || 'The others'} made it too. One wish, and everyone still standing has an opinion about it.`));
+      const share = el('button', 'primary-btn', 'Decide it together');
+      share.type = 'button';
+      share.addEventListener('click', () => {
+        const text = resolveTeamWish(GAME, SURVIVAL, true);
+        SURVIVAL.wishDecided = true;
+        pushSurvivalLines([text]);
+        renderSurvival();
+      });
+      wrap.appendChild(share);
+      const steal = el('button', 'ghost-btn danger', 'Take it for yourself');
+      steal.type = 'button';
+      steal.addEventListener('click', () => {
+        const text = resolveTeamWish(GAME, SURVIVAL, false);
+        SURVIVAL.wishDecided = true;
+        pushSurvivalLines([text]);
+        renderSurvival();
+      });
+      wrap.appendChild(steal);
+      return;
+    }
     const done = el('button', 'primary-btn', 'Leave the stage');
     done.type = 'button';
     done.addEventListener('click', () => {

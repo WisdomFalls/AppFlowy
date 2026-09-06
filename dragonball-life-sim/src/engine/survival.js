@@ -389,7 +389,18 @@ function finishSurvival(state, board) {
   } else if (opponents(board).length === 0) {
     board.outcome = 'won';
     c.flags.won_tournament_of_power = true;
-    board.log.push(`Every other universe is gone from the stage. ${mine.name} is still standing - not just you. That is enough to keep the lights on.`);
+    // The tournament was for one wish per winning universe, not one per sole
+    // survivor - Universe 7 won as a team in the source material, and the
+    // team decided together (or didn't) who spoke for it. Whoever from your
+    // own life is still standing beside you gets tracked here so that
+    // decision can actually be made instead of assumed.
+    state.world.summon = { dragon: 'super', remaining: 1, used: [], group: null, zenoGifted: true };
+    board.teamSurvivorIds = alive
+      .filter((f) => f !== board.me && typeof f.id === 'string' && f.id.startsWith('trusted_'))
+      .map((f) => f.id.slice('trusted_'.length));
+    board.log.push(board.teamSurvivorIds.length
+      ? `Every other universe is gone from the stage. ${mine.name} is still standing - ${alive.length} of you, not just you. One dragon, one wish, and whoever speaks for the rest.`
+      : `Every other universe is gone from the stage. ${mine.name} is still standing - not just you. That is enough to keep the lights on.`);
   } else {
     board.outcome = 'survived';
     board.log.push(`The clock runs out. ${mine.name} finishes with ${alive.length} still standing. That is enough.`);
@@ -406,6 +417,40 @@ function finishSurvival(state, board) {
         : `Fought in the Tournament of Power. ${board.knockedOut} eliminations, ${board.erased.length} universes gone.`,
   });
   return board;
+}
+
+/**
+ * A team win only produces one wish, and board.teamSurvivorIds is whoever
+ * from your own life is still standing to have an opinion about it. The
+ * wish itself works exactly the same either way - you still speak it -
+ * but sharing it keeps the people who earned it with you, and taking it
+ * alone costs you something real with them and your own name for it.
+ */
+export function resolveTeamWish(state, board, share) {
+  const ids = board.teamSurvivorIds || [];
+  const names = [];
+  for (const id of ids) {
+    const npc = state.npcs[id];
+    if (!npc || !npc.alive) continue;
+    names.push(npc.name);
+    if (share) {
+      npc.closeness = clamp((npc.closeness || 0) + 12, 0, 100);
+      npc.trust = clamp((npc.trust ?? 30) + 10, 0, 100);
+    } else {
+      npc.closeness = clamp((npc.closeness || 0) - 25, 0, 100);
+      npc.trust = clamp((npc.trust ?? 30) - 20, 0, 100);
+      npc.tension = clamp((npc.tension || 0) + 30, 0, 100);
+    }
+  }
+  if (!share) state.character.karma = clamp((state.character.karma || 0) - 8, -100, 100);
+  if (!names.length) {
+    return share
+      ? 'Nobody else from your life made it this far. The wish is yours by default.'
+      : 'Nobody else from your life made it this far. There was nobody to take it from.';
+  }
+  return share
+    ? `You put it to ${names.join(' and ')} first. Whatever gets wished for, it is agreed on.`
+    : `You do not ask ${names.join(' and ')}. The wish is yours before they can object.`;
 }
 
 /** The board, flattened for the UI. */
