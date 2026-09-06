@@ -12,6 +12,7 @@ import { canonAvailable } from '../../data/canon.js';
 import { startSurvival, survivalActions, survivalTurn, RULES } from '../survival.js';
 import { ensureBallSet, ballsHeld, ballsOn, ballManifest, scatterAfterWish, ballsAreInert } from '../dragonballs.js';
 import { getItem } from '../../data/items.js';
+import { die } from '../lifecycle.js';
 import { getPlace, PLACES } from '../../data/places.js';
 import { generateFullName } from '../../data/names.js';
 import { getTechnique, TECHNIQUES } from '../../data/techniques.js';
@@ -51,7 +52,10 @@ function tournamentInvite(ctx) {
   // Famous or strong enough that the organisers went looking for you
   // specifically, the way they did for a handful of outsiders historically.
   const soughtOut = ctx.character.fame > 55 || combatPower(ctx.character) > worldPowerBaseline(ctx.year) * 3;
-  return knownWell || soughtOut;
+  // Training personally under your own universe's God of Destruction (or his
+  // angel) is its own way onto the roster - he picks his own team.
+  const godPicked = ctx.character.mentors.includes('beerus') || ctx.character.mentors.includes('whis');
+  return knownWell || soughtOut || godPicked;
 }
 
 function timelineTournament(c2, ev) {
@@ -403,7 +407,9 @@ registerEvents([
     title: (ctx, s) => `${s.godName} Has Noticed You`,
     text: `{You feel it before you see anything|The air pressure changes|Everything goes very quiet}.
       [godName]. [godPersona] [godQuirk]`,
-    choices: (ctx, s) => [
+    choices: (ctx, s) => {
+      const destroyerGod = (canonAvailable(ctx.year, (c) => c.id === s.godId)[0] || {}).tags?.includes('destroyer');
+      const base = [
       { id: 'bow', label: 'Show respect', effect: (c2, sl) => {
         const npc = meetCanon(c2, sl.godId, 'acquaintance');
         relate(c2, npc, { closeness: 12, respect: 15 });
@@ -425,7 +431,16 @@ registerEvents([
           const t = trainYear(c2, { intensity: 1.6, mentorMult: 2.4, placeMult: 3 });
           const changes = apply(c2, { health: -25, happiness: 15, stats: { kiControl: 8, discipline: 6 } });
           fact(c2, `Trained under ${npc.name}.`, { type: 'mentor', weight: 9, subject: npc.id, tags: ['divine', 'mentor'] });
-          return { text: `{They agree, which surprises everyone including them|"Very well"|There is a condition and you meet it}. The training is {nothing like training|mostly being hit while doing chores|not survivable by most people}. ${powerLine(t.gained)}`, changes };
+          const lines = [`{They agree, which surprises everyone including them|"Very well"|There is a condition and you meet it}. The training is {nothing like training|mostly being hit while doing chores|not survivable by most people}. ${powerLine(t.gained)}`];
+          // Beerus and Whis are never anywhere apart from each other.
+          const companion = canon === 'beerus' ? 'whis' : canon === 'whis' ? 'beerus' : null;
+          if (companion && !c2.character.mentors.includes(companion)
+            && !Object.values(c2.state.npcs).some((n) => n.canonId === companion && n.alive)) {
+            const other = meetCanon(c2, companion, 'acquaintance');
+            relate(c2, other, { closeness: 8, respect: 8 });
+            lines.push(`${other.name} is there too, the way ${other.name} always is.`);
+          }
+          return { text: lines.join(' '), changes };
         }
         relate(c2, npc, { respect: -5 });
         const changes = apply(c2, { happiness: -8 });
@@ -441,10 +456,41 @@ registerEvents([
           fact(c2, `Stood up to ${npc.name} and was not erased for it.`, { type: 'divine', weight: 8, subject: npc.id, tags: ['divine', 'legend'] });
           return { text: `{You do not move|You say no to a god|Everyone else in the room stops breathing}. ${npc.name} {is delighted|stares, then laughs|says "interesting" and that is the whole conversation}.`, changes };
         }
+        // A God of Destruction erases things for less than this. Standing
+        // your ground against one and losing badly is a real death, not a
+        // beating - the gods who are not destroyers mostly just hurt you.
+        const destroyer = (canonAvailable(c2.year, (c) => c.id === sl.godId)[0] || {}).tags?.includes('destroyer');
+        if (destroyer && gap < 0.02 && odds(c2, 0.12)) {
+          fact(c2, `Erased by ${npc.name} for the insolence of it.`, { type: 'death', weight: 10, subject: npc.id, tags: ['divine', 'death'] });
+          die(c2.state, `Erased by ${npc.name}`);
+          return { text: `{There is no warning|One motion, unhurried|You do not finish the sentence you were saying}. ${npc.name} does not raise their voice. There is simply less of you than there was.`, changes: [] };
+        }
         const changes = apply(c2, { health: -55, happiness: -10 });
         return { text: `{You do not see the movement|There is no fight|One gesture}. {You are through a wall and most of a hillside|You wake up much later|It is not even close to a contest}.`, changes };
       } },
-    ],
+      ];
+      // A God of Destruction can be reached through his stomach in a way no
+      // other kind of god can. Nobody offers Zeno a snack.
+      if (!destroyerGod) return base;
+      return base.concat([{ id: 'feed', label: 'Offer them food', effect: (c2, sl) => {
+        const npc = meetCanon(c2, sl.godId, 'acquaintance');
+        const cost = c2.rng.int(5000, 80000);
+        const great = odds(c2, 0.3 + (c2.character.luck || 50) / 300 + (c2.character.stats.charisma || 50) / 500);
+        if (great) {
+          relate(c2, npc, { closeness: 25, respect: 20 });
+          if (!c2.character.mentors.includes(sl.godId)) c2.character.mentors.push(sl.godId);
+          npc.relation = 'mentor';
+          if (sl.godId === 'whis') c2.character.flags.angel_training = true;
+          if (sl.godId === 'beerus') c2.character.flags.destroyer_training = true;
+          const changes = apply(c2, { happiness: 14, zeni: -cost });
+          fact(c2, `Fed ${npc.name} something he had never had before.`, { type: 'divine', weight: 8, subject: npc.id, tags: ['divine', 'mentor'] });
+          return { text: `{He takes one bite and goes completely silent|His eyes actually open|"...more"}. {This is apparently how you get taken seriously by a god|Whatever that was, it worked|You have his full, undivided attention now, for entirely the right reason}.`, changes };
+        }
+        relate(c2, npc, { closeness: 6 });
+        const changes = apply(c2, { happiness: 2, zeni: -Math.round(cost * 0.4) });
+        return { text: `{He eats it without much comment|"Adequate"|Not bad, but not memorable}. {You have not been erased, which is something|It is not the reaction you were hoping for|Try again some other year, with something better}.`, changes };
+      } }]);
+    },
   },
 
   {

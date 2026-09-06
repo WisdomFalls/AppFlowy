@@ -15584,6 +15584,1422 @@ function ballManifest(state) {
   return { GRID, scatterBalls, ensureBallSet, ballsHeld, ballsOn, surveyPlanet, startHunt, pingSquare, dragonFor, summonReady, summonActive, beginSummon, wishGranted, dismissDragon, scatterAfterWish, ballsAreInert, ballManifest };
 })();
 
+/* ==== engine/prologue.js ==== */
+const __mod_engine_prologue_js = (function () {
+// The first minutes.
+//
+// A life sim that opens with "Age 1: you are born" has thrown away the only
+// scene it gets for free. This builds the opening out of what was actually
+// rolled - the world, the year, the parents, the upbringing - and narrates it
+// beat by beat as it happens, including the pod and the crash for the ones who
+// were put in a pod.
+
+const { getRace, UPBRINGINGS } = __mod_data_races_js;
+const { getPlace } = __mod_data_places_js;
+const { getPlanet } = __mod_data_planets_js;
+const { eraName } = __mod_data_timeline_js;
+const { render } = __mod_engine_text_js;
+const { npcsByRelation } = __mod_engine_state_js;
+
+const WORLD_OPENERS = {
+  planet_vegeta: `{The air on Planet Vegeta is thin and tastes of iron|Planet Vegeta has one weather and it is red|`
+    + `The sky here is the colour of a healing bruise}. `
+    + `{Gravity here is ten times what most of the galaxy calls normal, and nobody who lives here has noticed|`
+    + `Everything born here is born heavy|Nothing on this world is soft, including the ground}.`,
+  earth: `{Earth. Blue, wet, and almost entirely unaware of the rest of the galaxy|`
+    + `Earth is a quiet world with a very short memory|Earth: seven billion people, none of whom look up}. `
+    + `{It is the kind of place where the strongest man alive might be a farmer and nobody would know|`
+    + `Nothing here has needed to be strong for a long time|It has been peaceful for so long that peace looks permanent}.`,
+  namek: `{Namek has three suns and no night|The sky is green and stays green|There is no darkness on Namek, only shade}. `
+    + `{The water is drinkable everywhere and there is very little to eat, which suits the people who live here|`
+    + `Everything here grows slowly and on purpose|Nobody here is in a hurry}.`,
+  frieza_79: `{Frieza No. 79 is a company world|This world has a number instead of a name|`
+    + `Somebody bought this planet, numbered it, and put a garrison on it}. `
+    + `{Everything on it belongs to somebody a long way away|The paperwork arrived before the people did}.`,
+  yardrat: `{Yardrat is small, cold, and much stranger than it looks|`
+    + `The Yardratians are not warriors and are not worried about that|Yardrat teaches things that cannot be fought}.`,
+  sadala: `{Sadala never burned. In this universe the Saiyans kept their home|`
+    + `Sadala is green in places Planet Vegeta never was}.`,
+  cereal: `{Cereal is a farming world with two moons and no army|Cereal grows things and asks nothing of anyone}.`,
+};
+
+const UPBRINGING_SCENES = {
+  saiyan_creche: [
+    `{You are not held|Nobody picks you up|There is no ceremony}. `
+      + `{You are weighed, scanned, and read out to a room|A machine reads your power level aloud and somebody writes it down|`
+      + `The number is spoken and it decides everything that comes next}.`,
+    `{The creche is a wall of pods and you are one of them|`
+      + `You spend your first year in a tank with forty others|Nobody in the room is over three years old}. `
+      + `{The lessons start before the walking does|You learn to fight before you learn to speak|`
+      + `Somebody has decided what you are for}.`,
+  ],
+  orphan_pod: [
+    `{Somebody is arguing above you and you cannot see them|There are two voices and both of them are afraid|`
+      + `Someone says your name once, very fast}.`,
+    `{You are put in something round and small|The hatch closes|Hands, then a hatch, then nothing}. `
+      + `{You do not understand what is happening. That is a mercy|Somebody's palm is flat against the glass|`
+      + `The last thing you see of the place you were born is somebody running}.`,
+    `{The pod goes up|You are thrown at the sky|Acceleration presses you flat and holds you there}. `
+      + `{Behind you, the world you were born on stops existing|`
+      + `The sky goes black and then the black goes white and then the world is not there any more|`
+      + `You are asleep before you can see what happens to it}.`,
+    `{You sleep for years|The pod feeds you and talks to you in a language you will always half-remember|`
+      + `Somewhere in the dark, the pod is teaching you things}.`,
+    `{You come down hard|The landing is not a landing|The pod comes in too fast and makes a crater out of a hillside}. `
+      + `{[place]. Somebody hears it come down|You are found by [finder], who has never seen anything like you|`
+      + `[finder] gets to the crater before anybody official does}.`,
+  ],
+  animals: [
+    `{Nobody comes|You cry for a long time and nothing answers|The night is very loud and none of it is people}.`,
+    `{Something comes and does not eat you|Something warm lies down next to you and stays|`
+      + `You are picked up by the back of the neck and carried}. `
+      + `{You will not learn what people are for another nine years|`
+      + `Language happens to you late and badly|Nobody teaches you to speak because nobody there can}.`,
+  ],
+  self_raised: [
+    `{The people who made you are not here|You work out fairly early that nobody is coming|`
+      + `You are alone in the specific way that only very small children manage}.`,
+    `{You survive it|You learn what to eat by getting it wrong|`
+      + `Everything you know, you found out the hard way and kept}.`,
+  ],
+  lab: [
+    `{You wake up|There is no birth. There is a first time you were switched on|`
+      + `The first thing you experience is a room with the lights already on}.`,
+    `{Somebody is writing on a clipboard and does not look up|`
+      + `There is glass between you and everybody who has ever spoken to you|`
+      + `You have a designation before you have a name}.`,
+  ],
+  foster: [
+    `{Somebody who did not have to takes you in|You are handed over on a doorstep and taken inside|`
+      + `Two strangers decide, quickly and without much discussion, that you are theirs now}.`,
+  ],
+  exile: [
+    `{Your family is leaving and nobody will say why|You are born on the way out|`
+      + `The first place you remember is not the place you are from}.`,
+  ],
+  conquered: [
+    `{There are soldiers on the road the year you are born|Somebody else's flag is already up|`
+      + `You are born into an occupation and it is simply how the world is}.`,
+  ],
+  royal: [
+    `{There is a room full of people waiting for you to be born|`
+      + `The announcement is made before you are cleaned up|Somebody bows at you before you can hold your head up}.`,
+  ],
+  temple: [
+    `{You are born somewhere very quiet|The building you are born in is older than the language spoken in it|`
+      + `Somebody rings something once, a long way off}.`,
+  ],
+};
+
+const DEFAULT_SCENE = [
+  `{You are born|It happens the way it happens to everybody|`
+    + `The first thing that happens to you is the only thing that happens to everybody}. `
+    + `{Somebody counts your fingers|Somebody says you look like somebody|You are loud about it}.`,
+];
+
+/**
+ * The opening beats, as log entries. Called once, at the start of the first
+ * year, so the player watches their own origin happen instead of reading a
+ * summary of it.
+ */
+function prologueEntries(state, rng) {
+  const c = state.character;
+  const race = getRace(c.raceId);
+  const place = getPlace(c.placeId);
+  const planet = getPlanet(place.planet);
+  const parents = npcsByRelation(state, 'parent');
+  const upbringing = UPBRINGINGS.find((u) => u.id === c.upbringingId);
+
+  const slots = {
+    name: c.name,
+    place: place.name,
+    planet: planet ? planet.name : place.name,
+    year: String(c.birthYear),
+    era: eraName(c.birthYear),
+    race: race.name,
+    mother: parents.find((p) => p.sex === 'female')?.name || 'your mother',
+    father: parents.find((p) => p.sex === 'male')?.name || 'your father',
+    finder: parents[0]?.name || 'a farmer',
+  };
+
+  const out = [];
+  const say = (tpl, kind = 'prologue') => {
+    const text = render(tpl, slots, rng).replace(/\s+/g, ' ').trim();
+    if (text) out.push({ kind, text });
+  };
+
+  // 1. Where. A pod baby is not from where they landed, so the world they
+  // ended up on is introduced after the crash rather than before the launch.
+  const arrived = c.upbringingId === 'orphan_pod';
+  const opener = WORLD_OPENERS[place.planet];
+  if (arrived) say(`{Somewhere, a [race] is born|A [race] is born, and the record of where does not survive|`
+    + `You are born [race] on a world nobody will bother to write down}. `
+    + `{Age [year]|It is Age [year]}. {[era]|What history will call [era]}.`, 'scene');
+  else if (opener) say(opener, 'scene');
+  else {
+    say(`{[place]|[place], in [era]|[place]. Age [year]}. `
+      + `{It is not a famous world|Nothing important has ever happened here|`
+      + `Nobody outside this system could find it on a chart}.`, 'scene');
+  }
+
+  // 2. When.
+  if (!arrived) {
+    say(`{Age [year]|It is Age [year]|The year is [year]}. {[era]|This is [era]|History will call this [era]}.`, 'scene');
+  }
+
+  // 3. What happens.
+  const scene = UPBRINGING_SCENES[c.upbringingId] || DEFAULT_SCENE;
+  for (const beat of scene) say(beat);
+
+  // The world you woke up on, introduced now that you are on it.
+  if (arrived && opener) say(opener, 'scene');
+  else if (arrived) say(`{[place]. It will do|[place], which is where you are from now|You are from [place] now}.`, 'scene');
+
+  // 4. Who is there.
+  if (parents.length && !['orphan_pod', 'animals', 'self_raised', 'lab'].includes(c.upbringingId)) {
+    say(parents.length > 1
+      ? `{[mother] and [father] are there|Both of them are there|[father] is not much use and [mother] does not comment on it}. `
+        + `{They name you [name]|The name is [name]. Somebody in the family had it first|You are [name], apparently}.`
+      : `{[mother] is there. Nobody else is|There is one person in the room and she is holding you|`
+        + `It is just the two of you and it stays that way}. {You are [name]|She names you [name]}.`);
+  } else {
+    say(`{Whoever names you, names you [name]|The name comes later. It is [name]|`
+      + `You end up called [name], and nobody remembers deciding it}.`);
+  }
+
+  // 5. What you are, in the only terms this world understands.
+  say(`{You are [race]|Whatever else happens, you are [race]|`
+    + `[race], which will decide more about your life than anything you choose}. `
+    + (c.power > 400
+      ? `{Somebody points a scouter at you and stops talking|The number is high enough that it gets repeated|`
+        + `Whatever reads you reads you twice}.`
+      : c.power < 5
+        ? `{Nothing about you registers as remarkable|If anybody measures you, they do not mention the result|`
+          + `You are, by every measure available, nothing much}.`
+        : `{Nobody measures you. There is no reason to|It does not occur to anyone to check|`
+          + `You are a baby, and nobody scans babies here}.`));
+
+  if (upbringing && upbringing.blurb) {
+    out.push({ kind: 'origin', text: `${upbringing.name}. ${upbringing.blurb}` });
+  }
+  return out;
+}
+  return { prologueEntries };
+})();
+
+/* ==== engine/economy.js ==== */
+const __mod_engine_economy_js = (function () {
+// The action economy.
+//
+// The first version of this had a global slot budget as well as per-action
+// limits, and the two fought each other: at biological nine you got three
+// slots, training cost two of them, and a year was over after one session
+// even though the action itself allowed three. The budget is gone. What is
+// left is what actually stops the exploit:
+//
+//   1. Each action has its own yearly limit, which scales with how old you
+//      are - a toddler gets fewer goes at everything than an adult.
+//   2. Training grants power against a separate yearly ceiling, so pressing
+//      the same button is subject to diminishing returns however many times
+//      the limit lets you press it.
+//
+// A year is still finite. It is finite per activity, which is legible, rather
+// than in one pooled number, which was not.
+
+const { clamp } = __mod_engine_rng_js;
+const { getRace, hasPerk, maturity } = __mod_data_races_js;
+const { trainingRate } = __mod_engine_stats_js;
+
+/**
+ * How much of a year this character can get through, as a multiplier on every
+ * action's own limit. Small children and the very old do less of everything;
+ * androids and the disciplined do more; the dead have nothing but time.
+ */
+function yearCapacity(state) {
+  const c = state.character;
+  const bio = maturity(c);
+
+  let mult;
+  if (bio < 3) mult = 0.34;
+  else if (bio < 6) mult = 0.5;
+  else if (bio < 10) mult = 0.7;
+  else if (bio < 14) mult = 0.85;
+  else if (bio < 60) mult = 1;
+  else if (bio < 75) mult = 0.85;
+  else if (bio < 90) mult = 0.7;
+  else mult = 0.55;
+
+  if (hasPerk(c, 'infiniteStamina')) mult += 0.2;
+  if (hasPerk(c, 'meditative')) mult += 0.1;
+  if (c.stats.discipline >= 80) mult += 0.15;
+  if (c.vitals.health < 30) mult -= 0.25;
+  if (c.vitals.health < 10) mult -= 0.15;
+  if (c.inAfterlife) mult += 0.25;
+
+  return clamp(mult, 0.25, 1.7);
+}
+
+/** This action's limit for this character this year, after age scaling. */
+function limitFor(state, action) {
+  const base = typeof action.maxPerYear === 'function'
+    ? action.maxPerYear(state)
+    : action.maxPerYear;
+  if (base === undefined || base === null) return Infinity;
+  if (base <= 0) return 0;
+  // Never scale a once-a-year thing down to nothing.
+  return Math.max(1, Math.round(base * yearCapacity(state)));
+}
+
+function usedThisYear(state, actionId) {
+  const c = state.character;
+  return (c.yearUse && c.yearUse[actionId]) || 0;
+}
+
+/** Reset the per-year counters. Called once per age-up. */
+function resetYearBudget(state) {
+  const c = state.character;
+  c.yearUse = {};
+  c.yearPowerGained = 0;
+  c.yearPowerCap = trainingCapForYear(state);
+  delete c.slotsMax;
+  delete c.slotsLeft;
+}
+
+/** Can this action be run right now? Returns a reason string when it cannot. */
+function actionBlocked(state, action) {
+  const gate = ageGate(state, action);
+  if (gate) return gate;
+  const limit = limitFor(state, action);
+  if (limit === Infinity) return null;
+  const used = usedThisYear(state, action.id);
+  if (used >= limit) {
+    return limit === 1
+      ? 'Once a year, and you have had it.'
+      : `${limit} a year, and you have used ${used}.`;
+  }
+  return null;
+}
+
+/**
+ * Some things you simply cannot do yet. A one-year-old is not hunting Dragon
+ * Balls, and a five-year-old is not inventing a transformation.
+ */
+function ageGate(state, action) {
+  const c = state.character;
+  if (action.minMaturity === undefined) return null;
+  const bio = maturity(c);
+  if (bio >= action.minMaturity) return null;
+  const race = getRace(c.raceId);
+  const rate = race.maturityRate ?? 1;
+  const yearsOff = Math.max(1, Math.ceil((action.minMaturity - bio) / Math.max(0.2, rate)));
+  return action.tooYoung || `You are too young. About ${yearsOff} year${yearsOff > 1 ? 's' : ''} yet.`;
+}
+
+function chargeAction(state, action) {
+  const c = state.character;
+  c.yearUse = c.yearUse || {};
+  c.yearUse[action.id] = (c.yearUse[action.id] || 0) + 1;
+}
+
+/**
+ * The most power training may add this year. Deliberately generous - a good
+ * year can still roughly double you - but finite, so no amount of clicking
+ * turns a five-year-old into a planet buster.
+ */
+function trainingCapForYear(state) {
+  const c = state.character;
+  const rate = trainingRate(c, { state, intensity: 1.6, placeMult: 2.5, gearMult: 2.1, mentorMult: 2 });
+  const ceiling = clamp(rate * 2.4, 0.05, 1.3);
+  return Math.max(3, Math.round(c.power * ceiling));
+}
+
+/**
+ * Register power gained from training. Returns what was actually granted after
+ * the yearly ceiling, so callers can report the honest number.
+ */
+function grantTrainingPower(state, requested) {
+  const c = state.character;
+  if (c.yearPowerCap === undefined) c.yearPowerCap = trainingCapForYear(state);
+  if (c.yearPowerGained === undefined) c.yearPowerGained = 0;
+
+  const room = Math.max(0, c.yearPowerCap - c.yearPowerGained);
+  const granted = Math.max(0, Math.min(requested, room));
+  c.yearPowerGained += granted;
+  if (granted > 0) {
+    c.power += granted;
+    c.peakPower = Math.max(c.peakPower, c.power);
+  }
+  return { granted, capped: granted < requested, room: room - granted };
+}
+
+function trainingRoomLeft(state) {
+  const c = state.character;
+  if (c.yearPowerCap === undefined) return trainingCapForYear(state);
+  return Math.max(0, c.yearPowerCap - (c.yearPowerGained || 0));
+}
+
+/** How long an action takes, purely as flavour on the row now. */
+const COST_LABEL = { 0: 'A moment', 1: 'An afternoon', 2: 'A season', 3: 'Most of the year' };
+
+function costLabel(action) {
+  return action.cost || COST_LABEL[action.slots ?? 1] || 'A season';
+}
+  return { yearCapacity, limitFor, usedThisYear, resetYearBudget, actionBlocked, ageGate, chargeAction, trainingCapForYear, grantTrainingPower, trainingRoomLeft, COST_LABEL, costLabel };
+})();
+
+/* ==== engine/trials.js ==== */
+const __mod_engine_trials_js = (function () {
+// Trials: the small playable tests that sit behind training, learning a
+// technique, and reaching for a form. The engine defines what a trial is and
+// what a score is worth; the UI decides how it is played.
+
+const { clamp } = __mod_engine_rng_js;
+const { masteryMult, masteryDrain, masteryLabel } = __mod_engine_mastery_js;
+const { traitEffect } = __mod_data_traits_js;
+const { getTechnique, TECH_BY_ID } = __mod_data_techniques_js;
+const { getTransformation } = __mod_data_transformations_js;
+const { grantTrainingPower } = __mod_engine_economy_js;
+const { addFact } = __mod_engine_memory_js;
+const { adjust } = __mod_engine_state_js;
+const { combatPower } = __mod_engine_stats_js;
+const { numberish } = __mod_engine_text_js;
+
+const TRIAL_KINDS = {
+  timing: {
+    name: 'Focus',
+    blurb: 'Strike on the beat. The window is small and it does not wait.',
+    stat: 'technique',
+  },
+  sequence: {
+    name: 'Form',
+    blurb: 'Watch the sequence, then reproduce it exactly.',
+    stat: 'intellect',
+  },
+  endurance: {
+    name: 'Endurance',
+    blurb: 'Hold it. Keep holding it. The bar is trying to fall.',
+    stat: 'durability',
+  },
+  push: {
+    name: 'Limit',
+    blurb: 'Push, and choose when to stop. Every push is worth more and costs more.',
+    stat: 'discipline',
+  },
+  // Meditation is not a test of reflex or grit. It is a test of not doing the
+  // thing you keep doing, which needs its own shape.
+  stillness: {
+    name: 'Stillness',
+    blurb: 'Your mind will drift. Notice it and come back, without chasing it.',
+    stat: 'kiControl',
+  },
+  // A Great Ape is a transformation you are inside rather than one you use.
+  // The minigame is not about winning; it is about steering.
+  rampage: {
+    name: 'The Moon',
+    blurb: 'You are ten times the size and none of the mind. Steer what you can.',
+    stat: 'discipline',
+  },
+};
+
+/** Which trial suits which kind of work. */
+const STAT_TRIALS = {
+  strength: { kind: 'push', method: 'Weighted holds and throws until the arms give out.' },
+  speed: { kind: 'timing', method: 'Catching thrown stones blindfolded.' },
+  technique: { kind: 'sequence', method: 'Forms, drilled until the sequence is automatic.' },
+  kiControl: { kind: 'stillness', method: 'Sitting with it until the noise stops being interesting.' },
+  durability: { kind: 'endurance', method: 'Standing in it and refusing to fall over.' },
+  intellect: { kind: 'sequence', method: 'Reading, calculating, and remembering what you read.' },
+  charisma: { kind: 'sequence', method: 'Talking to people on purpose, which is its own discipline.' },
+  discipline: { kind: 'endurance', method: 'Sitting still for longer than is reasonable.' },
+};
+
+/**
+ * Difficulty runs 1-5 and is set by what the trial is for and how far past
+ * their current ability the character is reaching.
+ */
+function startTrial(state, rng, opts = {}) {
+  const c = state.character;
+  const kind = opts.kind || 'timing';
+  const difficulty = clamp(opts.difficulty ?? 2, 1, 5);
+  const relevant = TRIAL_KINDS[kind] ? (c.stats[TRIAL_KINDS[kind].stat] || 50) : 50;
+
+  return {
+    kind,
+    difficulty,
+    purpose: opts.purpose || 'training',
+    label: opts.label || TRIAL_KINDS[kind].name,
+    blurb: opts.blurb || TRIAL_KINDS[kind].blurb,
+    payload: opts.payload || {},
+    // A high relevant stat widens the window rather than skipping the trial.
+    aptitude: clamp(relevant / 100, 0.1, 1),
+    rounds: kind === 'sequence' ? 2 + difficulty : 3,
+    seed: rng.int(1, 999999),
+  };
+}
+
+/** Score is 0-1. Everything downstream keys off it. */
+/**
+ * How much easier a trial is for this character before they have touched it.
+ * A genius starts ahead; a slow study starts behind.
+ */
+function trialBonus(state) {
+  const c = state.character;
+  return clamp(traitEffect(c, 'trialEase') + ((c.iq || 100) - 100) / 500, -0.2, 0.3);
+}
+
+function gradeTrial(score) {
+  if (score >= 0.92) return { grade: 'perfect', mult: 1.9, text: 'Perfect. Not one wasted movement.' };
+  if (score >= 0.75) return { grade: 'strong', mult: 1.45, text: 'Clean. Better than you have managed before.' };
+  if (score >= 0.5) return { grade: 'fair', mult: 1.0, text: 'Adequate. It will do.' };
+  if (score >= 0.25) return { grade: 'poor', mult: 0.55, text: 'Sloppy. You know it as you finish.' };
+  return { grade: 'failed', mult: 0.15, text: 'That was a waste of a season.' };
+}
+
+/** Turn a played trial into consequences. */
+function resolveTrial(state, rng, trial, score) {
+  // Traits move the score before anything is judged against it.
+  score = clamp(score + trialBonus(state), 0, 1);
+  const c = state.character;
+  const result = gradeTrial(clamp(score, 0, 1));
+  const lines = [result.text];
+
+  if (trial.purpose === 'training') {
+    const stat = trial.payload.stat || 'strength';
+    const gain = Math.round(clamp(2 + trial.difficulty * result.mult, 1, 9));
+    adjust(state, { stats: { [stat]: gain }, health: -Math.round(3 + trial.difficulty) });
+    const requested = Math.round(c.power * (0.03 + trial.difficulty * 0.02) * result.mult);
+    const { granted, capped } = grantTrainingPower(state, requested);
+    lines.push(`+${gain} ${stat}. Power level up ${numberish(granted)}.`);
+    if (capped) lines.push('Your body has taken everything it can absorb this year.');
+  } else if (trial.purpose === 'technique') {
+    const tech = getTechnique(trial.payload.techId);
+    const threshold = 0.42 + trial.difficulty * 0.06 - (c.stats.discipline - 50) / 400;
+    if (score >= threshold) {
+      if (!c.techniques.includes(tech.id)) {
+        c.techniques.push(tech.id);
+        state.stats.techniquesLearned += 1;
+      }
+      adjust(state, { stats: { technique: 2, kiControl: 1 }, happiness: 10 });
+      addFact(state.memory, { type: 'technique', text: `Learned the ${tech.name}.`, year: c.age, weight: 3, tags: ['technique'] });
+      lines.push(`${tech.name}, learned. ${tech.desc}`);
+    } else {
+      adjust(state, { health: -5, happiness: -3, stats: { discipline: 1 } });
+      lines.push(`${tech.name} stays out of reach. You know what went wrong, which is something.`);
+    }
+  } else if (trial.purpose === 'form') {
+    const form = getTransformation(trial.payload.formId);
+    const threshold = 0.45 + trial.difficulty * 0.05;
+    if (score >= threshold) {
+      if (!c.transformations.includes(form.id)) c.transformations.push(form.id);
+      setMastery(state, form.id, 10);
+      adjust(state, { happiness: 20, health: -15, fame: 5 });
+      addFact(state.memory, { type: 'transformation', text: `Achieved ${form.name}.`, year: c.age, weight: 8, tags: ['transformation'] });
+      lines.push(`${form.name}. ${form.desc}`);
+    } else {
+      adjust(state, { health: -18, happiness: -6 });
+      lines.push(`You get right up against ${form.name} and no further.`);
+    }
+  } else if (trial.purpose === 'mastery') {
+    const form = getTransformation(trial.payload.formId);
+    const gain = Math.round(6 + trial.difficulty * 4 * result.mult);
+    const total = setMastery(state, form.id, gain);
+    adjust(state, { health: -8, stats: { discipline: 2 } });
+    lines.push(`${form.name}: mastery ${total}%.`);
+    if (total >= 100) lines.push('It costs you nothing to hold now. It is simply how you stand.');
+  }
+
+  return { ...result, lines, text: lines.join(' ') };
+}
+
+// ------------------------------------------------------------- mastery
+
+function getMastery(state, formId) {
+  return (state.character.formMastery && state.character.formMastery[formId]) || 0;
+}
+
+function setMastery(state, formId, delta) {
+  const c = state.character;
+  c.formMastery = c.formMastery || {};
+  c.formMastery[formId] = clamp((c.formMastery[formId] || 0) + delta, 0, 100);
+  return Math.round(c.formMastery[formId]);
+}
+
+/**
+ * Mastery makes a form cheaper to hold and slightly stronger. A mastered Super
+ * Saiyan is not a bigger number, it is a form you can live in.
+ */
+function masteryEffect(state, formId) {
+  // One mastery curve, defined in mastery.js, so the number the screen quotes
+  // is the number the fight uses.
+  return {
+    drainMult: masteryDrain(state.character, formId),
+    powerMult: masteryMult(state.character, formId),
+    mastery: Math.round(getMastery(state, formId)),
+    label: masteryLabel(getMastery(state, formId)),
+  };
+}
+
+/** Push past a mastered form and you may end up with something of your own. */
+function inventForm(state, rng, baseFormId, name) {
+  const base = getTransformation(baseFormId);
+  if (!base) return null;
+  const c = state.character;
+  c.customForms = c.customForms || [];
+  const invented = {
+    id: 'custom_' + (c.customForms.length + 1),
+    name: name || `${c.name}'s Form`,
+    baseId: baseFormId,
+    mult: Math.round(base.mult * rng.float(1.3, 2.2) * 10) / 10,
+    drain: Math.max(1, Math.round(base.drain * 0.85)),
+    desc: 'Nobody else has this. You built it out of something that already existed and something that did not.',
+    year: state.character.birthYear + c.age,
+    taught: [],
+  };
+  c.customForms.push(invented);
+  addFact(state.memory, {
+    type: 'transformation', weight: 10, year: c.age, tags: ['transformation', 'identity'],
+    text: `Invented a transformation of their own: ${invented.name}.`,
+  });
+  return invented;
+}
+  return { TRIAL_KINDS, STAT_TRIALS, startTrial, trialBonus, gradeTrial, resolveTrial, getMastery, setMastery, masteryEffect, inventForm };
+})();
+
+/* ==== engine/lifecycle.js ==== */
+const __mod_engine_lifecycle_js = (function () {
+// The turn loop. A year is: passive drift, then a short queue of generated
+// events the player answers one at a time, then the bookkeeping.
+
+const { clamp } = __mod_engine_rng_js;
+const { render } = __mod_engine_text_js;
+const { generateEvent, resolveChoice, buildContext, directorBias, forceEvent } = __mod_engine_generator_js;
+const { addFact, recallSummary } = __mod_engine_memory_js;
+const { relationshipTick, progressNpc, makeNpc, makeChild } = __mod_engine_npc_js;
+const { ladderFor } = __mod_data_transformations_js;
+const { TECHNIQUES } = __mod_data_techniques_js;
+const { getRace, hasPerk, maturity, raceHasTail } = __mod_data_races_js;
+const { getPlace } = __mod_data_places_js;
+const { TIMELINE, eraName, worldPowerBaseline } = __mod_data_timeline_js;
+const { agingDecay, naturalDeathChance, combatPower, powerTier, kiMaxFor, lifeExpectancy, zenkaiBoost, STAT_KEYS, equippedWeapon } = __mod_engine_stats_js;
+const { prologueEntries } = __mod_engine_prologue_js;
+const { getRng, saveRng, currentYear, livingNpcs, adjust, place: placeOf, characterSummary } = __mod_engine_state_js;
+const { getCareer } = __mod_data_jobs_js;
+const { resetYearBudget } = __mod_engine_economy_js;
+const { rollMarketYear } = __mod_engine_market_js;
+const { resolveTrial } = __mod_engine_trials_js;
+const { getItem } = __mod_data_items_js;
+const { checkEarnedTraits, traitEffect } = __mod_data_traits_js;
+
+const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
+
+const BUILD_ORDER = ['small', 'wiry', 'lean', 'balanced', 'stocky', 'massive'];
+
+/**
+ * The body changes because of what you did to it, not because you dragged a
+ * slider. Children grow, training thickens you, starvation and long illness
+ * strip you down, and after seventy everybody shrinks.
+ */
+function driftBody(state, rng) {
+  const c = state.character;
+  const a = c.appearance;
+  if (!a) return null;
+  const bio = maturity(c);
+  const race = getRace(c.raceId);
+  let note = null;
+
+  // Growing up. Adult height is reached around biological eighteen.
+  if (bio < 18) {
+    const adult = a.adultHeight || (a.adultHeight = a.heightCm);
+    const childScale = 0.34 + 0.66 * Math.min(1, bio / 18);
+    a.heightCm = Math.round(adult * childScale);
+    a.weightKg = Math.max(3, Math.round((a.adultWeight || (a.adultWeight = a.weightKg)) * Math.pow(childScale, 2.4)));
+  } else if (bio > 70 && rng.chance(0.35)) {
+    a.heightCm = Math.max(90, a.heightCm - 1);
+  }
+
+  // What the year was spent on shows up in the frame.
+  const idx = BUILD_ORDER.indexOf(a.buildShape);
+  if (idx >= 0 && bio >= 14) {
+    const trained = c.flags.trainedHardThisYear;
+    const starved = c.vitals.health < 35;
+    if (trained && c.stats.strength > 65 && idx < BUILD_ORDER.length - 1 && rng.chance(0.06)) {
+      a.buildShape = BUILD_ORDER[idx + 1];
+      a.weightKg = Math.round(a.weightKg * 1.06);
+      note = 'You have put on real muscle this year. Your clothes do not fit.';
+    } else if (starved && idx > 0 && rng.chance(0.12)) {
+      a.buildShape = BUILD_ORDER[idx - 1];
+      a.weightKg = Math.round(a.weightKg * 0.93);
+      note = 'You have lost weight you could not afford to lose.';
+    } else if (trained && rng.chance(0.25)) {
+      a.weightKg = Math.min(Math.round(a.weightKg * 1.01) + 1, 400);
+    } else if (!trained && bio > 40 && rng.chance(0.18)) {
+      a.weightKg = Math.round(a.weightKg * 1.012) + 1;
+    }
+  }
+
+  // Long lives go grey, unless the species does not.
+  if (!a.wentGrey && bio > 55 && race.agingRate >= 0.7 && rng.chance(0.08)
+    && !['white', 'silver'].includes(a.hairColour)) {
+    a.wentGrey = true;
+    a.hairColour = rng.chance(0.5) ? 'silver' : 'white';
+    note = 'You went grey this year, all at once, the way it happens.';
+  }
+  return note;
+}
+
+/**
+ * Somebody in your life died. One place that decides how you hear about it,
+ * because the old code told you about deaths from old age and said nothing at
+ * all about the rest - people were dying and the only way to find out was to
+ * open the relationships list.
+ */
+function mournNpc(state, rng, npc, cause) {
+  const c = state.character;
+  if (!npc || npc.mourned) return null;
+  npc.mourned = true;
+  npc.alive = false;
+  npc.deadSince = npc.deadSince || currentYear(state);
+  npc.causeOfDeath = npc.causeOfDeath || cause || 'unknown';
+
+  const bond = (npc.closeness || 0) + (npc.trust ?? 30) * 0.4 - (npc.tension || 0) * 0.5;
+  const kin = ['parent', 'child', 'spouse', 'sibling'].includes(npc.relation);
+  // Whether you got there. Close family and people you saw often, mostly.
+  const present = rng.chance(clamp(0.12 + (kin ? 0.45 : 0) + bond / 260, 0, 0.85));
+
+  let text;
+  let hit = 0;
+  if (kin && present) {
+    text = rng.pick([
+      `${npc.name} died this year. You were there for it. They knew you were there, right up until they did not.`,
+      `You got to ${npc.name} in time. Not in time to do anything, but in time. They were not on their own.`,
+      `${npc.name} went in the small hours with your hand in theirs and nothing useful said by either of you.`,
+    ]);
+    hit = -26;
+  } else if (kin) {
+    text = rng.pick([
+      `${npc.name} died this year. You were somewhere else. You found out days later.`,
+      `Word about ${npc.name} reaches you long after there was anything to be done. You were not there.`,
+      `${npc.name} is gone. Nobody could reach you in time, and you will think about that.`,
+    ]);
+    hit = -32;
+  } else if (bond > 55) {
+    text = present
+      ? `${npc.name} died this year, and you were with them.`
+      : `${npc.name} died this year. Somebody tells you in passing, as though you already knew.`;
+    hit = -18;
+  } else if ((npc.tension || 0) > 55) {
+    text = rng.pick([
+      `${npc.name} is dead. You are not sure what you feel and you do not like any of the options.`,
+      `Word comes that ${npc.name} died. That is one argument that will not be finished.`,
+    ]);
+    hit = -4;
+  } else {
+    text = `${npc.name} died this year.`;
+    hit = -6;
+  }
+
+  if (present) npc.youWereThere = true;
+  addFact(state.memory, {
+    type: 'death',
+    text: `${npc.name} died${present ? '. You were there' : ''}. ${npc.causeOfDeath}.`,
+    year: c.age, weight: kin ? 9 : 5, subject: npc.id, tags: ['loss'],
+  });
+  adjust(state, { happiness: hit });
+  if (kin || bond > 60) c.flags.grief = true;
+  if (kin && !present) c.flags.was_not_there = true;
+  return { kind: 'loss', text };
+}
+
+const DEATH_CAUSES = {
+  age: ['Old age', 'The body simply stopped', 'Died in their sleep'],
+  health: ['Injuries that never healed', 'A body used past its limits', 'Complications, finally'],
+};
+
+/** Begin a new year. Returns the first event, or null if nothing happens. */
+/**
+ * The birth scene, as its own log entry for the birth year - called once,
+ * right after character creation and before the player has aged up at all,
+ * so it reads as what it is (Age 0) rather than getting folded into
+ * whatever the first real year happens to produce.
+ */
+function openingLogEntry(state, rng) {
+  const c = state.character;
+  state.world.flags.prologue_done = true;
+  return { year: c.birthYear, age: 0, entries: prologueEntries(state, rng) };
+}
+
+function startYear(state) {
+  const rng = getRng(state);
+  const c = state.character;
+
+  // Settle last year's damage BEFORE anything heals. Spending a year at zero
+  // health used to be free because the new year's recovery ran first.
+  if (!c.inAfterlife && c.alive && c.vitals.health <= 0) {
+    const survived = resolveCriticalCondition(state, rng);
+    if (!survived) {
+      state.turn = {
+        year: currentYear(state), age: c.age, count: 0, used: [], queue: [],
+        index: 0, entries: [{ kind: 'death', text: `${c.death.cause}. You are ${c.age}.` }], done: true,
+      };
+      state.log.push({ year: state.turn.year, age: state.turn.age, entries: state.turn.entries.slice() });
+      saveRng(state, rng);
+      return null;
+    }
+  }
+
+  c.age += 1;
+  state.stats.yearsPlayed++;
+  if (c.inAfterlife) c.yearsInAfterlife = (c.yearsInAfterlife || 0) + 1;
+  resetYearBudget(state);
+  // The shelf turns over on wherever you actually are. Everywhere else
+  // rotates lazily, the first time you are there to see it.
+  if (!c.inAfterlife) rollMarketYear(state, rng, getPlace(c.placeId).planet);
+
+  const entries = [];
+  // The opening. Told once, as it happens, before anything else does.
+  if (c.age === 1 && !state.world.flags.prologue_done) {
+    state.world.flags.prologue_done = true;
+    entries.push(...prologueEntries(state, rng));
+  }
+  // The body changes before anything else happens to it this year.
+  const bodyNote = driftBody(state, rng);
+  if (bodyNote) entries.push({ kind: 'body', text: bodyNote });
+  entries.push(...passiveYear(state, rng));
+
+  // Career bookkeeping
+  if (c.career) {
+    c.career.years += 1;
+    const career = getCareer(c.career.id);
+    const rung = career.rungs[c.career.rung];
+    if (rung) adjust(state, { zeni: Math.round(rung.pay * 0.15) });
+  }
+
+  // Passive income and item effects
+  for (const id of c.items) {
+    const item = getItem(id);
+    if (item && item.passive && item.passive.income) adjust(state, { zeni: item.passive.income });
+  }
+  if (c.techniques.includes('senzu_farming') && rng.chance(0.7)) c.senzu += 1;
+
+  const revivalNews = tickRevivalEffort(state, rng);
+  if (revivalNews) entries.push(revivalNews);
+
+  // NPCs live their own year.
+  for (const npc of Object.values(state.npcs)) {
+    if (npc.alive) {
+      relationshipTick(rng, npc, c);
+      const news = progressNpc(rng, npc, currentYear(state), {
+        techniquePool: TECHNIQUE_POOL,
+        formsFor: (n) => ladderFor(n.raceId),
+      });
+      // You only hear about the lives of people you actually keep up with.
+      if (news && (npc.closeness > 45 || ['rival', 'nemesis', 'child', 'spouse', 'student'].includes(npc.relation))) {
+        entries.push({ kind: 'news', text: news });
+      }
+      const npcRace = getRace(npc.raceId);
+      const npcSpan = npc.isCanon ? Infinity : (npcRace.lifespan[0] + npcRace.lifespan[1]) / 2;
+      if (npc.age > npcSpan * 0.8 && rng.chance(0.02 + (npc.age - npcSpan * 0.8) * 0.01)) {
+        const note = mournNpc(state, rng, npc, 'Old age');
+        if (note) entries.push(note);
+      }
+    }
+  }
+
+  // What the life has made of you. Earned traits arrive when their conditions
+  // are met, announced or not asked for.
+  for (const t of checkEarnedTraits(state)) {
+    entries.push({ kind: 'trait', text: `${t.line} (${t.name})` });
+    addFact(state.memory, {
+      type: 'trait', text: `Became ${t.name.toLowerCase()}.`, year: c.age,
+      weight: 6, tags: ['trait'],
+    });
+  }
+
+  // Anybody who died some other way and was never announced gets announced
+  // now. Nobody in your life disappears silently.
+  for (const npc of Object.values(state.npcs)) {
+    if (npc.alive || npc.mourned) continue;
+    const note = mournNpc(state, rng, npc, npc.causeOfDeath);
+    if (note) entries.push(note);
+  }
+
+  // How many events this year: busier lives generate more.
+  let count = rng.weighted([1, 2, 3], (n) => [30, 50, 20][n - 1]);
+  if (c.age < 4) count = 1;
+
+  state.turn = {
+    year: currentYear(state),
+    age: c.age,
+    count,
+    used: [],
+    queue: [],
+    index: 0,
+    entries,
+    done: false,
+  };
+
+  // A canon saga is not a news bulletin: if one is due this year it is the
+  // first thing that happens to you, and you get to decide what you do about it.
+  const due = TIMELINE.filter((t) => t.year === currentYear(state)
+    && !state.world.resolved.includes(t.id)
+    && !(t.cancelIf && state.world.flags[t.cancelIf]));
+  for (let i = 0; i < due.length; i++) {
+    // Two sagas landing in the same year both get played, not summarised.
+    const forced = forceEvent(state, rng, 'timeline_event', { evId: due[i].id });
+    if (!forced) break;
+    state.turn.queue.push(forced);
+    state.turn.count = Math.max(state.turn.count, state.turn.queue.length + 1);
+    // Mark it claimed so the next forceEvent picks the following one.
+    state.world.resolved.push(due[i].id);
+  }
+  // The choice handlers push the id again; keep the list unique.
+  state.world.resolved = Array.from(new Set(state.world.resolved));
+
+  // Events are generated one at a time rather than all at once, so the second
+  // event of a year sees what the first one did to you.
+  if (!state.turn.queue.length) {
+    const first = nextGenerated(state, rng);
+    if (first) state.turn.queue.push(first);
+    else state.turn.done = true;
+  }
+
+  saveRng(state, rng);
+  if (state.turn.done) finishYear(state);
+  return currentEvent(state);
+}
+
+/** Generate the next event for this year against current state. */
+function nextGenerated(state, rng) {
+  const t = state.turn;
+  if (!t || t.used.length >= t.count) return null;
+  const ctx = buildContext(state, rng);
+  const bias = directorBias(state, ctx);
+  const event = generateEvent(state, rng, { bias, exclude: t.used });
+  if (!event) return null;
+  t.used.push(event.templateId);
+  return event;
+}
+
+/**
+ * Splice a model-authored event into this year's queue. Called by the UI after
+ * an async AI request resolves, so generation never blocks the turn.
+ */
+function insertEvent(state, event) {
+  const t = state.turn;
+  if (!t || t.done || !event) return currentEvent(state);
+  // If an event is already on screen, queue this one behind it. Splicing at the
+  // current index would swap the card the player is reading out from under the
+  // answer they are about to give.
+  const at = t.queue[t.index] ? t.index + 1 : t.index;
+  t.queue.splice(at, 0, event);
+  t.count += 1;
+  return t.queue[t.index];
+}
+
+/** How many events are still owed this year, for the UI's progress hint. */
+function eventsRemaining(state) {
+  const t = state.turn;
+  if (!t || t.done) return 0;
+  return Math.max(0, t.count - t.used.length) + (t.queue.length - t.index - 1);
+}
+
+/** Replace the text of the most recent log entry, for AI re-narration. */
+function renarrateLast(state, text) {
+  const t = state.turn;
+  if (!t || !t.entries.length || !text) return;
+  for (let i = t.entries.length - 1; i >= 0; i--) {
+    if (t.entries[i].kind === 'event') {
+      t.entries[i].outcome = text;
+      t.entries[i].aiNarrated = true;
+      return;
+    }
+  }
+}
+
+function currentEvent(state) {
+  const t = state.turn;
+  if (!t || t.done) return null;
+  return t.queue[t.index] || null;
+}
+
+/** Answer the current event. Returns the next event, or null when the year ends. */
+function choose(state, choiceId, params = null) {
+  const t = state.turn;
+  if (!t || t.done) return null;
+  const event = t.queue[t.index];
+  if (!event) {
+    t.done = true;
+    finishYear(state);
+    return null;
+  }
+
+  const rng = getRng(state);
+  const result = resolveChoice(state, rng, event, choiceId, params);
+
+  // A choice can call the next card directly - a dragon that is still in the
+  // sky, a menu that needs a second step. It goes in right behind this one.
+  if (result.followUp) {
+    const next = forceEvent(state, rng, result.followUp, result.followUpSlots || {});
+    if (next) {
+      t.queue.splice(t.index + 1, 0, next);
+      t.count += 1;
+    }
+  }
+  saveRng(state, rng);
+
+  const entry = {
+    kind: 'event',
+    title: event.title,
+    text: event.text,
+    outcome: result.text,
+    tags: event.tags,
+    templateId: event.templateId,
+  };
+  t.entries.push(entry);
+
+  // A choice that starts a fight parks the spec here; the UI picks it up and
+  // hands control to the battle screen before the year continues.
+  if (result.battle) t.pendingBattle = result.battle;
+  // A tournament is the same handover, one level up: the bracket takes over
+  // and gives the year back when the draw is done with you.
+  if (result.tournament) t.pendingTournament = result.tournament;
+  if (result.survival) t.pendingSurvival = result.survival;
+  // Some choices are a thing you have to actually do, not a thing you pick.
+  // Headless callers have nobody to play it, so it is scored off the stat the
+  // trial tests and resolved on the spot.
+  if (result.trial) {
+    if (state.autoBattle) {
+      const rng2 = getRng(state);
+      const score = clamp(result.trial.aptitude * 0.8 + rng2.float(-0.15, 0.35), 0, 1);
+      const played = resolveTrial(state, rng2, result.trial, score);
+      saveRng(state, rng2);
+      entry.outcome = [entry.outcome, played.text].filter(Boolean).join(' ');
+    } else {
+      t.pendingTrial = result.trial;
+    }
+  }
+
+  for (const f of result.facts || []) {
+    addFact(state.memory, { type: f.type || 'event', text: f.text, year: state.character.age, weight: f.weight ?? 1, tags: f.tags || [] });
+  }
+
+  if (result.outcome && result.outcome.death) {
+    die(state, result.outcome.death);
+    t.done = true;
+    return null;
+  }
+  if (result.outcome && result.outcome.reincarnate) {
+    state.character.flags.reincarnated = true;
+    t.done = true;
+    finishYear(state);
+    return null;
+  }
+
+  t.index += 1;
+  if (t.index >= t.queue.length) {
+    const rng2 = getRng(state);
+    const more = nextGenerated(state, rng2);
+    saveRng(state, rng2);
+    if (more) {
+      t.queue.push(more);
+    } else {
+      t.done = true;
+      finishYear(state);
+      return null;
+    }
+  }
+  return t.queue[t.index];
+}
+
+/** Skip the rest of the year's events (used by "let it happen"). */
+function skipRemaining(state) {
+  const t = state.turn;
+  let guard = 0;
+  while (t && !t.done && guard++ < 20) {
+    const ev = t.queue[t.index];
+    if (!ev) break;
+    choose(state, ev.choices.length ? ev.choices[ev.choices.length - 1].id : 'c0');
+  }
+}
+
+function passiveYear(state, rng) {
+  const c = state.character;
+  const race = getRace(c.raceId);
+  const entries = [];
+
+  // Physical drift
+  const decay = agingDecay(c);
+  if (decay > 0) {
+    for (const k of ['strength', 'speed', 'durability']) {
+      c.stats[k] = clamp(c.stats[k] - rng.float(0, decay), 1, 100);
+    }
+    if (decay > 1.5) c.stats.technique = clamp(c.stats.technique + rng.float(0, 0.4), 1, 100);
+  }
+
+  // Recovery and mood
+  const heal = (c.inAfterlife ? 40 : (24 + c.stats.durability * 0.28 + (hasPerk(c, 'regeneration') ? 30 : 0)))
+    * traitEffect(c, 'healRate');
+  adjust(state, { health: heal, ki: 999 });
+  const moodDrift = rng.float(-4, 4)
+    + (livingNpcs(state).filter((n) => n.closeness > 55).length * 0.8)
+    - (c.career && c.career.performance < 30 ? 3 : 0);
+  adjust(state, { happiness: moodDrift });
+
+  c.vitals.kiMax = kiMaxFor(c);
+
+  // Hard training accrues toward forms that ask for it.
+  if (c.flags.trainedHardThisYear) {
+    c.flags.hardTrainingYears = (c.flags.hardTrainingYears || 0) + 1;
+    // Nobody is born knowing how to fight with a weapon, and nobody gets to
+    // just decide they are equally dangerous with one. Training while
+    // actually carrying one, year over year, is what earns it.
+    if (equippedWeapon(c) && (c.flags.weaponTrainingYears || 0) < 99) {
+      c.flags.weaponTrainingYears = (c.flags.weaponTrainingYears || 0) + 1;
+      if (c.flags.weaponTrainingYears >= 2 && c.fightingStyle === 'martial_arts') {
+        c.fightingStyle = 'both';
+      }
+    }
+    c.flags.trainedHardThisYear = false;
+  }
+  // Living in Super Saiyan is how it becomes effortless.
+  if (c.transformations.includes('ssj') && (c.flags.ssjYears || 0) < 99) {
+    c.flags.ssjYears = (c.flags.ssjYears || 0) + 1;
+    if (c.flags.ssjYears >= 3 && c.stats.discipline > 55) c.flags.ssj_mastery = true;
+  }
+  // Living in Blue is how the flicker finally stops.
+  if (c.transformations.includes('ssb') && (c.flags.ssbYears || 0) < 99) {
+    c.flags.ssbYears = (c.flags.ssbYears || 0) + 1;
+    if (c.flags.ssbYears >= 3 && c.stats.discipline > 60 && c.stats.kiControl > 85) c.flags.ssb_mastery = true;
+  }
+
+  return entries;
+}
+
+function finishYear(state) {
+  const rng = getRng(state);
+  const c = state.character;
+
+  // Fire the world timeline even if the player ignored it.
+  for (const ev of TIMELINE) {
+    if (ev.year === currentYear(state) && !state.world.resolved.includes(ev.id)
+      && !(ev.cancelIf && state.world.flags[ev.cancelIf])) {
+      state.world.resolved.push(ev.id);
+      state.turn.entries.push({ kind: 'world', text: `${ev.name}. ${ev.blurb}` });
+      addFact(state.memory, { type: 'history', text: `${ev.name} happened.`, year: c.age, weight: 3, tags: ['history'] });
+    }
+  }
+
+  // Natural death, unless a wish says otherwise.
+  if (!c.inAfterlife && c.alive && !c.flags.immortal && rng.chance(naturalDeathChance(c))) {
+    die(state, rng.pick(DEATH_CAUSES.age));
+  } else if (!c.inAfterlife && c.alive && c.vitals.health <= 0) {
+    const survived = resolveCriticalCondition(state, rng);
+    if (survived && state.turn) {
+      state.turn.entries.push({ kind: 'survival', text: survived });
+    }
+  }
+
+  state.log.push({
+    year: state.turn.year,
+    age: state.turn.age,
+    entries: state.turn.entries.slice(),
+  });
+  if (state.log.length > 200) state.log.shift();
+
+  saveRng(state, rng);
+}
+
+/**
+ * Health at or below zero. A senzu saves you, a tough species usually pulls
+ * through, and otherwise it is a real coin flip. Returns the survival line, or
+ * false when it killed you.
+ */
+function resolveCriticalCondition(state, rng) {
+  const c = state.character;
+  if (c.senzu > 0) {
+    c.senzu -= 1;
+    c.vitals.health = 100;
+    return 'You were carrying a senzu bean. It is gone now, and you are not.';
+  }
+  const tough = hasPerk(c, 'regeneration') || hasPerk(c, 'hardToKill');
+  const durability = (c.stats.durability || 50) / 100;
+  const survivalOdds = (tough ? 0.62 : 0.38) + durability * 0.2;
+  if (rng.chance(survivalOdds)) {
+    c.vitals.health = tough ? 30 : 12;
+    // Coming back from this is exactly the state a Saiyan grows out of.
+    c.flags.brink_of_death = true;
+    c.flags.grief = c.flags.grief || false;
+    if (hasPerk(c, 'zenkai') || hasPerk(c, 'zenkaiWeak')) {
+      const gain = zenkaiBoost(c, rng, 1.2);
+      return `You should not have survived that. Your body rebuilds heavier. Power level up ${Math.round(gain).toLocaleString('en-US')}.`;
+    }
+    return 'You should not have survived that. You did, and it will cost you later.';
+  }
+  die(state, rng.pick(DEATH_CAUSES.health));
+  return false;
+}
+
+function die(state, cause) {
+  const c = state.character;
+  if (!c.alive && c.inAfterlife) return;
+  c.alive = false;
+  c.death = { cause, year: currentYear(state), age: c.age };
+  state.stats.deaths = (state.stats.deaths || 0) + 1;
+  c.flags.died_once = true;
+  addFact(state.memory, {
+    type: 'death', text: `Died at ${c.age}. ${cause}.`, year: c.age, weight: 10, tags: ['death'],
+  });
+  if (state.turn) {
+    state.turn.entries.push({ kind: 'death', text: `${cause}. You are ${c.age}.` });
+    state.turn.done = true;
+    state.log.push({ year: state.turn.year, age: state.turn.age, entries: state.turn.entries.slice() });
+  }
+}
+
+/**
+ * Gathering seven Dragon Balls takes years, not an afternoon. Whoever down
+ * there cares enough to try makes progress each year according to how capable
+ * and how motivated they are, and the player hears about it at milestones
+ * rather than every single year.
+ */
+function tickRevivalEffort(state, rng) {
+  const c = state.character;
+  if (!c.inAfterlife) return null;
+  // A death accepted as final is final. Nobody starts a scavenger hunt for
+  // somebody who told them not to.
+  if (c.flags.permadeath) return null;
+  const world = state.world;
+
+  if (!world.revival) {
+    const backers = Object.values(state.npcs).filter((n) => n.alive && n.closeness > 48);
+    if (!backers.length) return null;
+    // Not everyone who liked you will spend six years on a scavenger hunt.
+    const committed = backers.filter((n) => rng.chance(0.18 + n.closeness / 260));
+    if (!committed.length) return null;
+    world.revival = {
+      backers: committed.map((n) => n.id),
+      progress: 0,
+      announced: [],
+      startedYear: currentYear(state),
+    };
+    return {
+      kind: 'revival',
+      text: `${committed.map((n) => n.name).join(' and ')} ${committed.length > 1 ? 'have' : 'has'} started looking for the Dragon Balls. It will take years.`,
+    };
+  }
+
+  const backers = world.revival.backers.map((id) => state.npcs[id]).filter((n) => n && n.alive);
+  if (!backers.length) {
+    const line = 'Whoever was gathering the Dragon Balls for you has stopped.';
+    world.revival = null;
+    return { kind: 'revival', text: line };
+  }
+
+  let rate = 0;
+  for (const n of backers) {
+    const smart = ((n.stats && n.stats.intellect) || 45) / 100;
+    const rich = n.isCanon ? 0.5 : 0.2;
+    const radar = n.hasRadar ? 0.5 : 0;
+    rate += 6 + smart * 10 + rich * 10 + radar * 10;
+  }
+  rate *= rng.float(0.6, 1.3);
+  world.revival.progress = Math.min(100, world.revival.progress + rate);
+
+  const p = world.revival.progress;
+  for (const mark of [35, 70]) {
+    if (p >= mark && !world.revival.announced.includes(mark)) {
+      world.revival.announced.push(mark);
+      return {
+        kind: 'revival',
+        text: mark === 35
+          ? `Word comes up from below: ${backers[0].name} has two or three of them.`
+          : `${backers[0].name} is close. Five, maybe six.`,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Let a death be final. No wish will ever be spent on this life again - the
+ * Other World is closed to leaving, not just to visiting. This does not end
+ * the save: a living child can still be played as afterward (that is a
+ * separate, later choice), but this specific person is not coming back, and
+ * the people who were close to them feel it now rather than never noticing.
+ */
+function acceptPermanentDeath(state) {
+  const c = state.character;
+  c.flags.permadeath = true;
+  state.world.revival = null;
+  const info = epitaph(state);
+  for (const n of livingNpcs(state).filter((x) => x.closeness > 40)) {
+    n.mood = 'grieving';
+  }
+  addFact(state.memory, {
+    type: 'death', text: `${c.name}'s death was accepted as final: ${info.title}.`,
+    year: c.age, weight: 10, tags: ['death', 'legend'],
+  });
+  state.world.legends = state.world.legends || [];
+  state.world.legends.push({
+    name: c.name, raceId: c.raceId, title: info.title, score: info.score,
+    cause: c.death ? c.death.cause : 'unknown', year: currentYear(state),
+  });
+  if (state.world.legends.length > 20) state.world.legends = state.world.legends.slice(-20);
+  return info;
+}
+
+/** Bring a dead character back to the world of the living, properly. */
+function reviveCharacter(state) {
+  const c = state.character;
+  if (c.flags.permadeath) return state;
+  c.inAfterlife = false;
+  c.alive = true;
+  c.death = null;
+  c.yearsInAfterlife = 0;
+  c.keptBody = false;
+  c.flags.judged = false;
+  c.flags.died_once = true;
+  c.vitals.health = 100;
+  c.vitals.ki = c.vitals.kiMax;
+  if (['check_in', 'snake_way', 'kai_planet', 'hell', 'otherworld_arena', 'sacred_world'].includes(c.placeId)) {
+    c.placeId = state.world.deathPlaceId || 'east_city';
+  }
+  state.world.revival = null;
+  return state;
+}
+
+/** Move a dead character into the Other World and keep playing. */
+function enterAfterlife(state) {
+  const c = state.character;
+  state.world.deathPlaceId = c.placeId;
+  c.inAfterlife = true;
+  c.alive = true;
+  c.vitals.health = 100;
+  c.vitals.happiness = clamp(c.vitals.happiness, 20, 100);
+  c.placeId = 'check_in';
+  c.yearsInAfterlife = 0;
+  c.flags.judged = false;
+  addFact(state.memory, { type: 'afterlife', text: 'Arrived in the Other World.', year: c.age, weight: 6, tags: ['death'] });
+  return state;
+}
+
+/** The scored obituary shown when a life truly ends. */
+function epitaph(state) {
+  const c = state.character;
+  const race = getRace(c.raceId);
+  const power = combatPower(c);
+  const score = Math.round(
+    Math.log10(Math.max(10, power)) * 90
+    + c.fame * 3
+    + Math.abs(c.karma) * 1.2
+    + c.techniques.length * 12
+    + c.transformations.length * 45
+    + state.world.tournamentWins * 120
+    + state.stats.wins * 4
+    + livingNpcs(state).filter((n) => n.closeness > 60).length * 20
+    + (state.world.divergences.length * 200)
+  );
+
+  const titles = [
+    [12000, 'Legend of the Age'], [7000, 'World Shaker'], [4000, 'Named in the Histories'],
+    [2200, 'A Fighter People Remember'], [1200, 'Locally Famous'], [600, 'Respected'],
+    [0, 'Lived and Died'],
+  ];
+  const title = titles.find(([n]) => score >= n)[1];
+
+  return {
+    name: c.name,
+    race: race.name,
+    age: c.age,
+    year: currentYear(state),
+    cause: c.death ? c.death.cause : 'Still going',
+    power: Math.round(power),
+    tier: powerTier(power),
+    score,
+    title,
+    fame: Math.round(c.fame),
+    karma: Math.round(c.karma),
+    zeni: Math.round(c.zeni),
+    techniques: c.techniques.length,
+    forms: c.transformations.length,
+    children: livingNpcs(state).filter((n) => n.relation === 'child').length,
+    divergences: state.world.divergences.length,
+    highlights: recallSummary(state.memory, 8),
+  };
+}
+
+/** Continue as one of your children. The world keeps everything it learned. */
+function beginLegacy(state) {
+  const kids = Object.values(state.npcs).filter((n) => n.relation === 'child' && n.alive);
+  if (!kids.length) return null;
+  const rng = getRng(state);
+  const heir = kids.sort((a, b) => (b.inheritedPower || b.power) - (a.inheritedPower || a.power))[0];
+  const old = state.character;
+
+  const next = {
+    ...old,
+    name: heir.name,
+    raceId: heir.raceId,
+    sex: heir.sex,
+    age: heir.age,
+    birthYear: heir.birthYear,
+    alive: true,
+    inAfterlife: false,
+    death: null,
+    yearsInAfterlife: 0,
+    stats: { ...heir.stats },
+    power: Math.max(1, heir.inheritedPower || heir.power),
+    peakPower: Math.max(1, heir.inheritedPower || heir.power),
+    zenkaiCount: 0,
+    vitals: { health: 100, happiness: 70, ki: 60, kiMax: 60 },
+    techniques: (heir.techniques || []).slice(),
+    transformations: [],
+    activeForm: null,
+    signature: null,
+    mentors: [],
+    career: null,
+    items: old.items.slice(),
+    senzu: old.senzu,
+    zeni: Math.round(old.zeni * 0.6),
+    fame: Math.round(old.fame * 0.3),
+    karma: 0,
+    flags: { heir_of: old.name },
+    traits: [],
+    achievements: [],
+    tail: raceHasTail(heir.raceId),
+  };
+  next.vitals.kiMax = kiMaxFor(next);
+  next.vitals.ki = next.vitals.kiMax;
+  next.lifeExpectancy = lifeExpectancy(next, rng);
+
+  delete state.npcs[heir.id];
+  // The previous character becomes a memory in the world.
+  state.npcs['legacy_' + old.name] = {
+    id: 'legacy_' + old.name, name: old.name, raceId: old.raceId, canonId: null,
+    sex: old.sex, age: old.age, birthYear: old.birthYear, alive: false,
+    deadSince: currentYear(state), causeOfDeath: old.death ? old.death.cause : 'unknown',
+    title: 'Your parent', epithet: null, stats: old.stats, power: old.power,
+    relation: 'parent', closeness: 70, respect: 70, tension: 0, romance: 0,
+    tags: ['legend'], goal: null, placeId: old.placeId, metAt: heir.birthYear,
+    metHow: 'family', history: [], techniques: old.techniques.slice(), isCanon: false,
+  };
+
+  state.legacy = {
+    generation: (state.legacy ? state.legacy.generation : 1) + 1,
+    ancestors: [...(state.legacy ? state.legacy.ancestors : []), { name: old.name, age: old.age, power: old.power, score: epitaph(state).score }],
+  };
+  state.character = next;
+  state.turn = null;
+  addFact(state.memory, {
+    type: 'legacy', weight: 8, year: next.age,
+    text: `${next.name} takes up where ${old.name} left off.`, tags: ['legacy'],
+  });
+  saveRng(state, rng);
+  return state;
+}
+  return { mournNpc, openingLogEntry, startYear, insertEvent, eventsRemaining, renarrateLast, currentEvent, choose, skipRemaining, die, tickRevivalEffort, acceptPermanentDeath, reviveCharacter, enterAfterlife, epitaph, beginLegacy };
+})();
+
 /* ==== engine/tournament.js ==== */
 const __mod_engine_tournament_js = (function () {
 // Tournaments as brackets you actually fight.
@@ -16254,6 +17670,7 @@ const { canonAvailable } = __mod_data_canon_js;
 const { startSurvival, survivalActions, survivalTurn, RULES } = __mod_engine_survival_js;
 const { ensureBallSet, ballsHeld, ballsOn, ballManifest, scatterAfterWish, ballsAreInert } = __mod_engine_dragonballs_js;
 const { getItem } = __mod_data_items_js;
+const { die } = __mod_engine_lifecycle_js;
 const { getPlace, PLACES } = __mod_data_places_js;
 const { generateFullName } = __mod_data_names_js;
 const { getTechnique, TECHNIQUES } = __mod_data_techniques_js;
@@ -16293,7 +17710,10 @@ function tournamentInvite(ctx) {
   // Famous or strong enough that the organisers went looking for you
   // specifically, the way they did for a handful of outsiders historically.
   const soughtOut = ctx.character.fame > 55 || combatPower(ctx.character) > worldPowerBaseline(ctx.year) * 3;
-  return knownWell || soughtOut;
+  // Training personally under your own universe's God of Destruction (or his
+  // angel) is its own way onto the roster - he picks his own team.
+  const godPicked = ctx.character.mentors.includes('beerus') || ctx.character.mentors.includes('whis');
+  return knownWell || soughtOut || godPicked;
 }
 
 function timelineTournament(c2, ev) {
@@ -16645,7 +18065,9 @@ registerEvents([
     title: (ctx, s) => `${s.godName} Has Noticed You`,
     text: `{You feel it before you see anything|The air pressure changes|Everything goes very quiet}.
       [godName]. [godPersona] [godQuirk]`,
-    choices: (ctx, s) => [
+    choices: (ctx, s) => {
+      const destroyerGod = (canonAvailable(ctx.year, (c) => c.id === s.godId)[0] || {}).tags?.includes('destroyer');
+      const base = [
       { id: 'bow', label: 'Show respect', effect: (c2, sl) => {
         const npc = meetCanon(c2, sl.godId, 'acquaintance');
         relate(c2, npc, { closeness: 12, respect: 15 });
@@ -16667,7 +18089,16 @@ registerEvents([
           const t = trainYear(c2, { intensity: 1.6, mentorMult: 2.4, placeMult: 3 });
           const changes = apply(c2, { health: -25, happiness: 15, stats: { kiControl: 8, discipline: 6 } });
           fact(c2, `Trained under ${npc.name}.`, { type: 'mentor', weight: 9, subject: npc.id, tags: ['divine', 'mentor'] });
-          return { text: `{They agree, which surprises everyone including them|"Very well"|There is a condition and you meet it}. The training is {nothing like training|mostly being hit while doing chores|not survivable by most people}. ${powerLine(t.gained)}`, changes };
+          const lines = [`{They agree, which surprises everyone including them|"Very well"|There is a condition and you meet it}. The training is {nothing like training|mostly being hit while doing chores|not survivable by most people}. ${powerLine(t.gained)}`];
+          // Beerus and Whis are never anywhere apart from each other.
+          const companion = canon === 'beerus' ? 'whis' : canon === 'whis' ? 'beerus' : null;
+          if (companion && !c2.character.mentors.includes(companion)
+            && !Object.values(c2.state.npcs).some((n) => n.canonId === companion && n.alive)) {
+            const other = meetCanon(c2, companion, 'acquaintance');
+            relate(c2, other, { closeness: 8, respect: 8 });
+            lines.push(`${other.name} is there too, the way ${other.name} always is.`);
+          }
+          return { text: lines.join(' '), changes };
         }
         relate(c2, npc, { respect: -5 });
         const changes = apply(c2, { happiness: -8 });
@@ -16683,10 +18114,41 @@ registerEvents([
           fact(c2, `Stood up to ${npc.name} and was not erased for it.`, { type: 'divine', weight: 8, subject: npc.id, tags: ['divine', 'legend'] });
           return { text: `{You do not move|You say no to a god|Everyone else in the room stops breathing}. ${npc.name} {is delighted|stares, then laughs|says "interesting" and that is the whole conversation}.`, changes };
         }
+        // A God of Destruction erases things for less than this. Standing
+        // your ground against one and losing badly is a real death, not a
+        // beating - the gods who are not destroyers mostly just hurt you.
+        const destroyer = (canonAvailable(c2.year, (c) => c.id === sl.godId)[0] || {}).tags?.includes('destroyer');
+        if (destroyer && gap < 0.02 && odds(c2, 0.12)) {
+          fact(c2, `Erased by ${npc.name} for the insolence of it.`, { type: 'death', weight: 10, subject: npc.id, tags: ['divine', 'death'] });
+          die(c2.state, `Erased by ${npc.name}`);
+          return { text: `{There is no warning|One motion, unhurried|You do not finish the sentence you were saying}. ${npc.name} does not raise their voice. There is simply less of you than there was.`, changes: [] };
+        }
         const changes = apply(c2, { health: -55, happiness: -10 });
         return { text: `{You do not see the movement|There is no fight|One gesture}. {You are through a wall and most of a hillside|You wake up much later|It is not even close to a contest}.`, changes };
       } },
-    ],
+      ];
+      // A God of Destruction can be reached through his stomach in a way no
+      // other kind of god can. Nobody offers Zeno a snack.
+      if (!destroyerGod) return base;
+      return base.concat([{ id: 'feed', label: 'Offer them food', effect: (c2, sl) => {
+        const npc = meetCanon(c2, sl.godId, 'acquaintance');
+        const cost = c2.rng.int(5000, 80000);
+        const great = odds(c2, 0.3 + (c2.character.luck || 50) / 300 + (c2.character.stats.charisma || 50) / 500);
+        if (great) {
+          relate(c2, npc, { closeness: 25, respect: 20 });
+          if (!c2.character.mentors.includes(sl.godId)) c2.character.mentors.push(sl.godId);
+          npc.relation = 'mentor';
+          if (sl.godId === 'whis') c2.character.flags.angel_training = true;
+          if (sl.godId === 'beerus') c2.character.flags.destroyer_training = true;
+          const changes = apply(c2, { happiness: 14, zeni: -cost });
+          fact(c2, `Fed ${npc.name} something he had never had before.`, { type: 'divine', weight: 8, subject: npc.id, tags: ['divine', 'mentor'] });
+          return { text: `{He takes one bite and goes completely silent|His eyes actually open|"...more"}. {This is apparently how you get taken seriously by a god|Whatever that was, it worked|You have his full, undivided attention now, for entirely the right reason}.`, changes };
+        }
+        relate(c2, npc, { closeness: 6 });
+        const changes = apply(c2, { happiness: 2, zeni: -Math.round(cost * 0.4) });
+        return { text: `{He eats it without much comment|"Adequate"|Not bad, but not memorable}. {You have not been erased, which is something|It is not the reaction you were hoping for|Try again some other year, with something better}.`, changes };
+      } }]);
+    },
   },
 
   {
@@ -18534,384 +19996,6 @@ registerEvents([
 ]);
 })();
 
-/* ==== engine/economy.js ==== */
-const __mod_engine_economy_js = (function () {
-// The action economy.
-//
-// The first version of this had a global slot budget as well as per-action
-// limits, and the two fought each other: at biological nine you got three
-// slots, training cost two of them, and a year was over after one session
-// even though the action itself allowed three. The budget is gone. What is
-// left is what actually stops the exploit:
-//
-//   1. Each action has its own yearly limit, which scales with how old you
-//      are - a toddler gets fewer goes at everything than an adult.
-//   2. Training grants power against a separate yearly ceiling, so pressing
-//      the same button is subject to diminishing returns however many times
-//      the limit lets you press it.
-//
-// A year is still finite. It is finite per activity, which is legible, rather
-// than in one pooled number, which was not.
-
-const { clamp } = __mod_engine_rng_js;
-const { getRace, hasPerk, maturity } = __mod_data_races_js;
-const { trainingRate } = __mod_engine_stats_js;
-
-/**
- * How much of a year this character can get through, as a multiplier on every
- * action's own limit. Small children and the very old do less of everything;
- * androids and the disciplined do more; the dead have nothing but time.
- */
-function yearCapacity(state) {
-  const c = state.character;
-  const bio = maturity(c);
-
-  let mult;
-  if (bio < 3) mult = 0.34;
-  else if (bio < 6) mult = 0.5;
-  else if (bio < 10) mult = 0.7;
-  else if (bio < 14) mult = 0.85;
-  else if (bio < 60) mult = 1;
-  else if (bio < 75) mult = 0.85;
-  else if (bio < 90) mult = 0.7;
-  else mult = 0.55;
-
-  if (hasPerk(c, 'infiniteStamina')) mult += 0.2;
-  if (hasPerk(c, 'meditative')) mult += 0.1;
-  if (c.stats.discipline >= 80) mult += 0.15;
-  if (c.vitals.health < 30) mult -= 0.25;
-  if (c.vitals.health < 10) mult -= 0.15;
-  if (c.inAfterlife) mult += 0.25;
-
-  return clamp(mult, 0.25, 1.7);
-}
-
-/** This action's limit for this character this year, after age scaling. */
-function limitFor(state, action) {
-  const base = typeof action.maxPerYear === 'function'
-    ? action.maxPerYear(state)
-    : action.maxPerYear;
-  if (base === undefined || base === null) return Infinity;
-  if (base <= 0) return 0;
-  // Never scale a once-a-year thing down to nothing.
-  return Math.max(1, Math.round(base * yearCapacity(state)));
-}
-
-function usedThisYear(state, actionId) {
-  const c = state.character;
-  return (c.yearUse && c.yearUse[actionId]) || 0;
-}
-
-/** Reset the per-year counters. Called once per age-up. */
-function resetYearBudget(state) {
-  const c = state.character;
-  c.yearUse = {};
-  c.yearPowerGained = 0;
-  c.yearPowerCap = trainingCapForYear(state);
-  delete c.slotsMax;
-  delete c.slotsLeft;
-}
-
-/** Can this action be run right now? Returns a reason string when it cannot. */
-function actionBlocked(state, action) {
-  const gate = ageGate(state, action);
-  if (gate) return gate;
-  const limit = limitFor(state, action);
-  if (limit === Infinity) return null;
-  const used = usedThisYear(state, action.id);
-  if (used >= limit) {
-    return limit === 1
-      ? 'Once a year, and you have had it.'
-      : `${limit} a year, and you have used ${used}.`;
-  }
-  return null;
-}
-
-/**
- * Some things you simply cannot do yet. A one-year-old is not hunting Dragon
- * Balls, and a five-year-old is not inventing a transformation.
- */
-function ageGate(state, action) {
-  const c = state.character;
-  if (action.minMaturity === undefined) return null;
-  const bio = maturity(c);
-  if (bio >= action.minMaturity) return null;
-  const race = getRace(c.raceId);
-  const rate = race.maturityRate ?? 1;
-  const yearsOff = Math.max(1, Math.ceil((action.minMaturity - bio) / Math.max(0.2, rate)));
-  return action.tooYoung || `You are too young. About ${yearsOff} year${yearsOff > 1 ? 's' : ''} yet.`;
-}
-
-function chargeAction(state, action) {
-  const c = state.character;
-  c.yearUse = c.yearUse || {};
-  c.yearUse[action.id] = (c.yearUse[action.id] || 0) + 1;
-}
-
-/**
- * The most power training may add this year. Deliberately generous - a good
- * year can still roughly double you - but finite, so no amount of clicking
- * turns a five-year-old into a planet buster.
- */
-function trainingCapForYear(state) {
-  const c = state.character;
-  const rate = trainingRate(c, { state, intensity: 1.6, placeMult: 2.5, gearMult: 2.1, mentorMult: 2 });
-  const ceiling = clamp(rate * 2.4, 0.05, 1.3);
-  return Math.max(3, Math.round(c.power * ceiling));
-}
-
-/**
- * Register power gained from training. Returns what was actually granted after
- * the yearly ceiling, so callers can report the honest number.
- */
-function grantTrainingPower(state, requested) {
-  const c = state.character;
-  if (c.yearPowerCap === undefined) c.yearPowerCap = trainingCapForYear(state);
-  if (c.yearPowerGained === undefined) c.yearPowerGained = 0;
-
-  const room = Math.max(0, c.yearPowerCap - c.yearPowerGained);
-  const granted = Math.max(0, Math.min(requested, room));
-  c.yearPowerGained += granted;
-  if (granted > 0) {
-    c.power += granted;
-    c.peakPower = Math.max(c.peakPower, c.power);
-  }
-  return { granted, capped: granted < requested, room: room - granted };
-}
-
-function trainingRoomLeft(state) {
-  const c = state.character;
-  if (c.yearPowerCap === undefined) return trainingCapForYear(state);
-  return Math.max(0, c.yearPowerCap - (c.yearPowerGained || 0));
-}
-
-/** How long an action takes, purely as flavour on the row now. */
-const COST_LABEL = { 0: 'A moment', 1: 'An afternoon', 2: 'A season', 3: 'Most of the year' };
-
-function costLabel(action) {
-  return action.cost || COST_LABEL[action.slots ?? 1] || 'A season';
-}
-  return { yearCapacity, limitFor, usedThisYear, resetYearBudget, actionBlocked, ageGate, chargeAction, trainingCapForYear, grantTrainingPower, trainingRoomLeft, COST_LABEL, costLabel };
-})();
-
-/* ==== engine/trials.js ==== */
-const __mod_engine_trials_js = (function () {
-// Trials: the small playable tests that sit behind training, learning a
-// technique, and reaching for a form. The engine defines what a trial is and
-// what a score is worth; the UI decides how it is played.
-
-const { clamp } = __mod_engine_rng_js;
-const { masteryMult, masteryDrain, masteryLabel } = __mod_engine_mastery_js;
-const { traitEffect } = __mod_data_traits_js;
-const { getTechnique, TECH_BY_ID } = __mod_data_techniques_js;
-const { getTransformation } = __mod_data_transformations_js;
-const { grantTrainingPower } = __mod_engine_economy_js;
-const { addFact } = __mod_engine_memory_js;
-const { adjust } = __mod_engine_state_js;
-const { combatPower } = __mod_engine_stats_js;
-const { numberish } = __mod_engine_text_js;
-
-const TRIAL_KINDS = {
-  timing: {
-    name: 'Focus',
-    blurb: 'Strike on the beat. The window is small and it does not wait.',
-    stat: 'technique',
-  },
-  sequence: {
-    name: 'Form',
-    blurb: 'Watch the sequence, then reproduce it exactly.',
-    stat: 'intellect',
-  },
-  endurance: {
-    name: 'Endurance',
-    blurb: 'Hold it. Keep holding it. The bar is trying to fall.',
-    stat: 'durability',
-  },
-  push: {
-    name: 'Limit',
-    blurb: 'Push, and choose when to stop. Every push is worth more and costs more.',
-    stat: 'discipline',
-  },
-  // Meditation is not a test of reflex or grit. It is a test of not doing the
-  // thing you keep doing, which needs its own shape.
-  stillness: {
-    name: 'Stillness',
-    blurb: 'Your mind will drift. Notice it and come back, without chasing it.',
-    stat: 'kiControl',
-  },
-  // A Great Ape is a transformation you are inside rather than one you use.
-  // The minigame is not about winning; it is about steering.
-  rampage: {
-    name: 'The Moon',
-    blurb: 'You are ten times the size and none of the mind. Steer what you can.',
-    stat: 'discipline',
-  },
-};
-
-/** Which trial suits which kind of work. */
-const STAT_TRIALS = {
-  strength: { kind: 'push', method: 'Weighted holds and throws until the arms give out.' },
-  speed: { kind: 'timing', method: 'Catching thrown stones blindfolded.' },
-  technique: { kind: 'sequence', method: 'Forms, drilled until the sequence is automatic.' },
-  kiControl: { kind: 'stillness', method: 'Sitting with it until the noise stops being interesting.' },
-  durability: { kind: 'endurance', method: 'Standing in it and refusing to fall over.' },
-  intellect: { kind: 'sequence', method: 'Reading, calculating, and remembering what you read.' },
-  charisma: { kind: 'sequence', method: 'Talking to people on purpose, which is its own discipline.' },
-  discipline: { kind: 'endurance', method: 'Sitting still for longer than is reasonable.' },
-};
-
-/**
- * Difficulty runs 1-5 and is set by what the trial is for and how far past
- * their current ability the character is reaching.
- */
-function startTrial(state, rng, opts = {}) {
-  const c = state.character;
-  const kind = opts.kind || 'timing';
-  const difficulty = clamp(opts.difficulty ?? 2, 1, 5);
-  const relevant = TRIAL_KINDS[kind] ? (c.stats[TRIAL_KINDS[kind].stat] || 50) : 50;
-
-  return {
-    kind,
-    difficulty,
-    purpose: opts.purpose || 'training',
-    label: opts.label || TRIAL_KINDS[kind].name,
-    blurb: opts.blurb || TRIAL_KINDS[kind].blurb,
-    payload: opts.payload || {},
-    // A high relevant stat widens the window rather than skipping the trial.
-    aptitude: clamp(relevant / 100, 0.1, 1),
-    rounds: kind === 'sequence' ? 2 + difficulty : 3,
-    seed: rng.int(1, 999999),
-  };
-}
-
-/** Score is 0-1. Everything downstream keys off it. */
-/**
- * How much easier a trial is for this character before they have touched it.
- * A genius starts ahead; a slow study starts behind.
- */
-function trialBonus(state) {
-  const c = state.character;
-  return clamp(traitEffect(c, 'trialEase') + ((c.iq || 100) - 100) / 500, -0.2, 0.3);
-}
-
-function gradeTrial(score) {
-  if (score >= 0.92) return { grade: 'perfect', mult: 1.9, text: 'Perfect. Not one wasted movement.' };
-  if (score >= 0.75) return { grade: 'strong', mult: 1.45, text: 'Clean. Better than you have managed before.' };
-  if (score >= 0.5) return { grade: 'fair', mult: 1.0, text: 'Adequate. It will do.' };
-  if (score >= 0.25) return { grade: 'poor', mult: 0.55, text: 'Sloppy. You know it as you finish.' };
-  return { grade: 'failed', mult: 0.15, text: 'That was a waste of a season.' };
-}
-
-/** Turn a played trial into consequences. */
-function resolveTrial(state, rng, trial, score) {
-  // Traits move the score before anything is judged against it.
-  score = clamp(score + trialBonus(state), 0, 1);
-  const c = state.character;
-  const result = gradeTrial(clamp(score, 0, 1));
-  const lines = [result.text];
-
-  if (trial.purpose === 'training') {
-    const stat = trial.payload.stat || 'strength';
-    const gain = Math.round(clamp(2 + trial.difficulty * result.mult, 1, 9));
-    adjust(state, { stats: { [stat]: gain }, health: -Math.round(3 + trial.difficulty) });
-    const requested = Math.round(c.power * (0.03 + trial.difficulty * 0.02) * result.mult);
-    const { granted, capped } = grantTrainingPower(state, requested);
-    lines.push(`+${gain} ${stat}. Power level up ${numberish(granted)}.`);
-    if (capped) lines.push('Your body has taken everything it can absorb this year.');
-  } else if (trial.purpose === 'technique') {
-    const tech = getTechnique(trial.payload.techId);
-    const threshold = 0.42 + trial.difficulty * 0.06 - (c.stats.discipline - 50) / 400;
-    if (score >= threshold) {
-      if (!c.techniques.includes(tech.id)) {
-        c.techniques.push(tech.id);
-        state.stats.techniquesLearned += 1;
-      }
-      adjust(state, { stats: { technique: 2, kiControl: 1 }, happiness: 10 });
-      addFact(state.memory, { type: 'technique', text: `Learned the ${tech.name}.`, year: c.age, weight: 3, tags: ['technique'] });
-      lines.push(`${tech.name}, learned. ${tech.desc}`);
-    } else {
-      adjust(state, { health: -5, happiness: -3, stats: { discipline: 1 } });
-      lines.push(`${tech.name} stays out of reach. You know what went wrong, which is something.`);
-    }
-  } else if (trial.purpose === 'form') {
-    const form = getTransformation(trial.payload.formId);
-    const threshold = 0.45 + trial.difficulty * 0.05;
-    if (score >= threshold) {
-      if (!c.transformations.includes(form.id)) c.transformations.push(form.id);
-      setMastery(state, form.id, 10);
-      adjust(state, { happiness: 20, health: -15, fame: 5 });
-      addFact(state.memory, { type: 'transformation', text: `Achieved ${form.name}.`, year: c.age, weight: 8, tags: ['transformation'] });
-      lines.push(`${form.name}. ${form.desc}`);
-    } else {
-      adjust(state, { health: -18, happiness: -6 });
-      lines.push(`You get right up against ${form.name} and no further.`);
-    }
-  } else if (trial.purpose === 'mastery') {
-    const form = getTransformation(trial.payload.formId);
-    const gain = Math.round(6 + trial.difficulty * 4 * result.mult);
-    const total = setMastery(state, form.id, gain);
-    adjust(state, { health: -8, stats: { discipline: 2 } });
-    lines.push(`${form.name}: mastery ${total}%.`);
-    if (total >= 100) lines.push('It costs you nothing to hold now. It is simply how you stand.');
-  }
-
-  return { ...result, lines, text: lines.join(' ') };
-}
-
-// ------------------------------------------------------------- mastery
-
-function getMastery(state, formId) {
-  return (state.character.formMastery && state.character.formMastery[formId]) || 0;
-}
-
-function setMastery(state, formId, delta) {
-  const c = state.character;
-  c.formMastery = c.formMastery || {};
-  c.formMastery[formId] = clamp((c.formMastery[formId] || 0) + delta, 0, 100);
-  return Math.round(c.formMastery[formId]);
-}
-
-/**
- * Mastery makes a form cheaper to hold and slightly stronger. A mastered Super
- * Saiyan is not a bigger number, it is a form you can live in.
- */
-function masteryEffect(state, formId) {
-  // One mastery curve, defined in mastery.js, so the number the screen quotes
-  // is the number the fight uses.
-  return {
-    drainMult: masteryDrain(state.character, formId),
-    powerMult: masteryMult(state.character, formId),
-    mastery: Math.round(getMastery(state, formId)),
-    label: masteryLabel(getMastery(state, formId)),
-  };
-}
-
-/** Push past a mastered form and you may end up with something of your own. */
-function inventForm(state, rng, baseFormId, name) {
-  const base = getTransformation(baseFormId);
-  if (!base) return null;
-  const c = state.character;
-  c.customForms = c.customForms || [];
-  const invented = {
-    id: 'custom_' + (c.customForms.length + 1),
-    name: name || `${c.name}'s Form`,
-    baseId: baseFormId,
-    mult: Math.round(base.mult * rng.float(1.3, 2.2) * 10) / 10,
-    drain: Math.max(1, Math.round(base.drain * 0.85)),
-    desc: 'Nobody else has this. You built it out of something that already existed and something that did not.',
-    year: state.character.birthYear + c.age,
-    taught: [],
-  };
-  c.customForms.push(invented);
-  addFact(state.memory, {
-    type: 'transformation', weight: 10, year: c.age, tags: ['transformation', 'identity'],
-    text: `Invented a transformation of their own: ${invented.name}.`,
-  });
-  return invented;
-}
-  return { TRIAL_KINDS, STAT_TRIALS, startTrial, trialBonus, gradeTrial, resolveTrial, getMastery, setMastery, masteryEffect, inventForm };
-})();
-
 /* ==== engine/events/growingup.js ==== */
 const __mod_engine_events_growingup_js = (function () {
 // The things a life teaches you whether or not you go looking.
@@ -20293,1044 +21377,6 @@ registerEvents([
     ],
   },
 ]);
-})();
-
-/* ==== engine/prologue.js ==== */
-const __mod_engine_prologue_js = (function () {
-// The first minutes.
-//
-// A life sim that opens with "Age 1: you are born" has thrown away the only
-// scene it gets for free. This builds the opening out of what was actually
-// rolled - the world, the year, the parents, the upbringing - and narrates it
-// beat by beat as it happens, including the pod and the crash for the ones who
-// were put in a pod.
-
-const { getRace, UPBRINGINGS } = __mod_data_races_js;
-const { getPlace } = __mod_data_places_js;
-const { getPlanet } = __mod_data_planets_js;
-const { eraName } = __mod_data_timeline_js;
-const { render } = __mod_engine_text_js;
-const { npcsByRelation } = __mod_engine_state_js;
-
-const WORLD_OPENERS = {
-  planet_vegeta: `{The air on Planet Vegeta is thin and tastes of iron|Planet Vegeta has one weather and it is red|`
-    + `The sky here is the colour of a healing bruise}. `
-    + `{Gravity here is ten times what most of the galaxy calls normal, and nobody who lives here has noticed|`
-    + `Everything born here is born heavy|Nothing on this world is soft, including the ground}.`,
-  earth: `{Earth. Blue, wet, and almost entirely unaware of the rest of the galaxy|`
-    + `Earth is a quiet world with a very short memory|Earth: seven billion people, none of whom look up}. `
-    + `{It is the kind of place where the strongest man alive might be a farmer and nobody would know|`
-    + `Nothing here has needed to be strong for a long time|It has been peaceful for so long that peace looks permanent}.`,
-  namek: `{Namek has three suns and no night|The sky is green and stays green|There is no darkness on Namek, only shade}. `
-    + `{The water is drinkable everywhere and there is very little to eat, which suits the people who live here|`
-    + `Everything here grows slowly and on purpose|Nobody here is in a hurry}.`,
-  frieza_79: `{Frieza No. 79 is a company world|This world has a number instead of a name|`
-    + `Somebody bought this planet, numbered it, and put a garrison on it}. `
-    + `{Everything on it belongs to somebody a long way away|The paperwork arrived before the people did}.`,
-  yardrat: `{Yardrat is small, cold, and much stranger than it looks|`
-    + `The Yardratians are not warriors and are not worried about that|Yardrat teaches things that cannot be fought}.`,
-  sadala: `{Sadala never burned. In this universe the Saiyans kept their home|`
-    + `Sadala is green in places Planet Vegeta never was}.`,
-  cereal: `{Cereal is a farming world with two moons and no army|Cereal grows things and asks nothing of anyone}.`,
-};
-
-const UPBRINGING_SCENES = {
-  saiyan_creche: [
-    `{You are not held|Nobody picks you up|There is no ceremony}. `
-      + `{You are weighed, scanned, and read out to a room|A machine reads your power level aloud and somebody writes it down|`
-      + `The number is spoken and it decides everything that comes next}.`,
-    `{The creche is a wall of pods and you are one of them|`
-      + `You spend your first year in a tank with forty others|Nobody in the room is over three years old}. `
-      + `{The lessons start before the walking does|You learn to fight before you learn to speak|`
-      + `Somebody has decided what you are for}.`,
-  ],
-  orphan_pod: [
-    `{Somebody is arguing above you and you cannot see them|There are two voices and both of them are afraid|`
-      + `Someone says your name once, very fast}.`,
-    `{You are put in something round and small|The hatch closes|Hands, then a hatch, then nothing}. `
-      + `{You do not understand what is happening. That is a mercy|Somebody's palm is flat against the glass|`
-      + `The last thing you see of the place you were born is somebody running}.`,
-    `{The pod goes up|You are thrown at the sky|Acceleration presses you flat and holds you there}. `
-      + `{Behind you, the world you were born on stops existing|`
-      + `The sky goes black and then the black goes white and then the world is not there any more|`
-      + `You are asleep before you can see what happens to it}.`,
-    `{You sleep for years|The pod feeds you and talks to you in a language you will always half-remember|`
-      + `Somewhere in the dark, the pod is teaching you things}.`,
-    `{You come down hard|The landing is not a landing|The pod comes in too fast and makes a crater out of a hillside}. `
-      + `{[place]. Somebody hears it come down|You are found by [finder], who has never seen anything like you|`
-      + `[finder] gets to the crater before anybody official does}.`,
-  ],
-  animals: [
-    `{Nobody comes|You cry for a long time and nothing answers|The night is very loud and none of it is people}.`,
-    `{Something comes and does not eat you|Something warm lies down next to you and stays|`
-      + `You are picked up by the back of the neck and carried}. `
-      + `{You will not learn what people are for another nine years|`
-      + `Language happens to you late and badly|Nobody teaches you to speak because nobody there can}.`,
-  ],
-  self_raised: [
-    `{The people who made you are not here|You work out fairly early that nobody is coming|`
-      + `You are alone in the specific way that only very small children manage}.`,
-    `{You survive it|You learn what to eat by getting it wrong|`
-      + `Everything you know, you found out the hard way and kept}.`,
-  ],
-  lab: [
-    `{You wake up|There is no birth. There is a first time you were switched on|`
-      + `The first thing you experience is a room with the lights already on}.`,
-    `{Somebody is writing on a clipboard and does not look up|`
-      + `There is glass between you and everybody who has ever spoken to you|`
-      + `You have a designation before you have a name}.`,
-  ],
-  foster: [
-    `{Somebody who did not have to takes you in|You are handed over on a doorstep and taken inside|`
-      + `Two strangers decide, quickly and without much discussion, that you are theirs now}.`,
-  ],
-  exile: [
-    `{Your family is leaving and nobody will say why|You are born on the way out|`
-      + `The first place you remember is not the place you are from}.`,
-  ],
-  conquered: [
-    `{There are soldiers on the road the year you are born|Somebody else's flag is already up|`
-      + `You are born into an occupation and it is simply how the world is}.`,
-  ],
-  royal: [
-    `{There is a room full of people waiting for you to be born|`
-      + `The announcement is made before you are cleaned up|Somebody bows at you before you can hold your head up}.`,
-  ],
-  temple: [
-    `{You are born somewhere very quiet|The building you are born in is older than the language spoken in it|`
-      + `Somebody rings something once, a long way off}.`,
-  ],
-};
-
-const DEFAULT_SCENE = [
-  `{You are born|It happens the way it happens to everybody|`
-    + `The first thing that happens to you is the only thing that happens to everybody}. `
-    + `{Somebody counts your fingers|Somebody says you look like somebody|You are loud about it}.`,
-];
-
-/**
- * The opening beats, as log entries. Called once, at the start of the first
- * year, so the player watches their own origin happen instead of reading a
- * summary of it.
- */
-function prologueEntries(state, rng) {
-  const c = state.character;
-  const race = getRace(c.raceId);
-  const place = getPlace(c.placeId);
-  const planet = getPlanet(place.planet);
-  const parents = npcsByRelation(state, 'parent');
-  const upbringing = UPBRINGINGS.find((u) => u.id === c.upbringingId);
-
-  const slots = {
-    name: c.name,
-    place: place.name,
-    planet: planet ? planet.name : place.name,
-    year: String(c.birthYear),
-    era: eraName(c.birthYear),
-    race: race.name,
-    mother: parents.find((p) => p.sex === 'female')?.name || 'your mother',
-    father: parents.find((p) => p.sex === 'male')?.name || 'your father',
-    finder: parents[0]?.name || 'a farmer',
-  };
-
-  const out = [];
-  const say = (tpl, kind = 'prologue') => {
-    const text = render(tpl, slots, rng).replace(/\s+/g, ' ').trim();
-    if (text) out.push({ kind, text });
-  };
-
-  // 1. Where. A pod baby is not from where they landed, so the world they
-  // ended up on is introduced after the crash rather than before the launch.
-  const arrived = c.upbringingId === 'orphan_pod';
-  const opener = WORLD_OPENERS[place.planet];
-  if (arrived) say(`{Somewhere, a [race] is born|A [race] is born, and the record of where does not survive|`
-    + `You are born [race] on a world nobody will bother to write down}. `
-    + `{Age [year]|It is Age [year]}. {[era]|What history will call [era]}.`, 'scene');
-  else if (opener) say(opener, 'scene');
-  else {
-    say(`{[place]|[place], in [era]|[place]. Age [year]}. `
-      + `{It is not a famous world|Nothing important has ever happened here|`
-      + `Nobody outside this system could find it on a chart}.`, 'scene');
-  }
-
-  // 2. When.
-  if (!arrived) {
-    say(`{Age [year]|It is Age [year]|The year is [year]}. {[era]|This is [era]|History will call this [era]}.`, 'scene');
-  }
-
-  // 3. What happens.
-  const scene = UPBRINGING_SCENES[c.upbringingId] || DEFAULT_SCENE;
-  for (const beat of scene) say(beat);
-
-  // The world you woke up on, introduced now that you are on it.
-  if (arrived && opener) say(opener, 'scene');
-  else if (arrived) say(`{[place]. It will do|[place], which is where you are from now|You are from [place] now}.`, 'scene');
-
-  // 4. Who is there.
-  if (parents.length && !['orphan_pod', 'animals', 'self_raised', 'lab'].includes(c.upbringingId)) {
-    say(parents.length > 1
-      ? `{[mother] and [father] are there|Both of them are there|[father] is not much use and [mother] does not comment on it}. `
-        + `{They name you [name]|The name is [name]. Somebody in the family had it first|You are [name], apparently}.`
-      : `{[mother] is there. Nobody else is|There is one person in the room and she is holding you|`
-        + `It is just the two of you and it stays that way}. {You are [name]|She names you [name]}.`);
-  } else {
-    say(`{Whoever names you, names you [name]|The name comes later. It is [name]|`
-      + `You end up called [name], and nobody remembers deciding it}.`);
-  }
-
-  // 5. What you are, in the only terms this world understands.
-  say(`{You are [race]|Whatever else happens, you are [race]|`
-    + `[race], which will decide more about your life than anything you choose}. `
-    + (c.power > 400
-      ? `{Somebody points a scouter at you and stops talking|The number is high enough that it gets repeated|`
-        + `Whatever reads you reads you twice}.`
-      : c.power < 5
-        ? `{Nothing about you registers as remarkable|If anybody measures you, they do not mention the result|`
-          + `You are, by every measure available, nothing much}.`
-        : `{Nobody measures you. There is no reason to|It does not occur to anyone to check|`
-          + `You are a baby, and nobody scans babies here}.`));
-
-  if (upbringing && upbringing.blurb) {
-    out.push({ kind: 'origin', text: `${upbringing.name}. ${upbringing.blurb}` });
-  }
-  return out;
-}
-  return { prologueEntries };
-})();
-
-/* ==== engine/lifecycle.js ==== */
-const __mod_engine_lifecycle_js = (function () {
-// The turn loop. A year is: passive drift, then a short queue of generated
-// events the player answers one at a time, then the bookkeeping.
-
-const { clamp } = __mod_engine_rng_js;
-const { render } = __mod_engine_text_js;
-const { generateEvent, resolveChoice, buildContext, directorBias, forceEvent } = __mod_engine_generator_js;
-const { addFact, recallSummary } = __mod_engine_memory_js;
-const { relationshipTick, progressNpc, makeNpc, makeChild } = __mod_engine_npc_js;
-const { ladderFor } = __mod_data_transformations_js;
-const { TECHNIQUES } = __mod_data_techniques_js;
-const { getRace, hasPerk, maturity, raceHasTail } = __mod_data_races_js;
-const { getPlace } = __mod_data_places_js;
-const { TIMELINE, eraName, worldPowerBaseline } = __mod_data_timeline_js;
-const { agingDecay, naturalDeathChance, combatPower, powerTier, kiMaxFor, lifeExpectancy, zenkaiBoost, STAT_KEYS, equippedWeapon } = __mod_engine_stats_js;
-const { prologueEntries } = __mod_engine_prologue_js;
-const { getRng, saveRng, currentYear, livingNpcs, adjust, place: placeOf, characterSummary } = __mod_engine_state_js;
-const { getCareer } = __mod_data_jobs_js;
-const { resetYearBudget } = __mod_engine_economy_js;
-const { rollMarketYear } = __mod_engine_market_js;
-const { resolveTrial } = __mod_engine_trials_js;
-const { getItem } = __mod_data_items_js;
-const { checkEarnedTraits, traitEffect } = __mod_data_traits_js;
-
-const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
-
-const BUILD_ORDER = ['small', 'wiry', 'lean', 'balanced', 'stocky', 'massive'];
-
-/**
- * The body changes because of what you did to it, not because you dragged a
- * slider. Children grow, training thickens you, starvation and long illness
- * strip you down, and after seventy everybody shrinks.
- */
-function driftBody(state, rng) {
-  const c = state.character;
-  const a = c.appearance;
-  if (!a) return null;
-  const bio = maturity(c);
-  const race = getRace(c.raceId);
-  let note = null;
-
-  // Growing up. Adult height is reached around biological eighteen.
-  if (bio < 18) {
-    const adult = a.adultHeight || (a.adultHeight = a.heightCm);
-    const childScale = 0.34 + 0.66 * Math.min(1, bio / 18);
-    a.heightCm = Math.round(adult * childScale);
-    a.weightKg = Math.max(3, Math.round((a.adultWeight || (a.adultWeight = a.weightKg)) * Math.pow(childScale, 2.4)));
-  } else if (bio > 70 && rng.chance(0.35)) {
-    a.heightCm = Math.max(90, a.heightCm - 1);
-  }
-
-  // What the year was spent on shows up in the frame.
-  const idx = BUILD_ORDER.indexOf(a.buildShape);
-  if (idx >= 0 && bio >= 14) {
-    const trained = c.flags.trainedHardThisYear;
-    const starved = c.vitals.health < 35;
-    if (trained && c.stats.strength > 65 && idx < BUILD_ORDER.length - 1 && rng.chance(0.06)) {
-      a.buildShape = BUILD_ORDER[idx + 1];
-      a.weightKg = Math.round(a.weightKg * 1.06);
-      note = 'You have put on real muscle this year. Your clothes do not fit.';
-    } else if (starved && idx > 0 && rng.chance(0.12)) {
-      a.buildShape = BUILD_ORDER[idx - 1];
-      a.weightKg = Math.round(a.weightKg * 0.93);
-      note = 'You have lost weight you could not afford to lose.';
-    } else if (trained && rng.chance(0.25)) {
-      a.weightKg = Math.min(Math.round(a.weightKg * 1.01) + 1, 400);
-    } else if (!trained && bio > 40 && rng.chance(0.18)) {
-      a.weightKg = Math.round(a.weightKg * 1.012) + 1;
-    }
-  }
-
-  // Long lives go grey, unless the species does not.
-  if (!a.wentGrey && bio > 55 && race.agingRate >= 0.7 && rng.chance(0.08)
-    && !['white', 'silver'].includes(a.hairColour)) {
-    a.wentGrey = true;
-    a.hairColour = rng.chance(0.5) ? 'silver' : 'white';
-    note = 'You went grey this year, all at once, the way it happens.';
-  }
-  return note;
-}
-
-/**
- * Somebody in your life died. One place that decides how you hear about it,
- * because the old code told you about deaths from old age and said nothing at
- * all about the rest - people were dying and the only way to find out was to
- * open the relationships list.
- */
-function mournNpc(state, rng, npc, cause) {
-  const c = state.character;
-  if (!npc || npc.mourned) return null;
-  npc.mourned = true;
-  npc.alive = false;
-  npc.deadSince = npc.deadSince || currentYear(state);
-  npc.causeOfDeath = npc.causeOfDeath || cause || 'unknown';
-
-  const bond = (npc.closeness || 0) + (npc.trust ?? 30) * 0.4 - (npc.tension || 0) * 0.5;
-  const kin = ['parent', 'child', 'spouse', 'sibling'].includes(npc.relation);
-  // Whether you got there. Close family and people you saw often, mostly.
-  const present = rng.chance(clamp(0.12 + (kin ? 0.45 : 0) + bond / 260, 0, 0.85));
-
-  let text;
-  let hit = 0;
-  if (kin && present) {
-    text = rng.pick([
-      `${npc.name} died this year. You were there for it. They knew you were there, right up until they did not.`,
-      `You got to ${npc.name} in time. Not in time to do anything, but in time. They were not on their own.`,
-      `${npc.name} went in the small hours with your hand in theirs and nothing useful said by either of you.`,
-    ]);
-    hit = -26;
-  } else if (kin) {
-    text = rng.pick([
-      `${npc.name} died this year. You were somewhere else. You found out days later.`,
-      `Word about ${npc.name} reaches you long after there was anything to be done. You were not there.`,
-      `${npc.name} is gone. Nobody could reach you in time, and you will think about that.`,
-    ]);
-    hit = -32;
-  } else if (bond > 55) {
-    text = present
-      ? `${npc.name} died this year, and you were with them.`
-      : `${npc.name} died this year. Somebody tells you in passing, as though you already knew.`;
-    hit = -18;
-  } else if ((npc.tension || 0) > 55) {
-    text = rng.pick([
-      `${npc.name} is dead. You are not sure what you feel and you do not like any of the options.`,
-      `Word comes that ${npc.name} died. That is one argument that will not be finished.`,
-    ]);
-    hit = -4;
-  } else {
-    text = `${npc.name} died this year.`;
-    hit = -6;
-  }
-
-  if (present) npc.youWereThere = true;
-  addFact(state.memory, {
-    type: 'death',
-    text: `${npc.name} died${present ? '. You were there' : ''}. ${npc.causeOfDeath}.`,
-    year: c.age, weight: kin ? 9 : 5, subject: npc.id, tags: ['loss'],
-  });
-  adjust(state, { happiness: hit });
-  if (kin || bond > 60) c.flags.grief = true;
-  if (kin && !present) c.flags.was_not_there = true;
-  return { kind: 'loss', text };
-}
-
-const DEATH_CAUSES = {
-  age: ['Old age', 'The body simply stopped', 'Died in their sleep'],
-  health: ['Injuries that never healed', 'A body used past its limits', 'Complications, finally'],
-};
-
-/** Begin a new year. Returns the first event, or null if nothing happens. */
-/**
- * The birth scene, as its own log entry for the birth year - called once,
- * right after character creation and before the player has aged up at all,
- * so it reads as what it is (Age 0) rather than getting folded into
- * whatever the first real year happens to produce.
- */
-function openingLogEntry(state, rng) {
-  const c = state.character;
-  state.world.flags.prologue_done = true;
-  return { year: c.birthYear, age: 0, entries: prologueEntries(state, rng) };
-}
-
-function startYear(state) {
-  const rng = getRng(state);
-  const c = state.character;
-
-  // Settle last year's damage BEFORE anything heals. Spending a year at zero
-  // health used to be free because the new year's recovery ran first.
-  if (!c.inAfterlife && c.alive && c.vitals.health <= 0) {
-    const survived = resolveCriticalCondition(state, rng);
-    if (!survived) {
-      state.turn = {
-        year: currentYear(state), age: c.age, count: 0, used: [], queue: [],
-        index: 0, entries: [{ kind: 'death', text: `${c.death.cause}. You are ${c.age}.` }], done: true,
-      };
-      state.log.push({ year: state.turn.year, age: state.turn.age, entries: state.turn.entries.slice() });
-      saveRng(state, rng);
-      return null;
-    }
-  }
-
-  c.age += 1;
-  state.stats.yearsPlayed++;
-  if (c.inAfterlife) c.yearsInAfterlife = (c.yearsInAfterlife || 0) + 1;
-  resetYearBudget(state);
-  // The shelf turns over on wherever you actually are. Everywhere else
-  // rotates lazily, the first time you are there to see it.
-  if (!c.inAfterlife) rollMarketYear(state, rng, getPlace(c.placeId).planet);
-
-  const entries = [];
-  // The opening. Told once, as it happens, before anything else does.
-  if (c.age === 1 && !state.world.flags.prologue_done) {
-    state.world.flags.prologue_done = true;
-    entries.push(...prologueEntries(state, rng));
-  }
-  // The body changes before anything else happens to it this year.
-  const bodyNote = driftBody(state, rng);
-  if (bodyNote) entries.push({ kind: 'body', text: bodyNote });
-  entries.push(...passiveYear(state, rng));
-
-  // Career bookkeeping
-  if (c.career) {
-    c.career.years += 1;
-    const career = getCareer(c.career.id);
-    const rung = career.rungs[c.career.rung];
-    if (rung) adjust(state, { zeni: Math.round(rung.pay * 0.15) });
-  }
-
-  // Passive income and item effects
-  for (const id of c.items) {
-    const item = getItem(id);
-    if (item && item.passive && item.passive.income) adjust(state, { zeni: item.passive.income });
-  }
-  if (c.techniques.includes('senzu_farming') && rng.chance(0.7)) c.senzu += 1;
-
-  const revivalNews = tickRevivalEffort(state, rng);
-  if (revivalNews) entries.push(revivalNews);
-
-  // NPCs live their own year.
-  for (const npc of Object.values(state.npcs)) {
-    if (npc.alive) {
-      relationshipTick(rng, npc, c);
-      const news = progressNpc(rng, npc, currentYear(state), {
-        techniquePool: TECHNIQUE_POOL,
-        formsFor: (n) => ladderFor(n.raceId),
-      });
-      // You only hear about the lives of people you actually keep up with.
-      if (news && (npc.closeness > 45 || ['rival', 'nemesis', 'child', 'spouse', 'student'].includes(npc.relation))) {
-        entries.push({ kind: 'news', text: news });
-      }
-      const npcRace = getRace(npc.raceId);
-      const npcSpan = npc.isCanon ? Infinity : (npcRace.lifespan[0] + npcRace.lifespan[1]) / 2;
-      if (npc.age > npcSpan * 0.8 && rng.chance(0.02 + (npc.age - npcSpan * 0.8) * 0.01)) {
-        const note = mournNpc(state, rng, npc, 'Old age');
-        if (note) entries.push(note);
-      }
-    }
-  }
-
-  // What the life has made of you. Earned traits arrive when their conditions
-  // are met, announced or not asked for.
-  for (const t of checkEarnedTraits(state)) {
-    entries.push({ kind: 'trait', text: `${t.line} (${t.name})` });
-    addFact(state.memory, {
-      type: 'trait', text: `Became ${t.name.toLowerCase()}.`, year: c.age,
-      weight: 6, tags: ['trait'],
-    });
-  }
-
-  // Anybody who died some other way and was never announced gets announced
-  // now. Nobody in your life disappears silently.
-  for (const npc of Object.values(state.npcs)) {
-    if (npc.alive || npc.mourned) continue;
-    const note = mournNpc(state, rng, npc, npc.causeOfDeath);
-    if (note) entries.push(note);
-  }
-
-  // How many events this year: busier lives generate more.
-  let count = rng.weighted([1, 2, 3], (n) => [30, 50, 20][n - 1]);
-  if (c.age < 4) count = 1;
-
-  state.turn = {
-    year: currentYear(state),
-    age: c.age,
-    count,
-    used: [],
-    queue: [],
-    index: 0,
-    entries,
-    done: false,
-  };
-
-  // A canon saga is not a news bulletin: if one is due this year it is the
-  // first thing that happens to you, and you get to decide what you do about it.
-  const due = TIMELINE.filter((t) => t.year === currentYear(state)
-    && !state.world.resolved.includes(t.id)
-    && !(t.cancelIf && state.world.flags[t.cancelIf]));
-  for (let i = 0; i < due.length; i++) {
-    // Two sagas landing in the same year both get played, not summarised.
-    const forced = forceEvent(state, rng, 'timeline_event', { evId: due[i].id });
-    if (!forced) break;
-    state.turn.queue.push(forced);
-    state.turn.count = Math.max(state.turn.count, state.turn.queue.length + 1);
-    // Mark it claimed so the next forceEvent picks the following one.
-    state.world.resolved.push(due[i].id);
-  }
-  // The choice handlers push the id again; keep the list unique.
-  state.world.resolved = Array.from(new Set(state.world.resolved));
-
-  // Events are generated one at a time rather than all at once, so the second
-  // event of a year sees what the first one did to you.
-  if (!state.turn.queue.length) {
-    const first = nextGenerated(state, rng);
-    if (first) state.turn.queue.push(first);
-    else state.turn.done = true;
-  }
-
-  saveRng(state, rng);
-  if (state.turn.done) finishYear(state);
-  return currentEvent(state);
-}
-
-/** Generate the next event for this year against current state. */
-function nextGenerated(state, rng) {
-  const t = state.turn;
-  if (!t || t.used.length >= t.count) return null;
-  const ctx = buildContext(state, rng);
-  const bias = directorBias(state, ctx);
-  const event = generateEvent(state, rng, { bias, exclude: t.used });
-  if (!event) return null;
-  t.used.push(event.templateId);
-  return event;
-}
-
-/**
- * Splice a model-authored event into this year's queue. Called by the UI after
- * an async AI request resolves, so generation never blocks the turn.
- */
-function insertEvent(state, event) {
-  const t = state.turn;
-  if (!t || t.done || !event) return currentEvent(state);
-  // If an event is already on screen, queue this one behind it. Splicing at the
-  // current index would swap the card the player is reading out from under the
-  // answer they are about to give.
-  const at = t.queue[t.index] ? t.index + 1 : t.index;
-  t.queue.splice(at, 0, event);
-  t.count += 1;
-  return t.queue[t.index];
-}
-
-/** How many events are still owed this year, for the UI's progress hint. */
-function eventsRemaining(state) {
-  const t = state.turn;
-  if (!t || t.done) return 0;
-  return Math.max(0, t.count - t.used.length) + (t.queue.length - t.index - 1);
-}
-
-/** Replace the text of the most recent log entry, for AI re-narration. */
-function renarrateLast(state, text) {
-  const t = state.turn;
-  if (!t || !t.entries.length || !text) return;
-  for (let i = t.entries.length - 1; i >= 0; i--) {
-    if (t.entries[i].kind === 'event') {
-      t.entries[i].outcome = text;
-      t.entries[i].aiNarrated = true;
-      return;
-    }
-  }
-}
-
-function currentEvent(state) {
-  const t = state.turn;
-  if (!t || t.done) return null;
-  return t.queue[t.index] || null;
-}
-
-/** Answer the current event. Returns the next event, or null when the year ends. */
-function choose(state, choiceId, params = null) {
-  const t = state.turn;
-  if (!t || t.done) return null;
-  const event = t.queue[t.index];
-  if (!event) {
-    t.done = true;
-    finishYear(state);
-    return null;
-  }
-
-  const rng = getRng(state);
-  const result = resolveChoice(state, rng, event, choiceId, params);
-
-  // A choice can call the next card directly - a dragon that is still in the
-  // sky, a menu that needs a second step. It goes in right behind this one.
-  if (result.followUp) {
-    const next = forceEvent(state, rng, result.followUp, result.followUpSlots || {});
-    if (next) {
-      t.queue.splice(t.index + 1, 0, next);
-      t.count += 1;
-    }
-  }
-  saveRng(state, rng);
-
-  const entry = {
-    kind: 'event',
-    title: event.title,
-    text: event.text,
-    outcome: result.text,
-    tags: event.tags,
-    templateId: event.templateId,
-  };
-  t.entries.push(entry);
-
-  // A choice that starts a fight parks the spec here; the UI picks it up and
-  // hands control to the battle screen before the year continues.
-  if (result.battle) t.pendingBattle = result.battle;
-  // A tournament is the same handover, one level up: the bracket takes over
-  // and gives the year back when the draw is done with you.
-  if (result.tournament) t.pendingTournament = result.tournament;
-  if (result.survival) t.pendingSurvival = result.survival;
-  // Some choices are a thing you have to actually do, not a thing you pick.
-  // Headless callers have nobody to play it, so it is scored off the stat the
-  // trial tests and resolved on the spot.
-  if (result.trial) {
-    if (state.autoBattle) {
-      const rng2 = getRng(state);
-      const score = clamp(result.trial.aptitude * 0.8 + rng2.float(-0.15, 0.35), 0, 1);
-      const played = resolveTrial(state, rng2, result.trial, score);
-      saveRng(state, rng2);
-      entry.outcome = [entry.outcome, played.text].filter(Boolean).join(' ');
-    } else {
-      t.pendingTrial = result.trial;
-    }
-  }
-
-  for (const f of result.facts || []) {
-    addFact(state.memory, { type: f.type || 'event', text: f.text, year: state.character.age, weight: f.weight ?? 1, tags: f.tags || [] });
-  }
-
-  if (result.outcome && result.outcome.death) {
-    die(state, result.outcome.death);
-    t.done = true;
-    return null;
-  }
-  if (result.outcome && result.outcome.reincarnate) {
-    state.character.flags.reincarnated = true;
-    t.done = true;
-    finishYear(state);
-    return null;
-  }
-
-  t.index += 1;
-  if (t.index >= t.queue.length) {
-    const rng2 = getRng(state);
-    const more = nextGenerated(state, rng2);
-    saveRng(state, rng2);
-    if (more) {
-      t.queue.push(more);
-    } else {
-      t.done = true;
-      finishYear(state);
-      return null;
-    }
-  }
-  return t.queue[t.index];
-}
-
-/** Skip the rest of the year's events (used by "let it happen"). */
-function skipRemaining(state) {
-  const t = state.turn;
-  let guard = 0;
-  while (t && !t.done && guard++ < 20) {
-    const ev = t.queue[t.index];
-    if (!ev) break;
-    choose(state, ev.choices.length ? ev.choices[ev.choices.length - 1].id : 'c0');
-  }
-}
-
-function passiveYear(state, rng) {
-  const c = state.character;
-  const race = getRace(c.raceId);
-  const entries = [];
-
-  // Physical drift
-  const decay = agingDecay(c);
-  if (decay > 0) {
-    for (const k of ['strength', 'speed', 'durability']) {
-      c.stats[k] = clamp(c.stats[k] - rng.float(0, decay), 1, 100);
-    }
-    if (decay > 1.5) c.stats.technique = clamp(c.stats.technique + rng.float(0, 0.4), 1, 100);
-  }
-
-  // Recovery and mood
-  const heal = (c.inAfterlife ? 40 : (24 + c.stats.durability * 0.28 + (hasPerk(c, 'regeneration') ? 30 : 0)))
-    * traitEffect(c, 'healRate');
-  adjust(state, { health: heal, ki: 999 });
-  const moodDrift = rng.float(-4, 4)
-    + (livingNpcs(state).filter((n) => n.closeness > 55).length * 0.8)
-    - (c.career && c.career.performance < 30 ? 3 : 0);
-  adjust(state, { happiness: moodDrift });
-
-  c.vitals.kiMax = kiMaxFor(c);
-
-  // Hard training accrues toward forms that ask for it.
-  if (c.flags.trainedHardThisYear) {
-    c.flags.hardTrainingYears = (c.flags.hardTrainingYears || 0) + 1;
-    // Nobody is born knowing how to fight with a weapon, and nobody gets to
-    // just decide they are equally dangerous with one. Training while
-    // actually carrying one, year over year, is what earns it.
-    if (equippedWeapon(c) && (c.flags.weaponTrainingYears || 0) < 99) {
-      c.flags.weaponTrainingYears = (c.flags.weaponTrainingYears || 0) + 1;
-      if (c.flags.weaponTrainingYears >= 2 && c.fightingStyle === 'martial_arts') {
-        c.fightingStyle = 'both';
-      }
-    }
-    c.flags.trainedHardThisYear = false;
-  }
-  // Living in Super Saiyan is how it becomes effortless.
-  if (c.transformations.includes('ssj') && (c.flags.ssjYears || 0) < 99) {
-    c.flags.ssjYears = (c.flags.ssjYears || 0) + 1;
-    if (c.flags.ssjYears >= 3 && c.stats.discipline > 55) c.flags.ssj_mastery = true;
-  }
-  // Living in Blue is how the flicker finally stops.
-  if (c.transformations.includes('ssb') && (c.flags.ssbYears || 0) < 99) {
-    c.flags.ssbYears = (c.flags.ssbYears || 0) + 1;
-    if (c.flags.ssbYears >= 3 && c.stats.discipline > 60 && c.stats.kiControl > 85) c.flags.ssb_mastery = true;
-  }
-
-  return entries;
-}
-
-function finishYear(state) {
-  const rng = getRng(state);
-  const c = state.character;
-
-  // Fire the world timeline even if the player ignored it.
-  for (const ev of TIMELINE) {
-    if (ev.year === currentYear(state) && !state.world.resolved.includes(ev.id)
-      && !(ev.cancelIf && state.world.flags[ev.cancelIf])) {
-      state.world.resolved.push(ev.id);
-      state.turn.entries.push({ kind: 'world', text: `${ev.name}. ${ev.blurb}` });
-      addFact(state.memory, { type: 'history', text: `${ev.name} happened.`, year: c.age, weight: 3, tags: ['history'] });
-    }
-  }
-
-  // Natural death, unless a wish says otherwise.
-  if (!c.inAfterlife && c.alive && !c.flags.immortal && rng.chance(naturalDeathChance(c))) {
-    die(state, rng.pick(DEATH_CAUSES.age));
-  } else if (!c.inAfterlife && c.alive && c.vitals.health <= 0) {
-    const survived = resolveCriticalCondition(state, rng);
-    if (survived && state.turn) {
-      state.turn.entries.push({ kind: 'survival', text: survived });
-    }
-  }
-
-  state.log.push({
-    year: state.turn.year,
-    age: state.turn.age,
-    entries: state.turn.entries.slice(),
-  });
-  if (state.log.length > 200) state.log.shift();
-
-  saveRng(state, rng);
-}
-
-/**
- * Health at or below zero. A senzu saves you, a tough species usually pulls
- * through, and otherwise it is a real coin flip. Returns the survival line, or
- * false when it killed you.
- */
-function resolveCriticalCondition(state, rng) {
-  const c = state.character;
-  if (c.senzu > 0) {
-    c.senzu -= 1;
-    c.vitals.health = 100;
-    return 'You were carrying a senzu bean. It is gone now, and you are not.';
-  }
-  const tough = hasPerk(c, 'regeneration') || hasPerk(c, 'hardToKill');
-  const durability = (c.stats.durability || 50) / 100;
-  const survivalOdds = (tough ? 0.62 : 0.38) + durability * 0.2;
-  if (rng.chance(survivalOdds)) {
-    c.vitals.health = tough ? 30 : 12;
-    // Coming back from this is exactly the state a Saiyan grows out of.
-    c.flags.brink_of_death = true;
-    c.flags.grief = c.flags.grief || false;
-    if (hasPerk(c, 'zenkai') || hasPerk(c, 'zenkaiWeak')) {
-      const gain = zenkaiBoost(c, rng, 1.2);
-      return `You should not have survived that. Your body rebuilds heavier. Power level up ${Math.round(gain).toLocaleString('en-US')}.`;
-    }
-    return 'You should not have survived that. You did, and it will cost you later.';
-  }
-  die(state, rng.pick(DEATH_CAUSES.health));
-  return false;
-}
-
-function die(state, cause) {
-  const c = state.character;
-  if (!c.alive && c.inAfterlife) return;
-  c.alive = false;
-  c.death = { cause, year: currentYear(state), age: c.age };
-  state.stats.deaths = (state.stats.deaths || 0) + 1;
-  c.flags.died_once = true;
-  addFact(state.memory, {
-    type: 'death', text: `Died at ${c.age}. ${cause}.`, year: c.age, weight: 10, tags: ['death'],
-  });
-  if (state.turn) {
-    state.turn.entries.push({ kind: 'death', text: `${cause}. You are ${c.age}.` });
-    state.turn.done = true;
-    state.log.push({ year: state.turn.year, age: state.turn.age, entries: state.turn.entries.slice() });
-  }
-}
-
-/**
- * Gathering seven Dragon Balls takes years, not an afternoon. Whoever down
- * there cares enough to try makes progress each year according to how capable
- * and how motivated they are, and the player hears about it at milestones
- * rather than every single year.
- */
-function tickRevivalEffort(state, rng) {
-  const c = state.character;
-  if (!c.inAfterlife) return null;
-  // A death accepted as final is final. Nobody starts a scavenger hunt for
-  // somebody who told them not to.
-  if (c.flags.permadeath) return null;
-  const world = state.world;
-
-  if (!world.revival) {
-    const backers = Object.values(state.npcs).filter((n) => n.alive && n.closeness > 48);
-    if (!backers.length) return null;
-    // Not everyone who liked you will spend six years on a scavenger hunt.
-    const committed = backers.filter((n) => rng.chance(0.18 + n.closeness / 260));
-    if (!committed.length) return null;
-    world.revival = {
-      backers: committed.map((n) => n.id),
-      progress: 0,
-      announced: [],
-      startedYear: currentYear(state),
-    };
-    return {
-      kind: 'revival',
-      text: `${committed.map((n) => n.name).join(' and ')} ${committed.length > 1 ? 'have' : 'has'} started looking for the Dragon Balls. It will take years.`,
-    };
-  }
-
-  const backers = world.revival.backers.map((id) => state.npcs[id]).filter((n) => n && n.alive);
-  if (!backers.length) {
-    const line = 'Whoever was gathering the Dragon Balls for you has stopped.';
-    world.revival = null;
-    return { kind: 'revival', text: line };
-  }
-
-  let rate = 0;
-  for (const n of backers) {
-    const smart = ((n.stats && n.stats.intellect) || 45) / 100;
-    const rich = n.isCanon ? 0.5 : 0.2;
-    const radar = n.hasRadar ? 0.5 : 0;
-    rate += 6 + smart * 10 + rich * 10 + radar * 10;
-  }
-  rate *= rng.float(0.6, 1.3);
-  world.revival.progress = Math.min(100, world.revival.progress + rate);
-
-  const p = world.revival.progress;
-  for (const mark of [35, 70]) {
-    if (p >= mark && !world.revival.announced.includes(mark)) {
-      world.revival.announced.push(mark);
-      return {
-        kind: 'revival',
-        text: mark === 35
-          ? `Word comes up from below: ${backers[0].name} has two or three of them.`
-          : `${backers[0].name} is close. Five, maybe six.`,
-      };
-    }
-  }
-  return null;
-}
-
-/**
- * Let a death be final. No wish will ever be spent on this life again - the
- * Other World is closed to leaving, not just to visiting. This does not end
- * the save: a living child can still be played as afterward (that is a
- * separate, later choice), but this specific person is not coming back, and
- * the people who were close to them feel it now rather than never noticing.
- */
-function acceptPermanentDeath(state) {
-  const c = state.character;
-  c.flags.permadeath = true;
-  state.world.revival = null;
-  const info = epitaph(state);
-  for (const n of livingNpcs(state).filter((x) => x.closeness > 40)) {
-    n.mood = 'grieving';
-  }
-  addFact(state.memory, {
-    type: 'death', text: `${c.name}'s death was accepted as final: ${info.title}.`,
-    year: c.age, weight: 10, tags: ['death', 'legend'],
-  });
-  state.world.legends = state.world.legends || [];
-  state.world.legends.push({
-    name: c.name, raceId: c.raceId, title: info.title, score: info.score,
-    cause: c.death ? c.death.cause : 'unknown', year: currentYear(state),
-  });
-  if (state.world.legends.length > 20) state.world.legends = state.world.legends.slice(-20);
-  return info;
-}
-
-/** Bring a dead character back to the world of the living, properly. */
-function reviveCharacter(state) {
-  const c = state.character;
-  if (c.flags.permadeath) return state;
-  c.inAfterlife = false;
-  c.alive = true;
-  c.death = null;
-  c.yearsInAfterlife = 0;
-  c.keptBody = false;
-  c.flags.judged = false;
-  c.flags.died_once = true;
-  c.vitals.health = 100;
-  c.vitals.ki = c.vitals.kiMax;
-  if (['check_in', 'snake_way', 'kai_planet', 'hell', 'otherworld_arena', 'sacred_world'].includes(c.placeId)) {
-    c.placeId = state.world.deathPlaceId || 'east_city';
-  }
-  state.world.revival = null;
-  return state;
-}
-
-/** Move a dead character into the Other World and keep playing. */
-function enterAfterlife(state) {
-  const c = state.character;
-  state.world.deathPlaceId = c.placeId;
-  c.inAfterlife = true;
-  c.alive = true;
-  c.vitals.health = 100;
-  c.vitals.happiness = clamp(c.vitals.happiness, 20, 100);
-  c.placeId = 'check_in';
-  c.yearsInAfterlife = 0;
-  c.flags.judged = false;
-  addFact(state.memory, { type: 'afterlife', text: 'Arrived in the Other World.', year: c.age, weight: 6, tags: ['death'] });
-  return state;
-}
-
-/** The scored obituary shown when a life truly ends. */
-function epitaph(state) {
-  const c = state.character;
-  const race = getRace(c.raceId);
-  const power = combatPower(c);
-  const score = Math.round(
-    Math.log10(Math.max(10, power)) * 90
-    + c.fame * 3
-    + Math.abs(c.karma) * 1.2
-    + c.techniques.length * 12
-    + c.transformations.length * 45
-    + state.world.tournamentWins * 120
-    + state.stats.wins * 4
-    + livingNpcs(state).filter((n) => n.closeness > 60).length * 20
-    + (state.world.divergences.length * 200)
-  );
-
-  const titles = [
-    [12000, 'Legend of the Age'], [7000, 'World Shaker'], [4000, 'Named in the Histories'],
-    [2200, 'A Fighter People Remember'], [1200, 'Locally Famous'], [600, 'Respected'],
-    [0, 'Lived and Died'],
-  ];
-  const title = titles.find(([n]) => score >= n)[1];
-
-  return {
-    name: c.name,
-    race: race.name,
-    age: c.age,
-    year: currentYear(state),
-    cause: c.death ? c.death.cause : 'Still going',
-    power: Math.round(power),
-    tier: powerTier(power),
-    score,
-    title,
-    fame: Math.round(c.fame),
-    karma: Math.round(c.karma),
-    zeni: Math.round(c.zeni),
-    techniques: c.techniques.length,
-    forms: c.transformations.length,
-    children: livingNpcs(state).filter((n) => n.relation === 'child').length,
-    divergences: state.world.divergences.length,
-    highlights: recallSummary(state.memory, 8),
-  };
-}
-
-/** Continue as one of your children. The world keeps everything it learned. */
-function beginLegacy(state) {
-  const kids = Object.values(state.npcs).filter((n) => n.relation === 'child' && n.alive);
-  if (!kids.length) return null;
-  const rng = getRng(state);
-  const heir = kids.sort((a, b) => (b.inheritedPower || b.power) - (a.inheritedPower || a.power))[0];
-  const old = state.character;
-
-  const next = {
-    ...old,
-    name: heir.name,
-    raceId: heir.raceId,
-    sex: heir.sex,
-    age: heir.age,
-    birthYear: heir.birthYear,
-    alive: true,
-    inAfterlife: false,
-    death: null,
-    yearsInAfterlife: 0,
-    stats: { ...heir.stats },
-    power: Math.max(1, heir.inheritedPower || heir.power),
-    peakPower: Math.max(1, heir.inheritedPower || heir.power),
-    zenkaiCount: 0,
-    vitals: { health: 100, happiness: 70, ki: 60, kiMax: 60 },
-    techniques: (heir.techniques || []).slice(),
-    transformations: [],
-    activeForm: null,
-    signature: null,
-    mentors: [],
-    career: null,
-    items: old.items.slice(),
-    senzu: old.senzu,
-    zeni: Math.round(old.zeni * 0.6),
-    fame: Math.round(old.fame * 0.3),
-    karma: 0,
-    flags: { heir_of: old.name },
-    traits: [],
-    achievements: [],
-    tail: raceHasTail(heir.raceId),
-  };
-  next.vitals.kiMax = kiMaxFor(next);
-  next.vitals.ki = next.vitals.kiMax;
-  next.lifeExpectancy = lifeExpectancy(next, rng);
-
-  delete state.npcs[heir.id];
-  // The previous character becomes a memory in the world.
-  state.npcs['legacy_' + old.name] = {
-    id: 'legacy_' + old.name, name: old.name, raceId: old.raceId, canonId: null,
-    sex: old.sex, age: old.age, birthYear: old.birthYear, alive: false,
-    deadSince: currentYear(state), causeOfDeath: old.death ? old.death.cause : 'unknown',
-    title: 'Your parent', epithet: null, stats: old.stats, power: old.power,
-    relation: 'parent', closeness: 70, respect: 70, tension: 0, romance: 0,
-    tags: ['legend'], goal: null, placeId: old.placeId, metAt: heir.birthYear,
-    metHow: 'family', history: [], techniques: old.techniques.slice(), isCanon: false,
-  };
-
-  state.legacy = {
-    generation: (state.legacy ? state.legacy.generation : 1) + 1,
-    ancestors: [...(state.legacy ? state.legacy.ancestors : []), { name: old.name, age: old.age, power: old.power, score: epitaph(state).score }],
-  };
-  state.character = next;
-  state.turn = null;
-  addFact(state.memory, {
-    type: 'legacy', weight: 8, year: next.age,
-    text: `${next.name} takes up where ${old.name} left off.`, tags: ['legacy'],
-  });
-  saveRng(state, rng);
-  return state;
-}
-  return { mournNpc, openingLogEntry, startYear, insertEvent, eventsRemaining, renarrateLast, currentEvent, choose, skipRemaining, die, tickRevivalEffort, acceptPermanentDeath, reviveCharacter, enterAfterlife, epitaph, beginLegacy };
 })();
 
 /* ==== engine/events/afterlife.js ==== */
