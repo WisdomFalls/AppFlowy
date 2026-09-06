@@ -281,7 +281,7 @@ function renderHud() {
     pills.appendChild(p);
   };
   const cap = yearCapacity(GAME);
-  if (cap < 0.75) add('Year', cap < 0.5 ? 'Small' : 'Short', 'gold');
+  if (cap < 0.75) add('Actions this year', cap < 0.5 ? 'Few' : 'Limited', 'gold');
   // The money in your hand is the money of the world you are standing on.
   const localCur = currencyFor(getPlace(c.placeId).planet);
   add(localCur.short, Math.round(balance(c, localCur.id)).toLocaleString('en-US'));

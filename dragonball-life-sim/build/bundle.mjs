@@ -118,7 +118,9 @@ function main() {
   const css = readFileSync(resolve(SRC, 'ui', 'styles.css'), 'utf8');
   const shell = readFileSync(resolve(SRC, 'ui', 'shell.html'), 'utf8');
 
-  const page = `<title>Dragon Ball: Mortal Coil</title>
+  const page = `<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dragon Ball: Mortal Coil</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;600;800&display=swap">
 <style>
 ${css}
