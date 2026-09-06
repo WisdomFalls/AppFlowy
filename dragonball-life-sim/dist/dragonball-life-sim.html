@@ -7477,14 +7477,80 @@ function makeFamily(rng, character, year) {
   return out;
 }
 
+const ANDROID_KIN = ['android', 'bioandroid', 'half_android', 'frost_android'];
+const FROST_KIN = ['frostdemon', 'half_frostkin', 'frost_android'];
+const isEarthlingLike = (r) => r === 'earthling' || r === 'halfsaiyan';
+
+// Which root bloodlines a hybrid bucket actually stands for, so the game can
+// tell when that blood has thinned past the point of mattering. There is no
+// "quarter-Saiyan" race asset to promote a diluted halfsaiyan into - the
+// bucket stays the same, but a lineage this thin reads as plain earthling.
+const HYBRID_ROOTS = {
+  halfsaiyan: ['saiyan'],
+  half_android: ['android', 'bioandroid'],
+  half_frostkin: ['frostdemon'],
+  frost_android: ['frostdemon', 'android', 'bioandroid'],
+};
+const DILUTION_FLOOR = 0.12;
+
+// Anyone who is already a hybrid bucket but has no .lineage on record - the
+// player who picked "Half-Saiyan" at creation, a canon character, an NPC
+// generated straight into the role - is assumed to be the ordinary half-and-
+// half version of that bucket, not a "pure" root species of its own.
+const DEFAULT_LINEAGE = {
+  halfsaiyan: { saiyan: 0.5, earthling: 0.5 },
+  half_android: { android: 0.5, earthling: 0.5 },
+  half_frostkin: { frostdemon: 0.5, earthling: 0.5 },
+  frost_android: { frostdemon: 0.5, android: 0.5 },
+};
+
+/** A person's ancestry as fractions of root species, defaulting to "entirely
+ * whatever raceId they are" (or the usual split, for a known hybrid bucket)
+ * for anyone who has never had it computed. */
+function lineageOf(person) {
+  if (person && person.lineage) return person.lineage;
+  const r = person && person.raceId;
+  if (!r) return {};
+  return DEFAULT_LINEAGE[r] || { [r]: 1 };
+}
+
+/** Blend two lineages half-and-half. Fractions of more than two root species
+ * survive the merge, which is how "more than one, in fractions" happens. */
+function mixLineage(a, b) {
+  const out = {};
+  for (const [race, frac] of Object.entries(lineageOf(a))) out[race] = (out[race] || 0) + frac / 2;
+  for (const [race, frac] of Object.entries(lineageOf(b))) out[race] = (out[race] || 0) + frac / 2;
+  return out;
+}
+
+/** How a fraction of ancestry is said out loud. */
+function lineageLabel(fraction) {
+  if (fraction >= 0.98) return 'full';
+  if (fraction >= 0.85) return 'nearly full';
+  if (fraction >= 0.6) return 'mostly';
+  if (fraction >= 0.375) return 'half';
+  if (fraction >= 0.2) return 'a quarter';
+  if (fraction >= 0.1) return 'an eighth';
+  if (fraction >= 0.04) return 'a sixteenth';
+  return 'a trace of';
+}
+
+/** A readable line for a mixed lineage, or null for anyone who is just one thing. */
+function describeLineage(lineage) {
+  if (!lineage) return null;
+  const entries = Object.entries(lineage).filter(([, f]) => f > 0.02).sort((x, y) => y[1] - x[1]);
+  if (entries.length <= 1) return null;
+  return entries.map(([race, frac]) => {
+    const r = getRace(race);
+    return `${lineageLabel(frac)} ${r ? r.name : race}`;
+  }).join(', ');
+}
+
 /** A child of the player and a partner, inheriting race and a slice of stats. */
 function makeChild(rng, character, partner, year) {
   let raceId = character.raceId;
   const p = partner ? partner.raceId : character.raceId;
   const mix = [character.raceId, p].sort().join('+');
-  const ANDROID_KIN = ['android', 'bioandroid', 'half_android', 'frost_android'];
-  const FROST_KIN = ['frostdemon', 'half_frostkin', 'frost_android'];
-  const isEarthlingLike = (r) => r === 'earthling' || r === 'halfsaiyan';
   if (mix === 'earthling+saiyan' || mix === 'earthling+halfsaiyan' || mix === 'halfsaiyan+saiyan') raceId = 'halfsaiyan';
   else if (character.raceId === 'halfsaiyan' && p === 'halfsaiyan') raceId = 'halfsaiyan';
   else if (isEarthlingLike(character.raceId) && ANDROID_KIN.includes(p)) raceId = 'half_android';
@@ -7495,10 +7561,22 @@ function makeChild(rng, character, partner, year) {
   else if (FROST_KIN.includes(p) && ANDROID_KIN.includes(character.raceId)) raceId = 'frost_android';
   else if (p && rng.chance(0.5)) raceId = p;
 
+  // Blood keeps thinning generation over generation even where the bucket
+  // above cannot express it: a halfsaiyan grandchild of a halfsaiyan and an
+  // earthling is a quarter-Saiyan, not the same half-and-half mix as their
+  // parent, and enough further dilution finally reads as plain earthling.
+  const lineage = mixLineage(character, partner);
+  const roots = HYBRID_ROOTS[raceId];
+  if (roots) {
+    const kept = roots.reduce((sum, r) => sum + (lineage[r] || 0), 0);
+    if (kept < DILUTION_FLOOR) raceId = 'earthling';
+  }
+
   const child = makeNpc(rng, {
     raceId, relation: 'child', year, age: 0,
     closeness: 70, respect: 40, tension: 0, placeId: character.placeId, metHow: 'family',
   });
+  child.lineage = lineage;
   // Children inherit potential, which is why the second generation outclasses the first.
   const parentPower = Math.max(1, character.power);
   child.inheritedPower = Math.max(1, Math.round(Math.pow(parentPower, 0.42) * rng.float(0.8, 2.4)));
@@ -7865,7 +7943,7 @@ function learnAbout(npc, amount = 1) {
   npc.knowledge = Math.min(4, (npc.knowledge || 0) + amount);
   return npc.knowledge;
 }
-  return { RELATIONS, resetNpcCounter, nextNpcId, makeAppearance, makeNpc, makeCanonNpc, makeFamily, makeChild, driftAppearance, scarNpc, progressNpc, relationshipTick, spouseFlavor, weddingLine, courtLine, birthLine, dossier, describeNpc, relationLabel, bondScore, bondLabel, romanceLabel, KNOWLEDGE_LEVELS, knowledgeLabel, learnAbout };
+  return { RELATIONS, resetNpcCounter, nextNpcId, makeAppearance, makeNpc, makeCanonNpc, makeFamily, lineageLabel, describeLineage, makeChild, driftAppearance, scarNpc, progressNpc, relationshipTick, spouseFlavor, weddingLine, courtLine, birthLine, dossier, describeNpc, relationLabel, bondScore, bondLabel, romanceLabel, KNOWLEDGE_LEVELS, knowledgeLabel, learnAbout };
 })();
 
 /* ==== engine/state.js ==== */
@@ -14022,7 +14100,7 @@ const __mod_engine_events_social_js = (function () {
 
 const { registerEvents, pickNpc, npcSlot } = __mod_engine_generator_js;
 const { apply, fact, stranger, relate, thread, bumpThread, trainYear, powerLine, meetCanon, canonHere, odds, killNpc, findNpc, bondScore, scaledFoePower } = __mod_engine_events_helpers_js;
-const { makeChild, describeNpc, relationLabel, weddingLine, birthLine } = __mod_engine_npc_js;
+const { makeChild, describeNpc, relationLabel, weddingLine, birthLine, describeLineage } = __mod_engine_npc_js;
 const { addNpc } = __mod_engine_state_js;
 const { getRace } = __mod_data_races_js;
 const { numberish } = __mod_engine_text_js;
@@ -14200,7 +14278,8 @@ registerEvents([
         fact(c2, `${child.name} was born.`, { type: 'child', weight: 7, subject: child.id, tags: ['family'] });
         thread(c2, 'parenthood', child.id, { title: `Raising ${child.name}`, heat: 60, maxStage: 5 });
         const reaction = partner ? birthLine(partner, c2.rng) : `{Small, loud, and already stronger than they should be|They have your eyes and somebody else's temper|You hold them and something in your chest reorganises itself}.`;
-        return { text: `${child.name}. ${reaction} ${child.inheritedPower > c2.character.power ? `{Something in them is already bigger than you|Their potential is frightening|You can feel it, and it is enormous}.` : ``}`, changes };
+        const blood = describeLineage(child.lineage);
+        return { text: `${child.name}. ${reaction} ${child.inheritedPower > c2.character.power ? `{Something in them is already bigger than you|Their potential is frightening|You can feel it, and it is enormous}.` : ``}${blood ? ` By blood, ${child.name} is ${blood}.` : ''}`, changes };
       } },
       { id: 'unready', label: 'You are not built for this', effect: (c2, sl) => {
         const partner = sl.partnerId ? findNpc(c2.state, sl.partnerId) : null;
@@ -24566,7 +24645,7 @@ const { render } = __mod_engine_text_js;
 const { adjust, findNpc, currentYear, addNpc } = __mod_engine_state_js;
 const { addFact } = __mod_engine_memory_js;
 const { combatPower, weaponAttackBonus } = __mod_engine_stats_js;
-const { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild, weddingLine, courtLine, birthLine } = __mod_engine_npc_js;
+const { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild, weddingLine, courtLine, birthLine, describeLineage } = __mod_engine_npc_js;
 const { npcBag } = __mod_engine_inventory_js;
 
 /** An NPC's power as it actually shows up in a fight - their base, plus
@@ -24811,9 +24890,11 @@ const SOCIAL_ACTIONS = [
       chargeSocial(npc, { closeness: 12, romance: 8 });
       adjust(state, { happiness: 22, zeni: -rng.int(5000, 60000) });
       note(state, `${child.name} was born.`, { type: 'child', subject: child.id, tags: ['family'], weight: 7 });
+      const blood = describeLineage(child.lineage);
       return {
         text: `${child.name}. ${birthLine(npc, rng)}`
-          + (child.inheritedPower > state.character.power ? ' Something in them is already bigger than you.' : ''),
+          + (child.inheritedPower > state.character.power ? ' Something in them is already bigger than you.' : '')
+          + (blood ? ` By blood, ${child.name} is ${blood}.` : ''),
       };
     },
   },

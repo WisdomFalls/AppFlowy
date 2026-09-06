@@ -13,7 +13,7 @@ import { adjust, findNpc, currentYear, addNpc } from './state.js';
 import { addFact } from './memory.js';
 import { combatPower, weaponAttackBonus } from './stats.js';
 import { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild,
-  weddingLine, courtLine, birthLine } from './npc.js';
+  weddingLine, courtLine, birthLine, describeLineage } from './npc.js';
 import { npcBag } from './inventory.js';
 
 /** An NPC's power as it actually shows up in a fight - their base, plus
@@ -258,9 +258,11 @@ export const SOCIAL_ACTIONS = [
       chargeSocial(npc, { closeness: 12, romance: 8 });
       adjust(state, { happiness: 22, zeni: -rng.int(5000, 60000) });
       note(state, `${child.name} was born.`, { type: 'child', subject: child.id, tags: ['family'], weight: 7 });
+      const blood = describeLineage(child.lineage);
       return {
         text: `${child.name}. ${birthLine(npc, rng)}`
-          + (child.inheritedPower > state.character.power ? ' Something in them is already bigger than you.' : ''),
+          + (child.inheritedPower > state.character.power ? ' Something in them is already bigger than you.' : '')
+          + (blood ? ` By blood, ${child.name} is ${blood}.` : ''),
       };
     },
   },

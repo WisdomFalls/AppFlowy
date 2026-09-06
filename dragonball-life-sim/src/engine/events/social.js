@@ -4,7 +4,7 @@
 import { registerEvents, pickNpc, npcSlot } from '../generator.js';
 import { apply, fact, stranger, relate, thread, bumpThread, trainYear, powerLine,
   meetCanon, canonHere, odds, killNpc, findNpc, bondScore, scaledFoePower } from './helpers.js';
-import { makeChild, describeNpc, relationLabel, weddingLine, birthLine } from '../npc.js';
+import { makeChild, describeNpc, relationLabel, weddingLine, birthLine, describeLineage } from '../npc.js';
 import { addNpc } from '../state.js';
 import { getRace } from '../../data/races.js';
 import { numberish } from '../text.js';
@@ -182,7 +182,8 @@ registerEvents([
         fact(c2, `${child.name} was born.`, { type: 'child', weight: 7, subject: child.id, tags: ['family'] });
         thread(c2, 'parenthood', child.id, { title: `Raising ${child.name}`, heat: 60, maxStage: 5 });
         const reaction = partner ? birthLine(partner, c2.rng) : `{Small, loud, and already stronger than they should be|They have your eyes and somebody else's temper|You hold them and something in your chest reorganises itself}.`;
-        return { text: `${child.name}. ${reaction} ${child.inheritedPower > c2.character.power ? `{Something in them is already bigger than you|Their potential is frightening|You can feel it, and it is enormous}.` : ``}`, changes };
+        const blood = describeLineage(child.lineage);
+        return { text: `${child.name}. ${reaction} ${child.inheritedPower > c2.character.power ? `{Something in them is already bigger than you|Their potential is frightening|You can feel it, and it is enormous}.` : ``}${blood ? ` By blood, ${child.name} is ${blood}.` : ''}`, changes };
       } },
       { id: 'unready', label: 'You are not built for this', effect: (c2, sl) => {
         const partner = sl.partnerId ? findNpc(c2.state, sl.partnerId) : null;
