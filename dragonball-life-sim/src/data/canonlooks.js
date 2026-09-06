@@ -71,9 +71,9 @@ export const CANON_LOOKS = {
   },
   trunks: {
     sex: 'male', skin: 'light', face: 'square', eyeShape: 'sharp', eyeColour: 'blue',
-    hairStyle: 'bob', hairColour: 'lavender', outfit: 'armour_saiyan', buildShape: 'lean',
+    hairStyle: 'middle_part', hairColour: 'lavender', outfit: 'armour_saiyan', buildShape: 'lean',
     accessories: [], marks: [],
-    eras: [{ from: 780, outfit: 'casual', hairStyle: 'cropped' }],
+    eras: [{ from: 780, outfit: 'casual' }],
   },
   piccolo: {
     sex: 'male', skin: 'green', face: 'angular', eyeShape: 'sharp', eyeColour: 'black',
@@ -315,7 +315,7 @@ export const CANON_LOOKS = {
   },
   future_trunks: {
     sex: 'male', skin: 'light', face: 'square', eyeShape: 'sharp', eyeColour: 'blue',
-    hairStyle: 'bob', hairColour: 'lavender', outfit: 'coat', buildShape: 'lean',
+    hairStyle: 'middle_part', hairColour: 'lavender', outfit: 'coat', buildShape: 'lean',
     accessories: ['sword'], marks: [],
   },
   pan: {

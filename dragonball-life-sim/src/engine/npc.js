@@ -62,7 +62,7 @@ const GOALS = ['to be the strongest', 'to find their missing sibling', 'to open 
 
 /** A brand new person, appropriate to the era and place. */
 const NPC_HAIR = ['spiked', 'wild', 'long', 'ponytail', 'bob', 'cropped', 'mohawk', 'bald', 'braid', 'topknot',
-  'flame', 'pigtails', 'afro', 'buzz', 'sidepart'];
+  'flame', 'pigtails', 'afro', 'buzz', 'sidepart', 'middle_part'];
 const NPC_MARKS = ['scar_cheek', 'scar_brow', 'burn_arm', 'dots', 'tattoo_arm', 'birthmark', 'missing_ear'];
 const NPC_ACC = ['headband', 'bandana', 'glasses', 'earring', 'necklace', 'wristbands', 'scarf', 'hat', 'cape'];
 
@@ -391,7 +391,7 @@ const FOCUS_PATHS = ['power', 'technique', 'family', 'money', 'peace'];
  * Returns a line of news when something happened worth hearing about.
  */
 const DRIFT_HAIR = ['spiked', 'wild', 'long', 'ponytail', 'bob', 'cropped', 'mohawk', 'bald', 'braid', 'topknot',
-  'flame', 'pigtails', 'afro', 'buzz', 'sidepart'];
+  'flame', 'pigtails', 'afro', 'buzz', 'sidepart', 'middle_part'];
 
 /**
  * People change how they look. Not often, and mostly the ones who care: a new

@@ -18,6 +18,7 @@ export const HAIR_STYLES = [
   { id: 'afro', name: 'Afro' },
   { id: 'buzz', name: 'Buzzed' },
   { id: 'sidepart', name: 'Neat side-part' },
+  { id: 'middle_part', name: 'Middle part' },
 ];
 
 export const HAIR_COLOURS = [
@@ -279,6 +280,10 @@ function hairBackPath(style, headTop, cx, headR, headH) {
     case 'bob':
       return `M${L - 3} ${y} Q${sk.cx} ${sk.top - 4} ${R + 3} ${y}
         L${R + 4} ${y + 40} L${L - 4} ${y + 40} Z`;
+    case 'middle_part':
+      // A little volume past the ears, shorter than a full bob.
+      return `M${L - 2} ${y} Q${sk.cx} ${sk.top - 4} ${R + 2} ${y}
+        L${R + 3} ${y + 26} L${L - 3} ${y + 26} Z`;
     case 'pigtails': {
       // Gathered at each temple rather than the crown, and falling either side.
       const left = `M${L + 2} ${sk.temple - 6} Q${L - 9} ${sk.temple - 2} ${L - 11} ${sk.temple + 16}
@@ -388,6 +393,21 @@ function hairPath(style, headTop, cx, headR, headH) {
       // grin) so the lower side reads as a longer fringe, not a bar drawn
       // across the eyebrows.
       return domePath(sk, 2.5, 2, 6);
+    case 'middle_part': {
+      // A clean centre part swept to both sides - Trunks, not a forward
+      // widow's peak like 'flame'. The dip at the very centre sits above
+      // the dome's own hairline so the part actually reads as a part
+      // instead of just a straight fringe.
+      const L = sk.left - 1;
+      const R = sk.right + 1;
+      return `M${sk.cx} ${sk.brow - 4}
+        Q${L} ${sk.top} ${L} ${sk.temple - 4}
+        L${L + 9} ${sk.brow + 7}
+        Q${sk.cx - 5} ${sk.brow - 1} ${sk.cx} ${sk.brow - 5}
+        Q${sk.cx + 5} ${sk.brow - 1} ${R - 9} ${sk.brow + 7}
+        L${R} ${sk.temple - 4}
+        Q${R} ${sk.top} ${sk.cx} ${sk.brow - 4} Z`;
+    }
     default:
       return '';
   }
