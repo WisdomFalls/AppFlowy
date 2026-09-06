@@ -176,6 +176,24 @@ export function createGame(creation, seedInput) {
   character.vitals.stamina = character.vitals.staminaMax;
   character.lifeExpectancy = lifeExpectancy(character, rng);
 
+  // A body at birth is not a body at eighteen. Without this, height and
+  // weight show full adult figures for the entire first year, since
+  // driftBody() (which does this same scaling) does not run until the
+  // player's first age-up. adultHeight/adultWeight are cached now, in the
+  // same shape driftBody() expects, so growth continues from the real
+  // adult figure rather than from this shrunk starting point.
+  {
+    const bio = maturity(character);
+    if (bio < 18) {
+      const a = character.appearance;
+      const scale = 0.34 + 0.66 * Math.min(1, bio / 18);
+      a.adultHeight = a.heightCm;
+      a.adultWeight = a.weightKg;
+      a.heightCm = Math.round(a.adultHeight * scale);
+      a.weightKg = Math.max(3, Math.round(a.adultWeight * Math.pow(scale, 2.4)));
+    }
+  }
+
   const state = {
     version: SAVE_VERSION,
     seed,

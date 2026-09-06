@@ -8,7 +8,7 @@ import {
   availableActions, runAction, actionOptions, Rng,
   initSampling, improviseEvent, narrateOutcome, backendName, getApiKey, setApiKey, errorCopy,
   interpretWish,
-  eventsRemaining,
+  eventsRemaining, openingLogEntry,
   save, load, listSaves, clearSlot, exportString, importString,
 } from '../game.js';
 import { RACES, getRace, UPBRINGINGS, TEMPERAMENTS, BODY_TYPES } from '../data/races.js';
@@ -2533,6 +2533,9 @@ function startGame() {
     placeId: DRAFT.placeId,
     look: DRAFT.look,
   }, seed || undefined);
+  const rng = getRng(GAME);
+  GAME.log.push(openingLogEntry(GAME, rng));
+  saveRng(GAME, rng);
   autosave();
   showPlay();
   flash(`${GAME.character.name} is born on ${getPlace(GAME.character.placeId).name}.`);

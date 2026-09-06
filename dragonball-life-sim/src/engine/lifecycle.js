@@ -147,6 +147,18 @@ const DEATH_CAUSES = {
 };
 
 /** Begin a new year. Returns the first event, or null if nothing happens. */
+/**
+ * The birth scene, as its own log entry for the birth year - called once,
+ * right after character creation and before the player has aged up at all,
+ * so it reads as what it is (Age 0) rather than getting folded into
+ * whatever the first real year happens to produce.
+ */
+export function openingLogEntry(state, rng) {
+  const c = state.character;
+  state.world.flags.prologue_done = true;
+  return { year: c.birthYear, age: 0, entries: prologueEntries(state, rng) };
+}
+
 export function startYear(state) {
   const rng = getRng(state);
   const c = state.character;

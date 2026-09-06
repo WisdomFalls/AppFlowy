@@ -7441,6 +7441,24 @@ function createGame(creation, seedInput) {
   character.vitals.stamina = character.vitals.staminaMax;
   character.lifeExpectancy = lifeExpectancy(character, rng);
 
+  // A body at birth is not a body at eighteen. Without this, height and
+  // weight show full adult figures for the entire first year, since
+  // driftBody() (which does this same scaling) does not run until the
+  // player's first age-up. adultHeight/adultWeight are cached now, in the
+  // same shape driftBody() expects, so growth continues from the real
+  // adult figure rather than from this shrunk starting point.
+  {
+    const bio = maturity(character);
+    if (bio < 18) {
+      const a = character.appearance;
+      const scale = 0.34 + 0.66 * Math.min(1, bio / 18);
+      a.adultHeight = a.heightCm;
+      a.adultWeight = a.weightKg;
+      a.heightCm = Math.round(a.adultHeight * scale);
+      a.weightKg = Math.max(3, Math.round(a.adultWeight * Math.pow(scale, 2.4)));
+    }
+  }
+
   const state = {
     version: SAVE_VERSION,
     seed,
@@ -20307,6 +20325,18 @@ const DEATH_CAUSES = {
 };
 
 /** Begin a new year. Returns the first event, or null if nothing happens. */
+/**
+ * The birth scene, as its own log entry for the birth year - called once,
+ * right after character creation and before the player has aged up at all,
+ * so it reads as what it is (Age 0) rather than getting folded into
+ * whatever the first real year happens to produce.
+ */
+function openingLogEntry(state, rng) {
+  const c = state.character;
+  state.world.flags.prologue_done = true;
+  return { year: c.birthYear, age: 0, entries: prologueEntries(state, rng) };
+}
+
 function startYear(state) {
   const rng = getRng(state);
   const c = state.character;
@@ -20930,7 +20960,7 @@ function beginLegacy(state) {
   saveRng(state, rng);
   return state;
 }
-  return { mournNpc, startYear, insertEvent, eventsRemaining, renarrateLast, currentEvent, choose, skipRemaining, die, tickRevivalEffort, reviveCharacter, enterAfterlife, epitaph, beginLegacy };
+  return { mournNpc, openingLogEntry, startYear, insertEvent, eventsRemaining, renarrateLast, currentEvent, choose, skipRemaining, die, tickRevivalEffort, reviveCharacter, enterAfterlife, epitaph, beginLegacy };
 })();
 
 /* ==== engine/events/afterlife.js ==== */
@@ -23891,14 +23921,14 @@ const __mod_game_js = (function () {
 
 
 const { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext } = __mod_engine_state_js;
-const { startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort } = __mod_engine_lifecycle_js;
+const { startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort, openingLogEntry } = __mod_engine_lifecycle_js;
 const { initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish, PRESETS } = __mod_engine_ai_js;
 const { save, load, listSaves, clearSlot, exportString, importString } = __mod_engine_save_js;
 const { allTemplates } = __mod_engine_generator_js;
 const { ladderStatus, nearbyForms, unlockableForms } = __mod_engine_progression_js;
 const { Rng, Rng: RngClass } = __mod_engine_rng_js;
 const { ACTIONS, availableActions, runAction, actionOptions } = __mod_engine_events_actions_js;
-  return { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort, initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish, PRESETS, save, load, listSaves, clearSlot, exportString, importString, allTemplates, ladderStatus, nearbyForms, unlockableForms, Rng, ACTIONS, availableActions, runAction, actionOptions };
+  return { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort, openingLogEntry, initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish, PRESETS, save, load, listSaves, clearSlot, exportString, importString, allTemplates, ladderStatus, nearbyForms, unlockableForms, Rng, ACTIONS, availableActions, runAction, actionOptions };
 })();
 
 /* ==== engine/social.js ==== */
@@ -25052,7 +25082,7 @@ const __mod_ui_app_js = (function () {
 // UI controller. Vanilla DOM, one render pass per change - the simulation is
 // the interesting part, so the interface stays boring on purpose.
 
-const { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, insertEvent, renarrateLast, skipRemaining, ladderStatus, nearbyForms, availableActions, runAction, actionOptions, Rng, initSampling, improviseEvent, narrateOutcome, backendName, getApiKey, setApiKey, errorCopy, interpretWish, eventsRemaining, save, load, listSaves, clearSlot, exportString, importString } = __mod_game_js;
+const { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, insertEvent, renarrateLast, skipRemaining, ladderStatus, nearbyForms, availableActions, runAction, actionOptions, Rng, initSampling, improviseEvent, narrateOutcome, backendName, getApiKey, setApiKey, errorCopy, interpretWish, eventsRemaining, openingLogEntry, save, load, listSaves, clearSlot, exportString, importString } = __mod_game_js;
 const { RACES, getRace, UPBRINGINGS, TEMPERAMENTS, BODY_TYPES } = __mod_data_races_js;
 const { PLACES, getPlace } = __mod_data_places_js;
 const { APPEARANCE } = __mod_engine_state_js;
@@ -27567,6 +27597,9 @@ function startGame() {
     placeId: DRAFT.placeId,
     look: DRAFT.look,
   }, seed || undefined);
+  const rng = getRng(GAME);
+  GAME.log.push(openingLogEntry(GAME, rng));
+  saveRng(GAME, rng);
   autosave();
   showPlay();
   flash(`${GAME.character.name} is born on ${getPlace(GAME.character.placeId).name}.`);
