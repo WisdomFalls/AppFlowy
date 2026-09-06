@@ -7,6 +7,7 @@
 // you permanently.
 
 import { clamp } from './rng.js';
+import { limitFor } from './economy.js';
 import { render } from './text.js';
 import { adjust, findNpc, currentYear, addNpc } from './state.js';
 import { addFact } from './memory.js';
@@ -374,11 +375,14 @@ export function npcActions(state, npc) {
     if (!ok) continue;
     const key = `social:${action.id}:${npc.id}`;
     const used = (state.character.yearUse && state.character.yearUse[key]) || 0;
-    const slots = action.slots ?? 1;
+    const limit = limitFor(state, action);
     let blocked = null;
-    if (used >= (action.maxPerYear ?? 99)) blocked = 'Already done this year.';
-    else if ((state.character.slotsLeft ?? 0) < slots) blocked = 'No time left this year.';
-    out.push({ ...action, blocked, used, key });
+    if (used >= limit) {
+      blocked = limit === 1
+        ? `Once a year with ${npc.name}, and you have had it.`
+        : `${limit} a year with ${npc.name}. You have used ${used}.`;
+    }
+    out.push({ ...action, blocked, used, limit, key });
   }
   return out;
 }
@@ -391,11 +395,9 @@ export function runNpcAction(state, rng, npcId, actionId) {
 
   const key = `social:${action.id}:${npc.id}`;
   const used = (state.character.yearUse && state.character.yearUse[key]) || 0;
-  if (used >= (action.maxPerYear ?? 99)) return { text: 'Already done this year.', refused: true };
-  const slots = action.slots ?? 1;
-  if ((state.character.slotsLeft ?? 0) < slots) return { text: 'No time left this year.', refused: true };
-
-  state.character.slotsLeft -= slots;
+  if (used >= limitFor(state, action)) {
+    return { text: `Not again this year, not with ${npc.name}.`, refused: true };
+  }
   state.character.yearUse = state.character.yearUse || {};
   state.character.yearUse[key] = used + 1;
 

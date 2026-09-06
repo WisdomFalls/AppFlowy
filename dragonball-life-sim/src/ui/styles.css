@@ -713,3 +713,6 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
 .choice.speak .choice-label { color: var(--gold); }
 .speak-box { margin-top: 12px; }
 .speak-box textarea { resize: vertical; }
+
+.row-count { font-family: var(--font-mono); font-weight: 800; font-size: 13px; color: var(--gi); }
+.row-when { font-family: var(--font-mono); font-size: 9.5px; color: var(--ink-3); letter-spacing: .06em; }

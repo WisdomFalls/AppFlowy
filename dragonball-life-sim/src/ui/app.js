@@ -27,9 +27,10 @@ import { npcActions, runNpcAction } from '../engine/social.js';
 import { scoreReplyLocally, applyReply, impressionLabel } from '../engine/dialogue.js';
 import { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } from '../engine/ai.js';
 import { numberish, zeni } from '../engine/text.js';
+import { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSense } from '../engine/perception.js';
 import { getRng, saveRng } from '../engine/state.js';
 import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } from '../engine/battle.js';
-import { slotsLeft, slotsMax, costLabel } from '../engine/economy.js';
+import { costLabel, limitFor, usedThisYear, yearCapacity } from '../engine/economy.js';
 import { ballsHeld, ballManifest, pingSquare, GRID } from '../engine/dragonballs.js';
 import { resolveTrial, getMastery } from '../engine/trials.js';
 import {
@@ -156,7 +157,7 @@ function renderCreation() {
 
   const sexes = $('opt-sex');
   sexes.innerHTML = '';
-  for (const sx of [['female', 'Female'], ['male', 'Male'], ['nonbinary', 'Non-binary']]) {
+  for (const sx of [['female', 'Female'], ['male', 'Male']]) {
     const b = el('button', 'opt' + (DRAFT.sex === sx[0] ? ' on' : ''), sx[1]);
     b.type = 'button';
     b.addEventListener('click', () => { DRAFT.sex = sx[0]; renderCreation(); });
@@ -239,8 +240,8 @@ function renderHud() {
     p.innerHTML = `${label} <b>${value}</b>`;
     pills.appendChild(p);
   };
-  const left = slotsLeft(GAME);
-  add('Year', `${left}/${slotsMax(GAME)}`, left === 0 ? 'bad' : left <= 1 ? 'gold' : 'good');
+  const cap = yearCapacity(GAME);
+  if (cap < 0.75) add('Year', cap < 0.5 ? 'Small' : 'Short', 'gold');
   add('Zeni', zeni(c.zeni).replace(' Zeni', ''));
   add('Fame', Math.round(c.fame));
   add('Karma', Math.round(c.karma), c.karma > 20 ? 'good' : c.karma < -20 ? 'bad' : '');
@@ -531,13 +532,14 @@ async function requestAiEvent(replace) {
 // ---------------------------------------------------------------- panels
 
 function panelActivities() {
-  const left = slotsLeft(GAME);
-  const { body } = sheetShell('Activities', `${left} of ${slotsMax(GAME)} left this year`);
-  if (left === 0) {
-    body.appendChild(el('p', 'row-note', 'The year is spent. Age up to get another one.'));
+  const actionsAll = availableActions(GAME);
+  const openCount = actionsAll.filter((a) => !a.blocked).length;
+  const { body } = sheetShell('Activities', `${openCount} still open this year`);
+  if (!openCount) {
+    body.appendChild(el('p', 'row-note', 'Everything you can do this year, you have done. Age up.'));
   }
   const groups = { body: 'Body', mind: 'Mind', power: 'Power', social: 'People', world: 'World' };
-  const actions = availableActions(GAME);
+  const actions = actionsAll;
 
   for (const [key, label] of Object.entries(groups)) {
     const inGroup = actions.filter((a) => a.cat === key);
@@ -552,10 +554,11 @@ function panelActivities() {
       main.appendChild(el('div', 'row-note', action.blocked || action.desc));
       b.appendChild(main);
       const cost = el('div', 'row-value');
-      cost.textContent = action.cost;
-      if (action.maxPerYear) {
-        cost.appendChild(el('div', '', `${action.used}/${action.maxPerYear}`));
+      // The count is the budget now, so it leads.
+      if (action.limit !== undefined && Number.isFinite(action.limit)) {
+        cost.appendChild(el('div', 'row-count', `${action.used}/${action.limit}`));
       }
+      cost.appendChild(el('div', 'row-when', action.cost));
       b.appendChild(cost);
       b.addEventListener('click', () => {
         const options = actionOptions(GAME, action.id);
@@ -717,8 +720,16 @@ function panelPerson(npcId) {
   }
 
   body.appendChild(el('div', 'group-label', 'What you know'));
+  // Only what you can actually read. Knowing somebody for years tells you they
+  // are dangerous; it does not tell you a figure.
+  const read = readPower(GAME, npc.power);
+  const powerRead = read.known
+    ? `${read.text} (${read.how})`
+    : read.broke ? 'Your scouter did not survive the reading.'
+      : `${read.text}${(npc.knowledge || 0) >= 2 ? '' : ''}`;
+  if (read.broke) flash('Your scouter climbs, screams and comes apart.', 5000);
   const table = el('div', 'dossier');
-  for (const row of dossier(npc, { full: npc.isCanon })) {
+  for (const row of dossier(npc, { full: npc.isCanon, powerRead })) {
     const line = el('div', 'dossier-row');
     line.appendChild(el('span', 'dossier-key', row.label));
     line.appendChild(el('span', 'dossier-val' + (row.value === '\u2014' ? ' unknown' : ''), row.value));
@@ -1364,7 +1375,10 @@ function renderTournament() {
       const card = el('div', 'draw-card');
       card.appendChild(el('div', 'draw-label', `${roundName(t)} - your draw`));
       card.appendChild(el('div', 'draw-name', foe.name));
-      card.appendChild(el('div', 'draw-power', `Power level ${numberish(foe.power)} - ${powerTier(foe.power)}`));
+      const read = readPower(GAME, foe.power, { peek: true });
+      card.appendChild(el('div', 'draw-power', read.known
+        ? `Power level ${numberish(foe.power)} - ${powerTier(foe.power)}`
+        : `${powerTier(foe.power)} - ${read.text}`));
       if (foe.flavour) card.appendChild(el('div', 'draw-flavour', foe.universe ? `Universe ${foe.universe}. ${foe.flavour}` : `They ${foe.flavour}.`));
       body.appendChild(card);
     } else {
@@ -1394,7 +1408,7 @@ function renderTournament() {
       row.appendChild(el('span', 'fname', e.name));
       if (e.universe) row.appendChild(el('span', 'ftag', `U${e.universe}`));
       else if (e.isCanon) row.appendChild(el('span', 'ftag', 'known'));
-      row.appendChild(el('span', 'fpow', numberish(e.power)));
+      row.appendChild(el('span', 'fpow', shortPower(GAME, e.power)));
       block.appendChild(row);
     }
     body.appendChild(block);
@@ -1625,7 +1639,9 @@ function renderBattle() {
   const st = battleStatus(BATTLE);
   $('foe-name').textContent = st.them.name;
   $('foe-sub').textContent = [st.them.tier, st.them.form, st.them.stance].filter(Boolean).join(' - ');
-  $('foe-power').textContent = numberish(st.them.power);
+  // A number on the foe panel is a scouter reading, not a birthright.
+  const foeRead = readPower(GAME, st.them.power, { peek: true });
+  $('foe-power').textContent = foeRead.known ? numberish(st.them.power) : (foeRead.broke ? '—' : '?');
   $('foe-hp').style.width = Math.max(0, st.them.hp) + '%';
   $('foe-state').textContent = st.them.hp > 60 ? 'Barely marked'
     : st.them.hp > 30 ? 'Hurt' : st.them.hp > 10 ? 'Badly hurt' : 'Barely standing';

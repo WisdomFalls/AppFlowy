@@ -459,12 +459,13 @@ export function portraitSvg(character, opts = {}) {
   // Frame differs by sex as well as build: narrower shoulders and neck, a
   // softer jaw, a waist that comes in rather than going straight down.
   const fem = character.sex === 'female';
-  const enby = character.sex === 'nonbinary';
-  const sexScale = fem ? 0.84 : enby ? 0.93 : 1;
+  const sexScale = fem ? 0.84 : 1;
   const shoulderWidth = Math.round(({ small: 44, wiry: 50, lean: 56, balanced: 62, stocky: 70, massive: 80 }[build] || 62) * sexScale);
-  const neckWidth = Math.round(({ small: 11, wiry: 12, lean: 13, balanced: 15, stocky: 18, massive: 21 }[build] || 15) * (fem ? 0.82 : enby ? 0.92 : 1));
-  const waist = Math.round(shoulderWidth * (fem ? 0.82 : enby ? 0.9 : 0.96));
-  const jawTaper = fem ? 8 : enby ? 6 : 4;
+  const neckWidth = Math.round(({ small: 11, wiry: 12, lean: 13, balanced: 15, stocky: 18, massive: 21 }[build] || 15) * (fem ? 0.82 : 1));
+  // A female frame comes in at the waist and back out; the male one tapers.
+  const waist = Math.round(shoulderWidth * (fem ? 0.7 : 0.94));
+  const hip = Math.round(shoulderWidth * (fem ? 0.98 : 0.9));
+  const jawTaper = fem ? 8 : 4;
   const mood = expressionFor(character, opts);
 
   const goldHair = opts.form && /Super Saiyan|Golden/.test(opts.form.name);
@@ -505,11 +506,23 @@ export function portraitSvg(character, opts = {}) {
   }
 
   // Torso and clothing.
-  parts.push(`<path d="M${cx - waist} ${H}
-    C${cx - waist - 3} ${H - 40} ${cx - shoulderWidth} ${chin + 46} ${cx - shoulderWidth + 6} ${chin + 26}
+  const waistY = chin + 74;
+  parts.push(`<path d="M${cx - hip} ${H}
+    C${cx - hip} ${H - 30} ${cx - waist} ${waistY + 14} ${cx - waist} ${waistY}
+    C${cx - waist} ${waistY - 22} ${cx - shoulderWidth} ${chin + 44} ${cx - shoulderWidth + 6} ${chin + 26}
     Q${cx} ${chin + 2} ${cx + shoulderWidth - 6} ${chin + 26}
-    C${cx + shoulderWidth} ${chin + 46} ${cx + waist + 3} ${H - 40} ${cx + waist} ${H} Z"
+    C${cx + shoulderWidth} ${chin + 44} ${cx + waist} ${waistY - 22} ${cx + waist} ${waistY}
+    C${cx + waist} ${waistY + 14} ${cx + hip} ${H - 30} ${cx + hip} ${H} Z"
     fill="${outfit.main || skin}"/>`);
+  if (fem) {
+    // A chest, shaped by build rather than uniform.
+    const bust = { small: 7, wiry: 8, lean: 9, balanced: 11, stocky: 13, massive: 14 }[build] || 11;
+    const by = chin + 40;
+    parts.push(`<path d="M${cx - shoulderWidth + 12} ${by - 6}
+      q${bust} ${bust + 4} ${bust * 2} 0 M${cx + shoulderWidth - 12} ${by - 6}
+      q${-bust} ${bust + 4} ${-bust * 2} 0"
+      fill="none" stroke="${shade(outfit.main || skin, -0.22)}" stroke-width="2.2" stroke-linecap="round"/>`);
+  }
   if (outfit.main) {
     parts.push(`<path d="M${cx - 16} ${chin + 14} L${cx} ${chin + 44} L${cx + 16} ${chin + 14}
       L${cx + 26} ${chin + 22} L${cx} ${H} L${cx - 26} ${chin + 22} Z" fill="${outfit.trim}" opacity="0.9"/>`);

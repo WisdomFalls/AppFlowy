@@ -74,6 +74,69 @@ function driftBody(state, rng) {
   return note;
 }
 
+/**
+ * Somebody in your life died. One place that decides how you hear about it,
+ * because the old code told you about deaths from old age and said nothing at
+ * all about the rest - people were dying and the only way to find out was to
+ * open the relationships list.
+ */
+export function mournNpc(state, rng, npc, cause) {
+  const c = state.character;
+  if (!npc || npc.mourned) return null;
+  npc.mourned = true;
+  npc.alive = false;
+  npc.deadSince = npc.deadSince || currentYear(state);
+  npc.causeOfDeath = npc.causeOfDeath || cause || 'unknown';
+
+  const bond = (npc.closeness || 0) + (npc.trust ?? 30) * 0.4 - (npc.tension || 0) * 0.5;
+  const kin = ['parent', 'child', 'spouse', 'sibling'].includes(npc.relation);
+  // Whether you got there. Close family and people you saw often, mostly.
+  const present = rng.chance(clamp(0.12 + (kin ? 0.45 : 0) + bond / 260, 0, 0.85));
+
+  let text;
+  let hit = 0;
+  if (kin && present) {
+    text = rng.pick([
+      `${npc.name} died this year. You were there for it. They knew you were there, right up until they did not.`,
+      `You got to ${npc.name} in time. Not in time to do anything, but in time. They were not on their own.`,
+      `${npc.name} went in the small hours with your hand in theirs and nothing useful said by either of you.`,
+    ]);
+    hit = -26;
+  } else if (kin) {
+    text = rng.pick([
+      `${npc.name} died this year. You were somewhere else. You found out days later.`,
+      `Word about ${npc.name} reaches you long after there was anything to be done. You were not there.`,
+      `${npc.name} is gone. Nobody could reach you in time, and you will think about that.`,
+    ]);
+    hit = -32;
+  } else if (bond > 55) {
+    text = present
+      ? `${npc.name} died this year, and you were with them.`
+      : `${npc.name} died this year. Somebody tells you in passing, as though you already knew.`;
+    hit = -18;
+  } else if ((npc.tension || 0) > 55) {
+    text = rng.pick([
+      `${npc.name} is dead. You are not sure what you feel and you do not like any of the options.`,
+      `Word comes that ${npc.name} died. That is one argument that will not be finished.`,
+    ]);
+    hit = -4;
+  } else {
+    text = `${npc.name} died this year.`;
+    hit = -6;
+  }
+
+  if (present) npc.youWereThere = true;
+  addFact(state.memory, {
+    type: 'death',
+    text: `${npc.name} died${present ? '. You were there' : ''}. ${npc.causeOfDeath}.`,
+    year: c.age, weight: kin ? 9 : 5, subject: npc.id, tags: ['loss'],
+  });
+  adjust(state, { happiness: hit });
+  if (kin || bond > 60) c.flags.grief = true;
+  if (kin && !present) c.flags.was_not_there = true;
+  return { kind: 'loss', text };
+}
+
 const DEATH_CAUSES = {
   age: ['Old age', 'The body simply stopped', 'Died in their sleep'],
   health: ['Injuries that never healed', 'A body used past its limits', 'Complications, finally'],
@@ -143,17 +206,18 @@ export function startYear(state) {
       const npcRace = getRace(npc.raceId);
       const npcSpan = npc.isCanon ? Infinity : (npcRace.lifespan[0] + npcRace.lifespan[1]) / 2;
       if (npc.age > npcSpan * 0.8 && rng.chance(0.02 + (npc.age - npcSpan * 0.8) * 0.01)) {
-        npc.alive = false;
-        npc.deadSince = currentYear(state);
-        npc.causeOfDeath = 'age';
-        entries.push({ kind: 'loss', text: `${npc.name} died this year. ${render('#grief#', {}, rng)}` });
-        addFact(state.memory, { type: 'death', text: `${npc.name} died of old age.`, year: c.age, weight: 4, subject: npc.id, tags: ['loss'] });
-        if (npc.closeness > 60) {
-          adjust(state, { happiness: -14 });
-          c.flags.grief = true;
-        }
+        const note = mournNpc(state, rng, npc, 'Old age');
+        if (note) entries.push(note);
       }
     }
+  }
+
+  // Anybody who died some other way and was never announced gets announced
+  // now. Nobody in your life disappears silently.
+  for (const npc of Object.values(state.npcs)) {
+    if (npc.alive || npc.mourned) continue;
+    const note = mournNpc(state, rng, npc, npc.causeOfDeath);
+    if (note) entries.push(note);
   }
 
   // How many events this year: busier lives generate more.

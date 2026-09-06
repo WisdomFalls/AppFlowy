@@ -31,7 +31,7 @@ for (let i = 0; i < LIVES; i++) {
   const creation = {
     name: 'Subject ' + i,
     raceId: race.id,
-    sex: rng.pick(['male', 'female', 'nonbinary']),
+    sex: rng.pick(['male', 'female']),
     upbringingId: rng.pick(UPBRINGINGS).id,
     temperamentId: rng.pick(TEMPERAMENTS).id,
     bodyId: rng.pick(BODY_TYPES).id,

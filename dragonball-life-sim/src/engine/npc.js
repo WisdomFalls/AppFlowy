@@ -81,7 +81,7 @@ export function makeNpc(rng, opts = {}) {
     name: opts.name || generateFullName(rng, raceId),
     raceId,
     canonId: null,
-    sex: opts.sex || rng.pick(['male', 'female', 'nonbinary', 'male', 'female']),
+    sex: opts.sex || rng.pick(['male', 'female']),
     age,
     birthYear: year - age,
     alive: true,
@@ -392,13 +392,19 @@ export function dossier(npc, opts = {}) {
   const rows = [];
 
   rows.push({ label: 'Species', value: race.short });
+  rows.push({ label: 'Sex', value: npc.sex === 'female' ? 'Female' : 'Male' });
   rows.push({ label: 'Age', value: String(npc.age) });
   rows.push({ label: 'Standing', value: relationLabel(npc) });
   rows.push({ label: 'Mood', value: k >= 1 ? npc.mood : unknown });
+  // Knowing somebody well tells you how dangerous they are. It does not hand
+  // you a number: that takes ki sense or a scouter, and the caller supplies
+  // the reading because only it knows what you are carrying.
   rows.push({
     label: 'Power',
-    value: k >= 2 ? Math.round(npc.power).toLocaleString('en-US')
-      : k >= 1 ? approximatePower(npc.power) : unknown,
+    value: opts.powerRead !== undefined
+      ? opts.powerRead
+      : (k >= 2 ? Math.round(npc.power).toLocaleString('en-US')
+        : k >= 1 ? approximatePower(npc.power) : unknown),
   });
   rows.push({ label: 'Wearing', value: k >= 1 && npc.look ? npc.look.clothing : unknown });
   rows.push({

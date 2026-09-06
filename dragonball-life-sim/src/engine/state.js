@@ -28,7 +28,7 @@ export function defaultCreation(rng) {
   return {
     name: generateFullName(rng, raceId),
     raceId,
-    sex: rng.pick(['male', 'female', 'nonbinary']),
+    sex: rng.pick(['male', 'female']),
     upbringingId: rng.pick(UPBRINGINGS).id,
     temperamentId: rng.pick(TEMPERAMENTS).id,
     bodyId: rng.pick(BODY_TYPES).id,
@@ -75,7 +75,7 @@ export function createGame(creation, seedInput) {
   const character = {
     name: creation.name || generateFullName(rng, creation.raceId),
     raceId: creation.raceId,
-    sex: creation.sex || 'nonbinary',
+    sex: creation.sex === 'female' ? 'female' : 'male',
     appearance: Object.assign({
       build: body.name,
       buildShape: body.id,

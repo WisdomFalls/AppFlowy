@@ -1,82 +1,111 @@
 // The action economy.
 //
-// A year is a finite thing. Every activity costs slots out of a yearly budget,
-// some activities have their own hard limits, and there is a ceiling on how
-// much power training can add in one year. Without this you can stand still and
-// press "train" until you are stronger than the setting allows.
+// The first version of this had a global slot budget as well as per-action
+// limits, and the two fought each other: at biological nine you got three
+// slots, training cost two of them, and a year was over after one session
+// even though the action itself allowed three. The budget is gone. What is
+// left is what actually stops the exploit:
+//
+//   1. Each action has its own yearly limit, which scales with how old you
+//      are - a toddler gets fewer goes at everything than an adult.
+//   2. Training grants power against a separate yearly ceiling, so pressing
+//      the same button is subject to diminishing returns however many times
+//      the limit lets you press it.
+//
+// A year is still finite. It is finite per activity, which is legible, rather
+// than in one pooled number, which was not.
 
 import { clamp } from './rng.js';
 import { getRace, hasPerk, maturity } from '../data/races.js';
 import { trainingRate } from './stats.js';
 
-/** How many slots this character gets in a year. */
-export function yearBudget(state) {
+/**
+ * How much of a year this character can get through, as a multiplier on every
+ * action's own limit. Small children and the very old do less of everything;
+ * androids and the disciplined do more; the dead have nothing but time.
+ */
+export function yearCapacity(state) {
   const c = state.character;
   const bio = maturity(c);
 
-  let slots;
-  if (bio < 4) slots = 1;
-  else if (bio < 8) slots = 2;
-  else if (bio < 13) slots = 3;
-  else if (bio < 18) slots = 4;
-  else if (bio < 32) slots = 5;
-  else if (bio < 55) slots = 6;      // you finally know how to spend a year
-  else if (bio < 70) slots = 5;
-  else if (bio < 85) slots = 4;
-  else slots = 3;
+  let mult;
+  if (bio < 3) mult = 0.34;
+  else if (bio < 6) mult = 0.5;
+  else if (bio < 10) mult = 0.7;
+  else if (bio < 14) mult = 0.85;
+  else if (bio < 60) mult = 1;
+  else if (bio < 75) mult = 0.85;
+  else if (bio < 90) mult = 0.7;
+  else mult = 0.55;
 
-  if (hasPerk(c, 'infiniteStamina')) slots += 1;   // androids never need to rest
-  if (hasPerk(c, 'meditative')) slots += 1;
-  if (c.stats.discipline >= 80) slots += 1;
-  if (c.vitals.health < 30) slots -= 1;
-  if (c.inAfterlife) slots += 1;                    // the dead have nothing but time
+  if (hasPerk(c, 'infiniteStamina')) mult += 0.2;
+  if (hasPerk(c, 'meditative')) mult += 0.1;
+  if (c.stats.discipline >= 80) mult += 0.15;
+  if (c.vitals.health < 30) mult -= 0.25;
+  if (c.vitals.health < 10) mult -= 0.15;
+  if (c.inAfterlife) mult += 0.25;
 
-  return clamp(slots, 1, 9);
+  return clamp(mult, 0.25, 1.7);
+}
+
+/** This action's limit for this character this year, after age scaling. */
+export function limitFor(state, action) {
+  const base = typeof action.maxPerYear === 'function'
+    ? action.maxPerYear(state)
+    : action.maxPerYear;
+  if (base === undefined || base === null) return Infinity;
+  if (base <= 0) return 0;
+  // Never scale a once-a-year thing down to nothing.
+  return Math.max(1, Math.round(base * yearCapacity(state)));
+}
+
+export function usedThisYear(state, actionId) {
+  const c = state.character;
+  return (c.yearUse && c.yearUse[actionId]) || 0;
 }
 
 /** Reset the per-year counters. Called once per age-up. */
 export function resetYearBudget(state) {
   const c = state.character;
-  c.slotsMax = yearBudget(state);
-  c.slotsLeft = c.slotsMax;
   c.yearUse = {};
   c.yearPowerGained = 0;
   c.yearPowerCap = trainingCapForYear(state);
-}
-
-export function slotsLeft(state) {
-  const c = state.character;
-  if (c.slotsLeft === undefined) resetYearBudget(state);
-  return c.slotsLeft;
-}
-
-export function slotsMax(state) {
-  const c = state.character;
-  if (c.slotsMax === undefined) resetYearBudget(state);
-  return c.slotsMax;
+  delete c.slotsMax;
+  delete c.slotsLeft;
 }
 
 /** Can this action be run right now? Returns a reason string when it cannot. */
 export function actionBlocked(state, action) {
-  const c = state.character;
-  const cost = action.slots ?? 1;
-  if (slotsLeft(state) < cost) {
-    return cost === 1 ? 'No time left this year.' : `Needs ${cost} slots; you have ${slotsLeft(state)}.`;
-  }
-  if (action.maxPerYear !== undefined) {
-    const used = (c.yearUse && c.yearUse[action.id]) || 0;
-    if (used >= action.maxPerYear) {
-      return action.maxPerYear === 1
-        ? 'Once a year, and you have had it.'
-        : `Only ${action.maxPerYear} a year. You have used ${used}.`;
-    }
+  const gate = ageGate(state, action);
+  if (gate) return gate;
+  const limit = limitFor(state, action);
+  if (limit === Infinity) return null;
+  const used = usedThisYear(state, action.id);
+  if (used >= limit) {
+    return limit === 1
+      ? 'Once a year, and you have had it.'
+      : `${limit} a year, and you have used ${used}.`;
   }
   return null;
 }
 
+/**
+ * Some things you simply cannot do yet. A one-year-old is not hunting Dragon
+ * Balls, and a five-year-old is not inventing a transformation.
+ */
+export function ageGate(state, action) {
+  const c = state.character;
+  if (action.minMaturity === undefined) return null;
+  const bio = maturity(c);
+  if (bio >= action.minMaturity) return null;
+  const race = getRace(c.raceId);
+  const rate = race.maturityRate ?? 1;
+  const yearsOff = Math.max(1, Math.ceil((action.minMaturity - bio) / Math.max(0.2, rate)));
+  return action.tooYoung || `You are too young. About ${yearsOff} year${yearsOff > 1 ? 's' : ''} yet.`;
+}
+
 export function chargeAction(state, action) {
   const c = state.character;
-  c.slotsLeft = Math.max(0, slotsLeft(state) - (action.slots ?? 1));
   c.yearUse = c.yearUse || {};
   c.yearUse[action.id] = (c.yearUse[action.id] || 0) + 1;
 }
@@ -118,9 +147,9 @@ export function trainingRoomLeft(state) {
   return Math.max(0, c.yearPowerCap - (c.yearPowerGained || 0));
 }
 
-/** Slot costs by label, so the UI and the data stay in step. */
-export const COST_LABEL = { 1: 'A moment', 2: 'A season', 3: 'Most of the year' };
+/** How long an action takes, purely as flavour on the row now. */
+export const COST_LABEL = { 0: 'A moment', 1: 'An afternoon', 2: 'A season', 3: 'Most of the year' };
 
 export function costLabel(action) {
-  return COST_LABEL[action.slots ?? 1] || 'A season';
+  return action.cost || COST_LABEL[action.slots ?? 1] || 'A season';
 }

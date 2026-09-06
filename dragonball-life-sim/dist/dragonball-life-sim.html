@@ -717,6 +717,9 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
 .speak-box { margin-top: 12px; }
 .speak-box textarea { resize: vertical; }
 
+.row-count { font-family: var(--font-mono); font-weight: 800; font-size: 13px; color: var(--gi); }
+.row-when { font-family: var(--font-mono); font-size: 9.5px; color: var(--ink-3); letter-spacing: .06em; }
+
 </style>
 <div id="app">
 
@@ -3368,12 +3371,13 @@ function portraitSvg(character, opts = {}) {
   // Frame differs by sex as well as build: narrower shoulders and neck, a
   // softer jaw, a waist that comes in rather than going straight down.
   const fem = character.sex === 'female';
-  const enby = character.sex === 'nonbinary';
-  const sexScale = fem ? 0.84 : enby ? 0.93 : 1;
+  const sexScale = fem ? 0.84 : 1;
   const shoulderWidth = Math.round(({ small: 44, wiry: 50, lean: 56, balanced: 62, stocky: 70, massive: 80 }[build] || 62) * sexScale);
-  const neckWidth = Math.round(({ small: 11, wiry: 12, lean: 13, balanced: 15, stocky: 18, massive: 21 }[build] || 15) * (fem ? 0.82 : enby ? 0.92 : 1));
-  const waist = Math.round(shoulderWidth * (fem ? 0.82 : enby ? 0.9 : 0.96));
-  const jawTaper = fem ? 8 : enby ? 6 : 4;
+  const neckWidth = Math.round(({ small: 11, wiry: 12, lean: 13, balanced: 15, stocky: 18, massive: 21 }[build] || 15) * (fem ? 0.82 : 1));
+  // A female frame comes in at the waist and back out; the male one tapers.
+  const waist = Math.round(shoulderWidth * (fem ? 0.7 : 0.94));
+  const hip = Math.round(shoulderWidth * (fem ? 0.98 : 0.9));
+  const jawTaper = fem ? 8 : 4;
   const mood = expressionFor(character, opts);
 
   const goldHair = opts.form && /Super Saiyan|Golden/.test(opts.form.name);
@@ -3414,11 +3418,23 @@ function portraitSvg(character, opts = {}) {
   }
 
   // Torso and clothing.
-  parts.push(`<path d="M${cx - waist} ${H}
-    C${cx - waist - 3} ${H - 40} ${cx - shoulderWidth} ${chin + 46} ${cx - shoulderWidth + 6} ${chin + 26}
+  const waistY = chin + 74;
+  parts.push(`<path d="M${cx - hip} ${H}
+    C${cx - hip} ${H - 30} ${cx - waist} ${waistY + 14} ${cx - waist} ${waistY}
+    C${cx - waist} ${waistY - 22} ${cx - shoulderWidth} ${chin + 44} ${cx - shoulderWidth + 6} ${chin + 26}
     Q${cx} ${chin + 2} ${cx + shoulderWidth - 6} ${chin + 26}
-    C${cx + shoulderWidth} ${chin + 46} ${cx + waist + 3} ${H - 40} ${cx + waist} ${H} Z"
+    C${cx + shoulderWidth} ${chin + 44} ${cx + waist} ${waistY - 22} ${cx + waist} ${waistY}
+    C${cx + waist} ${waistY + 14} ${cx + hip} ${H - 30} ${cx + hip} ${H} Z"
     fill="${outfit.main || skin}"/>`);
+  if (fem) {
+    // A chest, shaped by build rather than uniform.
+    const bust = { small: 7, wiry: 8, lean: 9, balanced: 11, stocky: 13, massive: 14 }[build] || 11;
+    const by = chin + 40;
+    parts.push(`<path d="M${cx - shoulderWidth + 12} ${by - 6}
+      q${bust} ${bust + 4} ${bust * 2} 0 M${cx + shoulderWidth - 12} ${by - 6}
+      q${-bust} ${bust + 4} ${-bust * 2} 0"
+      fill="none" stroke="${shade(outfit.main || skin, -0.22)}" stroke-width="2.2" stroke-linecap="round"/>`);
+  }
   if (outfit.main) {
     parts.push(`<path d="M${cx - 16} ${chin + 14} L${cx} ${chin + 44} L${cx + 16} ${chin + 14}
       L${cx + 26} ${chin + 22} L${cx} ${H} L${cx - 26} ${chin + 22} Z" fill="${outfit.trim}" opacity="0.9"/>`);
@@ -4506,7 +4522,7 @@ function makeNpc(rng, opts = {}) {
     name: opts.name || generateFullName(rng, raceId),
     raceId,
     canonId: null,
-    sex: opts.sex || rng.pick(['male', 'female', 'nonbinary', 'male', 'female']),
+    sex: opts.sex || rng.pick(['male', 'female']),
     age,
     birthYear: year - age,
     alive: true,
@@ -4817,13 +4833,19 @@ function dossier(npc, opts = {}) {
   const rows = [];
 
   rows.push({ label: 'Species', value: race.short });
+  rows.push({ label: 'Sex', value: npc.sex === 'female' ? 'Female' : 'Male' });
   rows.push({ label: 'Age', value: String(npc.age) });
   rows.push({ label: 'Standing', value: relationLabel(npc) });
   rows.push({ label: 'Mood', value: k >= 1 ? npc.mood : unknown });
+  // Knowing somebody well tells you how dangerous they are. It does not hand
+  // you a number: that takes ki sense or a scouter, and the caller supplies
+  // the reading because only it knows what you are carrying.
   rows.push({
     label: 'Power',
-    value: k >= 2 ? Math.round(npc.power).toLocaleString('en-US')
-      : k >= 1 ? approximatePower(npc.power) : unknown,
+    value: opts.powerRead !== undefined
+      ? opts.powerRead
+      : (k >= 2 ? Math.round(npc.power).toLocaleString('en-US')
+        : k >= 1 ? approximatePower(npc.power) : unknown),
   });
   rows.push({ label: 'Wearing', value: k >= 1 && npc.look ? npc.look.clothing : unknown });
   rows.push({
@@ -4955,7 +4977,7 @@ function defaultCreation(rng) {
   return {
     name: generateFullName(rng, raceId),
     raceId,
-    sex: rng.pick(['male', 'female', 'nonbinary']),
+    sex: rng.pick(['male', 'female']),
     upbringingId: rng.pick(UPBRINGINGS).id,
     temperamentId: rng.pick(TEMPERAMENTS).id,
     bodyId: rng.pick(BODY_TYPES).id,
@@ -5002,7 +5024,7 @@ function createGame(creation, seedInput) {
   const character = {
     name: creation.name || generateFullName(rng, creation.raceId),
     raceId: creation.raceId,
-    sex: creation.sex || 'nonbinary',
+    sex: creation.sex === 'female' ? 'female' : 'male',
     appearance: Object.assign({
       build: body.name,
       buildShape: body.id,
@@ -13720,83 +13742,112 @@ registerEvents([
 const __mod_engine_economy_js = (function () {
 // The action economy.
 //
-// A year is a finite thing. Every activity costs slots out of a yearly budget,
-// some activities have their own hard limits, and there is a ceiling on how
-// much power training can add in one year. Without this you can stand still and
-// press "train" until you are stronger than the setting allows.
+// The first version of this had a global slot budget as well as per-action
+// limits, and the two fought each other: at biological nine you got three
+// slots, training cost two of them, and a year was over after one session
+// even though the action itself allowed three. The budget is gone. What is
+// left is what actually stops the exploit:
+//
+//   1. Each action has its own yearly limit, which scales with how old you
+//      are - a toddler gets fewer goes at everything than an adult.
+//   2. Training grants power against a separate yearly ceiling, so pressing
+//      the same button is subject to diminishing returns however many times
+//      the limit lets you press it.
+//
+// A year is still finite. It is finite per activity, which is legible, rather
+// than in one pooled number, which was not.
 
 const { clamp } = __mod_engine_rng_js;
 const { getRace, hasPerk, maturity } = __mod_data_races_js;
 const { trainingRate } = __mod_engine_stats_js;
 
-/** How many slots this character gets in a year. */
-function yearBudget(state) {
+/**
+ * How much of a year this character can get through, as a multiplier on every
+ * action's own limit. Small children and the very old do less of everything;
+ * androids and the disciplined do more; the dead have nothing but time.
+ */
+function yearCapacity(state) {
   const c = state.character;
   const bio = maturity(c);
 
-  let slots;
-  if (bio < 4) slots = 1;
-  else if (bio < 8) slots = 2;
-  else if (bio < 13) slots = 3;
-  else if (bio < 18) slots = 4;
-  else if (bio < 32) slots = 5;
-  else if (bio < 55) slots = 6;      // you finally know how to spend a year
-  else if (bio < 70) slots = 5;
-  else if (bio < 85) slots = 4;
-  else slots = 3;
+  let mult;
+  if (bio < 3) mult = 0.34;
+  else if (bio < 6) mult = 0.5;
+  else if (bio < 10) mult = 0.7;
+  else if (bio < 14) mult = 0.85;
+  else if (bio < 60) mult = 1;
+  else if (bio < 75) mult = 0.85;
+  else if (bio < 90) mult = 0.7;
+  else mult = 0.55;
 
-  if (hasPerk(c, 'infiniteStamina')) slots += 1;   // androids never need to rest
-  if (hasPerk(c, 'meditative')) slots += 1;
-  if (c.stats.discipline >= 80) slots += 1;
-  if (c.vitals.health < 30) slots -= 1;
-  if (c.inAfterlife) slots += 1;                    // the dead have nothing but time
+  if (hasPerk(c, 'infiniteStamina')) mult += 0.2;
+  if (hasPerk(c, 'meditative')) mult += 0.1;
+  if (c.stats.discipline >= 80) mult += 0.15;
+  if (c.vitals.health < 30) mult -= 0.25;
+  if (c.vitals.health < 10) mult -= 0.15;
+  if (c.inAfterlife) mult += 0.25;
 
-  return clamp(slots, 1, 9);
+  return clamp(mult, 0.25, 1.7);
+}
+
+/** This action's limit for this character this year, after age scaling. */
+function limitFor(state, action) {
+  const base = typeof action.maxPerYear === 'function'
+    ? action.maxPerYear(state)
+    : action.maxPerYear;
+  if (base === undefined || base === null) return Infinity;
+  if (base <= 0) return 0;
+  // Never scale a once-a-year thing down to nothing.
+  return Math.max(1, Math.round(base * yearCapacity(state)));
+}
+
+function usedThisYear(state, actionId) {
+  const c = state.character;
+  return (c.yearUse && c.yearUse[actionId]) || 0;
 }
 
 /** Reset the per-year counters. Called once per age-up. */
 function resetYearBudget(state) {
   const c = state.character;
-  c.slotsMax = yearBudget(state);
-  c.slotsLeft = c.slotsMax;
   c.yearUse = {};
   c.yearPowerGained = 0;
   c.yearPowerCap = trainingCapForYear(state);
-}
-
-function slotsLeft(state) {
-  const c = state.character;
-  if (c.slotsLeft === undefined) resetYearBudget(state);
-  return c.slotsLeft;
-}
-
-function slotsMax(state) {
-  const c = state.character;
-  if (c.slotsMax === undefined) resetYearBudget(state);
-  return c.slotsMax;
+  delete c.slotsMax;
+  delete c.slotsLeft;
 }
 
 /** Can this action be run right now? Returns a reason string when it cannot. */
 function actionBlocked(state, action) {
-  const c = state.character;
-  const cost = action.slots ?? 1;
-  if (slotsLeft(state) < cost) {
-    return cost === 1 ? 'No time left this year.' : `Needs ${cost} slots; you have ${slotsLeft(state)}.`;
-  }
-  if (action.maxPerYear !== undefined) {
-    const used = (c.yearUse && c.yearUse[action.id]) || 0;
-    if (used >= action.maxPerYear) {
-      return action.maxPerYear === 1
-        ? 'Once a year, and you have had it.'
-        : `Only ${action.maxPerYear} a year. You have used ${used}.`;
-    }
+  const gate = ageGate(state, action);
+  if (gate) return gate;
+  const limit = limitFor(state, action);
+  if (limit === Infinity) return null;
+  const used = usedThisYear(state, action.id);
+  if (used >= limit) {
+    return limit === 1
+      ? 'Once a year, and you have had it.'
+      : `${limit} a year, and you have used ${used}.`;
   }
   return null;
 }
 
+/**
+ * Some things you simply cannot do yet. A one-year-old is not hunting Dragon
+ * Balls, and a five-year-old is not inventing a transformation.
+ */
+function ageGate(state, action) {
+  const c = state.character;
+  if (action.minMaturity === undefined) return null;
+  const bio = maturity(c);
+  if (bio >= action.minMaturity) return null;
+  const race = getRace(c.raceId);
+  const rate = race.maturityRate ?? 1;
+  const yearsOff = Math.max(1, Math.ceil((action.minMaturity - bio) / Math.max(0.2, rate)));
+  return action.tooYoung || `You are too young. About ${yearsOff} year${yearsOff > 1 ? 's' : ''} yet.`;
+}
+
 function chargeAction(state, action) {
   const c = state.character;
-  c.slotsLeft = Math.max(0, slotsLeft(state) - (action.slots ?? 1));
   c.yearUse = c.yearUse || {};
   c.yearUse[action.id] = (c.yearUse[action.id] || 0) + 1;
 }
@@ -13838,13 +13889,13 @@ function trainingRoomLeft(state) {
   return Math.max(0, c.yearPowerCap - (c.yearPowerGained || 0));
 }
 
-/** Slot costs by label, so the UI and the data stay in step. */
-const COST_LABEL = { 1: 'A moment', 2: 'A season', 3: 'Most of the year' };
+/** How long an action takes, purely as flavour on the row now. */
+const COST_LABEL = { 0: 'A moment', 1: 'An afternoon', 2: 'A season', 3: 'Most of the year' };
 
 function costLabel(action) {
-  return COST_LABEL[action.slots ?? 1] || 'A season';
+  return action.cost || COST_LABEL[action.slots ?? 1] || 'A season';
 }
-  return { yearBudget, resetYearBudget, slotsLeft, slotsMax, actionBlocked, chargeAction, trainingCapForYear, grantTrainingPower, trainingRoomLeft, COST_LABEL, costLabel };
+  return { yearCapacity, limitFor, usedThisYear, resetYearBudget, actionBlocked, ageGate, chargeAction, trainingCapForYear, grantTrainingPower, trainingRoomLeft, COST_LABEL, costLabel };
 })();
 
 /* ==== engine/lifecycle.js ==== */
@@ -13925,6 +13976,69 @@ function driftBody(state, rng) {
   return note;
 }
 
+/**
+ * Somebody in your life died. One place that decides how you hear about it,
+ * because the old code told you about deaths from old age and said nothing at
+ * all about the rest - people were dying and the only way to find out was to
+ * open the relationships list.
+ */
+function mournNpc(state, rng, npc, cause) {
+  const c = state.character;
+  if (!npc || npc.mourned) return null;
+  npc.mourned = true;
+  npc.alive = false;
+  npc.deadSince = npc.deadSince || currentYear(state);
+  npc.causeOfDeath = npc.causeOfDeath || cause || 'unknown';
+
+  const bond = (npc.closeness || 0) + (npc.trust ?? 30) * 0.4 - (npc.tension || 0) * 0.5;
+  const kin = ['parent', 'child', 'spouse', 'sibling'].includes(npc.relation);
+  // Whether you got there. Close family and people you saw often, mostly.
+  const present = rng.chance(clamp(0.12 + (kin ? 0.45 : 0) + bond / 260, 0, 0.85));
+
+  let text;
+  let hit = 0;
+  if (kin && present) {
+    text = rng.pick([
+      `${npc.name} died this year. You were there for it. They knew you were there, right up until they did not.`,
+      `You got to ${npc.name} in time. Not in time to do anything, but in time. They were not on their own.`,
+      `${npc.name} went in the small hours with your hand in theirs and nothing useful said by either of you.`,
+    ]);
+    hit = -26;
+  } else if (kin) {
+    text = rng.pick([
+      `${npc.name} died this year. You were somewhere else. You found out days later.`,
+      `Word about ${npc.name} reaches you long after there was anything to be done. You were not there.`,
+      `${npc.name} is gone. Nobody could reach you in time, and you will think about that.`,
+    ]);
+    hit = -32;
+  } else if (bond > 55) {
+    text = present
+      ? `${npc.name} died this year, and you were with them.`
+      : `${npc.name} died this year. Somebody tells you in passing, as though you already knew.`;
+    hit = -18;
+  } else if ((npc.tension || 0) > 55) {
+    text = rng.pick([
+      `${npc.name} is dead. You are not sure what you feel and you do not like any of the options.`,
+      `Word comes that ${npc.name} died. That is one argument that will not be finished.`,
+    ]);
+    hit = -4;
+  } else {
+    text = `${npc.name} died this year.`;
+    hit = -6;
+  }
+
+  if (present) npc.youWereThere = true;
+  addFact(state.memory, {
+    type: 'death',
+    text: `${npc.name} died${present ? '. You were there' : ''}. ${npc.causeOfDeath}.`,
+    year: c.age, weight: kin ? 9 : 5, subject: npc.id, tags: ['loss'],
+  });
+  adjust(state, { happiness: hit });
+  if (kin || bond > 60) c.flags.grief = true;
+  if (kin && !present) c.flags.was_not_there = true;
+  return { kind: 'loss', text };
+}
+
 const DEATH_CAUSES = {
   age: ['Old age', 'The body simply stopped', 'Died in their sleep'],
   health: ['Injuries that never healed', 'A body used past its limits', 'Complications, finally'],
@@ -13994,17 +14108,18 @@ function startYear(state) {
       const npcRace = getRace(npc.raceId);
       const npcSpan = npc.isCanon ? Infinity : (npcRace.lifespan[0] + npcRace.lifespan[1]) / 2;
       if (npc.age > npcSpan * 0.8 && rng.chance(0.02 + (npc.age - npcSpan * 0.8) * 0.01)) {
-        npc.alive = false;
-        npc.deadSince = currentYear(state);
-        npc.causeOfDeath = 'age';
-        entries.push({ kind: 'loss', text: `${npc.name} died this year. ${render('#grief#', {}, rng)}` });
-        addFact(state.memory, { type: 'death', text: `${npc.name} died of old age.`, year: c.age, weight: 4, subject: npc.id, tags: ['loss'] });
-        if (npc.closeness > 60) {
-          adjust(state, { happiness: -14 });
-          c.flags.grief = true;
-        }
+        const note = mournNpc(state, rng, npc, 'Old age');
+        if (note) entries.push(note);
       }
     }
+  }
+
+  // Anybody who died some other way and was never announced gets announced
+  // now. Nobody in your life disappears silently.
+  for (const npc of Object.values(state.npcs)) {
+    if (npc.alive || npc.mourned) continue;
+    const note = mournNpc(state, rng, npc, npc.causeOfDeath);
+    if (note) entries.push(note);
   }
 
   // How many events this year: busier lives generate more.
@@ -14518,7 +14633,7 @@ function beginLegacy(state) {
   saveRng(state, rng);
   return state;
 }
-  return { startYear, insertEvent, eventsRemaining, renarrateLast, currentEvent, choose, skipRemaining, die, tickRevivalEffort, reviveCharacter, enterAfterlife, epitaph, beginLegacy };
+  return { mournNpc, startYear, insertEvent, eventsRemaining, renarrateLast, currentEvent, choose, skipRemaining, die, tickRevivalEffort, reviveCharacter, enterAfterlife, epitaph, beginLegacy };
 })();
 
 /* ==== engine/events/afterlife.js ==== */
@@ -15350,7 +15465,7 @@ const { getPlace, PLACES } = __mod_data_places_js;
 const { shopStock, getItem, ITEMS } = __mod_data_items_js;
 const { CAREERS, getCareer, careersFor } = __mod_data_jobs_js;
 const { getRace, hasPerk } = __mod_data_races_js;
-const { actionBlocked, chargeAction, grantTrainingPower, costLabel, slotsLeft } = __mod_engine_economy_js;
+const { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel, limitFor, usedThisYear, trainingRoomLeft } = __mod_engine_economy_js;
 const { makeNpc, bondScore, relationLabel } = __mod_engine_npc_js;
 const { canonAvailable, canonPower } = __mod_data_canon_js;
 const { ensureBallSet, ballsHeld, startHunt, surveyPlanet, ballsAreInert, summonReady } = __mod_engine_dragonballs_js;
@@ -15390,7 +15505,7 @@ function trainOnce(state, rng, opts = {}) {
 const ACTIONS = [
   // ------------------------------------------------------------- training
   {
-    id: 'train_stat', slots: 2, maxPerYear: 3, name: 'Train', cat: 'body',
+    id: 'train_stat', maxPerYear: 4, minMaturity: 3, tooYoung: 'You are too small to train. Play, for now.', slots: 2, name: 'Train', cat: 'body',
     desc: 'Pick what you are working on. Each attribute has its own trial.',
     available: (s) => s.character.age >= 3,
     options: () => Object.entries(STAT_TRIALS).map(([stat, cfg]) => ({
@@ -15417,7 +15532,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'meditate', slots: 1, maxPerYear: 3, name: 'Meditate', cat: 'mind', cost: 'A season',
+    id: 'meditate', maxPerYear: 4, minMaturity: 5, tooYoung: 'Sitting still on purpose is beyond you yet.', slots: 1, name: 'Meditate', cat: 'mind', cost: 'A season',
     desc: 'Ki control, discipline and a calmer head.',
     available: () => true,
     run: (s, rng) => {
@@ -15426,7 +15541,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'rest', slots: 2, maxPerYear: 2, name: 'Rest and recover', cat: 'mind', cost: 'A season',
+    id: 'rest', maxPerYear: 3, slots: 2, name: 'Rest and recover', cat: 'mind', cost: 'A season',
     desc: 'Heal up. You lose ground and you stop dying.',
     available: () => true,
     run: (s, rng) => {
@@ -15447,7 +15562,7 @@ const ACTIONS = [
 
   // ------------------------------------------------------------ progression
   {
-    id: 'attempt_form', slots: 2, maxPerYear: 2, name: 'Reach for a transformation', cat: 'power',
+    id: 'attempt_form', maxPerYear: 2, minMaturity: 10, tooYoung: 'Whatever is in you is not ready to come out yet.', slots: 2, name: 'Reach for a transformation', cat: 'power',
     desc: 'A form you have the grounds for. Whether you get it is another matter.',
     available: (s) => unlockableForms(s).length > 0,
     options: (s) => unlockableForms(s).map((f) => ({ id: f.id, label: f.name, hint: f.desc })),
@@ -15467,7 +15582,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'learn_technique', slots: 2, maxPerYear: 2, name: 'Study a technique', cat: 'power',
+    id: 'learn_technique', maxPerYear: 3, minMaturity: 6, tooYoung: 'You cannot hold the shapes yet.', slots: 2, name: 'Study a technique', cat: 'power',
     desc: 'Something from the tree. You have to be able to do the movement before it does anything.',
     available: (s) => availableTechniques(s.character).length > 0,
     options: (s) => availableTechniques(s.character)
@@ -15490,7 +15605,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'master_form', slots: 2, maxPerYear: 2, name: 'Master a transformation', cat: 'power',
+    id: 'master_form', maxPerYear: 2, minMaturity: 12, slots: 2, name: 'Master a transformation', cat: 'power',
     desc: 'Live in it until it stops costing you anything.',
     available: (s) => s.character.transformations.length > 0,
     options: (s) => s.character.transformations.map((id) => {
@@ -15514,7 +15629,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'invent_form', slots: 3, maxPerYear: 1, name: 'Build a form of your own', cat: 'power',
+    id: 'invent_form', maxPerYear: 1, minMaturity: 18, tooYoung: 'You have not lived enough to have a style of your own.', slots: 3, name: 'Build a form of your own', cat: 'power',
     desc: 'Take something you have mastered and push it where it was not designed to go.',
     available: (s) => s.character.transformations.some((id) => getMastery(s, id) >= 85)
       && s.character.stats.discipline >= 65,
@@ -15541,7 +15656,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'upgrade_self', slots: 2, maxPerYear: 1, name: 'Upgrade your hardware', cat: 'power', cost: 'A season',
+    id: 'upgrade_self', maxPerYear: 2, slots: 2, name: 'Upgrade your hardware', cat: 'power', cost: 'A season',
     desc: 'Machines improve by being improved.',
     available: (s) => ['android', 'bioandroid', 'tuffle'].includes(s.character.raceId),
     run: (s, rng) => {
@@ -15560,7 +15675,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'absorb', slots: 2, maxPerYear: 1, name: 'Absorb someone', cat: 'power', cost: 'A season', danger: true,
+    id: 'absorb', maxPerYear: 1, minMaturity: 10, slots: 2, name: 'Absorb someone', cat: 'power', cost: 'A season', danger: true,
     desc: 'Take them in. Keep the useful parts.',
     available: (s) => hasPerk(s.character, 'absorption') && livingNpcs(s).some((n) => n.power > 1),
     options: (s) => livingNpcs(s).filter((n) => n.power > 1)
@@ -15591,7 +15706,7 @@ const ACTIONS = [
 
   // ------------------------------------------------------------- relations
   {
-    id: 'spend_time', slots: 1, maxPerYear: 4, name: 'Spend time with someone', cat: 'social', cost: 'A season',
+    id: 'spend_time', maxPerYear: 6, slots: 1, name: 'Spend time with someone', cat: 'social', cost: 'A season',
     desc: 'Closeness is the only thing that does not decay on its own.',
     available: (s) => livingNpcs(s).length > 0,
     options: (s) => livingNpcs(s).slice(0, 20).map((n) => ({ id: n.id, label: n.name, hint: `${relationLabel(n)} - bond ${bondScore(n)}` })),
@@ -15605,7 +15720,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'spar_npc', slots: 2, maxPerYear: 3, name: 'Spar with someone', cat: 'social', cost: 'A season',
+    id: 'spar_npc', maxPerYear: 4, minMaturity: 5, tooYoung: 'Nobody will spar a toddler.', slots: 2, name: 'Spar with someone', cat: 'social', cost: 'A season',
     desc: 'The Dragon Ball way of saying hello.',
     available: (s) => livingNpcs(s).some((n) => n.power > 1),
     options: (s) => livingNpcs(s).filter((n) => n.power > 1).slice(0, 20)
@@ -15628,7 +15743,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'ask_training', slots: 2, maxPerYear: 2, name: 'Ask someone to train you', cat: 'social', cost: 'A season',
+    id: 'ask_training', maxPerYear: 3, minMaturity: 5, tooYoung: 'Nobody takes students this young.', slots: 2, name: 'Ask someone to train you', cat: 'social', cost: 'A season',
     desc: 'The fastest growth in the game, if they say yes.',
     available: (s) => livingNpcs(s).some((n) => n.power > combatPower(s.character) * 0.8),
     options: (s) => livingNpcs(s).filter((n) => n.power > combatPower(s.character) * 0.8)
@@ -15662,7 +15777,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'make_enemy', slots: 1, maxPerYear: 2, name: 'Pick a fight with someone', cat: 'social', cost: 'A moment', danger: true,
+    id: 'make_enemy', maxPerYear: 3, minMaturity: 3, slots: 1, name: 'Pick a fight with someone', cat: 'social', cost: 'A moment', danger: true,
     desc: 'Burn a relationship down on purpose.',
     available: (s) => livingNpcs(s).length > 0,
     options: (s) => livingNpcs(s).slice(0, 20).map((n) => ({ id: n.id, label: n.name, hint: relationLabel(n) })),
@@ -15680,7 +15795,7 @@ const ACTIONS = [
 
   // ------------------------------------------------------------------ world
   {
-    id: 'survey_world', slots: 0, maxPerYear: 2, name: 'Sweep for Dragon Balls', cat: 'world',
+    id: 'survey_world', maxPerYear: 3, minMaturity: 7, tooYoung: 'You would not know what you were looking at.', slots: 0, name: 'Sweep for Dragon Balls', cat: 'world',
     desc: 'Check whether this world has anything worth searching for.',
     available: (s) => !s.character.inAfterlife && !ballsAreInert(s),
     run: (s, rng) => {
@@ -15695,7 +15810,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'hunt_dragonball', slots: 2, maxPerYear: 2, name: 'Search for a Dragon Ball', cat: 'world',
+    id: 'hunt_dragonball', maxPerYear: 3, minMaturity: 9, tooYoung: 'You cannot cross a continent on your own yet.', slots: 2, name: 'Search for a Dragon Ball', cat: 'world',
     desc: 'Narrow down a signal square by square. A radar makes this survivable.',
     available: (s) => ballsHeld(s) < 7 && !s.character.inAfterlife && !ballsAreInert(s),
     run: (s, rng) => {
@@ -15708,7 +15823,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'travel', slots: 1, name: 'Travel', cat: 'world',
+    id: 'travel', minMaturity: 8, tooYoung: 'You are not going anywhere by yourself.', slots: 1, name: 'Travel', cat: 'world',
     desc: 'Somewhere else. Crossing space costs years unless you can skip them.',
     available: (s) => !s.character.inAfterlife,
     options: (s) => {
@@ -15754,7 +15869,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'world_act', slots: 2, maxPerYear: 1, name: 'Do something about this world', cat: 'world',
+    id: 'world_act', maxPerYear: 1, minMaturity: 15, tooYoung: 'Nobody on this world is listening to a child.', slots: 2, name: 'Do something about this world', cat: 'world',
     desc: 'Defend it, take it, empty it, or recruit from it.',
     available: (s) => !s.character.inAfterlife,
     options: (s) => {
@@ -15786,7 +15901,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'find_work', slots: 1, maxPerYear: 2, name: 'Look for work', cat: 'world', cost: 'A season',
+    id: 'find_work', maxPerYear: 2, minMaturity: 13, tooYoung: 'Nobody will hire you yet.', slots: 1, name: 'Look for work', cat: 'world', cost: 'A season',
     desc: 'Zeni buys gravity chambers.',
     available: (s) => !s.character.career && !s.character.inAfterlife,
     options: (s) => careersFor(s.character, getPlace(s.character.placeId).tags)
@@ -15803,7 +15918,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'shop', slots: 0, maxPerYear: 4, name: 'Go shopping', cat: 'world', cost: 'A moment',
+    id: 'shop', maxPerYear: 5, minMaturity: 5, tooYoung: 'Somebody else buys your things.', slots: 0, name: 'Go shopping', cat: 'world', cost: 'A moment',
     desc: 'Gear, property and transport.',
     available: (s) => !s.character.inAfterlife,
     options: (s) => shopStock(getPlace(s.character.placeId).tags)
@@ -15820,7 +15935,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'gamble', slots: 1, maxPerYear: 2, name: 'Gamble', cat: 'world', cost: 'A moment', danger: true,
+    id: 'gamble', maxPerYear: 2, minMaturity: 15, tooYoung: 'They will not let you in.', slots: 1, name: 'Gamble', cat: 'world', cost: 'A moment', danger: true,
     desc: 'The house on this planet is unusually honest, which does not help.',
     available: (s) => s.character.zeni > 5000 && !s.character.inAfterlife,
     run: (s, rng) => {
@@ -15836,7 +15951,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'commit_crime', slots: 1, maxPerYear: 2, name: 'Commit a crime', cat: 'world', cost: 'A moment', danger: true,
+    id: 'commit_crime', maxPerYear: 3, minMaturity: 8, slots: 1, name: 'Commit a crime', cat: 'world', cost: 'A moment', danger: true,
     desc: 'Fast money, lasting consequences.',
     available: (s) => s.character.age >= 12 && !s.character.inAfterlife,
     run: (s, rng) => {
@@ -15853,13 +15968,13 @@ const ACTIONS = [
     },
   },
   {
-    id: 'summon_dragon_action', slots: 0, name: 'Summon the dragon', cat: 'world', cost: 'A moment',
+    id: 'summon_dragon_action', minMaturity: 7, slots: 0, name: 'Summon the dragon', cat: 'world', cost: 'A moment',
     desc: 'You have all seven.',
     available: (s) => summonReady(s),
     run: (s, rng) => ({ text: 'Seven in a circle. The sky is already going dark.', forceEvent: 'summon_dragon' }),
   },
   {
-    id: 'seek_challenge', slots: 2, maxPerYear: 2, name: 'Go looking for a fight', cat: 'world',
+    id: 'seek_challenge', maxPerYear: 3, minMaturity: 11, tooYoung: 'You would not survive looking.', slots: 2, name: 'Go looking for a fight', cat: 'world',
     desc: 'Pick how far you are willing to reach for somebody worth fighting.',
     available: (s) => s.character.age >= 12,
     afterlife: true,
@@ -15889,7 +16004,7 @@ const ACTIONS = [
     },
   },
   {
-    id: 'hold_tournament', slots: 3, maxPerYear: 1, name: 'Hold a tournament', cat: 'world',
+    id: 'hold_tournament', maxPerYear: 1, minMaturity: 14, tooYoung: 'Nobody would come.', slots: 3, name: 'Hold a tournament', cat: 'world',
     desc: 'Put up a purse, send out word, and see who turns up. Your rules.',
     available: (s) => s.character.age >= 14 && !s.character.inAfterlife && s.character.zeni >= 50000,
     options: (s) => {
@@ -16010,12 +16125,16 @@ function availableActions(state) {
     let usable = false;
     try { usable = action.available(state); } catch (e) { usable = false; }
     if (!usable) continue;
+    // Things you are simply too young for are not listed as locked rows; they
+    // are not part of your life yet.
+    if (ageGate(state, action) && !action.showWhenYoung) continue;
     const blocked = actionBlocked(state, action);
     out.push({
       ...action,
       blocked,
       cost: costLabel(action),
-      used: (state.character.yearUse && state.character.yearUse[action.id]) || 0,
+      limit: limitFor(state, action),
+      used: usedThisYear(state, action.id),
     });
   }
   return out;
@@ -16696,8 +16815,10 @@ function migrate(state, from) {
   if (!state.character.extraPerks) state.character.extraPerks = [];
   if (state.character.yearsInAfterlife === undefined) state.character.yearsInAfterlife = 0;
   if (state.character.senzu === undefined) state.character.senzu = 0;
-  if (state.character.slotsMax === undefined) state.character.slotsMax = 5;
-  if (state.character.slotsLeft === undefined) state.character.slotsLeft = state.character.slotsMax;
+  // Old saves carry a slot budget that no longer exists.
+  delete state.character.slotsMax;
+  delete state.character.slotsLeft;
+  if (!state.character.yearUse) state.character.yearUse = {};
   if (!state.character.yearUse) state.character.yearUse = {};
   for (const npc of Object.values(state.npcs || {})) {
     if (npc.trust === undefined) npc.trust = 30;
@@ -16828,6 +16949,7 @@ const __mod_engine_social_js = (function () {
 // you permanently.
 
 const { clamp } = __mod_engine_rng_js;
+const { limitFor } = __mod_engine_economy_js;
 const { render } = __mod_engine_text_js;
 const { adjust, findNpc, currentYear, addNpc } = __mod_engine_state_js;
 const { addFact } = __mod_engine_memory_js;
@@ -17195,11 +17317,14 @@ function npcActions(state, npc) {
     if (!ok) continue;
     const key = `social:${action.id}:${npc.id}`;
     const used = (state.character.yearUse && state.character.yearUse[key]) || 0;
-    const slots = action.slots ?? 1;
+    const limit = limitFor(state, action);
     let blocked = null;
-    if (used >= (action.maxPerYear ?? 99)) blocked = 'Already done this year.';
-    else if ((state.character.slotsLeft ?? 0) < slots) blocked = 'No time left this year.';
-    out.push({ ...action, blocked, used, key });
+    if (used >= limit) {
+      blocked = limit === 1
+        ? `Once a year with ${npc.name}, and you have had it.`
+        : `${limit} a year with ${npc.name}. You have used ${used}.`;
+    }
+    out.push({ ...action, blocked, used, limit, key });
   }
   return out;
 }
@@ -17212,11 +17337,9 @@ function runNpcAction(state, rng, npcId, actionId) {
 
   const key = `social:${action.id}:${npc.id}`;
   const used = (state.character.yearUse && state.character.yearUse[key]) || 0;
-  if (used >= (action.maxPerYear ?? 99)) return { text: 'Already done this year.', refused: true };
-  const slots = action.slots ?? 1;
-  if ((state.character.slotsLeft ?? 0) < slots) return { text: 'No time left this year.', refused: true };
-
-  state.character.slotsLeft -= slots;
+  if (used >= limitFor(state, action)) {
+    return { text: `Not again this year, not with ${npc.name}.`, refused: true };
+  }
   state.character.yearUse = state.character.yearUse || {};
   state.character.yearUse[key] = used + 1;
 
@@ -17321,6 +17444,111 @@ function impressionLabel(impression) {
   return 'That was a mistake.';
 }
   return { scoreReplyLocally, applyReply, impressionLabel };
+})();
+
+/* ==== engine/perception.js ==== */
+const __mod_engine_perception_js = (function () {
+// What you can actually tell about somebody.
+//
+// A power level is a number a scouter reads out. Without one, and without ki
+// sense, you do not get a number - you get an impression, which is what every
+// character in this setting who is not holding a scouter actually has.
+//
+// Scouters also break. They were built to read the Frieza Force's own people
+// and they cannot cope with anything past about a million, which is the joke
+// the entire Namek saga runs on.
+
+const { combatPower, powerTier } = __mod_engine_stats_js;
+
+/** The reading a scouter can survive before the lens goes. */
+const SCOUTER_CEILING = 1000000;
+
+function hasScouter(character) {
+  return (character.items || []).includes('scouter') || (character.items || []).includes('cyber_eye');
+}
+
+function hasKiSense(character) {
+  const t = character.techniques || [];
+  return t.includes('ki_sense') || t.includes('ki_suppress') || t.includes('instant_transmission');
+}
+
+/** Can this character read exact numbers off anybody at all? */
+function canReadPower(character) {
+  return hasKiSense(character) || hasScouter(character);
+}
+
+/**
+ * How a power level reads to this character. Returns the string to show and
+ * whether a scouter just died getting it.
+ */
+function readPower(state, targetPower, opts = {}) {
+  const c = state.character;
+  const mine = combatPower(c);
+  const ratio = targetPower / Math.max(1, mine);
+
+  if (hasKiSense(c)) {
+    // Ki sense is a feel, not a display, but a trained one is accurate.
+    return { known: true, exact: true, broke: false, text: fmt(targetPower), how: 'ki sense' };
+  }
+
+  if (hasScouter(c)) {
+    if (targetPower > SCOUTER_CEILING) {
+      // The classic. It reads, it climbs, and then it does not exist any more.
+      if (!opts.peek && !state.character.flags.scouter_broken) {
+        state.character.flags.scouter_broken = true;
+        const i = (c.items || []).indexOf('scouter');
+        if (i > -1) c.items.splice(i, 1);
+      }
+      return {
+        known: false, exact: false, broke: true,
+        text: 'the scouter climbs, screams, and comes apart against the side of your head',
+        how: 'scouter',
+      };
+    }
+    return { known: true, exact: true, broke: false, text: fmt(targetPower), how: 'scouter' };
+  }
+
+  // No instrument and no training: you get what a person gets.
+  return { known: false, exact: false, broke: false, how: 'instinct', text: impression(ratio) };
+}
+
+function fmt(n) {
+  const v = Math.round(n);
+  return v.toLocaleString('en-US');
+}
+
+/** A body's honest read on somebody else, with no numbers in it. */
+function impression(ratio) {
+  if (ratio > 400) return 'standing near them is like standing near weather';
+  if (ratio > 60) return 'you cannot look directly at what they are';
+  if (ratio > 12) return 'far past you, and not pretending otherwise';
+  if (ratio > 3.5) return 'stronger than you, clearly';
+  if (ratio > 1.4) return 'stronger than you, probably';
+  if (ratio > 0.7) return 'about even, as far as you can tell';
+  if (ratio > 0.2) return 'weaker than you';
+  if (ratio > 0.02) return 'no threat';
+  return 'nothing at all';
+}
+
+/**
+ * The tier name is always available - everyone in this setting can tell a
+ * fighter from a farmer - but the number behind it is not.
+ */
+function describePower(state, targetPower, opts = {}) {
+  const read = readPower(state, targetPower, opts);
+  if (read.known) return `${read.text} (${powerTier(targetPower)})`;
+  if (read.broke) return read.text;
+  return read.text;
+}
+
+/** For rows and cards where only a short label fits. */
+function shortPower(state, targetPower) {
+  const read = readPower(state, targetPower, { peek: true });
+  if (read.known) return read.text;
+  if (read.broke) return 'off the scale';
+  return '?';
+}
+  return { SCOUTER_CEILING, hasScouter, hasKiSense, canReadPower, readPower, describePower, shortPower };
 })();
 
 /* ==== ui/trialui.js ==== */
@@ -17615,9 +17843,10 @@ const { npcActions, runNpcAction } = __mod_engine_social_js;
 const { scoreReplyLocally, applyReply, impressionLabel } = __mod_engine_dialogue_js;
 const { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } = __mod_engine_ai_js;
 const { numberish, zeni } = __mod_engine_text_js;
+const { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSense } = __mod_engine_perception_js;
 const { getRng, saveRng } = __mod_engine_state_js;
 const { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } = __mod_engine_battle_js;
-const { slotsLeft, slotsMax, costLabel } = __mod_engine_economy_js;
+const { costLabel, limitFor, usedThisYear, yearCapacity } = __mod_engine_economy_js;
 const { ballsHeld, ballManifest, pingSquare, GRID } = __mod_engine_dragonballs_js;
 const { resolveTrial, getMastery } = __mod_engine_trials_js;
 const { FORMATS, createTournament, roundName, playerMatch, playerOpponent, resolveOtherMatches, recordPlayerResult, matchBattleSpec, bracketSummary, standings, payout, placementLine, describeField, settle } = __mod_engine_tournament_js;
@@ -17740,7 +17969,7 @@ function renderCreation() {
 
   const sexes = $('opt-sex');
   sexes.innerHTML = '';
-  for (const sx of [['female', 'Female'], ['male', 'Male'], ['nonbinary', 'Non-binary']]) {
+  for (const sx of [['female', 'Female'], ['male', 'Male']]) {
     const b = el('button', 'opt' + (DRAFT.sex === sx[0] ? ' on' : ''), sx[1]);
     b.type = 'button';
     b.addEventListener('click', () => { DRAFT.sex = sx[0]; renderCreation(); });
@@ -17823,8 +18052,8 @@ function renderHud() {
     p.innerHTML = `${label} <b>${value}</b>`;
     pills.appendChild(p);
   };
-  const left = slotsLeft(GAME);
-  add('Year', `${left}/${slotsMax(GAME)}`, left === 0 ? 'bad' : left <= 1 ? 'gold' : 'good');
+  const cap = yearCapacity(GAME);
+  if (cap < 0.75) add('Year', cap < 0.5 ? 'Small' : 'Short', 'gold');
   add('Zeni', zeni(c.zeni).replace(' Zeni', ''));
   add('Fame', Math.round(c.fame));
   add('Karma', Math.round(c.karma), c.karma > 20 ? 'good' : c.karma < -20 ? 'bad' : '');
@@ -18115,13 +18344,14 @@ async function requestAiEvent(replace) {
 // ---------------------------------------------------------------- panels
 
 function panelActivities() {
-  const left = slotsLeft(GAME);
-  const { body } = sheetShell('Activities', `${left} of ${slotsMax(GAME)} left this year`);
-  if (left === 0) {
-    body.appendChild(el('p', 'row-note', 'The year is spent. Age up to get another one.'));
+  const actionsAll = availableActions(GAME);
+  const openCount = actionsAll.filter((a) => !a.blocked).length;
+  const { body } = sheetShell('Activities', `${openCount} still open this year`);
+  if (!openCount) {
+    body.appendChild(el('p', 'row-note', 'Everything you can do this year, you have done. Age up.'));
   }
   const groups = { body: 'Body', mind: 'Mind', power: 'Power', social: 'People', world: 'World' };
-  const actions = availableActions(GAME);
+  const actions = actionsAll;
 
   for (const [key, label] of Object.entries(groups)) {
     const inGroup = actions.filter((a) => a.cat === key);
@@ -18136,10 +18366,11 @@ function panelActivities() {
       main.appendChild(el('div', 'row-note', action.blocked || action.desc));
       b.appendChild(main);
       const cost = el('div', 'row-value');
-      cost.textContent = action.cost;
-      if (action.maxPerYear) {
-        cost.appendChild(el('div', '', `${action.used}/${action.maxPerYear}`));
+      // The count is the budget now, so it leads.
+      if (action.limit !== undefined && Number.isFinite(action.limit)) {
+        cost.appendChild(el('div', 'row-count', `${action.used}/${action.limit}`));
       }
+      cost.appendChild(el('div', 'row-when', action.cost));
       b.appendChild(cost);
       b.addEventListener('click', () => {
         const options = actionOptions(GAME, action.id);
@@ -18301,8 +18532,16 @@ function panelPerson(npcId) {
   }
 
   body.appendChild(el('div', 'group-label', 'What you know'));
+  // Only what you can actually read. Knowing somebody for years tells you they
+  // are dangerous; it does not tell you a figure.
+  const read = readPower(GAME, npc.power);
+  const powerRead = read.known
+    ? `${read.text} (${read.how})`
+    : read.broke ? 'Your scouter did not survive the reading.'
+      : `${read.text}${(npc.knowledge || 0) >= 2 ? '' : ''}`;
+  if (read.broke) flash('Your scouter climbs, screams and comes apart.', 5000);
   const table = el('div', 'dossier');
-  for (const row of dossier(npc, { full: npc.isCanon })) {
+  for (const row of dossier(npc, { full: npc.isCanon, powerRead })) {
     const line = el('div', 'dossier-row');
     line.appendChild(el('span', 'dossier-key', row.label));
     line.appendChild(el('span', 'dossier-val' + (row.value === '\u2014' ? ' unknown' : ''), row.value));
@@ -18948,7 +19187,10 @@ function renderTournament() {
       const card = el('div', 'draw-card');
       card.appendChild(el('div', 'draw-label', `${roundName(t)} - your draw`));
       card.appendChild(el('div', 'draw-name', foe.name));
-      card.appendChild(el('div', 'draw-power', `Power level ${numberish(foe.power)} - ${powerTier(foe.power)}`));
+      const read = readPower(GAME, foe.power, { peek: true });
+      card.appendChild(el('div', 'draw-power', read.known
+        ? `Power level ${numberish(foe.power)} - ${powerTier(foe.power)}`
+        : `${powerTier(foe.power)} - ${read.text}`));
       if (foe.flavour) card.appendChild(el('div', 'draw-flavour', foe.universe ? `Universe ${foe.universe}. ${foe.flavour}` : `They ${foe.flavour}.`));
       body.appendChild(card);
     } else {
@@ -18978,7 +19220,7 @@ function renderTournament() {
       row.appendChild(el('span', 'fname', e.name));
       if (e.universe) row.appendChild(el('span', 'ftag', `U${e.universe}`));
       else if (e.isCanon) row.appendChild(el('span', 'ftag', 'known'));
-      row.appendChild(el('span', 'fpow', numberish(e.power)));
+      row.appendChild(el('span', 'fpow', shortPower(GAME, e.power)));
       block.appendChild(row);
     }
     body.appendChild(block);
@@ -19209,7 +19451,9 @@ function renderBattle() {
   const st = battleStatus(BATTLE);
   $('foe-name').textContent = st.them.name;
   $('foe-sub').textContent = [st.them.tier, st.them.form, st.them.stance].filter(Boolean).join(' - ');
-  $('foe-power').textContent = numberish(st.them.power);
+  // A number on the foe panel is a scouter reading, not a birthright.
+  const foeRead = readPower(GAME, st.them.power, { peek: true });
+  $('foe-power').textContent = foeRead.known ? numberish(st.them.power) : (foeRead.broke ? '—' : '?');
   $('foe-hp').style.width = Math.max(0, st.them.hp) + '%';
   $('foe-state').textContent = st.them.hp > 60 ? 'Barely marked'
     : st.them.hp > 30 ? 'Hurt' : st.them.hp > 10 ? 'Badly hurt' : 'Barely standing';

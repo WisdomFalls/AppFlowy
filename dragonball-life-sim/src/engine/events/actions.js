@@ -14,7 +14,8 @@ import { getPlace, PLACES } from '../../data/places.js';
 import { shopStock, getItem, ITEMS } from '../../data/items.js';
 import { CAREERS, getCareer, careersFor } from '../../data/jobs.js';
 import { getRace, hasPerk } from '../../data/races.js';
-import { actionBlocked, chargeAction, grantTrainingPower, costLabel, slotsLeft } from '../economy.js';
+import { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel,
+  limitFor, usedThisYear, trainingRoomLeft } from '../economy.js';
 import { makeNpc, bondScore, relationLabel } from '../npc.js';
 import { canonAvailable, canonPower } from '../../data/canon.js';
 import { ensureBallSet, ballsHeld, startHunt, surveyPlanet, ballsAreInert, summonReady } from '../dragonballs.js';
@@ -54,7 +55,7 @@ function trainOnce(state, rng, opts = {}) {
 export const ACTIONS = [
   // ------------------------------------------------------------- training
   {
-    id: 'train_stat', slots: 2, maxPerYear: 3, name: 'Train', cat: 'body',
+    id: 'train_stat', maxPerYear: 4, minMaturity: 3, tooYoung: 'You are too small to train. Play, for now.', slots: 2, name: 'Train', cat: 'body',
     desc: 'Pick what you are working on. Each attribute has its own trial.',
     available: (s) => s.character.age >= 3,
     options: () => Object.entries(STAT_TRIALS).map(([stat, cfg]) => ({
@@ -81,7 +82,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'meditate', slots: 1, maxPerYear: 3, name: 'Meditate', cat: 'mind', cost: 'A season',
+    id: 'meditate', maxPerYear: 4, minMaturity: 5, tooYoung: 'Sitting still on purpose is beyond you yet.', slots: 1, name: 'Meditate', cat: 'mind', cost: 'A season',
     desc: 'Ki control, discipline and a calmer head.',
     available: () => true,
     run: (s, rng) => {
@@ -90,7 +91,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'rest', slots: 2, maxPerYear: 2, name: 'Rest and recover', cat: 'mind', cost: 'A season',
+    id: 'rest', maxPerYear: 3, slots: 2, name: 'Rest and recover', cat: 'mind', cost: 'A season',
     desc: 'Heal up. You lose ground and you stop dying.',
     available: () => true,
     run: (s, rng) => {
@@ -111,7 +112,7 @@ export const ACTIONS = [
 
   // ------------------------------------------------------------ progression
   {
-    id: 'attempt_form', slots: 2, maxPerYear: 2, name: 'Reach for a transformation', cat: 'power',
+    id: 'attempt_form', maxPerYear: 2, minMaturity: 10, tooYoung: 'Whatever is in you is not ready to come out yet.', slots: 2, name: 'Reach for a transformation', cat: 'power',
     desc: 'A form you have the grounds for. Whether you get it is another matter.',
     available: (s) => unlockableForms(s).length > 0,
     options: (s) => unlockableForms(s).map((f) => ({ id: f.id, label: f.name, hint: f.desc })),
@@ -131,7 +132,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'learn_technique', slots: 2, maxPerYear: 2, name: 'Study a technique', cat: 'power',
+    id: 'learn_technique', maxPerYear: 3, minMaturity: 6, tooYoung: 'You cannot hold the shapes yet.', slots: 2, name: 'Study a technique', cat: 'power',
     desc: 'Something from the tree. You have to be able to do the movement before it does anything.',
     available: (s) => availableTechniques(s.character).length > 0,
     options: (s) => availableTechniques(s.character)
@@ -154,7 +155,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'master_form', slots: 2, maxPerYear: 2, name: 'Master a transformation', cat: 'power',
+    id: 'master_form', maxPerYear: 2, minMaturity: 12, slots: 2, name: 'Master a transformation', cat: 'power',
     desc: 'Live in it until it stops costing you anything.',
     available: (s) => s.character.transformations.length > 0,
     options: (s) => s.character.transformations.map((id) => {
@@ -178,7 +179,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'invent_form', slots: 3, maxPerYear: 1, name: 'Build a form of your own', cat: 'power',
+    id: 'invent_form', maxPerYear: 1, minMaturity: 18, tooYoung: 'You have not lived enough to have a style of your own.', slots: 3, name: 'Build a form of your own', cat: 'power',
     desc: 'Take something you have mastered and push it where it was not designed to go.',
     available: (s) => s.character.transformations.some((id) => getMastery(s, id) >= 85)
       && s.character.stats.discipline >= 65,
@@ -205,7 +206,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'upgrade_self', slots: 2, maxPerYear: 1, name: 'Upgrade your hardware', cat: 'power', cost: 'A season',
+    id: 'upgrade_self', maxPerYear: 2, slots: 2, name: 'Upgrade your hardware', cat: 'power', cost: 'A season',
     desc: 'Machines improve by being improved.',
     available: (s) => ['android', 'bioandroid', 'tuffle'].includes(s.character.raceId),
     run: (s, rng) => {
@@ -224,7 +225,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'absorb', slots: 2, maxPerYear: 1, name: 'Absorb someone', cat: 'power', cost: 'A season', danger: true,
+    id: 'absorb', maxPerYear: 1, minMaturity: 10, slots: 2, name: 'Absorb someone', cat: 'power', cost: 'A season', danger: true,
     desc: 'Take them in. Keep the useful parts.',
     available: (s) => hasPerk(s.character, 'absorption') && livingNpcs(s).some((n) => n.power > 1),
     options: (s) => livingNpcs(s).filter((n) => n.power > 1)
@@ -255,7 +256,7 @@ export const ACTIONS = [
 
   // ------------------------------------------------------------- relations
   {
-    id: 'spend_time', slots: 1, maxPerYear: 4, name: 'Spend time with someone', cat: 'social', cost: 'A season',
+    id: 'spend_time', maxPerYear: 6, slots: 1, name: 'Spend time with someone', cat: 'social', cost: 'A season',
     desc: 'Closeness is the only thing that does not decay on its own.',
     available: (s) => livingNpcs(s).length > 0,
     options: (s) => livingNpcs(s).slice(0, 20).map((n) => ({ id: n.id, label: n.name, hint: `${relationLabel(n)} - bond ${bondScore(n)}` })),
@@ -269,7 +270,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'spar_npc', slots: 2, maxPerYear: 3, name: 'Spar with someone', cat: 'social', cost: 'A season',
+    id: 'spar_npc', maxPerYear: 4, minMaturity: 5, tooYoung: 'Nobody will spar a toddler.', slots: 2, name: 'Spar with someone', cat: 'social', cost: 'A season',
     desc: 'The Dragon Ball way of saying hello.',
     available: (s) => livingNpcs(s).some((n) => n.power > 1),
     options: (s) => livingNpcs(s).filter((n) => n.power > 1).slice(0, 20)
@@ -292,7 +293,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'ask_training', slots: 2, maxPerYear: 2, name: 'Ask someone to train you', cat: 'social', cost: 'A season',
+    id: 'ask_training', maxPerYear: 3, minMaturity: 5, tooYoung: 'Nobody takes students this young.', slots: 2, name: 'Ask someone to train you', cat: 'social', cost: 'A season',
     desc: 'The fastest growth in the game, if they say yes.',
     available: (s) => livingNpcs(s).some((n) => n.power > combatPower(s.character) * 0.8),
     options: (s) => livingNpcs(s).filter((n) => n.power > combatPower(s.character) * 0.8)
@@ -326,7 +327,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'make_enemy', slots: 1, maxPerYear: 2, name: 'Pick a fight with someone', cat: 'social', cost: 'A moment', danger: true,
+    id: 'make_enemy', maxPerYear: 3, minMaturity: 3, slots: 1, name: 'Pick a fight with someone', cat: 'social', cost: 'A moment', danger: true,
     desc: 'Burn a relationship down on purpose.',
     available: (s) => livingNpcs(s).length > 0,
     options: (s) => livingNpcs(s).slice(0, 20).map((n) => ({ id: n.id, label: n.name, hint: relationLabel(n) })),
@@ -344,7 +345,7 @@ export const ACTIONS = [
 
   // ------------------------------------------------------------------ world
   {
-    id: 'survey_world', slots: 0, maxPerYear: 2, name: 'Sweep for Dragon Balls', cat: 'world',
+    id: 'survey_world', maxPerYear: 3, minMaturity: 7, tooYoung: 'You would not know what you were looking at.', slots: 0, name: 'Sweep for Dragon Balls', cat: 'world',
     desc: 'Check whether this world has anything worth searching for.',
     available: (s) => !s.character.inAfterlife && !ballsAreInert(s),
     run: (s, rng) => {
@@ -359,7 +360,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'hunt_dragonball', slots: 2, maxPerYear: 2, name: 'Search for a Dragon Ball', cat: 'world',
+    id: 'hunt_dragonball', maxPerYear: 3, minMaturity: 9, tooYoung: 'You cannot cross a continent on your own yet.', slots: 2, name: 'Search for a Dragon Ball', cat: 'world',
     desc: 'Narrow down a signal square by square. A radar makes this survivable.',
     available: (s) => ballsHeld(s) < 7 && !s.character.inAfterlife && !ballsAreInert(s),
     run: (s, rng) => {
@@ -372,7 +373,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'travel', slots: 1, name: 'Travel', cat: 'world',
+    id: 'travel', minMaturity: 8, tooYoung: 'You are not going anywhere by yourself.', slots: 1, name: 'Travel', cat: 'world',
     desc: 'Somewhere else. Crossing space costs years unless you can skip them.',
     available: (s) => !s.character.inAfterlife,
     options: (s) => {
@@ -418,7 +419,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'world_act', slots: 2, maxPerYear: 1, name: 'Do something about this world', cat: 'world',
+    id: 'world_act', maxPerYear: 1, minMaturity: 15, tooYoung: 'Nobody on this world is listening to a child.', slots: 2, name: 'Do something about this world', cat: 'world',
     desc: 'Defend it, take it, empty it, or recruit from it.',
     available: (s) => !s.character.inAfterlife,
     options: (s) => {
@@ -450,7 +451,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'find_work', slots: 1, maxPerYear: 2, name: 'Look for work', cat: 'world', cost: 'A season',
+    id: 'find_work', maxPerYear: 2, minMaturity: 13, tooYoung: 'Nobody will hire you yet.', slots: 1, name: 'Look for work', cat: 'world', cost: 'A season',
     desc: 'Zeni buys gravity chambers.',
     available: (s) => !s.character.career && !s.character.inAfterlife,
     options: (s) => careersFor(s.character, getPlace(s.character.placeId).tags)
@@ -467,7 +468,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'shop', slots: 0, maxPerYear: 4, name: 'Go shopping', cat: 'world', cost: 'A moment',
+    id: 'shop', maxPerYear: 5, minMaturity: 5, tooYoung: 'Somebody else buys your things.', slots: 0, name: 'Go shopping', cat: 'world', cost: 'A moment',
     desc: 'Gear, property and transport.',
     available: (s) => !s.character.inAfterlife,
     options: (s) => shopStock(getPlace(s.character.placeId).tags)
@@ -484,7 +485,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'gamble', slots: 1, maxPerYear: 2, name: 'Gamble', cat: 'world', cost: 'A moment', danger: true,
+    id: 'gamble', maxPerYear: 2, minMaturity: 15, tooYoung: 'They will not let you in.', slots: 1, name: 'Gamble', cat: 'world', cost: 'A moment', danger: true,
     desc: 'The house on this planet is unusually honest, which does not help.',
     available: (s) => s.character.zeni > 5000 && !s.character.inAfterlife,
     run: (s, rng) => {
@@ -500,7 +501,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'commit_crime', slots: 1, maxPerYear: 2, name: 'Commit a crime', cat: 'world', cost: 'A moment', danger: true,
+    id: 'commit_crime', maxPerYear: 3, minMaturity: 8, slots: 1, name: 'Commit a crime', cat: 'world', cost: 'A moment', danger: true,
     desc: 'Fast money, lasting consequences.',
     available: (s) => s.character.age >= 12 && !s.character.inAfterlife,
     run: (s, rng) => {
@@ -517,13 +518,13 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'summon_dragon_action', slots: 0, name: 'Summon the dragon', cat: 'world', cost: 'A moment',
+    id: 'summon_dragon_action', minMaturity: 7, slots: 0, name: 'Summon the dragon', cat: 'world', cost: 'A moment',
     desc: 'You have all seven.',
     available: (s) => summonReady(s),
     run: (s, rng) => ({ text: 'Seven in a circle. The sky is already going dark.', forceEvent: 'summon_dragon' }),
   },
   {
-    id: 'seek_challenge', slots: 2, maxPerYear: 2, name: 'Go looking for a fight', cat: 'world',
+    id: 'seek_challenge', maxPerYear: 3, minMaturity: 11, tooYoung: 'You would not survive looking.', slots: 2, name: 'Go looking for a fight', cat: 'world',
     desc: 'Pick how far you are willing to reach for somebody worth fighting.',
     available: (s) => s.character.age >= 12,
     afterlife: true,
@@ -553,7 +554,7 @@ export const ACTIONS = [
     },
   },
   {
-    id: 'hold_tournament', slots: 3, maxPerYear: 1, name: 'Hold a tournament', cat: 'world',
+    id: 'hold_tournament', maxPerYear: 1, minMaturity: 14, tooYoung: 'Nobody would come.', slots: 3, name: 'Hold a tournament', cat: 'world',
     desc: 'Put up a purse, send out word, and see who turns up. Your rules.',
     available: (s) => s.character.age >= 14 && !s.character.inAfterlife && s.character.zeni >= 50000,
     options: (s) => {
@@ -674,12 +675,16 @@ export function availableActions(state) {
     let usable = false;
     try { usable = action.available(state); } catch (e) { usable = false; }
     if (!usable) continue;
+    // Things you are simply too young for are not listed as locked rows; they
+    // are not part of your life yet.
+    if (ageGate(state, action) && !action.showWhenYoung) continue;
     const blocked = actionBlocked(state, action);
     out.push({
       ...action,
       blocked,
       cost: costLabel(action),
-      used: (state.character.yearUse && state.character.yearUse[action.id]) || 0,
+      limit: limitFor(state, action),
+      used: usedThisYear(state, action.id),
     });
   }
   return out;
