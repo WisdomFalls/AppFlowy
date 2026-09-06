@@ -777,6 +777,85 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
 .still-label { font-size: 15.5px; color: var(--ink-2); text-align: center; min-height: 2.4em; }
 @media (prefers-reduced-motion: reduce) { .still-inner { transition: none; } }
 
+
+/* ---------------------------------------------------------------- desktop */
+
+/* On a wide screen the phone column wastes most of the window. Above 900px the
+   game opens out: the feed takes the width, and the sheet stops being a drawer
+   and becomes a column pinned to the right. The sheet is a sibling of #app
+   rather than a child, so this is done with position and a margin rather than
+   a grid. Nothing below 900px changes. */
+@media (min-width: 900px) {
+  :root { --phone: 100%; }
+
+  #app {
+    max-width: 1080px;
+    transition: margin-right .2s ease, max-width .2s ease;
+  }
+
+  /* The sheet: a fixed right-hand column, not a bottom drawer. */
+  .sheet {
+    top: 0;
+    bottom: 0;
+    left: auto;
+    right: 0;
+    transform: none;
+    width: 400px;
+    max-width: 400px;
+    max-height: none;
+    border-radius: 0;
+    border: none;
+    border-left: 1px solid var(--line);
+    box-shadow: -18px 0 40px -30px rgba(0, 0, 0, .8);
+  }
+  .sheet.open { animation: slide-in .2s cubic-bezier(.2, .8, .3, 1); }
+  @keyframes slide-in { from { transform: translateX(24px); opacity: .5; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .sheet.open { animation: none; } }
+
+  .sheet-grab { display: none; }
+  .sheet-body { padding: 20px 22px 14px; }
+  .sheet-foot { padding: 12px 18px 18px; }
+  .sheet-scrim { display: none !important; }
+
+  /* Make room for it only when it is actually there. */
+  body:has(.sheet.open) #app { margin-right: 400px; max-width: 900px; }
+
+  /* A wider feed still needs a readable measure. */
+  .feed { padding: 20px 28px 28px; }
+  .entry-text, .entry-outcome, .event-text { max-width: 66ch; }
+  .create { max-width: 700px; margin: 0 auto; }
+
+  /* Screens that are their own thing get room without stretching. */
+  #screen-battle, #screen-tourney, #screen-trial, #screen-hunt { max-width: 940px; margin: 0 auto; width: 100%; }
+  .battle-actions { grid-template-columns: repeat(3, 1fr); }
+  .tourney-body, .trial-stage, .hunt-grid, .epitaph { max-width: 720px; margin-left: auto; margin-right: auto; }
+
+  .dock { padding: 12px 28px calc(12px + env(safe-area-inset-bottom)); }
+  .age-btn { max-width: 460px; }
+  .stat-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: 1400px) {
+  #app { max-width: 1200px; }
+  .sheet { width: 460px; max-width: 460px; }
+  body:has(.sheet.open) #app { margin-right: 460px; max-width: 1000px; }
+}
+
+/* Everybody in a fight that has more than two people in it. */
+.foe-squad { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.foechip {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px;
+  background: var(--panel); font: inherit; font-size: 11px; color: var(--ink);
+  cursor: pointer; min-width: 78px;
+}
+.foechip.focus { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.foechip.down { opacity: .38; text-decoration: line-through; cursor: default; }
+.foechip.ally { border-style: dashed; }
+.foechip-name { font-weight: 600; letter-spacing: .01em; }
+.foechip-bar { display: block; width: 100%; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.foechip-fill { display: block; height: 100%; background: var(--danger, #c0392b); }
+
 </style>
 <div id="app">
 
@@ -892,6 +971,7 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
         <span id="foe-state">-</span>
         <span id="battle-round">Round 1</span>
       </div>
+      <div class="foe-squad" id="foe-squad" hidden></div>
       <div class="destruction" id="destruction" hidden>
         <span>Collateral</span>
         <div class="bar-track"><div class="bar-fill dmg" id="destruction-fill" style="width:0%"></div></div>
@@ -2250,7 +2330,7 @@ function getTrait(id) {
  * The sum of one effect key across every trait somebody has. Multiplicative
  * keys start at 1 and multiply; everything else adds.
  */
-const MULTIPLICATIVE = ['learnSpeed', 'trainMult', 'kiMult', 'staminaMult', 'damageTaken',
+const MULTIPLICATIVE = ['learnSpeed', 'trainMult', 'kiMult', 'staminaMult', 'healthMult', 'damageTaken',
   'healRate', 'powerMult', 'lifespan', 'agingRate', 'tensionGain', 'respectGain'];
 
 function traitEffect(character, key) {
@@ -2919,6 +2999,153 @@ function techniquePower(character) {
   return { BRANCHES, TECHNIQUES, TECH_BY_ID, getTechnique, availableTechniques, techniquePower };
 })();
 
+/* ==== engine/mastery.js ==== */
+const __mod_engine_mastery_js = (function () {
+// Form ceilings.
+//
+// Raw training has a roof, and the roof is set by the last form you unlocked.
+// This is the shape the series actually has: Goku trains for three years and
+// gains a factor of ten, then stalls until he goes Super Saiyan, then stalls
+// again until he masters it. Grinding push-ups past your ceiling does almost
+// nothing. You break through by finding the next form, or by mastering the one
+// you already have until it holds more than it was built to hold.
+
+const { clamp } = __mod_engine_rng_js;
+const { ladderFor, getTransformation } = __mod_data_transformations_js;
+
+/** Best form owned, by multiplier. Local so this module stays a leaf. */
+function bestForm(character) {
+  let best = null;
+  for (const id of character.transformations || []) {
+    const t = getTransformation(id);
+    if (!t) continue;
+    if (!best || t.mult > best.mult) best = t;
+  }
+  return best;
+}
+
+/** Where raw training stops working, for a character at their current rung. */
+function ceilingFor(state) {
+  const c = state.character;
+  const ladder = ladderFor(c.raceId).slice().sort((a, b) => a.mult - b.mult);
+  const owned = new Set(c.transformations);
+
+  // The next rung you have not taken sets the roof: you can train up to
+  // comfortably past its entry requirement, and then you are simply stuck at
+  // the door until you open it.
+  const next = ladder.find((f) => !owned.has(f.id) && f.req && f.req.power);
+  let base;
+  if (next) {
+    base = next.req.power * 1.6;
+  } else {
+    // Nothing left on the ladder. The roof becomes your best form's own
+    // ceiling, which is very high but not infinite.
+    const best = bestForm(c);
+    const top = ladder[ladder.length - 1];
+    const anchor = (best && best.req && best.req.power) || (top && top.req && top.req.power) || 1000;
+    base = anchor * 250;
+  }
+
+  // A form you have worn until it fits holds more than one you just found.
+  const best = bestForm(c);
+  const m = best ? masteryOf(c, best.id) : 0;
+  base *= 1 + (m / 100) * 1.4;
+
+  // Species that grow without a ladder at all (Earthlings, most of them) are
+  // not meant to be capped by a form they can never reach.
+  if (!ladder.length) base = Math.max(base, c.power * 6);
+
+  return Math.max(120, base);
+}
+
+/** 0 at nowhere near the roof, 1 at it. */
+function ceilingPressure(state) {
+  return clamp(state.character.power / ceilingFor(state), 0, 1.4);
+}
+
+/** The training multiplier the ceiling imposes. Falls away sharply at the top. */
+function ceilingDamping(state) {
+  const p = ceilingPressure(state);
+  if (p < 0.6) return 1;
+  return clamp(1 - Math.pow((p - 0.6) / 0.42, 2.4), 0.04, 1);
+}
+
+/** What is actually stopping you, in words, or null if nothing is. */
+function ceilingBlock(state) {
+  const p = ceilingPressure(state);
+  if (p < 0.82) return null;
+  const c = state.character;
+  const ladder = ladderFor(c.raceId).slice().sort((a, b) => a.mult - b.mult);
+  const owned = new Set(c.transformations);
+  const next = ladder.find((f) => !owned.has(f.id) && f.req && f.req.power);
+  const best = bestForm(c);
+  return {
+    at: p >= 1,
+    next: next || null,
+    form: best || null,
+    mastery: best ? masteryOf(c, best.id) : 0,
+    text: p >= 1
+      ? (next
+        ? `Training has stopped giving anything back. Your body is at the edge of what this shape holds. ${next.name} is the door.`
+        : 'Training has stopped giving anything back. You are at the top of what your species is built to do, and past this it is the form itself that has to grow.')
+      : 'The gains are getting thin. You are approaching what this shape holds.',
+  };
+}
+
+// ------------------------------------------------------------------ mastery
+
+function masteryOf(character, formId) {
+  return (character.formMastery && character.formMastery[formId]) || 0;
+}
+
+function trainMastery(character, formId, amount) {
+  if (!formId) return 0;
+  character.formMastery = character.formMastery || {};
+  const before = masteryOf(character, formId);
+  const after = clamp(before + amount, 0, 100);
+  character.formMastery[formId] = after;
+  return Math.round(after) - Math.round(before);
+}
+
+/**
+ * What mastery buys inside the form: more of the multiplier, less of the
+ * drain. An unmastered form is a blunt instrument that empties you.
+ */
+function masteryMult(character, formId) {
+  const m = masteryOf(character, formId);
+  return 0.82 + (m / 100) * 0.43;      // 0.82x raw, up to 1.25x fully mastered
+}
+
+function masteryDrain(character, formId) {
+  const m = masteryOf(character, formId);
+  return 1.45 - (m / 100) * 0.95;      // 1.45x raw drain, down to 0.5x
+}
+
+function masteryLabel(m) {
+  if (m >= 95) return 'second nature';
+  if (m >= 75) return 'mastered';
+  if (m >= 50) return 'comfortable';
+  if (m >= 25) return 'usable';
+  if (m > 0) return 'raw';
+  return 'untouched';
+}
+
+/** Every owned form and how well it is worn, for the UI. */
+function masteryList(character) {
+  return (character.transformations || []).map((id) => {
+    const f = getTransformation(id);
+    if (!f) return null;
+    const m = masteryOf(character, id);
+    return {
+      id, name: f.name, mult: f.mult, mastery: Math.round(m), label: masteryLabel(m),
+      power: Math.round(f.mult * masteryMult(character, id) * 100) / 100,
+      drain: Math.round(f.drain * masteryDrain(character, id) * 10) / 10,
+    };
+  }).filter(Boolean);
+}
+  return { ceilingFor, ceilingPressure, ceilingDamping, ceilingBlock, masteryOf, trainMastery, masteryMult, masteryDrain, masteryLabel, masteryList };
+})();
+
 /* ==== engine/stats.js ==== */
 const __mod_engine_stats_js = (function () {
 // Power level mathematics. Dragon Ball power is exponential, so growth here is
@@ -2931,6 +3158,7 @@ const { traitEffect } = __mod_data_traits_js;
 const { getRace, hasPerk } = __mod_data_races_js;
 const { getTransformation } = __mod_data_transformations_js;
 const { techniquePower } = __mod_data_techniques_js;
+const { ceilingDamping, masteryMult } = __mod_engine_mastery_js;
 
 const STAT_KEYS = ['strength', 'speed', 'technique', 'kiControl', 'durability', 'intellect', 'charisma', 'discipline'];
 
@@ -2996,6 +3224,9 @@ function trainingRate(character, opts = {}) {
   if (character.vitals.health < 40) rate *= 0.6;
   if (character.vitals.happiness < 25) rate *= 0.8;
 
+  // The roof. Past the ceiling your current form supports, work stops paying.
+  if (opts.state) rate *= ceilingDamping(opts.state);
+
   return (Math.max(0, rate)) * traitEffect(character, 'trainMult');
 }
 
@@ -3027,8 +3258,9 @@ function bestForm(character) {
  */
 function combatPower(character, opts = {}) {
   const form = opts.form === null ? null : (opts.form || bestForm(character));
-  const mult = form ? form.mult : 1;
-  const health = clamp(character.vitals.health / 100, 0.25, 1);
+  // A form you have not worn in gives you less than it says on the tin.
+  const mult = form ? form.mult * masteryMult(character, form.id) : 1;
+  const health = clamp(character.vitals.health / Math.max(1, character.vitals.healthMax || 100), 0.25, 1);
   const ki = clamp(0.55 + (character.vitals.ki / Math.max(1, character.vitals.kiMax)) * 0.45, 0.4, 1);
   const tech = techniquePower(character);
   const techFactor = 1 + (tech.atk + tech.def + tech.speed) / 260;
@@ -3068,6 +3300,35 @@ function applyStatDelta(character, delta, cap = 100) {
   }
 }
 
+/**
+ * How much punishment the body holds. This is not a constant: a fighter who
+ * has trained for thirty years and come back from three near-deaths is
+ * physically harder to put down than the boy he was, and the number should
+ * say so instead of everyone sharing one hundred hit points forever.
+ */
+function healthMaxFor(character) {
+  const race = getRace(character.raceId);
+  const dur = character.stats.durability || 40;
+  let max = 60 + dur * 0.8;                                   // 68 .. 140
+  max += Math.min(60, (character.flags?.hardTrainingYears || 0) * 2.2);
+  max += Math.min(70, (character.zenkaiCount || 0) * 9);      // scar tissue that helps
+  max += Math.min(40, Math.log10(Math.max(10, character.power)) * 6);
+  if (hasPerk(character, 'hardToKill')) max *= 1.15;
+  if (hasPerk(character, 'regeneration')) max *= 1.08;
+  max *= ageFactor(character) < 0.3 ? 0.8 : 1;                // the very old and the very small
+  max *= traitEffect(character, 'healthMult') || 1;
+  return Math.round(clamp(max, 45, 420));
+}
+
+/** Stamina pool. Same idea: conditioning is a thing you build. */
+function staminaMaxFor(character) {
+  if (hasPerk(character, 'infiniteStamina')) return 100;
+  const base = 55 + (character.stats.durability || 40) * 0.35 + (character.stats.discipline || 40) * 0.3;
+  const trained = Math.min(45, (character.flags?.hardTrainingYears || 0) * 1.6);
+  const mult = traitEffect(character, 'staminaMult') || 1;
+  return Math.round(clamp((base + trained) * mult * (ageFactor(character) < 0.3 ? 0.85 : 1), 50, 240));
+}
+
 /** Maximum ki pool, which grows with control and technique. */
 function kiMaxFor(character) {
   // Deep reserves are a real thing somebody is born with.
@@ -3093,7 +3354,7 @@ function naturalDeathChance(character) {
   if (over < 0) return 0.004 + (10 + over) * 0.002;
   return clamp(0.08 + over * 0.06, 0, 0.85);
 }
-  return { STAT_KEYS, STAT_LABELS, ageFactor, agingDecay, trainingRate, zenkaiBoost, bestForm, combatPower, powerTier, winChance, statAverage, applyStatDelta, kiMaxFor, lifeExpectancy, naturalDeathChance };
+  return { STAT_KEYS, STAT_LABELS, ageFactor, agingDecay, trainingRate, zenkaiBoost, bestForm, combatPower, powerTier, winChance, statAverage, applyStatDelta, healthMaxFor, staminaMaxFor, kiMaxFor, lifeExpectancy, naturalDeathChance };
 })();
 
 /* ==== data/names.js ==== */
@@ -6042,7 +6303,7 @@ const { rollOrigin } = __mod_engine_origins_js;
 const { inheritTraits, originTraits, traitEffect } = __mod_data_traits_js;
 const { emptyPurse, currencyFor, priceIn, credit } = __mod_data_currency_js;
 const { makeFamily, resetNpcCounter } = __mod_engine_npc_js;
-const { STAT_KEYS, kiMaxFor, lifeExpectancy, combatPower, powerTier } = __mod_engine_stats_js;
+const { STAT_KEYS, kiMaxFor, healthMaxFor, staminaMaxFor, lifeExpectancy, combatPower, powerTier } = __mod_engine_stats_js;
 
 const SAVE_VERSION = 3;
 
@@ -6146,7 +6407,7 @@ function createGame(creation, seedInput) {
     keptBody: false,
 
     stats,
-    vitals: { health: 100, happiness: 65, ki: 40, kiMax: 60 },
+    vitals: { health: 100, healthMax: 100, happiness: 65, ki: 40, kiMax: 60, stamina: 100, staminaMax: 100 },
     power: startPower,
     peakPower: startPower,
     zenkaiCount: 0,
@@ -6200,6 +6461,10 @@ function createGame(creation, seedInput) {
 
   character.vitals.kiMax = kiMaxFor(character);
   character.vitals.ki = character.vitals.kiMax;
+  character.vitals.healthMax = healthMaxFor(character);
+  character.vitals.health = character.vitals.healthMax;
+  character.vitals.staminaMax = staminaMaxFor(character);
+  character.vitals.stamina = character.vitals.staminaMax;
   character.lifeExpectancy = lifeExpectancy(character, rng);
 
   const state = {
@@ -6361,7 +6626,7 @@ function spend(state, amount) {
 
 function adjust(state, changes = {}) {
   const c = state.character;
-  if (changes.health !== undefined) c.vitals.health = clamp(c.vitals.health + changes.health, 0, 100);
+  if (changes.health !== undefined) c.vitals.health = clamp(c.vitals.health + changes.health, 0, healthCap(c));
   if (changes.happiness !== undefined) c.vitals.happiness = clamp(c.vitals.happiness + changes.happiness, 0, 100);
   if (changes.ki !== undefined) c.vitals.ki = clamp(c.vitals.ki + changes.ki, 0, c.vitals.kiMax);
   if (changes.fame !== undefined) c.fame = clamp(c.fame + changes.fame, 0, 100);
@@ -6382,6 +6647,28 @@ function adjust(state, changes = {}) {
   }
   c.vitals.kiMax = kiMaxFor(c);
   c.vitals.ki = Math.min(c.vitals.ki, c.vitals.kiMax);
+  refreshCeilings(c);
+}
+
+/**
+ * The ceilings move as the character does, so they are recomputed rather than
+ * stored once. Old saves that predate them get them filled in here.
+ */
+function healthCap(character) {
+  const max = healthMaxFor(character);
+  character.vitals.healthMax = max;
+  return max;
+}
+
+function refreshCeilings(character) {
+  const hMax = healthMaxFor(character);
+  const sMax = staminaMaxFor(character);
+  character.vitals.healthMax = hMax;
+  character.vitals.staminaMax = sMax;
+  character.vitals.health = Math.min(character.vitals.health ?? hMax, hMax);
+  if (character.vitals.stamina === undefined) character.vitals.stamina = sMax;
+  character.vitals.stamina = Math.min(character.vitals.stamina, sMax);
+  return character.vitals;
 }
 
 function setFlag(state, flag, value = true) {
@@ -6399,7 +6686,7 @@ function worldFlag(state, name) {
 function setWorldFlag(state, name, value = true) {
   state.world.flags[name] = value;
 }
-  return { SAVE_VERSION, APPEARANCE, defaultCreation, createGame, getRng, saveRng, currentYear, place, npcList, livingNpcs, npcsByRelation, addNpc, findNpc, characterSummary, aiContext, isChild, isAdult, hasItem, giveItem, spend, adjust, setFlag, flag, worldFlag, setWorldFlag };
+  return { SAVE_VERSION, APPEARANCE, defaultCreation, createGame, getRng, saveRng, currentYear, place, npcList, livingNpcs, npcsByRelation, addNpc, findNpc, characterSummary, aiContext, isChild, isAdult, hasItem, giveItem, spend, adjust, healthCap, refreshCeilings, setFlag, flag, worldFlag, setWorldFlag };
 })();
 
 /* ==== engine/aieffects.js ==== */
@@ -7752,6 +8039,186 @@ const DEED_SCALE = {
   return { HOME_KINDS, homeOf, homeOptions, settleHome, homeBonus, reputationOf, reputationLabel, spreadWord, DEED_SCALE };
 })();
 
+/* ==== engine/body.js ==== */
+const __mod_engine_body_js = (function () {
+// What a fight takes and does not give back.
+//
+// Scars are cosmetic. These are not: an arm you no longer have, an eye that
+// stopped working, a tail somebody cut off. Each one costs something real and
+// permanently, and each one has an answer - a prosthetic, a regeneration, a
+// wish - that costs something else.
+
+const { clamp } = __mod_engine_rng_js;
+const { getRace, hasPerk } = __mod_data_races_js;
+
+const INJURIES = {
+  lost_arm: {
+    id: 'lost_arm', name: 'a missing arm', mark: 'stump_arm', side: true,
+    desc: 'Taken off above the elbow. You have relearned everything one-handed.',
+    stats: { strength: -10, technique: -8 }, powerMult: 0.82,
+    prosthetic: 'mech_arm',
+  },
+  lost_hand: {
+    id: 'lost_hand', name: 'a missing hand', mark: 'stump_hand', side: true,
+    desc: 'The hand is gone. The arm works.',
+    stats: { technique: -6, strength: -3 }, powerMult: 0.93,
+    prosthetic: 'mech_arm',
+  },
+  lost_eye: {
+    id: 'lost_eye', name: 'a lost eye', mark: 'missing_eye', side: true,
+    desc: 'Depth perception is a thing you have had to rebuild from scratch.',
+    stats: { speed: -5, technique: -4 }, powerMult: 0.94,
+    prosthetic: 'mech_eye',
+  },
+  lost_leg: {
+    id: 'lost_leg', name: 'a missing leg', mark: 'stump_leg', side: true,
+    desc: 'Below the knee. Flight helps. Standing does not.',
+    stats: { speed: -12, strength: -4 }, powerMult: 0.85,
+    prosthetic: 'mech_leg',
+  },
+  lost_tail: {
+    id: 'lost_tail', name: 'a severed tail', mark: null,
+    desc: 'Cut at the base. Whatever it was for, it is not for that any more.',
+    stats: {}, powerMult: 1,
+  },
+  broken_back: {
+    id: 'broken_back', name: 'a spine that never set right', mark: null,
+    desc: 'It healed. It did not heal straight.',
+    stats: { speed: -8, durability: -6 }, powerMult: 0.88,
+  },
+  ruined_lungs: {
+    id: 'ruined_lungs', name: 'ruined lungs', mark: null,
+    desc: 'Something burned out of you that does not grow back. You tire early now.',
+    stats: { durability: -8, discipline: -2 }, powerMult: 0.9,
+  },
+};
+
+const PROSTHETICS = {
+  mech_arm: { id: 'mech_arm', name: 'a mechanical arm', restores: 0.85, stats: { strength: 4 } },
+  mech_leg: { id: 'mech_leg', name: 'a mechanical leg', restores: 0.85, stats: { speed: 3 } },
+  mech_eye: { id: 'mech_eye', name: 'an artificial eye', restores: 0.9, stats: { technique: 2 } },
+};
+
+function injuries(character) {
+  return character.injuries || (character.injuries = []);
+}
+
+function hasInjury(character, id) {
+  return injuries(character).some((i) => i.id === id);
+}
+
+/**
+ * Take a permanent injury. Returns the line to show, or null if it did not
+ * apply (already have it, or the body regrows it before anyone can notice).
+ */
+function maim(state, rng, id, from, opts = {}) {
+  const c = state.character;
+  const spec = INJURIES[id];
+  if (!spec || hasInjury(c, id)) return null;
+
+  // Namekians and Buu regrow limbs in the time it takes to say so. Androids
+  // do not bleed, but they do come apart, and theirs stays off until repaired.
+  if (hasPerk(c, 'regeneration') && id !== 'lost_tail' && !opts.force) {
+    return `${from ? from + ' takes' : 'You lose'} the limb, and it is back before the shock is.`;
+  }
+
+  const entry = {
+    id, from: from || 'nobody in particular', year: c.birthYear + c.age,
+    side: spec.side ? rng.pick(['left', 'right']) : null,
+    prosthetic: null,
+  };
+  injuries(c).push(entry);
+
+  if (spec.mark) {
+    c.scars = c.scars || [];
+    c.scars.push({ year: entry.year, mark: spec.mark, from: entry.from, text: `${spec.name}, from ${entry.from}.` });
+  }
+  if (id === 'lost_tail') c.tail = false;
+  applyInjuryStats(c, spec, 1);
+  c.power = Math.max(1, Math.round(c.power * spec.powerMult));
+
+  return opts.text || `You lose ${entry.side ? 'the ' + entry.side + ' one' : 'it'}. ${spec.desc}`;
+}
+
+function applyInjuryStats(character, spec, sign) {
+  for (const [k, v] of Object.entries(spec.stats || {})) {
+    character.stats[k] = clamp((character.stats[k] || 0) + v * sign, 1, 100);
+  }
+}
+
+/** What is currently missing, in a form the record and the UI can print. */
+function injuryList(character) {
+  return injuries(character).map((e) => {
+    const spec = INJURIES[e.id] || {};
+    const p = e.prosthetic ? PROSTHETICS[e.prosthetic] : null;
+    return {
+      id: e.id, year: e.year, from: e.from, side: e.side,
+      name: spec.name || e.id,
+      desc: spec.desc || '',
+      prosthetic: p ? p.name : null,
+      fixable: !!spec.prosthetic && !e.prosthetic,
+      needs: spec.prosthetic || null,
+    };
+  });
+}
+
+/** Something you can have fitted, and what it costs you to be without it. */
+function prostheticOptions(character) {
+  return injuries(character)
+    .filter((e) => !e.prosthetic && INJURIES[e.id] && INJURIES[e.id].prosthetic)
+    .map((e) => ({ entry: e, spec: INJURIES[e.id], part: PROSTHETICS[INJURIES[e.id].prosthetic] }));
+}
+
+/** Fit one. Gives most of the lost ground back, and none of the lost flesh. */
+function fitProsthetic(state, injuryId, quality = 1) {
+  const c = state.character;
+  const entry = injuries(c).find((e) => e.id === injuryId && !e.prosthetic);
+  if (!entry) return { ok: false, text: 'Nothing to fit.' };
+  const spec = INJURIES[injuryId];
+  const part = PROSTHETICS[spec.prosthetic];
+  if (!part) return { ok: false, text: 'Nothing to fit.' };
+
+  entry.prosthetic = part.id;
+  entry.quality = quality;
+  // Give back most of what the injury took, scaled by how good the work is.
+  const back = part.restores * quality;
+  for (const [k, v] of Object.entries(spec.stats || {})) {
+    c.stats[k] = clamp((c.stats[k] || 0) - v * back, 1, 100);
+  }
+  for (const [k, v] of Object.entries(part.stats || {})) {
+    c.stats[k] = clamp((c.stats[k] || 0) + v * quality, 1, 100);
+  }
+  c.power = Math.max(1, Math.round(c.power / (spec.powerMult + (1 - spec.powerMult) * (1 - back))));
+  return {
+    ok: true, part,
+    text: `${part.name.charAt(0).toUpperCase()}${part.name.slice(1)}, fitted and calibrated. `
+      + (quality >= 1 ? 'It moves like the original did, near enough.'
+        : 'It is not the original. It will do.'),
+  };
+}
+
+/** Undo everything: a wish, a Namekian healer, a proper regeneration tank. */
+function restoreBody(state) {
+  const c = state.character;
+  const list = injuries(c);
+  if (!list.length) return { ok: false, text: 'There is nothing to put back.' };
+  for (const e of list) {
+    const spec = INJURIES[e.id];
+    if (!spec) continue;
+    if (!e.prosthetic) {
+      applyInjuryStats(c, spec, -1);
+      c.power = Math.max(1, Math.round(c.power / spec.powerMult));
+    }
+    if (e.id === 'lost_tail' && getRace(c.raceId).perks.includes('oozaru')) c.tail = true;
+    if (spec.mark) c.scars = (c.scars || []).filter((s) => s.mark !== spec.mark);
+  }
+  const n = list.length;
+  c.injuries = [];
+  return { ok: true, text: `Everything that was taken off you is back on. ${n === 1 ? 'It' : 'All of it'} works.` };
+}
+  return { INJURIES, PROSTHETICS, injuries, hasInjury, maim, injuryList, prostheticOptions, fitProsthetic, restoreBody };
+})();
+
 /* ==== engine/battle.js ==== */
 const __mod_engine_battle_js = (function () {
 // Turn-based combat.
@@ -7763,7 +8230,8 @@ const __mod_engine_battle_js = (function () {
 
 const { clamp } = __mod_engine_rng_js;
 const { render } = __mod_engine_text_js;
-const { combatPower, powerTier, zenkaiBoost, winChance } = __mod_engine_stats_js;
+const { combatPower, powerTier, zenkaiBoost, winChance, healthMaxFor, staminaMaxFor } = __mod_engine_stats_js;
+const { masteryMult, masteryDrain, trainMastery } = __mod_engine_mastery_js;
 const { TECH_BY_ID } = __mod_data_techniques_js;
 const { getTransformation, ladderFor } = __mod_data_transformations_js;
 const { getPlace } = __mod_data_places_js;
@@ -7771,6 +8239,7 @@ const { getRace, hasPerk } = __mod_data_races_js;
 const { numberish } = __mod_engine_text_js;
 const { damageGear } = __mod_engine_inventory_js;
 const { spreadWord, DEED_SCALE } = __mod_engine_settlement_js;
+const { maim } = __mod_engine_body_js;
 
 /**
  * What people say mid-fight. Nobody in this setting fights silently: they
@@ -7865,12 +8334,12 @@ function sideTemplate(name, power, opts = {}) {
     name,
     power,
     basePower: power,
-    hp: 100,
-    hpMax: 100,
+    hp: opts.hpMax ?? 100,
+    hpMax: opts.hpMax ?? 100,
     ki: opts.ki ?? 100,
     kiMax: opts.kiMax ?? 100,
-    stamina: 100,
-    staminaMax: 100,
+    stamina: opts.staminaMax ?? 100,
+    staminaMax: opts.staminaMax ?? 100,
     stance: 'neutral',
     form: null,
     formName: null,
@@ -7887,6 +8356,9 @@ function sideTemplate(name, power, opts = {}) {
     instinct: opts.instinct ?? 50,
     // What they say when things happen. Filled in by the caller.
     voice: opts.voice || null,
+    mastery: opts.mastery || null,
+    // Somebody in the fight who is not you and not the enemy in front of you.
+    down: false,
   };
 }
 
@@ -7907,25 +8379,53 @@ function createBattle(state, rng, opts = {}) {
     techniques: c.techniques.slice(),
     forms: c.transformations.slice(),
     raceId: c.raceId,
+    mastery: c.formMastery || {},
   });
-  me.hp = clamp(c.vitals.health, 5, 100);
-  me.hpMax = 100;
+  me.hpMax = Math.max(20, Math.round(c.vitals.healthMax || healthMaxFor(c)));
+  me.hp = clamp(c.vitals.health, 5, me.hpMax);
+  me.staminaMax = Math.max(40, Math.round(c.vitals.staminaMax || staminaMaxFor(c)));
+  me.stamina = me.staminaMax;
 
-  const them = sideTemplate(foeSpec.name, Math.max(1, foeSpec.power), {
-    speedStat: foeSpec.speedStat ?? 50,
-    instinct: foeSpec.instinct ?? 50,
-    voice: foeSpec.voice || null,
-    techniques: foeSpec.techniques || [],
-    forms: foeSpec.forms || [],
-    raceId: foeSpec.raceId || 'other',
-    infiniteStamina: foeSpec.raceId === 'android',
-    regenerates: ['namekian', 'majin', 'bioandroid'].includes(foeSpec.raceId),
+  const makeFoe = (spec) => sideTemplate(spec.name, Math.max(1, spec.power), {
+    hpMax: spec.hpMax ?? Math.round(clamp(70 + Math.log10(Math.max(10, spec.power)) * 14, 70, 260)),
+    speedStat: spec.speedStat ?? 50,
+    instinct: spec.instinct ?? 50,
+    voice: spec.voice || null,
+    techniques: spec.techniques || [],
+    forms: spec.forms || [],
+    raceId: spec.raceId || 'other',
+    infiniteStamina: spec.raceId === 'android',
+    regenerates: ['namekian', 'majin', 'bioandroid'].includes(spec.raceId),
   });
+
+  // One enemy or a squad. Everything below treats `them` as whoever you are
+  // currently looking at; `squad` is everybody still on their feet.
+  const specs = (opts.foes && opts.foes.length) ? opts.foes.slice() : [foeSpec];
+  const squad = specs.map((spec, i) => {
+    const side = makeFoe(spec);
+    side.slot = i;
+    side.ref = { canonId: spec.canonId || null, npcId: spec.npcId || null };
+    return side;
+  });
+  const them = squad[0];
+
+  // A crowd is not the sum of its parts. Everyone past the first fights at a
+  // discount, because they get in each other's way - which is exactly why the
+  // series lets one strong fighter hold off six weaker ones.
+  if (squad.length > 1) {
+    for (let i = 1; i < squad.length; i += 1) squad[i].crowdPenalty = 1 - Math.min(0.45, i * 0.09);
+  }
 
   return {
     id: 'battle_' + (state.stats.fights + 1),
     me,
     them,
+    squad,
+    allies: (opts.allies || []).map((spec) => {
+      const side = makeFoe(spec);
+      side.ally = true;
+      return side;
+    }),
     foeRef: { canonId: foeSpec.canonId || null, npcId: foeSpec.npcId || null },
     intro: foeSpec.intro || '',
     round: 1,
@@ -7955,12 +8455,14 @@ function createBattle(state, rng, opts = {}) {
 
 function effectivePower(side, battle) {
   const form = side.form ? getTransformation(side.form) : null;
-  const mult = form ? form.mult : 1;
+  // A form is worth what you can hold of it, not what the book says.
+  const mult = form ? form.mult * (side.mastery ? masteryMult({ formMastery: side.mastery }, form.id) : 1) : 1;
   const condition = clamp(0.45 + (side.hp / side.hpMax) * 0.55, 0.45, 1);
   const kiFactor = clamp(0.6 + (side.ki / Math.max(1, side.kiMax)) * 0.4, 0.6, 1);
   // Whatever you are keeping in reserve does not land on them.
   const held = battle && side === battle.me ? (battle.restraint ?? 1) : 1;
-  return Math.max(1, side.basePower * mult * condition * kiFactor * held);
+  const crowd = side.crowdPenalty ?? 1;
+  return Math.max(1, side.basePower * mult * condition * kiFactor * held * crowd);
 }
 
 /** The gap that decides whether somebody can be touched at all. */
@@ -7981,6 +8483,32 @@ function scaleByPower(ratio) {
 
 function stanceOf(side) {
   return STANCES[side.stance] || STANCES.neutral;
+}
+
+/** Everybody on the other side still standing. */
+function standingFoes(battle) {
+  return (battle.squad || [battle.them]).filter((f) => f.hp > 0);
+}
+
+/** Pick a new focus when the one you were looking at goes down. */
+function refocus(battle) {
+  const up = standingFoes(battle);
+  if (!up.length) return null;
+  if (battle.them.hp > 0) return battle.them;
+  battle.them = up[0];
+  return battle.them;
+}
+
+/**
+ * The lockout. Past a certain speed gap the slower fighter is not losing, they
+ * are not participating: they swing at afterimages. This is the difference
+ * between a hard fight and Frieza standing still while Krillin punches him.
+ */
+function lockout(attacker, defender, battle) {
+  const gap = speedGap(defender, attacker) * Math.pow(ratioOf(defender, attacker, battle), 0.2);
+  if (gap > 2.6) return 'gone';       // cannot be touched at all
+  if (gap > 1.8) return 'hard';       // most things miss
+  return null;
 }
 
 // --------------------------------------------------------------- available
@@ -8024,6 +8552,19 @@ function battleActions(state, battle) {
       disabled: me.ki < cost,
       reason: me.ki < cost ? 'Not enough ki' : null,
     });
+  }
+
+  // Who you are looking at. In a crowd this is the whole game: pick off the
+  // dangerous one first, or keep the weak ones between you and it.
+  const up = standingFoes(battle);
+  if (up.length > 1) {
+    for (const f of up) {
+      if (f === battle.them) continue;
+      out.push({
+        id: 'target:' + f.slot, kind: 'target', label: `Turn on ${f.name}`,
+        hint: `${Math.round((f.hp / f.hpMax) * 100)}% standing`,
+      });
+    }
   }
 
   out.push({ id: 'guard', kind: 'defend', label: 'Guard', hint: 'Cut the next hit hard, recover stamina' });
@@ -8135,7 +8676,7 @@ function applyUpkeep(side, lines) {
   if (side.form) {
     const form = getTransformation(side.form);
     if (form) {
-      side.ki -= form.drain;
+      side.ki -= form.drain * (side.mastery ? masteryDrain({ formMastery: side.mastery }, form.id) : 1);
       if (side.ki <= 0) {
         side.ki = 0;
         side.form = null;
@@ -8158,7 +8699,13 @@ function strike(attacker, defender, battle, rng, spec) {
   const dstance = stanceOf(defender);
   const ratio = ratioOf(attacker, defender, battle);
 
+  const lock = lockout(attacker, defender, battle);
+  if (lock === 'gone' && !spec.tracking) {
+    return { miss: true, damage: 0, lockedOut: true };
+  }
+
   let hitChance = (spec.hit ?? 0.85) * stance.atk;
+  if (lock === 'hard') hitChance *= 0.35;
   hitChance -= dstance.dodge;
   if (defender.blinded > 0) hitChance += 0.3;
   if (attacker.blinded > 0) hitChance -= 0.35;
@@ -8197,6 +8744,12 @@ function strike(attacker, defender, battle, rng, spec) {
  */
 function describeStrike(res, attackerName, defenderName, moveName, rng, byPlayer) {
   const slots = { a: attackerName, d: defenderName, m: moveName.toLowerCase() };
+  if (res.lockedOut) {
+    return render(byPlayer
+      ? `{[d] is simply not there. You are hitting the place they were standing|You cannot land on [d]. Your [m] goes through empty air where they used to be|There is no version of the [m] that reaches [d]}.`
+      : `{You are not there. [a] hits the place you were standing|[a] cannot touch you. The [m] goes through air|[a] is not fast enough to reach you and knows it}.`,
+    slots, rng);
+  }
   if (res.miss) {
     return render(byPlayer
       ? `{You go for the [m] and find nothing|[d] is not there when your [m] arrives|Your [m] misses}.`
@@ -8216,9 +8769,10 @@ function describeStrike(res, attackerName, defenderName, moveName, rng, byPlayer
 }
 
 /** The opponent's move. Simple, but it escalates when it is losing. */
-function foeTurn(state, battle, rng) {
-  const them = battle.them;
+function foeTurn(state, battle, rng, actor) {
+  const them = actor || battle.them;
   const me = battle.me;
+  if (them.hp <= 0) return [];
   const lines = [];
   const hurt = them.hp / them.hpMax;
   const losing = ratioOf(them, me, battle) < 0.8;
@@ -8291,7 +8845,7 @@ function finish(state, battle, rng, outcome) {
   // stakes is allowed to take the last of your health, because otherwise
   // every defeat became a coin flip on the following new year.
   const floor = (battle.stakes === 'lethal' && outcome === 'lost') ? 0 : 6;
-  c.vitals.health = clamp(Math.round(Math.max(battle.me.hp, floor)), 0, 100);
+  c.vitals.health = clamp(Math.round(Math.max(battle.me.hp, floor)), 0, healthMaxFor(c));
 
   if (battle.me.hp <= 12 && outcome !== 'fled') {
     c.flags.brink_of_death = true;
@@ -8339,8 +8893,11 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
       if (form && me.forms.includes(id)) {
         me.form = id;
         me.formName = form.name;
-        me.ki = Math.max(0, me.ki - form.drain);
+        me.ki = Math.max(0, me.ki - form.drain * masteryDrain(c, form.id));
+        battle.formRounds = battle.formRounds || {};
         lines.push(`${form.name}. ${form.desc}`);
+        const worn = masteryMult(c, form.id);
+        if (worn < 0.95) lines.push('It fights you. You are wearing something that does not fit yet.');
         const said = voiceLine(battle, rng, 'form');
         if (said) lines.push(said);
         else if (them.hp / them.hpMax > 0.5) {
@@ -8446,6 +9003,18 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
         if (e.healthCost) lines.push('It costs you as much as it costs them.');
       }
     }
+  } else if (actionId.startsWith('target:')) {
+    const slot = Number(actionId.slice(7));
+    const pick = (battle.squad || []).find((f) => f.slot === slot && f.hp > 0);
+    if (pick) {
+      battle.them = pick;
+      lines.push(rng.pick([
+        `You stop caring about the others and look at ${pick.name}.`,
+        `You put ${pick.name} in front of everything else.`,
+        `${pick.name}. That is the one that matters.`,
+      ]));
+      skipFoe = false;
+    }
   } else if (actionId === 'guard') {
     me.guarding = true;
     me.stamina = clamp(me.stamina + 22, 0, me.staminaMax);
@@ -8502,18 +9071,49 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
     lines.push(`${them.name} does not accept it.`);
   }
 
-  if (them.hp <= 0) {
+  if (battle.them.hp <= 0) {
+    const downed = battle.them;
     const parting = voiceLine(battle, rng, 'beaten');
     if (parting) lines.push(parting);
-    lines.push(`${them.name} goes down and does not get back up.`);
-    return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
+    lines.push(`${downed.name} goes down and does not get back up.`);
+    battle.defeated = battle.defeated || [];
+    if (!battle.defeated.includes(downed)) battle.defeated.push(downed);
+    const next = refocus(battle);
+    if (!next) {
+      return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
+    }
+    lines.push(rng.pick([
+      `${next.name} steps over ${downed.name} without looking down.`,
+      `That leaves ${standingFoes(battle).length}. ${next.name} is closest.`,
+      `${next.name} does not appear to have found that discouraging.`,
+    ]));
   }
 
   if (!skipFoe) {
-    if (freeSwing) lines.push(`${them.name} does not wait for you to finish.`);
-    lines.push(...foeTurn(state, battle, rng));
-    // Their turn can end the fight outright (a ring-out).
-    if (battle.over) return { lines, over: true, outcome: battle.outcome };
+    if (freeSwing) lines.push(`${battle.them.name} does not wait for you to finish.`);
+    // Everyone still on their feet gets a turn, not just the one you are
+    // looking at. This is what makes being surrounded actually dangerous.
+    for (const foe of standingFoes(battle)) {
+      lines.push(...foeTurn(state, battle, rng, foe));
+      if (battle.over) return { lines, over: true, outcome: battle.outcome };
+      if (me.hp <= 0) break;
+    }
+    // And anybody fighting on your side answers back.
+    for (const ally of (battle.allies || [])) {
+      if (ally.hp <= 0) continue;
+      const mark = standingFoes(battle)[0];
+      if (!mark) break;
+      const move = rng.weighted(PHYSICAL, (m) => m.base);
+      const res = strike(ally, mark, battle, rng, move);
+      lines.push(describeStrike(res, ally.name, mark.name, move.name, rng, false));
+      if (mark.hp <= 0) {
+        lines.push(`${mark.name} is down. ${ally.name} did that one.`);
+        refocus(battle);
+        if (!standingFoes(battle).length) {
+          return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
+        }
+      }
+    }
   }
 
   if (me.hp <= 0) {
@@ -8526,6 +9126,12 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
     const state2 = them.hp / them.hpMax;
     const said = voiceLine(battle, rng, state2 < 0.35 ? 'losing' : me.hp / me.hpMax < 0.45 ? 'winning' : 'hurt');
     if (said) lines.push(said);
+  }
+
+  // Time spent inside a form is how a form gets worn in.
+  if (me.form) {
+    battle.formRounds = battle.formRounds || {};
+    battle.formRounds[me.form] = (battle.formRounds[me.form] || 0) + 1;
   }
 
   applyUpkeep(me, lines);
@@ -8547,14 +9153,16 @@ function battleStatus(battle) {
   return {
     round: battle.round,
     me: {
-      hp: Math.round(battle.me.hp), ki: Math.round(battle.me.ki),
-      stamina: Math.round(battle.me.stamina), kiMax: Math.round(battle.me.kiMax),
+      hp: Math.round(battle.me.hp), hpMax: Math.round(battle.me.hpMax),
+      ki: Math.round(battle.me.ki), kiMax: Math.round(battle.me.kiMax),
+      stamina: Math.round(battle.me.stamina), staminaMax: Math.round(battle.me.staminaMax),
       form: battle.me.formName, stance: STANCES[battle.me.stance].name,
       power: Math.round(effectivePower(battle.me, battle)),
     },
     them: {
       name: battle.them.name,
-      hp: Math.round(battle.them.hp), ki: Math.round(battle.them.ki),
+      hp: Math.round(battle.them.hp), hpMax: Math.round(battle.them.hpMax),
+      ki: Math.round(battle.them.ki),
       form: battle.them.formName, stance: STANCES[battle.them.stance].name,
       power: Math.round(effectivePower(battle.them, battle)),
       tier: powerTier(effectivePower(battle.them, battle)),
@@ -8562,10 +9170,30 @@ function battleStatus(battle) {
     destruction: Math.round(battle.destruction),
     civilians: battle.civilians,
     gap: ratioOf(battle.me, battle.them, battle),
+    lockedOut: lockout(battle.me, battle.them, battle),
+    lockingThem: lockout(battle.them, battle.me, battle),
+    squad: (battle.squad || []).map((f) => ({
+      slot: f.slot, name: f.name, hp: Math.round(f.hp), hpMax: Math.round(f.hpMax),
+      down: f.hp <= 0, focus: f === battle.them, form: f.formName,
+      power: Math.round(effectivePower(f, battle)),
+    })),
+    allies: (battle.allies || []).map((a) => ({
+      name: a.name, hp: Math.round(a.hp), hpMax: Math.round(a.hpMax), down: a.hp <= 0,
+    })),
+    restraint: battle.restraint ?? 1,
   };
 }
 
 function describeMatchup(battle) {
+  const up = standingFoes(battle);
+  if (up.length > 1) {
+    const total = up.reduce((n, f) => n + effectivePower(f, battle), 0);
+    const r2 = effectivePower(battle.me, battle) / Math.max(1, total);
+    if (r2 > 6) return `${up.length} of them, and it will not matter.`;
+    if (r2 > 1.4) return `${up.length} of them. You can take them, if they let you take them one at a time.`;
+    if (r2 > 0.5) return `${up.length} of them, and together they are a real problem.`;
+    return `${up.length} of them. You are going to have to pick which one you can afford to fight.`;
+  }
   const r = ratioOf(battle.me, battle.them, battle);
   if (r > 30) return 'They are not in your class and you both know it.';
   if (r > 6) return 'You are clearly stronger.';
@@ -8592,6 +9220,17 @@ function battleAftermath(state, rng, battle, opts = {}) {
 
   if (battle.zenkai) {
     lines.push(`Your body rebuilds heavier than it was. Power level up ${numberish(battle.zenkai)}.`);
+  }
+
+  // Rounds held inside a form are the only thing that really masters it. A
+  // hard fight teaches more than an easy one.
+  for (const [formId, rounds] of Object.entries(battle.formRounds || {})) {
+    const pressure = outcome === 'won' ? 1 : 1.4;
+    const gain = trainMastery(c, formId, Math.min(9, rounds * 0.55 * pressure));
+    if (gain >= 3) {
+      const form = getTransformation(formId);
+      lines.push(`${form ? form.name : 'The form'} sits better on you than it did this morning.`);
+    }
   }
 
   // Clothes and kit take the same beating you do.
@@ -8621,7 +9260,7 @@ function battleAftermath(state, rng, battle, opts = {}) {
 
   if (outcome === 'won') {
     // How far the story travels depends on what you beat, not on you.
-    const theirs = battle.them.basePower || 1;
+    const theirs = (battle.squad || [battle.them]).reduce((n, f) => n + (f.basePower || 0), 0) || 1;
     const scale = theirs > 1e12 ? DEED_SCALE.god_beaten
       : theirs > 1e8 ? DEED_SCALE.city
         : theirs > 1e5 ? DEED_SCALE.tournament : DEED_SCALE.street;
@@ -8679,7 +9318,6 @@ const SCAR_MARKS = ['scar_cheek', 'scar_brow', 'scar_chest', 'scar_arm', 'scar_e
 
 function markBody(state, rng, battle) {
   const c = state.character;
-  if (hasPerk(c, 'regeneration') || c.raceId === 'android') return null;
   const nearDeath = battle.me.hp <= 12 && battle.outcome !== 'fled';
   if (!nearDeath) return null;
   c.scars = c.scars || [];
@@ -8687,12 +9325,21 @@ function markBody(state, rng, battle) {
   const from = battle.them.name;
   const year = c.birthYear + c.age;
 
-  // Losing badly to something lethal can cost more than skin.
-  if (battle.stakes === 'lethal' && battle.outcome === 'lost' && !have.has('missing_eye') && rng.chance(0.12)) {
-    c.scars.push({ year, mark: 'missing_eye', from, text: `Lost an eye to ${from}.` });
-    c.stats.speed = Math.max(1, c.stats.speed - 3);
-    return `You lose the eye. ${from} does not even notice.`;
+  // Losing badly to something lethal can cost more than skin. This is the
+  // part of the series everybody remembers: Gohan's arm, Vegeta's tail,
+  // Yamcha's leg. Losing does not have to kill you to change you.
+  if (battle.stakes === 'lethal' && battle.outcome === 'lost' && rng.chance(0.2)) {
+    const gap = ratioOf(battle.them, battle.me, battle);
+    const table = gap > 6
+      ? ['lost_arm', 'lost_leg', 'lost_eye', 'lost_hand', 'broken_back']
+      : ['lost_eye', 'lost_hand', 'ruined_lungs'];
+    if (c.tail && rng.chance(0.3)) table.unshift('lost_tail');
+    const line = maim(state, rng, rng.pick(table), from);
+    if (line) return line;
   }
+
+  // Past that, a body that puts itself back together keeps no record.
+  if (hasPerk(c, 'regeneration') || c.raceId === 'android') return null;
   if (rng.chance(0.45)) {
     const open = SCAR_MARKS.filter((m) => !have.has(m));
     if (!open.length) return null;
@@ -8730,7 +9377,7 @@ function autoResolve(state, rng, battle) {
   }
   return battle;
 }
-  return { voiceLine, REPLIES, STANCES, createBattle, speedGap, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, autoResolve };
+  return { voiceLine, REPLIES, STANCES, createBattle, speedGap, standingFoes, lockout, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, autoResolve };
 })();
 
 /* ==== engine/events/helpers.js ==== */
@@ -8960,9 +9607,35 @@ function voiceFor(foe, ctx) {
   return 'professional';
 }
 
+/**
+ * Break one nominal enemy into a squad of named bodies. A "purge squad" is
+ * five people, and it should fight like five people rather than like one
+ * person with five times the health.
+ */
+function squadOf(ctx, foe, count, opts = {}) {
+  const n = Math.max(1, Math.min(6, Math.round(count)));
+  if (n === 1) return [foe];
+  const names = opts.names || null;
+  // The leader carries most of it; the rest are the rest.
+  const share = [0.42, 0.2, 0.14, 0.1, 0.08, 0.06].slice(0, n);
+  const total = share.reduce((a, b) => a + b, 0);
+  return share.map((w, i) => ({
+    ...foe,
+    name: names && names[i] ? names[i]
+      : i === 0 ? (opts.leaderName || `${foe.name} - the one in charge`)
+        : `${opts.memberName || 'one of them'} (${i + 1})`,
+    power: Math.max(1, Math.round(foe.power * (w / total) * n * 0.62)),
+    speedStat: (foe.speedStat ?? 50) + (i === 0 ? 6 : -4),
+    canonId: i === 0 ? foe.canonId : null,
+    npcId: i === 0 ? foe.npcId : null,
+  }));
+}
+
 function offerBattle(ctx, foe, opts = {}) {
   const spec = {
     foe,
+    foes: opts.foes || null,
+    allies: opts.allies || null,
     stakes: opts.stakes || 'serious',
     reason: opts.reason || 'fight',
     protecting: !!opts.protecting,
@@ -8996,7 +9669,7 @@ function offerBattle(ctx, foe, opts = {}) {
     battleResult: battle.outcome,
   };
 }
-  return { apply, summarise, fact, stranger, meetCanon, canonHere, relate, killNpc, thread, bumpThread, trainYear, powerLine, elsewhere, moveTo, money, canAfford, hurt, odds, scaledFoePower, tierOf, offerBattle, bondScore, findNpc, setFlag, setWorldFlag, numberish, nextNpcId, getCanon, canonPower };
+  return { apply, summarise, fact, stranger, meetCanon, canonHere, relate, killNpc, thread, bumpThread, trainYear, powerLine, elsewhere, moveTo, money, canAfford, hurt, odds, scaledFoePower, tierOf, squadOf, offerBattle, bondScore, findNpc, setFlag, setWorldFlag, numberish, nextNpcId, getCanon, canonPower };
 })();
 
 /* ==== engine/events/origins.js ==== */
@@ -13380,9 +14053,9 @@ function autoRunTournament(state, rng, t) {
     const won = rng.chance(p);
     if (won) {
       // Winning a round costs you something; you do not arrive at the final fresh.
-      state.character.vitals.health = clamp(state.character.vitals.health - rng.int(6, 18), 1, 100);
+      state.character.vitals.health = clamp(state.character.vitals.health - rng.int(6, 18), 1, state.character.vitals.healthMax || 100);
     } else {
-      state.character.vitals.health = clamp(state.character.vitals.health - rng.int(12, 30), 1, 100);
+      state.character.vitals.health = clamp(state.character.vitals.health - rng.int(12, 30), 1, state.character.vitals.healthMax || 100);
     }
     recordPlayerResult(state, rng, t, won);
   }
@@ -16197,7 +16870,7 @@ const __mod_engine_events_forces_js = (function () {
 // arrest, to test, to collect - with their own colours and their own squads.
 
 const { registerEvents } = __mod_engine_generator_js;
-const { apply, fact, relate, stranger, offerBattle, trainYear, powerLine, moveTo } = __mod_engine_events_helpers_js;
+const { apply, fact, relate, stranger, offerBattle, squadOf, trainYear, powerLine, moveTo } = __mod_engine_events_helpers_js;
 const { combatPower, powerTier } = __mod_engine_stats_js;
 const { FACTIONS, factionsPresent, factionIntent, getFaction } = __mod_data_factions_js;
 const { getPlace } = __mod_data_places_js;
@@ -16262,6 +16935,11 @@ registerEvents([
         officer: found.officer,
         arrival: found.arrival,
         goal: found.faction.goal,
+        // How many of them there actually are. A child does not get
+        // surrounded by five; a known fighter does.
+        bodies: found.squad.elite ? 5
+          : (ctx.bioAge ?? 20) < 14 ? 1
+            : ctx.rng.pick([1, 1, 2, 3, 3, 4]),
       };
     },
     title: (ctx, s) => `${s.squad.charAt(0).toUpperCase()}${s.squad.slice(1)}`,
@@ -16275,15 +16953,27 @@ registerEvents([
       list.push({
         id: 'fight', label: 'Meet them', danger: true,
         hint: 'All of them, if it comes to it.',
-        effect: (c2, sl) => offerBattle(c2, {
-          name: sl.squad.replace(/^an? /, '').replace(/^the /, 'The '),
-          power: sl.power, raceId: 'other',
-          voice: faction && faction.alignment < -40 ? 'cruel' : 'professional',
-        }, {
-          reason: 'faction', stakes: sl.intent === 'test' ? 'serious' : 'lethal',
+        effect: (c2, sl) => {
+          const head = {
+            name: sl.squad.replace(/^an? /, '').replace(/^the /, 'The '),
+            power: sl.power, raceId: 'other',
+            voice: faction && faction.alignment < -40 ? 'cruel' : 'professional',
+          };
+          // A squad is people, and they all swing.
+          const bodies = squadOf(c2, head, sl.bodies || 1, {
+            leaderName: `${sl.officer}`,
+            memberName: sl.factionName.replace(/^The /, '') + ' trooper',
+          });
+          return offerBattle(c2, head, {
+          foes: bodies,
+          // They will finish an adult who takes them on. They will not
+          // execute a child in the road; they will put them down and leave.
+          reason: 'faction',
+          stakes: (sl.intent === 'test' || (c2.bioAge ?? 20) < 15) ? 'serious' : 'lethal',
           intro: `${sl.factionName}. ${sl.officer} is the one doing the talking, right up until they are not.`,
           context: { factionId: sl.factionId },
-        }),
+          });
+        },
       });
 
       if (s.intent === 'recruit' || (faction && faction.recruits && s.intent === 'passing')) {
@@ -16351,6 +17041,209 @@ registerEvents([
     },
   },
 ]);
+})();
+
+/* ==== engine/prologue.js ==== */
+const __mod_engine_prologue_js = (function () {
+// The first minutes.
+//
+// A life sim that opens with "Age 1: you are born" has thrown away the only
+// scene it gets for free. This builds the opening out of what was actually
+// rolled - the world, the year, the parents, the upbringing - and narrates it
+// beat by beat as it happens, including the pod and the crash for the ones who
+// were put in a pod.
+
+const { getRace, UPBRINGINGS } = __mod_data_races_js;
+const { getPlace } = __mod_data_places_js;
+const { getPlanet } = __mod_data_planets_js;
+const { eraName } = __mod_data_timeline_js;
+const { render } = __mod_engine_text_js;
+const { npcsByRelation } = __mod_engine_state_js;
+
+const WORLD_OPENERS = {
+  planet_vegeta: `{The air on Planet Vegeta is thin and tastes of iron|Planet Vegeta has one weather and it is red|`
+    + `The sky here is the colour of a healing bruise}. `
+    + `{Gravity here is ten times what most of the galaxy calls normal, and nobody who lives here has noticed|`
+    + `Everything born here is born heavy|Nothing on this world is soft, including the ground}.`,
+  earth: `{Earth. Blue, wet, and almost entirely unaware of the rest of the galaxy|`
+    + `Earth is a quiet world with a very short memory|Earth: seven billion people, none of whom look up}. `
+    + `{It is the kind of place where the strongest man alive might be a farmer and nobody would know|`
+    + `Nothing here has needed to be strong for a long time|It has been peaceful for so long that peace looks permanent}.`,
+  namek: `{Namek has three suns and no night|The sky is green and stays green|There is no darkness on Namek, only shade}. `
+    + `{The water is drinkable everywhere and there is very little to eat, which suits the people who live here|`
+    + `Everything here grows slowly and on purpose|Nobody here is in a hurry}.`,
+  frieza_79: `{Frieza No. 79 is a company world|This world has a number instead of a name|`
+    + `Somebody bought this planet, numbered it, and put a garrison on it}. `
+    + `{Everything on it belongs to somebody a long way away|The paperwork arrived before the people did}.`,
+  yardrat: `{Yardrat is small, cold, and much stranger than it looks|`
+    + `The Yardratians are not warriors and are not worried about that|Yardrat teaches things that cannot be fought}.`,
+  sadala: `{Sadala never burned. In this universe the Saiyans kept their home|`
+    + `Sadala is green in places Planet Vegeta never was}.`,
+  cereal: `{Cereal is a farming world with two moons and no army|Cereal grows things and asks nothing of anyone}.`,
+};
+
+const UPBRINGING_SCENES = {
+  saiyan_creche: [
+    `{You are not held|Nobody picks you up|There is no ceremony}. `
+      + `{You are weighed, scanned, and read out to a room|A machine reads your power level aloud and somebody writes it down|`
+      + `The number is spoken and it decides everything that comes next}.`,
+    `{The creche is a wall of pods and you are one of them|`
+      + `You spend your first year in a tank with forty others|Nobody in the room is over three years old}. `
+      + `{The lessons start before the walking does|You learn to fight before you learn to speak|`
+      + `Somebody has decided what you are for}.`,
+  ],
+  orphan_pod: [
+    `{Somebody is arguing above you and you cannot see them|There are two voices and both of them are afraid|`
+      + `Someone says your name once, very fast}.`,
+    `{You are put in something round and small|The hatch closes|Hands, then a hatch, then nothing}. `
+      + `{You do not understand what is happening. That is a mercy|Somebody's palm is flat against the glass|`
+      + `The last thing you see of the place you were born is somebody running}.`,
+    `{The pod goes up|You are thrown at the sky|Acceleration presses you flat and holds you there}. `
+      + `{Behind you, the world you were born on stops existing|`
+      + `The sky goes black and then the black goes white and then the world is not there any more|`
+      + `You are asleep before you can see what happens to it}.`,
+    `{You sleep for years|The pod feeds you and talks to you in a language you will always half-remember|`
+      + `Somewhere in the dark, the pod is teaching you things}.`,
+    `{You come down hard|The landing is not a landing|The pod comes in too fast and makes a crater out of a hillside}. `
+      + `{[place]. Somebody hears it come down|You are found by [finder], who has never seen anything like you|`
+      + `[finder] gets to the crater before anybody official does}.`,
+  ],
+  animals: [
+    `{Nobody comes|You cry for a long time and nothing answers|The night is very loud and none of it is people}.`,
+    `{Something comes and does not eat you|Something warm lies down next to you and stays|`
+      + `You are picked up by the back of the neck and carried}. `
+      + `{You will not learn what people are for another nine years|`
+      + `Language happens to you late and badly|Nobody teaches you to speak because nobody there can}.`,
+  ],
+  self_raised: [
+    `{The people who made you are not here|You work out fairly early that nobody is coming|`
+      + `You are alone in the specific way that only very small children manage}.`,
+    `{You survive it|You learn what to eat by getting it wrong|`
+      + `Everything you know, you found out the hard way and kept}.`,
+  ],
+  lab: [
+    `{You wake up|There is no birth. There is a first time you were switched on|`
+      + `The first thing you experience is a room with the lights already on}.`,
+    `{Somebody is writing on a clipboard and does not look up|`
+      + `There is glass between you and everybody who has ever spoken to you|`
+      + `You have a designation before you have a name}.`,
+  ],
+  foster: [
+    `{Somebody who did not have to takes you in|You are handed over on a doorstep and taken inside|`
+      + `Two strangers decide, quickly and without much discussion, that you are theirs now}.`,
+  ],
+  exile: [
+    `{Your family is leaving and nobody will say why|You are born on the way out|`
+      + `The first place you remember is not the place you are from}.`,
+  ],
+  conquered: [
+    `{There are soldiers on the road the year you are born|Somebody else's flag is already up|`
+      + `You are born into an occupation and it is simply how the world is}.`,
+  ],
+  royal: [
+    `{There is a room full of people waiting for you to be born|`
+      + `The announcement is made before you are cleaned up|Somebody bows at you before you can hold your head up}.`,
+  ],
+  temple: [
+    `{You are born somewhere very quiet|The building you are born in is older than the language spoken in it|`
+      + `Somebody rings something once, a long way off}.`,
+  ],
+};
+
+const DEFAULT_SCENE = [
+  `{You are born|It happens the way it happens to everybody|`
+    + `The first thing that happens to you is the only thing that happens to everybody}. `
+    + `{Somebody counts your fingers|Somebody says you look like somebody|You are loud about it}.`,
+];
+
+/**
+ * The opening beats, as log entries. Called once, at the start of the first
+ * year, so the player watches their own origin happen instead of reading a
+ * summary of it.
+ */
+function prologueEntries(state, rng) {
+  const c = state.character;
+  const race = getRace(c.raceId);
+  const place = getPlace(c.placeId);
+  const planet = getPlanet(place.planet);
+  const parents = npcsByRelation(state, 'parent');
+  const upbringing = UPBRINGINGS.find((u) => u.id === c.upbringingId);
+
+  const slots = {
+    name: c.name,
+    place: place.name,
+    planet: planet ? planet.name : place.name,
+    year: String(c.birthYear),
+    era: eraName(c.birthYear),
+    race: race.name,
+    mother: parents.find((p) => p.sex === 'female')?.name || 'your mother',
+    father: parents.find((p) => p.sex === 'male')?.name || 'your father',
+    finder: parents[0]?.name || 'a farmer',
+  };
+
+  const out = [];
+  const say = (tpl, kind = 'prologue') => {
+    const text = render(tpl, slots, rng).replace(/\s+/g, ' ').trim();
+    if (text) out.push({ kind, text });
+  };
+
+  // 1. Where. A pod baby is not from where they landed, so the world they
+  // ended up on is introduced after the crash rather than before the launch.
+  const arrived = c.upbringingId === 'orphan_pod';
+  const opener = WORLD_OPENERS[place.planet];
+  if (arrived) say(`{Somewhere, a [race] is born|A [race] is born, and the record of where does not survive|`
+    + `You are born [race] on a world nobody will bother to write down}. `
+    + `{Age [year]|It is Age [year]}. {[era]|What history will call [era]}.`, 'scene');
+  else if (opener) say(opener, 'scene');
+  else {
+    say(`{[place]|[place], in [era]|[place]. Age [year]}. `
+      + `{It is not a famous world|Nothing important has ever happened here|`
+      + `Nobody outside this system could find it on a chart}.`, 'scene');
+  }
+
+  // 2. When.
+  if (!arrived) {
+    say(`{Age [year]|It is Age [year]|The year is [year]}. {[era]|This is [era]|History will call this [era]}.`, 'scene');
+  }
+
+  // 3. What happens.
+  const scene = UPBRINGING_SCENES[c.upbringingId] || DEFAULT_SCENE;
+  for (const beat of scene) say(beat);
+
+  // The world you woke up on, introduced now that you are on it.
+  if (arrived && opener) say(opener, 'scene');
+  else if (arrived) say(`{[place]. It will do|[place], which is where you are from now|You are from [place] now}.`, 'scene');
+
+  // 4. Who is there.
+  if (parents.length && !['orphan_pod', 'animals', 'self_raised', 'lab'].includes(c.upbringingId)) {
+    say(parents.length > 1
+      ? `{[mother] and [father] are there|Both of them are there|[father] is not much use and [mother] does not comment on it}. `
+        + `{They name you [name]|The name is [name]. Somebody in the family had it first|You are [name], apparently}.`
+      : `{[mother] is there. Nobody else is|There is one person in the room and she is holding you|`
+        + `It is just the two of you and it stays that way}. {You are [name]|She names you [name]}.`);
+  } else {
+    say(`{Whoever names you, names you [name]|The name comes later. It is [name]|`
+      + `You end up called [name], and nobody remembers deciding it}.`);
+  }
+
+  // 5. What you are, in the only terms this world understands.
+  say(`{You are [race]|Whatever else happens, you are [race]|`
+    + `[race], which will decide more about your life than anything you choose}. `
+    + (c.power > 400
+      ? `{Somebody points a scouter at you and stops talking|The number is high enough that it gets repeated|`
+        + `Whatever reads you reads you twice}.`
+      : c.power < 5
+        ? `{Nothing about you registers as remarkable|If anybody measures you, they do not mention the result|`
+          + `You are, by every measure available, nothing much}.`
+        : `{Nobody measures you. There is no reason to|It does not occur to anyone to check|`
+          + `You are a baby, and nobody scans babies here}.`));
+
+  if (upbringing && upbringing.blurb) {
+    out.push({ kind: 'origin', text: `${upbringing.name}. ${upbringing.blurb}` });
+  }
+  return out;
+}
+  return { prologueEntries };
 })();
 
 /* ==== engine/economy.js ==== */
@@ -16529,6 +17422,7 @@ const { getRace, hasPerk, maturity } = __mod_data_races_js;
 const { getPlace } = __mod_data_places_js;
 const { TIMELINE, eraName, worldPowerBaseline } = __mod_data_timeline_js;
 const { agingDecay, naturalDeathChance, combatPower, powerTier, kiMaxFor, lifeExpectancy, zenkaiBoost, STAT_KEYS } = __mod_engine_stats_js;
+const { prologueEntries } = __mod_engine_prologue_js;
 const { getRng, saveRng, currentYear, livingNpcs, adjust, place: placeOf, characterSummary } = __mod_engine_state_js;
 const { getCareer } = __mod_data_jobs_js;
 const { resetYearBudget } = __mod_engine_economy_js;
@@ -16686,6 +17580,11 @@ function startYear(state) {
   resetYearBudget(state);
 
   const entries = [];
+  // The opening. Told once, as it happens, before anything else does.
+  if (c.age === 1 && !state.world.flags.prologue_done) {
+    state.world.flags.prologue_done = true;
+    entries.push(...prologueEntries(state, rng));
+  }
   // The body changes before anything else happens to it this year.
   const bodyNote = driftBody(state, rng);
   if (bodyNote) entries.push({ kind: 'body', text: bodyNote });
@@ -18249,6 +19148,7 @@ const { canonAvailable, canonPower, getCanon } = __mod_data_canon_js;
 const { combatPower } = __mod_engine_stats_js;
 const { addFact } = __mod_engine_memory_js;
 const { adjust } = __mod_engine_state_js;
+const { spreadWord, DEED_SCALE } = __mod_engine_settlement_js;
 
 function worldRecord(state, planetId) {
   state.world.planets = state.world.planets || {};
@@ -22913,18 +23813,52 @@ function renderBattle() {
   // A number on the foe panel is a scouter reading, not a birthright.
   const foeRead = readPower(GAME, st.them.power, { peek: true });
   $('foe-power').textContent = foeRead.known ? numberish(st.them.power) : (foeRead.broke ? '—' : '?');
-  $('foe-hp').style.width = Math.max(0, st.them.hp) + '%';
-  $('foe-state').textContent = st.them.hp > 60 ? 'Barely marked'
-    : st.them.hp > 30 ? 'Hurt' : st.them.hp > 10 ? 'Badly hurt' : 'Barely standing';
+  const foePct = (st.them.hp / Math.max(1, st.them.hpMax)) * 100;
+  $('foe-hp').style.width = Math.max(0, foePct) + '%';
+  $('foe-state').textContent = [
+    foePct > 60 ? 'Barely marked' : foePct > 30 ? 'Hurt' : foePct > 10 ? 'Badly hurt' : 'Barely standing',
+    st.lockedOut === 'gone' ? 'you cannot touch them' : st.lockedOut === 'hard' ? 'far too fast for you' : null,
+    st.lockingThem === 'gone' ? 'they cannot touch you' : null,
+  ].filter(Boolean).join(' - ');
+
+  // A crowd needs a roll call: who is left, who is down, who you are on.
+  const strip = $('foe-squad');
+  if (strip) {
+    const many = st.squad.length > 1;
+    strip.hidden = !many;
+    strip.innerHTML = '';
+    if (many) {
+      for (const f of st.squad) {
+        const chip = el('button', 'foechip'
+          + (f.down ? ' down' : '') + (f.focus ? ' focus' : ''));
+        chip.type = 'button';
+        chip.appendChild(el('span', 'foechip-name', f.name));
+        const bar = el('span', 'foechip-bar');
+        const fill = el('span', 'foechip-fill');
+        fill.style.width = Math.max(0, (f.hp / Math.max(1, f.hpMax)) * 100) + '%';
+        bar.appendChild(fill);
+        chip.appendChild(bar);
+        chip.disabled = f.down || f.focus;
+        chip.addEventListener('click', () => battleTurn('target:' + f.slot));
+        strip.appendChild(chip);
+      }
+      for (const a of st.allies) {
+        const chip = el('button', 'foechip ally' + (a.down ? ' down' : ''), a.name + (a.down ? ' (down)' : ''));
+        chip.type = 'button';
+        chip.disabled = true;
+        strip.appendChild(chip);
+      }
+    }
+  }
   $('battle-round').textContent = 'Round ' + st.round;
 
   const destruction = $('destruction');
   destruction.hidden = !BATTLE.civilians;
   $('destruction-fill').style.width = st.destruction + '%';
 
-  $('my-hp').style.width = Math.max(0, st.me.hp) + '%';
+  $('my-hp').style.width = Math.max(0, (st.me.hp / Math.max(1, st.me.hpMax)) * 100) + '%';
   $('my-ki').style.width = Math.max(0, (st.me.ki / Math.max(1, st.me.kiMax)) * 100) + '%';
-  $('my-sta').style.width = Math.max(0, st.me.stamina) + '%';
+  $('my-sta').style.width = Math.max(0, (st.me.stamina / Math.max(1, st.me.staminaMax)) * 100) + '%';
   const held = BATTLE.restraint ?? 1;
   $('my-state').textContent = [
     st.me.form, st.me.stance,

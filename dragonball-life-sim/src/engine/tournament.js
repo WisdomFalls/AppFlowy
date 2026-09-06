@@ -585,9 +585,9 @@ export function autoRunTournament(state, rng, t) {
     const won = rng.chance(p);
     if (won) {
       // Winning a round costs you something; you do not arrive at the final fresh.
-      state.character.vitals.health = clamp(state.character.vitals.health - rng.int(6, 18), 1, 100);
+      state.character.vitals.health = clamp(state.character.vitals.health - rng.int(6, 18), 1, state.character.vitals.healthMax || 100);
     } else {
-      state.character.vitals.health = clamp(state.character.vitals.health - rng.int(12, 30), 1, 100);
+      state.character.vitals.health = clamp(state.character.vitals.health - rng.int(12, 30), 1, state.character.vitals.healthMax || 100);
     }
     recordPlayerResult(state, rng, t, won);
   }

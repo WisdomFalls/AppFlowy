@@ -8,6 +8,7 @@ import { traitEffect } from '../data/traits.js';
 import { getRace, hasPerk } from '../data/races.js';
 import { getTransformation } from '../data/transformations.js';
 import { techniquePower } from '../data/techniques.js';
+import { ceilingDamping, masteryMult } from './mastery.js';
 
 export const STAT_KEYS = ['strength', 'speed', 'technique', 'kiControl', 'durability', 'intellect', 'charisma', 'discipline'];
 
@@ -73,6 +74,9 @@ export function trainingRate(character, opts = {}) {
   if (character.vitals.health < 40) rate *= 0.6;
   if (character.vitals.happiness < 25) rate *= 0.8;
 
+  // The roof. Past the ceiling your current form supports, work stops paying.
+  if (opts.state) rate *= ceilingDamping(opts.state);
+
   return (Math.max(0, rate)) * traitEffect(character, 'trainMult');
 }
 
@@ -104,8 +108,9 @@ export function bestForm(character) {
  */
 export function combatPower(character, opts = {}) {
   const form = opts.form === null ? null : (opts.form || bestForm(character));
-  const mult = form ? form.mult : 1;
-  const health = clamp(character.vitals.health / 100, 0.25, 1);
+  // A form you have not worn in gives you less than it says on the tin.
+  const mult = form ? form.mult * masteryMult(character, form.id) : 1;
+  const health = clamp(character.vitals.health / Math.max(1, character.vitals.healthMax || 100), 0.25, 1);
   const ki = clamp(0.55 + (character.vitals.ki / Math.max(1, character.vitals.kiMax)) * 0.45, 0.4, 1);
   const tech = techniquePower(character);
   const techFactor = 1 + (tech.atk + tech.def + tech.speed) / 260;
@@ -143,6 +148,35 @@ export function applyStatDelta(character, delta, cap = 100) {
       character.stats[k] = clamp((character.stats[k] || 0) + v, 1, cap);
     }
   }
+}
+
+/**
+ * How much punishment the body holds. This is not a constant: a fighter who
+ * has trained for thirty years and come back from three near-deaths is
+ * physically harder to put down than the boy he was, and the number should
+ * say so instead of everyone sharing one hundred hit points forever.
+ */
+export function healthMaxFor(character) {
+  const race = getRace(character.raceId);
+  const dur = character.stats.durability || 40;
+  let max = 60 + dur * 0.8;                                   // 68 .. 140
+  max += Math.min(60, (character.flags?.hardTrainingYears || 0) * 2.2);
+  max += Math.min(70, (character.zenkaiCount || 0) * 9);      // scar tissue that helps
+  max += Math.min(40, Math.log10(Math.max(10, character.power)) * 6);
+  if (hasPerk(character, 'hardToKill')) max *= 1.15;
+  if (hasPerk(character, 'regeneration')) max *= 1.08;
+  max *= ageFactor(character) < 0.3 ? 0.8 : 1;                // the very old and the very small
+  max *= traitEffect(character, 'healthMult') || 1;
+  return Math.round(clamp(max, 45, 420));
+}
+
+/** Stamina pool. Same idea: conditioning is a thing you build. */
+export function staminaMaxFor(character) {
+  if (hasPerk(character, 'infiniteStamina')) return 100;
+  const base = 55 + (character.stats.durability || 40) * 0.35 + (character.stats.discipline || 40) * 0.3;
+  const trained = Math.min(45, (character.flags?.hardTrainingYears || 0) * 1.6);
+  const mult = traitEffect(character, 'staminaMult') || 1;
+  return Math.round(clamp((base + trained) * mult * (ageFactor(character) < 0.3 ? 0.85 : 1), 50, 240));
 }
 
 /** Maximum ki pool, which grows with control and technique. */

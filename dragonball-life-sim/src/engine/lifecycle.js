@@ -12,6 +12,7 @@ import { getRace, hasPerk, maturity } from '../data/races.js';
 import { getPlace } from '../data/places.js';
 import { TIMELINE, eraName, worldPowerBaseline } from '../data/timeline.js';
 import { agingDecay, naturalDeathChance, combatPower, powerTier, kiMaxFor, lifeExpectancy, zenkaiBoost, STAT_KEYS } from './stats.js';
+import { prologueEntries } from './prologue.js';
 import { getRng, saveRng, currentYear, livingNpcs, adjust, place as placeOf, characterSummary } from './state.js';
 import { getCareer } from '../data/jobs.js';
 import { resetYearBudget } from './economy.js';
@@ -169,6 +170,11 @@ export function startYear(state) {
   resetYearBudget(state);
 
   const entries = [];
+  // The opening. Told once, as it happens, before anything else does.
+  if (c.age === 1 && !state.world.flags.prologue_done) {
+    state.world.flags.prologue_done = true;
+    entries.push(...prologueEntries(state, rng));
+  }
   // The body changes before anything else happens to it this year.
   const bodyNote = driftBody(state, rng);
   if (bodyNote) entries.push({ kind: 'body', text: bodyNote });

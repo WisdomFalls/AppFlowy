@@ -5,7 +5,7 @@
 // arrest, to test, to collect - with their own colours and their own squads.
 
 import { registerEvents } from '../generator.js';
-import { apply, fact, relate, stranger, offerBattle, trainYear, powerLine, moveTo } from './helpers.js';
+import { apply, fact, relate, stranger, offerBattle, squadOf, trainYear, powerLine, moveTo } from './helpers.js';
 import { combatPower, powerTier } from '../stats.js';
 import { FACTIONS, factionsPresent, factionIntent, getFaction } from '../../data/factions.js';
 import { getPlace } from '../../data/places.js';
@@ -70,6 +70,11 @@ registerEvents([
         officer: found.officer,
         arrival: found.arrival,
         goal: found.faction.goal,
+        // How many of them there actually are. A child does not get
+        // surrounded by five; a known fighter does.
+        bodies: found.squad.elite ? 5
+          : (ctx.bioAge ?? 20) < 14 ? 1
+            : ctx.rng.pick([1, 1, 2, 3, 3, 4]),
       };
     },
     title: (ctx, s) => `${s.squad.charAt(0).toUpperCase()}${s.squad.slice(1)}`,
@@ -83,15 +88,27 @@ registerEvents([
       list.push({
         id: 'fight', label: 'Meet them', danger: true,
         hint: 'All of them, if it comes to it.',
-        effect: (c2, sl) => offerBattle(c2, {
-          name: sl.squad.replace(/^an? /, '').replace(/^the /, 'The '),
-          power: sl.power, raceId: 'other',
-          voice: faction && faction.alignment < -40 ? 'cruel' : 'professional',
-        }, {
-          reason: 'faction', stakes: sl.intent === 'test' ? 'serious' : 'lethal',
+        effect: (c2, sl) => {
+          const head = {
+            name: sl.squad.replace(/^an? /, '').replace(/^the /, 'The '),
+            power: sl.power, raceId: 'other',
+            voice: faction && faction.alignment < -40 ? 'cruel' : 'professional',
+          };
+          // A squad is people, and they all swing.
+          const bodies = squadOf(c2, head, sl.bodies || 1, {
+            leaderName: `${sl.officer}`,
+            memberName: sl.factionName.replace(/^The /, '') + ' trooper',
+          });
+          return offerBattle(c2, head, {
+          foes: bodies,
+          // They will finish an adult who takes them on. They will not
+          // execute a child in the road; they will put them down and leave.
+          reason: 'faction',
+          stakes: (sl.intent === 'test' || (c2.bioAge ?? 20) < 15) ? 'serious' : 'lethal',
           intro: `${sl.factionName}. ${sl.officer} is the one doing the talking, right up until they are not.`,
           context: { factionId: sl.factionId },
-        }),
+          });
+        },
       });
 
       if (s.intent === 'recruit' || (faction && faction.recruits && s.intent === 'passing')) {

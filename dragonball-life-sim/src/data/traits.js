@@ -196,7 +196,7 @@ export function getTrait(id) {
  * The sum of one effect key across every trait somebody has. Multiplicative
  * keys start at 1 and multiply; everything else adds.
  */
-const MULTIPLICATIVE = ['learnSpeed', 'trainMult', 'kiMult', 'staminaMult', 'damageTaken',
+const MULTIPLICATIVE = ['learnSpeed', 'trainMult', 'kiMult', 'staminaMult', 'healthMult', 'damageTaken',
   'healRate', 'powerMult', 'lifespan', 'agingRate', 'tensionGain', 'respectGain'];
 
 export function traitEffect(character, key) {

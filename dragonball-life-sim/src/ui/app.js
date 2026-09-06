@@ -1916,18 +1916,52 @@ function renderBattle() {
   // A number on the foe panel is a scouter reading, not a birthright.
   const foeRead = readPower(GAME, st.them.power, { peek: true });
   $('foe-power').textContent = foeRead.known ? numberish(st.them.power) : (foeRead.broke ? '—' : '?');
-  $('foe-hp').style.width = Math.max(0, st.them.hp) + '%';
-  $('foe-state').textContent = st.them.hp > 60 ? 'Barely marked'
-    : st.them.hp > 30 ? 'Hurt' : st.them.hp > 10 ? 'Badly hurt' : 'Barely standing';
+  const foePct = (st.them.hp / Math.max(1, st.them.hpMax)) * 100;
+  $('foe-hp').style.width = Math.max(0, foePct) + '%';
+  $('foe-state').textContent = [
+    foePct > 60 ? 'Barely marked' : foePct > 30 ? 'Hurt' : foePct > 10 ? 'Badly hurt' : 'Barely standing',
+    st.lockedOut === 'gone' ? 'you cannot touch them' : st.lockedOut === 'hard' ? 'far too fast for you' : null,
+    st.lockingThem === 'gone' ? 'they cannot touch you' : null,
+  ].filter(Boolean).join(' - ');
+
+  // A crowd needs a roll call: who is left, who is down, who you are on.
+  const strip = $('foe-squad');
+  if (strip) {
+    const many = st.squad.length > 1;
+    strip.hidden = !many;
+    strip.innerHTML = '';
+    if (many) {
+      for (const f of st.squad) {
+        const chip = el('button', 'foechip'
+          + (f.down ? ' down' : '') + (f.focus ? ' focus' : ''));
+        chip.type = 'button';
+        chip.appendChild(el('span', 'foechip-name', f.name));
+        const bar = el('span', 'foechip-bar');
+        const fill = el('span', 'foechip-fill');
+        fill.style.width = Math.max(0, (f.hp / Math.max(1, f.hpMax)) * 100) + '%';
+        bar.appendChild(fill);
+        chip.appendChild(bar);
+        chip.disabled = f.down || f.focus;
+        chip.addEventListener('click', () => battleTurn('target:' + f.slot));
+        strip.appendChild(chip);
+      }
+      for (const a of st.allies) {
+        const chip = el('button', 'foechip ally' + (a.down ? ' down' : ''), a.name + (a.down ? ' (down)' : ''));
+        chip.type = 'button';
+        chip.disabled = true;
+        strip.appendChild(chip);
+      }
+    }
+  }
   $('battle-round').textContent = 'Round ' + st.round;
 
   const destruction = $('destruction');
   destruction.hidden = !BATTLE.civilians;
   $('destruction-fill').style.width = st.destruction + '%';
 
-  $('my-hp').style.width = Math.max(0, st.me.hp) + '%';
+  $('my-hp').style.width = Math.max(0, (st.me.hp / Math.max(1, st.me.hpMax)) * 100) + '%';
   $('my-ki').style.width = Math.max(0, (st.me.ki / Math.max(1, st.me.kiMax)) * 100) + '%';
-  $('my-sta').style.width = Math.max(0, st.me.stamina) + '%';
+  $('my-sta').style.width = Math.max(0, (st.me.stamina / Math.max(1, st.me.staminaMax)) * 100) + '%';
   const held = BATTLE.restraint ?? 1;
   $('my-state').textContent = [
     st.me.form, st.me.stance,

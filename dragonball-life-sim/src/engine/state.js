@@ -10,7 +10,7 @@ import { rollOrigin } from './origins.js';
 import { inheritTraits, originTraits, traitEffect } from '../data/traits.js';
 import { emptyPurse, currencyFor, priceIn, credit } from '../data/currency.js';
 import { makeFamily, resetNpcCounter } from './npc.js';
-import { STAT_KEYS, kiMaxFor, lifeExpectancy, combatPower, powerTier } from './stats.js';
+import { STAT_KEYS, kiMaxFor, healthMaxFor, staminaMaxFor, lifeExpectancy, combatPower, powerTier } from './stats.js';
 
 export const SAVE_VERSION = 3;
 
@@ -114,7 +114,7 @@ export function createGame(creation, seedInput) {
     keptBody: false,
 
     stats,
-    vitals: { health: 100, happiness: 65, ki: 40, kiMax: 60 },
+    vitals: { health: 100, healthMax: 100, happiness: 65, ki: 40, kiMax: 60, stamina: 100, staminaMax: 100 },
     power: startPower,
     peakPower: startPower,
     zenkaiCount: 0,
@@ -168,6 +168,10 @@ export function createGame(creation, seedInput) {
 
   character.vitals.kiMax = kiMaxFor(character);
   character.vitals.ki = character.vitals.kiMax;
+  character.vitals.healthMax = healthMaxFor(character);
+  character.vitals.health = character.vitals.healthMax;
+  character.vitals.staminaMax = staminaMaxFor(character);
+  character.vitals.stamina = character.vitals.staminaMax;
   character.lifeExpectancy = lifeExpectancy(character, rng);
 
   const state = {
@@ -329,7 +333,7 @@ export function spend(state, amount) {
 
 export function adjust(state, changes = {}) {
   const c = state.character;
-  if (changes.health !== undefined) c.vitals.health = clamp(c.vitals.health + changes.health, 0, 100);
+  if (changes.health !== undefined) c.vitals.health = clamp(c.vitals.health + changes.health, 0, healthCap(c));
   if (changes.happiness !== undefined) c.vitals.happiness = clamp(c.vitals.happiness + changes.happiness, 0, 100);
   if (changes.ki !== undefined) c.vitals.ki = clamp(c.vitals.ki + changes.ki, 0, c.vitals.kiMax);
   if (changes.fame !== undefined) c.fame = clamp(c.fame + changes.fame, 0, 100);
@@ -350,6 +354,28 @@ export function adjust(state, changes = {}) {
   }
   c.vitals.kiMax = kiMaxFor(c);
   c.vitals.ki = Math.min(c.vitals.ki, c.vitals.kiMax);
+  refreshCeilings(c);
+}
+
+/**
+ * The ceilings move as the character does, so they are recomputed rather than
+ * stored once. Old saves that predate them get them filled in here.
+ */
+export function healthCap(character) {
+  const max = healthMaxFor(character);
+  character.vitals.healthMax = max;
+  return max;
+}
+
+export function refreshCeilings(character) {
+  const hMax = healthMaxFor(character);
+  const sMax = staminaMaxFor(character);
+  character.vitals.healthMax = hMax;
+  character.vitals.staminaMax = sMax;
+  character.vitals.health = Math.min(character.vitals.health ?? hMax, hMax);
+  if (character.vitals.stamina === undefined) character.vitals.stamina = sMax;
+  character.vitals.stamina = Math.min(character.vitals.stamina, sMax);
+  return character.vitals;
 }
 
 export function setFlag(state, flag, value = true) {

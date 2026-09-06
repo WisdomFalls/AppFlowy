@@ -7,7 +7,8 @@
 
 import { clamp } from './rng.js';
 import { render } from './text.js';
-import { combatPower, powerTier, zenkaiBoost, winChance } from './stats.js';
+import { combatPower, powerTier, zenkaiBoost, winChance, healthMaxFor, staminaMaxFor } from './stats.js';
+import { masteryMult, masteryDrain, trainMastery } from './mastery.js';
 import { TECH_BY_ID } from '../data/techniques.js';
 import { getTransformation, ladderFor } from '../data/transformations.js';
 import { getPlace } from '../data/places.js';
@@ -15,6 +16,7 @@ import { getRace, hasPerk } from '../data/races.js';
 import { numberish } from './text.js';
 import { damageGear } from './inventory.js';
 import { spreadWord, DEED_SCALE } from './settlement.js';
+import { maim } from './body.js';
 
 /**
  * What people say mid-fight. Nobody in this setting fights silently: they
@@ -109,12 +111,12 @@ function sideTemplate(name, power, opts = {}) {
     name,
     power,
     basePower: power,
-    hp: 100,
-    hpMax: 100,
+    hp: opts.hpMax ?? 100,
+    hpMax: opts.hpMax ?? 100,
     ki: opts.ki ?? 100,
     kiMax: opts.kiMax ?? 100,
-    stamina: 100,
-    staminaMax: 100,
+    stamina: opts.staminaMax ?? 100,
+    staminaMax: opts.staminaMax ?? 100,
     stance: 'neutral',
     form: null,
     formName: null,
@@ -131,6 +133,9 @@ function sideTemplate(name, power, opts = {}) {
     instinct: opts.instinct ?? 50,
     // What they say when things happen. Filled in by the caller.
     voice: opts.voice || null,
+    mastery: opts.mastery || null,
+    // Somebody in the fight who is not you and not the enemy in front of you.
+    down: false,
   };
 }
 
@@ -151,25 +156,53 @@ export function createBattle(state, rng, opts = {}) {
     techniques: c.techniques.slice(),
     forms: c.transformations.slice(),
     raceId: c.raceId,
+    mastery: c.formMastery || {},
   });
-  me.hp = clamp(c.vitals.health, 5, 100);
-  me.hpMax = 100;
+  me.hpMax = Math.max(20, Math.round(c.vitals.healthMax || healthMaxFor(c)));
+  me.hp = clamp(c.vitals.health, 5, me.hpMax);
+  me.staminaMax = Math.max(40, Math.round(c.vitals.staminaMax || staminaMaxFor(c)));
+  me.stamina = me.staminaMax;
 
-  const them = sideTemplate(foeSpec.name, Math.max(1, foeSpec.power), {
-    speedStat: foeSpec.speedStat ?? 50,
-    instinct: foeSpec.instinct ?? 50,
-    voice: foeSpec.voice || null,
-    techniques: foeSpec.techniques || [],
-    forms: foeSpec.forms || [],
-    raceId: foeSpec.raceId || 'other',
-    infiniteStamina: foeSpec.raceId === 'android',
-    regenerates: ['namekian', 'majin', 'bioandroid'].includes(foeSpec.raceId),
+  const makeFoe = (spec) => sideTemplate(spec.name, Math.max(1, spec.power), {
+    hpMax: spec.hpMax ?? Math.round(clamp(70 + Math.log10(Math.max(10, spec.power)) * 14, 70, 260)),
+    speedStat: spec.speedStat ?? 50,
+    instinct: spec.instinct ?? 50,
+    voice: spec.voice || null,
+    techniques: spec.techniques || [],
+    forms: spec.forms || [],
+    raceId: spec.raceId || 'other',
+    infiniteStamina: spec.raceId === 'android',
+    regenerates: ['namekian', 'majin', 'bioandroid'].includes(spec.raceId),
   });
+
+  // One enemy or a squad. Everything below treats `them` as whoever you are
+  // currently looking at; `squad` is everybody still on their feet.
+  const specs = (opts.foes && opts.foes.length) ? opts.foes.slice() : [foeSpec];
+  const squad = specs.map((spec, i) => {
+    const side = makeFoe(spec);
+    side.slot = i;
+    side.ref = { canonId: spec.canonId || null, npcId: spec.npcId || null };
+    return side;
+  });
+  const them = squad[0];
+
+  // A crowd is not the sum of its parts. Everyone past the first fights at a
+  // discount, because they get in each other's way - which is exactly why the
+  // series lets one strong fighter hold off six weaker ones.
+  if (squad.length > 1) {
+    for (let i = 1; i < squad.length; i += 1) squad[i].crowdPenalty = 1 - Math.min(0.45, i * 0.09);
+  }
 
   return {
     id: 'battle_' + (state.stats.fights + 1),
     me,
     them,
+    squad,
+    allies: (opts.allies || []).map((spec) => {
+      const side = makeFoe(spec);
+      side.ally = true;
+      return side;
+    }),
     foeRef: { canonId: foeSpec.canonId || null, npcId: foeSpec.npcId || null },
     intro: foeSpec.intro || '',
     round: 1,
@@ -199,12 +232,14 @@ export function createBattle(state, rng, opts = {}) {
 
 function effectivePower(side, battle) {
   const form = side.form ? getTransformation(side.form) : null;
-  const mult = form ? form.mult : 1;
+  // A form is worth what you can hold of it, not what the book says.
+  const mult = form ? form.mult * (side.mastery ? masteryMult({ formMastery: side.mastery }, form.id) : 1) : 1;
   const condition = clamp(0.45 + (side.hp / side.hpMax) * 0.55, 0.45, 1);
   const kiFactor = clamp(0.6 + (side.ki / Math.max(1, side.kiMax)) * 0.4, 0.6, 1);
   // Whatever you are keeping in reserve does not land on them.
   const held = battle && side === battle.me ? (battle.restraint ?? 1) : 1;
-  return Math.max(1, side.basePower * mult * condition * kiFactor * held);
+  const crowd = side.crowdPenalty ?? 1;
+  return Math.max(1, side.basePower * mult * condition * kiFactor * held * crowd);
 }
 
 /** The gap that decides whether somebody can be touched at all. */
@@ -225,6 +260,32 @@ function scaleByPower(ratio) {
 
 function stanceOf(side) {
   return STANCES[side.stance] || STANCES.neutral;
+}
+
+/** Everybody on the other side still standing. */
+export function standingFoes(battle) {
+  return (battle.squad || [battle.them]).filter((f) => f.hp > 0);
+}
+
+/** Pick a new focus when the one you were looking at goes down. */
+function refocus(battle) {
+  const up = standingFoes(battle);
+  if (!up.length) return null;
+  if (battle.them.hp > 0) return battle.them;
+  battle.them = up[0];
+  return battle.them;
+}
+
+/**
+ * The lockout. Past a certain speed gap the slower fighter is not losing, they
+ * are not participating: they swing at afterimages. This is the difference
+ * between a hard fight and Frieza standing still while Krillin punches him.
+ */
+export function lockout(attacker, defender, battle) {
+  const gap = speedGap(defender, attacker) * Math.pow(ratioOf(defender, attacker, battle), 0.2);
+  if (gap > 2.6) return 'gone';       // cannot be touched at all
+  if (gap > 1.8) return 'hard';       // most things miss
+  return null;
 }
 
 // --------------------------------------------------------------- available
@@ -268,6 +329,19 @@ export function battleActions(state, battle) {
       disabled: me.ki < cost,
       reason: me.ki < cost ? 'Not enough ki' : null,
     });
+  }
+
+  // Who you are looking at. In a crowd this is the whole game: pick off the
+  // dangerous one first, or keep the weak ones between you and it.
+  const up = standingFoes(battle);
+  if (up.length > 1) {
+    for (const f of up) {
+      if (f === battle.them) continue;
+      out.push({
+        id: 'target:' + f.slot, kind: 'target', label: `Turn on ${f.name}`,
+        hint: `${Math.round((f.hp / f.hpMax) * 100)}% standing`,
+      });
+    }
   }
 
   out.push({ id: 'guard', kind: 'defend', label: 'Guard', hint: 'Cut the next hit hard, recover stamina' });
@@ -379,7 +453,7 @@ function applyUpkeep(side, lines) {
   if (side.form) {
     const form = getTransformation(side.form);
     if (form) {
-      side.ki -= form.drain;
+      side.ki -= form.drain * (side.mastery ? masteryDrain({ formMastery: side.mastery }, form.id) : 1);
       if (side.ki <= 0) {
         side.ki = 0;
         side.form = null;
@@ -402,7 +476,13 @@ function strike(attacker, defender, battle, rng, spec) {
   const dstance = stanceOf(defender);
   const ratio = ratioOf(attacker, defender, battle);
 
+  const lock = lockout(attacker, defender, battle);
+  if (lock === 'gone' && !spec.tracking) {
+    return { miss: true, damage: 0, lockedOut: true };
+  }
+
   let hitChance = (spec.hit ?? 0.85) * stance.atk;
+  if (lock === 'hard') hitChance *= 0.35;
   hitChance -= dstance.dodge;
   if (defender.blinded > 0) hitChance += 0.3;
   if (attacker.blinded > 0) hitChance -= 0.35;
@@ -441,6 +521,12 @@ function strike(attacker, defender, battle, rng, spec) {
  */
 function describeStrike(res, attackerName, defenderName, moveName, rng, byPlayer) {
   const slots = { a: attackerName, d: defenderName, m: moveName.toLowerCase() };
+  if (res.lockedOut) {
+    return render(byPlayer
+      ? `{[d] is simply not there. You are hitting the place they were standing|You cannot land on [d]. Your [m] goes through empty air where they used to be|There is no version of the [m] that reaches [d]}.`
+      : `{You are not there. [a] hits the place you were standing|[a] cannot touch you. The [m] goes through air|[a] is not fast enough to reach you and knows it}.`,
+    slots, rng);
+  }
   if (res.miss) {
     return render(byPlayer
       ? `{You go for the [m] and find nothing|[d] is not there when your [m] arrives|Your [m] misses}.`
@@ -460,9 +546,10 @@ function describeStrike(res, attackerName, defenderName, moveName, rng, byPlayer
 }
 
 /** The opponent's move. Simple, but it escalates when it is losing. */
-function foeTurn(state, battle, rng) {
-  const them = battle.them;
+function foeTurn(state, battle, rng, actor) {
+  const them = actor || battle.them;
   const me = battle.me;
+  if (them.hp <= 0) return [];
   const lines = [];
   const hurt = them.hp / them.hpMax;
   const losing = ratioOf(them, me, battle) < 0.8;
@@ -535,7 +622,7 @@ function finish(state, battle, rng, outcome) {
   // stakes is allowed to take the last of your health, because otherwise
   // every defeat became a coin flip on the following new year.
   const floor = (battle.stakes === 'lethal' && outcome === 'lost') ? 0 : 6;
-  c.vitals.health = clamp(Math.round(Math.max(battle.me.hp, floor)), 0, 100);
+  c.vitals.health = clamp(Math.round(Math.max(battle.me.hp, floor)), 0, healthMaxFor(c));
 
   if (battle.me.hp <= 12 && outcome !== 'fled') {
     c.flags.brink_of_death = true;
@@ -583,8 +670,11 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
       if (form && me.forms.includes(id)) {
         me.form = id;
         me.formName = form.name;
-        me.ki = Math.max(0, me.ki - form.drain);
+        me.ki = Math.max(0, me.ki - form.drain * masteryDrain(c, form.id));
+        battle.formRounds = battle.formRounds || {};
         lines.push(`${form.name}. ${form.desc}`);
+        const worn = masteryMult(c, form.id);
+        if (worn < 0.95) lines.push('It fights you. You are wearing something that does not fit yet.');
         const said = voiceLine(battle, rng, 'form');
         if (said) lines.push(said);
         else if (them.hp / them.hpMax > 0.5) {
@@ -690,6 +780,18 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
         if (e.healthCost) lines.push('It costs you as much as it costs them.');
       }
     }
+  } else if (actionId.startsWith('target:')) {
+    const slot = Number(actionId.slice(7));
+    const pick = (battle.squad || []).find((f) => f.slot === slot && f.hp > 0);
+    if (pick) {
+      battle.them = pick;
+      lines.push(rng.pick([
+        `You stop caring about the others and look at ${pick.name}.`,
+        `You put ${pick.name} in front of everything else.`,
+        `${pick.name}. That is the one that matters.`,
+      ]));
+      skipFoe = false;
+    }
   } else if (actionId === 'guard') {
     me.guarding = true;
     me.stamina = clamp(me.stamina + 22, 0, me.staminaMax);
@@ -746,18 +848,49 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
     lines.push(`${them.name} does not accept it.`);
   }
 
-  if (them.hp <= 0) {
+  if (battle.them.hp <= 0) {
+    const downed = battle.them;
     const parting = voiceLine(battle, rng, 'beaten');
     if (parting) lines.push(parting);
-    lines.push(`${them.name} goes down and does not get back up.`);
-    return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
+    lines.push(`${downed.name} goes down and does not get back up.`);
+    battle.defeated = battle.defeated || [];
+    if (!battle.defeated.includes(downed)) battle.defeated.push(downed);
+    const next = refocus(battle);
+    if (!next) {
+      return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
+    }
+    lines.push(rng.pick([
+      `${next.name} steps over ${downed.name} without looking down.`,
+      `That leaves ${standingFoes(battle).length}. ${next.name} is closest.`,
+      `${next.name} does not appear to have found that discouraging.`,
+    ]));
   }
 
   if (!skipFoe) {
-    if (freeSwing) lines.push(`${them.name} does not wait for you to finish.`);
-    lines.push(...foeTurn(state, battle, rng));
-    // Their turn can end the fight outright (a ring-out).
-    if (battle.over) return { lines, over: true, outcome: battle.outcome };
+    if (freeSwing) lines.push(`${battle.them.name} does not wait for you to finish.`);
+    // Everyone still on their feet gets a turn, not just the one you are
+    // looking at. This is what makes being surrounded actually dangerous.
+    for (const foe of standingFoes(battle)) {
+      lines.push(...foeTurn(state, battle, rng, foe));
+      if (battle.over) return { lines, over: true, outcome: battle.outcome };
+      if (me.hp <= 0) break;
+    }
+    // And anybody fighting on your side answers back.
+    for (const ally of (battle.allies || [])) {
+      if (ally.hp <= 0) continue;
+      const mark = standingFoes(battle)[0];
+      if (!mark) break;
+      const move = rng.weighted(PHYSICAL, (m) => m.base);
+      const res = strike(ally, mark, battle, rng, move);
+      lines.push(describeStrike(res, ally.name, mark.name, move.name, rng, false));
+      if (mark.hp <= 0) {
+        lines.push(`${mark.name} is down. ${ally.name} did that one.`);
+        refocus(battle);
+        if (!standingFoes(battle).length) {
+          return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
+        }
+      }
+    }
   }
 
   if (me.hp <= 0) {
@@ -770,6 +903,12 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
     const state2 = them.hp / them.hpMax;
     const said = voiceLine(battle, rng, state2 < 0.35 ? 'losing' : me.hp / me.hpMax < 0.45 ? 'winning' : 'hurt');
     if (said) lines.push(said);
+  }
+
+  // Time spent inside a form is how a form gets worn in.
+  if (me.form) {
+    battle.formRounds = battle.formRounds || {};
+    battle.formRounds[me.form] = (battle.formRounds[me.form] || 0) + 1;
   }
 
   applyUpkeep(me, lines);
@@ -791,14 +930,16 @@ export function battleStatus(battle) {
   return {
     round: battle.round,
     me: {
-      hp: Math.round(battle.me.hp), ki: Math.round(battle.me.ki),
-      stamina: Math.round(battle.me.stamina), kiMax: Math.round(battle.me.kiMax),
+      hp: Math.round(battle.me.hp), hpMax: Math.round(battle.me.hpMax),
+      ki: Math.round(battle.me.ki), kiMax: Math.round(battle.me.kiMax),
+      stamina: Math.round(battle.me.stamina), staminaMax: Math.round(battle.me.staminaMax),
       form: battle.me.formName, stance: STANCES[battle.me.stance].name,
       power: Math.round(effectivePower(battle.me, battle)),
     },
     them: {
       name: battle.them.name,
-      hp: Math.round(battle.them.hp), ki: Math.round(battle.them.ki),
+      hp: Math.round(battle.them.hp), hpMax: Math.round(battle.them.hpMax),
+      ki: Math.round(battle.them.ki),
       form: battle.them.formName, stance: STANCES[battle.them.stance].name,
       power: Math.round(effectivePower(battle.them, battle)),
       tier: powerTier(effectivePower(battle.them, battle)),
@@ -806,10 +947,30 @@ export function battleStatus(battle) {
     destruction: Math.round(battle.destruction),
     civilians: battle.civilians,
     gap: ratioOf(battle.me, battle.them, battle),
+    lockedOut: lockout(battle.me, battle.them, battle),
+    lockingThem: lockout(battle.them, battle.me, battle),
+    squad: (battle.squad || []).map((f) => ({
+      slot: f.slot, name: f.name, hp: Math.round(f.hp), hpMax: Math.round(f.hpMax),
+      down: f.hp <= 0, focus: f === battle.them, form: f.formName,
+      power: Math.round(effectivePower(f, battle)),
+    })),
+    allies: (battle.allies || []).map((a) => ({
+      name: a.name, hp: Math.round(a.hp), hpMax: Math.round(a.hpMax), down: a.hp <= 0,
+    })),
+    restraint: battle.restraint ?? 1,
   };
 }
 
 export function describeMatchup(battle) {
+  const up = standingFoes(battle);
+  if (up.length > 1) {
+    const total = up.reduce((n, f) => n + effectivePower(f, battle), 0);
+    const r2 = effectivePower(battle.me, battle) / Math.max(1, total);
+    if (r2 > 6) return `${up.length} of them, and it will not matter.`;
+    if (r2 > 1.4) return `${up.length} of them. You can take them, if they let you take them one at a time.`;
+    if (r2 > 0.5) return `${up.length} of them, and together they are a real problem.`;
+    return `${up.length} of them. You are going to have to pick which one you can afford to fight.`;
+  }
   const r = ratioOf(battle.me, battle.them, battle);
   if (r > 30) return 'They are not in your class and you both know it.';
   if (r > 6) return 'You are clearly stronger.';
@@ -836,6 +997,17 @@ export function battleAftermath(state, rng, battle, opts = {}) {
 
   if (battle.zenkai) {
     lines.push(`Your body rebuilds heavier than it was. Power level up ${numberish(battle.zenkai)}.`);
+  }
+
+  // Rounds held inside a form are the only thing that really masters it. A
+  // hard fight teaches more than an easy one.
+  for (const [formId, rounds] of Object.entries(battle.formRounds || {})) {
+    const pressure = outcome === 'won' ? 1 : 1.4;
+    const gain = trainMastery(c, formId, Math.min(9, rounds * 0.55 * pressure));
+    if (gain >= 3) {
+      const form = getTransformation(formId);
+      lines.push(`${form ? form.name : 'The form'} sits better on you than it did this morning.`);
+    }
   }
 
   // Clothes and kit take the same beating you do.
@@ -865,7 +1037,7 @@ export function battleAftermath(state, rng, battle, opts = {}) {
 
   if (outcome === 'won') {
     // How far the story travels depends on what you beat, not on you.
-    const theirs = battle.them.basePower || 1;
+    const theirs = (battle.squad || [battle.them]).reduce((n, f) => n + (f.basePower || 0), 0) || 1;
     const scale = theirs > 1e12 ? DEED_SCALE.god_beaten
       : theirs > 1e8 ? DEED_SCALE.city
         : theirs > 1e5 ? DEED_SCALE.tournament : DEED_SCALE.street;
@@ -923,7 +1095,6 @@ const SCAR_MARKS = ['scar_cheek', 'scar_brow', 'scar_chest', 'scar_arm', 'scar_e
 
 function markBody(state, rng, battle) {
   const c = state.character;
-  if (hasPerk(c, 'regeneration') || c.raceId === 'android') return null;
   const nearDeath = battle.me.hp <= 12 && battle.outcome !== 'fled';
   if (!nearDeath) return null;
   c.scars = c.scars || [];
@@ -931,12 +1102,21 @@ function markBody(state, rng, battle) {
   const from = battle.them.name;
   const year = c.birthYear + c.age;
 
-  // Losing badly to something lethal can cost more than skin.
-  if (battle.stakes === 'lethal' && battle.outcome === 'lost' && !have.has('missing_eye') && rng.chance(0.12)) {
-    c.scars.push({ year, mark: 'missing_eye', from, text: `Lost an eye to ${from}.` });
-    c.stats.speed = Math.max(1, c.stats.speed - 3);
-    return `You lose the eye. ${from} does not even notice.`;
+  // Losing badly to something lethal can cost more than skin. This is the
+  // part of the series everybody remembers: Gohan's arm, Vegeta's tail,
+  // Yamcha's leg. Losing does not have to kill you to change you.
+  if (battle.stakes === 'lethal' && battle.outcome === 'lost' && rng.chance(0.2)) {
+    const gap = ratioOf(battle.them, battle.me, battle);
+    const table = gap > 6
+      ? ['lost_arm', 'lost_leg', 'lost_eye', 'lost_hand', 'broken_back']
+      : ['lost_eye', 'lost_hand', 'ruined_lungs'];
+    if (c.tail && rng.chance(0.3)) table.unshift('lost_tail');
+    const line = maim(state, rng, rng.pick(table), from);
+    if (line) return line;
   }
+
+  // Past that, a body that puts itself back together keeps no record.
+  if (hasPerk(c, 'regeneration') || c.raceId === 'android') return null;
   if (rng.chance(0.45)) {
     const open = SCAR_MARKS.filter((m) => !have.has(m));
     if (!open.length) return null;

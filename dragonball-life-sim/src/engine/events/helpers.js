@@ -223,9 +223,35 @@ function voiceFor(foe, ctx) {
   return 'professional';
 }
 
+/**
+ * Break one nominal enemy into a squad of named bodies. A "purge squad" is
+ * five people, and it should fight like five people rather than like one
+ * person with five times the health.
+ */
+export function squadOf(ctx, foe, count, opts = {}) {
+  const n = Math.max(1, Math.min(6, Math.round(count)));
+  if (n === 1) return [foe];
+  const names = opts.names || null;
+  // The leader carries most of it; the rest are the rest.
+  const share = [0.42, 0.2, 0.14, 0.1, 0.08, 0.06].slice(0, n);
+  const total = share.reduce((a, b) => a + b, 0);
+  return share.map((w, i) => ({
+    ...foe,
+    name: names && names[i] ? names[i]
+      : i === 0 ? (opts.leaderName || `${foe.name} - the one in charge`)
+        : `${opts.memberName || 'one of them'} (${i + 1})`,
+    power: Math.max(1, Math.round(foe.power * (w / total) * n * 0.62)),
+    speedStat: (foe.speedStat ?? 50) + (i === 0 ? 6 : -4),
+    canonId: i === 0 ? foe.canonId : null,
+    npcId: i === 0 ? foe.npcId : null,
+  }));
+}
+
 export function offerBattle(ctx, foe, opts = {}) {
   const spec = {
     foe,
+    foes: opts.foes || null,
+    allies: opts.allies || null,
     stakes: opts.stakes || 'serious',
     reason: opts.reason || 'fight',
     protecting: !!opts.protecting,

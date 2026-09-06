@@ -8,6 +8,7 @@ import { canonAvailable, canonPower, getCanon } from '../data/canon.js';
 import { combatPower } from './stats.js';
 import { addFact } from './memory.js';
 import { adjust } from './state.js';
+import { spreadWord, DEED_SCALE } from './settlement.js';
 
 export function worldRecord(state, planetId) {
   state.world.planets = state.world.planets || {};
