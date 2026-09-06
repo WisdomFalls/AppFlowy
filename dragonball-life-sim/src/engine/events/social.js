@@ -4,7 +4,7 @@
 import { registerEvents, pickNpc, npcSlot } from '../generator.js';
 import { apply, fact, stranger, relate, thread, bumpThread, trainYear, powerLine,
   meetCanon, canonHere, odds, killNpc, findNpc, bondScore, scaledFoePower } from './helpers.js';
-import { makeChild, describeNpc, relationLabel } from '../npc.js';
+import { makeChild, describeNpc, relationLabel, weddingLine, birthLine } from '../npc.js';
 import { addNpc } from '../state.js';
 import { getRace } from '../../data/races.js';
 import { numberish } from '../text.js';
@@ -95,7 +95,7 @@ registerEvents([
         relate(c2, npc, { relation: 'spouse', closeness: 20, romance: 25 });
         const changes = apply(c2, { happiness: 22, zeni: -c2.rng.int(20000, 200000), fame: 2 });
         fact(c2, `Married ${npc.name}.`, { type: 'marriage', weight: 6, subject: npc.id, tags: ['romance', 'family'] });
-        return { text: `{It is a small wedding|It is an enormous wedding|Somebody destroys part of the venue and it is still the best day of the year}. #joy#`, changes };
+        return { text: `${weddingLine(npc, c2.rng)} #joy#`, changes };
       } },
       { id: 'no', label: 'Say no', effect: (c2, sl) => {
         const npc = findNpc(c2.state, sl.npcId);
@@ -140,7 +140,8 @@ registerEvents([
         const changes = apply(c2, { happiness: 20, zeni: -c2.rng.int(5000, 40000), health: -3 });
         fact(c2, `${child.name} was born.`, { type: 'child', weight: 7, subject: child.id, tags: ['family'] });
         thread(c2, 'parenthood', child.id, { title: `Raising ${child.name}`, heat: 60, maxStage: 5 });
-        return { text: `${child.name}. {Small, loud, and already stronger than they should be|They have your eyes and somebody else's temper|You hold them and something in your chest reorganises itself}. ${child.inheritedPower > c2.character.power ? `{Something in them is already bigger than you|Their potential is frightening|You can feel it, and it is enormous}.` : ``}`, changes };
+        const reaction = partner ? birthLine(partner, c2.rng) : `{Small, loud, and already stronger than they should be|They have your eyes and somebody else's temper|You hold them and something in your chest reorganises itself}.`;
+        return { text: `${child.name}. ${reaction} ${child.inheritedPower > c2.character.power ? `{Something in them is already bigger than you|Their potential is frightening|You can feel it, and it is enormous}.` : ``}`, changes };
       } },
       { id: 'unready', label: 'You are not built for this', effect: (c2, sl) => {
         const partner = sl.partnerId ? findNpc(c2.state, sl.partnerId) : null;

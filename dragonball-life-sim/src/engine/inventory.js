@@ -10,6 +10,7 @@ import { getItem, ITEMS } from '../data/items.js';
 import { currencyFor, priceIn, credit, debit, canAfford, balance, formatMoney } from '../data/currency.js';
 import { getPlace } from '../data/places.js';
 import { priceMult, tradeSellBonus, tryStartTrade } from './market.js';
+import { render } from './text.js';
 
 /** Slots a wearable item can occupy. One thing per slot. */
 export const SLOTS = {
@@ -250,18 +251,93 @@ export function requestItem(state, rng, npc, itemId, how) {
   return { ok: false, text: `${npc.name} will not let go of it, and you find out you are not as far above them as you thought.` };
 }
 
-/** Give something of yours away. */
-export function giveItem(state, npc, itemId) {
+// What kind of person a given category of gift actually lands with. Nobody
+// is impressed by a sword just because it was expensive if fighting is not
+// who they are, and nobody who is vain turns down jewellery.
+const GIFT_AFFINITY = {
+  weapon: ['brave', 'reckless', 'ambitious', 'protective', 'vengeful'],
+  gear: ['ambitious', 'patient', 'protective', 'curious'],
+  accessory: ['vain', 'curious', 'funny'],
+  treasure: ['vain', 'greedy', 'ambitious', 'curious'],
+  trophy: ['vain', 'ambitious', 'greedy'],
+  consumable: ['kind', 'gentle', 'generous', 'loyal'],
+  property: ['patient', 'protective', 'loyal'],
+  transport: ['curious', 'ambitious', 'reckless'],
+};
+
+/**
+ * Does this gift actually suit them, independent of whether they will say
+ * so? Personality tags and what they are chasing in life count for more
+ * than the price tag, though a genuinely extravagant gift still buys some
+ * credit even with someone it was never going to be right for.
+ */
+export function giftFit(npc, item) {
+  if (!item) return 'neutral';
+  const tags = npc.tags || [];
+  let score = (GIFT_AFFINITY[item.cat] || []).filter((t) => tags.includes(t)).length * 2;
+  const fights = (npc.power || 0) > 500 || npc.growthFocus === 'power';
+  if (item.cat === 'weapon') score += fights ? 2 : (tags.some((t) => t === 'gentle' || t === 'patient') ? -2 : 0);
+  if (item.cat === 'gear' && item.passive && item.passive.trainMult && fights) score += 2;
+  if ((item.cat === 'accessory' || item.cat === 'trophy') && npc.appearance && npc.appearance.vain) score += 2;
+  if (item.cat === 'consumable' && npc.growthFocus === 'family') score += 1;
+  if (item.cat === 'property' && npc.growthFocus === 'family') score += 2;
+  if (item.cat === 'transport' && npc.growthFocus === 'money') score += 1;
+  const worth = Math.log10(Math.max(10, item.cost || (item.passive && item.passive.unique ? 5000000 : 1000)));
+  score += clamp(worth - 3, -1, 2.5);
+  if (score >= 3.5) return 'loved';
+  if (score >= 1) return 'liked';
+  if (score > -1.5) return 'neutral';
+  return 'disliked';
+}
+
+/**
+ * Give something of yours away. What happens next depends on whether it
+ * actually suits them and, if it does not, on how they feel about you: a
+ * spouse or partner who loves you will often wear or use a gift they do not
+ * privately care for rather than let you down, where anyone else just says
+ * a polite nothing and puts it in a drawer.
+ */
+export function giveItem(state, rng, npc, itemId) {
   const entry = findEntry(state.character, itemId);
   if (!entry) return { ok: false, text: 'You do not have that.' };
   const item = getItem(itemId);
   removeItem(state.character, itemId, 1);
   npc.bag = npc.bag || [];
-  npc.bag.push({ id: itemId, qty: 1, condition: entry.condition ?? 100, worn: false });
-  const worth = Math.log10(Math.max(10, item.cost || 1000));
-  npc.closeness = clamp((npc.closeness || 0) + Math.round(worth * 2.5), 0, 100);
-  npc.trust = clamp((npc.trust ?? 30) + Math.round(worth * 2), 0, 100);
-  return { ok: true, text: `${npc.name} takes it, and takes a moment over it.` };
+
+  const fit = giftFit(npc, item);
+  const romantic = ['spouse', 'lover'].includes(npc.relation);
+  const devoted = romantic && (npc.romance || 0) > 55 && (npc.closeness || 0) > 45;
+  const blunt = (npc.tags || []).some((t) => t === 'honest' || t === 'blunt');
+
+  let wears, closenessGain, trustGain, romanceGain = 0, text;
+  if (fit === 'loved') {
+    wears = true; closenessGain = rng.int(14, 22); trustGain = rng.int(6, 10);
+    romanceGain = romantic ? rng.int(8, 14) : 0;
+    text = `${npc.name} ${render(`{lights up|does not put it down for the rest of the day|says this is exactly right, and means it}.`, {}, rng)}`;
+  } else if (fit === 'liked') {
+    wears = true; closenessGain = rng.int(8, 14); trustGain = rng.int(3, 6);
+    romanceGain = romantic ? rng.int(3, 7) : 0;
+    text = `${npc.name} ${render(`{is genuinely pleased|thanks you properly|keeps it close}.`, {}, rng)}`;
+  } else if (fit === 'neutral') {
+    wears = devoted || rng.chance(0.35); closenessGain = rng.int(2, 6); trustGain = rng.int(0, 3);
+    text = `${npc.name} ${render(`{takes it politely|is not sure what to make of it, but says thank you|puts it aside for now}.`, {}, rng)}`;
+  } else if (devoted) {
+    wears = true; closenessGain = rng.int(3, 8); trustGain = rng.int(2, 5); romanceGain = rng.int(1, 4);
+    text = blunt
+      ? `${npc.name} tells you, honestly, that it is not their taste - and wears it anyway, because you gave it to them.`
+      : `${npc.name} ${render(`{smiles and says it is perfect, which is not quite true|wears it the very next day, for you|does not love it and will never once say so}.`, {}, rng)}`;
+  } else {
+    wears = false; closenessGain = blunt ? -2 : rng.int(-2, 1); trustGain = 0;
+    text = blunt
+      ? `${npc.name} looks at it and tells you, plainly, that it is not for them.`
+      : `${npc.name} ${render(`{thanks you without much behind it|is polite about it and nothing more|puts it away and does not bring it up again}.`, {}, rng)}`;
+  }
+
+  npc.bag.push({ id: itemId, qty: 1, condition: entry.condition ?? 100, worn: wears, from: 'you', trueFeeling: fit });
+  npc.closeness = clamp((npc.closeness || 0) + closenessGain, 0, 100);
+  npc.trust = clamp((npc.trust ?? 30) + trustGain, 0, 100);
+  if (romantic) npc.romance = clamp((npc.romance || 0) + romanceGain, 0, 100);
+  return { ok: true, text, fit };
 }
 
 /** A fight wears things out. */

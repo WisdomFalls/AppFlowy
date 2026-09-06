@@ -6494,6 +6494,7 @@ const { RACES, getRace, raceHasTail } = __mod_data_races_js;
 const { getCanon, canonPower, canonAlive } = __mod_data_canon_js;
 const { getPlace } = __mod_data_places_js;
 const { canonLook, SPECIES_LOOK } = __mod_data_canonlooks_js;
+const { render } = __mod_engine_text_js;
 
 const RELATIONS = {
   parent: { label: 'Parent', family: true },
@@ -6986,6 +6987,64 @@ function relationshipTick(rng, npc, character) {
 }
 
 /**
+ * A shorthand read on who somebody is, for the systems that need to speak
+ * about a spouse or partner as a person rather than a stat block. Nothing
+ * here is stored; it is recomputed from what the NPC already carries.
+ */
+function spouseFlavor(npc) {
+  const tags = npc.tags || [];
+  return {
+    fighter: (npc.power || 0) > 1000 || npc.isCanon,
+    gentle: tags.some((t) => t === 'gentle' || t === 'kind' || t === 'patient'),
+    fierce: tags.some((t) => t === 'reckless' || t === 'vengeful' || t === 'ambitious' || t === 'brave'),
+    vain: tags.includes('vain') || !!(npc.appearance && npc.appearance.vain),
+    jealous: tags.includes('jealous'),
+    funny: tags.includes('funny'),
+    grim: tags.includes('grim') || tags.includes('cold'),
+  };
+}
+
+/** The wedding you actually get, not a generic one, going by who is standing next to you. */
+function weddingLine(npc, rng) {
+  const f = spouseFlavor(npc);
+  if (f.fighter && f.fierce) {
+    return render(`{Half the guests could level a city and at least one of them nearly does|Somebody destroys part of the venue and it is still the best day of the year|The vows are short, because neither of you is built for standing still that long}.`, {}, rng);
+  }
+  if (f.fighter) {
+    return render(`{It is disciplined and quiet, more like a promotion than a party|Everyone in the room could kill you and nobody does|The toast is one sentence, and it is enough}.`, {}, rng);
+  }
+  if (f.vain) {
+    return render(`{Nothing about the day is understated, on purpose|What you are wearing gets more attention than the vows, and neither of you minds|It is the kind of wedding people are still talking about a decade later}.`, {}, rng);
+  }
+  if (f.gentle) {
+    return render(`{It is a small wedding, exactly as quiet as they wanted it|Nobody makes a scene, which is the whole point|It is soft, brief, and exactly right}.`, {}, rng);
+  }
+  if (f.funny) {
+    return render(`{Somebody's toast goes on twice as long as it should and gets funnier every minute|The ceremony keeps almost breaking down into laughing|It is not a solemn day and was never going to be}.`, {}, rng);
+  }
+  return render(`{It is a small wedding|It is an enormous wedding|Somewhere in between, and better for it}.`, {}, rng);
+}
+
+/** How a year spent on a partner actually goes, by who they are. */
+function courtLine(npc, rng) {
+  const f = spouseFlavor(npc);
+  if (f.fighter) return render(`{You spend the year sparring as often as you talk, and call that romance|Half your dates end in a friendly beating|You relax the only way either of you knows how, which is not very}.`, {}, rng);
+  if (f.vain) return render(`{You go somewhere with good light and better company|They pick everything, and they are right every time|It is extravagant and you do not regret a zeni of it}.`, {}, rng);
+  if (f.gentle) return render(`{You go somewhere with no fighting in it and mean to keep it that way|A whole year of nothing important, which turns out to be everything|Quiet, mostly, and better for it}.`, {}, rng);
+  if (f.grim) return render(`{Neither of you says much, and somehow that is the point|It is not a loud year, and you would not trade it|Some of the best time you spend together is spent in silence}.`, {}, rng);
+  return render(`{You go somewhere with no fighting in it|You are extremely bad at relaxing and they find that funny|A whole year of nothing important}.`, {}, rng);
+}
+
+/** A birth reaction shaped by who is holding the other end of it. */
+function birthLine(npc, rng) {
+  const f = spouseFlavor(npc);
+  if (f.fighter) return render(`{They are already talking about training|"Look at the grip on this one"|They hold the baby like something they need to protect, which is new}.`, {}, rng);
+  if (f.gentle) return render(`{They cry, quietly, and do not explain why|They do not put the baby down for the first two days|It is the softest you have ever seen them}.`, {}, rng);
+  if (f.funny) return render(`{They are already making jokes about who the kid takes after|"This one's going to be trouble, I can tell"|They will not stop narrating what the baby is thinking}.`, {}, rng);
+  return render(`{Small, loud, and already stronger than they should be|They have your eyes and somebody else's temper|You hold them and something in your chest reorganises itself}.`, {}, rng);
+}
+
+/**
  * What you actually know about somebody, gated by how well you know them.
  * Everything unknown reads as a blank rather than being silently omitted, so
  * the gaps are visible and worth closing.
@@ -7106,7 +7165,7 @@ function learnAbout(npc, amount = 1) {
   npc.knowledge = Math.min(4, (npc.knowledge || 0) + amount);
   return npc.knowledge;
 }
-  return { RELATIONS, resetNpcCounter, nextNpcId, makeAppearance, makeNpc, makeCanonNpc, makeFamily, makeChild, driftAppearance, scarNpc, progressNpc, relationshipTick, dossier, describeNpc, relationLabel, bondScore, bondLabel, romanceLabel, KNOWLEDGE_LEVELS, knowledgeLabel, learnAbout };
+  return { RELATIONS, resetNpcCounter, nextNpcId, makeAppearance, makeNpc, makeCanonNpc, makeFamily, makeChild, driftAppearance, scarNpc, progressNpc, relationshipTick, spouseFlavor, weddingLine, courtLine, birthLine, dossier, describeNpc, relationLabel, bondScore, bondLabel, romanceLabel, KNOWLEDGE_LEVELS, knowledgeLabel, learnAbout };
 })();
 
 /* ==== engine/state.js ==== */
@@ -8134,6 +8193,7 @@ const { getItem, ITEMS } = __mod_data_items_js;
 const { currencyFor, priceIn, credit, debit, canAfford, balance, formatMoney } = __mod_data_currency_js;
 const { getPlace } = __mod_data_places_js;
 const { priceMult, tradeSellBonus, tryStartTrade } = __mod_engine_market_js;
+const { render } = __mod_engine_text_js;
 
 /** Slots a wearable item can occupy. One thing per slot. */
 const SLOTS = {
@@ -8374,18 +8434,93 @@ function requestItem(state, rng, npc, itemId, how) {
   return { ok: false, text: `${npc.name} will not let go of it, and you find out you are not as far above them as you thought.` };
 }
 
-/** Give something of yours away. */
-function giveItem(state, npc, itemId) {
+// What kind of person a given category of gift actually lands with. Nobody
+// is impressed by a sword just because it was expensive if fighting is not
+// who they are, and nobody who is vain turns down jewellery.
+const GIFT_AFFINITY = {
+  weapon: ['brave', 'reckless', 'ambitious', 'protective', 'vengeful'],
+  gear: ['ambitious', 'patient', 'protective', 'curious'],
+  accessory: ['vain', 'curious', 'funny'],
+  treasure: ['vain', 'greedy', 'ambitious', 'curious'],
+  trophy: ['vain', 'ambitious', 'greedy'],
+  consumable: ['kind', 'gentle', 'generous', 'loyal'],
+  property: ['patient', 'protective', 'loyal'],
+  transport: ['curious', 'ambitious', 'reckless'],
+};
+
+/**
+ * Does this gift actually suit them, independent of whether they will say
+ * so? Personality tags and what they are chasing in life count for more
+ * than the price tag, though a genuinely extravagant gift still buys some
+ * credit even with someone it was never going to be right for.
+ */
+function giftFit(npc, item) {
+  if (!item) return 'neutral';
+  const tags = npc.tags || [];
+  let score = (GIFT_AFFINITY[item.cat] || []).filter((t) => tags.includes(t)).length * 2;
+  const fights = (npc.power || 0) > 500 || npc.growthFocus === 'power';
+  if (item.cat === 'weapon') score += fights ? 2 : (tags.some((t) => t === 'gentle' || t === 'patient') ? -2 : 0);
+  if (item.cat === 'gear' && item.passive && item.passive.trainMult && fights) score += 2;
+  if ((item.cat === 'accessory' || item.cat === 'trophy') && npc.appearance && npc.appearance.vain) score += 2;
+  if (item.cat === 'consumable' && npc.growthFocus === 'family') score += 1;
+  if (item.cat === 'property' && npc.growthFocus === 'family') score += 2;
+  if (item.cat === 'transport' && npc.growthFocus === 'money') score += 1;
+  const worth = Math.log10(Math.max(10, item.cost || (item.passive && item.passive.unique ? 5000000 : 1000)));
+  score += clamp(worth - 3, -1, 2.5);
+  if (score >= 3.5) return 'loved';
+  if (score >= 1) return 'liked';
+  if (score > -1.5) return 'neutral';
+  return 'disliked';
+}
+
+/**
+ * Give something of yours away. What happens next depends on whether it
+ * actually suits them and, if it does not, on how they feel about you: a
+ * spouse or partner who loves you will often wear or use a gift they do not
+ * privately care for rather than let you down, where anyone else just says
+ * a polite nothing and puts it in a drawer.
+ */
+function giveItem(state, rng, npc, itemId) {
   const entry = findEntry(state.character, itemId);
   if (!entry) return { ok: false, text: 'You do not have that.' };
   const item = getItem(itemId);
   removeItem(state.character, itemId, 1);
   npc.bag = npc.bag || [];
-  npc.bag.push({ id: itemId, qty: 1, condition: entry.condition ?? 100, worn: false });
-  const worth = Math.log10(Math.max(10, item.cost || 1000));
-  npc.closeness = clamp((npc.closeness || 0) + Math.round(worth * 2.5), 0, 100);
-  npc.trust = clamp((npc.trust ?? 30) + Math.round(worth * 2), 0, 100);
-  return { ok: true, text: `${npc.name} takes it, and takes a moment over it.` };
+
+  const fit = giftFit(npc, item);
+  const romantic = ['spouse', 'lover'].includes(npc.relation);
+  const devoted = romantic && (npc.romance || 0) > 55 && (npc.closeness || 0) > 45;
+  const blunt = (npc.tags || []).some((t) => t === 'honest' || t === 'blunt');
+
+  let wears, closenessGain, trustGain, romanceGain = 0, text;
+  if (fit === 'loved') {
+    wears = true; closenessGain = rng.int(14, 22); trustGain = rng.int(6, 10);
+    romanceGain = romantic ? rng.int(8, 14) : 0;
+    text = `${npc.name} ${render(`{lights up|does not put it down for the rest of the day|says this is exactly right, and means it}.`, {}, rng)}`;
+  } else if (fit === 'liked') {
+    wears = true; closenessGain = rng.int(8, 14); trustGain = rng.int(3, 6);
+    romanceGain = romantic ? rng.int(3, 7) : 0;
+    text = `${npc.name} ${render(`{is genuinely pleased|thanks you properly|keeps it close}.`, {}, rng)}`;
+  } else if (fit === 'neutral') {
+    wears = devoted || rng.chance(0.35); closenessGain = rng.int(2, 6); trustGain = rng.int(0, 3);
+    text = `${npc.name} ${render(`{takes it politely|is not sure what to make of it, but says thank you|puts it aside for now}.`, {}, rng)}`;
+  } else if (devoted) {
+    wears = true; closenessGain = rng.int(3, 8); trustGain = rng.int(2, 5); romanceGain = rng.int(1, 4);
+    text = blunt
+      ? `${npc.name} tells you, honestly, that it is not their taste - and wears it anyway, because you gave it to them.`
+      : `${npc.name} ${render(`{smiles and says it is perfect, which is not quite true|wears it the very next day, for you|does not love it and will never once say so}.`, {}, rng)}`;
+  } else {
+    wears = false; closenessGain = blunt ? -2 : rng.int(-2, 1); trustGain = 0;
+    text = blunt
+      ? `${npc.name} looks at it and tells you, plainly, that it is not for them.`
+      : `${npc.name} ${render(`{thanks you without much behind it|is polite about it and nothing more|puts it away and does not bring it up again}.`, {}, rng)}`;
+  }
+
+  npc.bag.push({ id: itemId, qty: 1, condition: entry.condition ?? 100, worn: wears, from: 'you', trueFeeling: fit });
+  npc.closeness = clamp((npc.closeness || 0) + closenessGain, 0, 100);
+  npc.trust = clamp((npc.trust ?? 30) + trustGain, 0, 100);
+  if (romantic) npc.romance = clamp((npc.romance || 0) + romanceGain, 0, 100);
+  return { ok: true, text, fit };
 }
 
 /** A fight wears things out. */
@@ -8427,7 +8562,7 @@ function repairItem(state, itemId) {
   entry.condition = 100;
   return { ok: true, text: `Repaired. ${formatMoney(cost, cur.id)}, and they were not pleased about the state of it.` };
 }
-  return { SLOTS, itemSlot, inventoryOf, ensureBag, findEntry, hasItem, addItem, removeItem, toggleWorn, valueHere, sellItem, buyItem, npcBag, knownItems, requestItem, giveItem, damageGear, repairItem };
+  return { SLOTS, itemSlot, inventoryOf, ensureBag, findEntry, hasItem, addItem, removeItem, toggleWorn, valueHere, sellItem, buyItem, npcBag, knownItems, requestItem, giftFit, giveItem, damageGear, repairItem };
 })();
 
 /* ==== data/planets.js ==== */
@@ -13300,7 +13435,7 @@ const __mod_engine_events_social_js = (function () {
 
 const { registerEvents, pickNpc, npcSlot } = __mod_engine_generator_js;
 const { apply, fact, stranger, relate, thread, bumpThread, trainYear, powerLine, meetCanon, canonHere, odds, killNpc, findNpc, bondScore, scaledFoePower } = __mod_engine_events_helpers_js;
-const { makeChild, describeNpc, relationLabel } = __mod_engine_npc_js;
+const { makeChild, describeNpc, relationLabel, weddingLine, birthLine } = __mod_engine_npc_js;
 const { addNpc } = __mod_engine_state_js;
 const { getRace } = __mod_data_races_js;
 const { numberish } = __mod_engine_text_js;
@@ -13391,7 +13526,7 @@ registerEvents([
         relate(c2, npc, { relation: 'spouse', closeness: 20, romance: 25 });
         const changes = apply(c2, { happiness: 22, zeni: -c2.rng.int(20000, 200000), fame: 2 });
         fact(c2, `Married ${npc.name}.`, { type: 'marriage', weight: 6, subject: npc.id, tags: ['romance', 'family'] });
-        return { text: `{It is a small wedding|It is an enormous wedding|Somebody destroys part of the venue and it is still the best day of the year}. #joy#`, changes };
+        return { text: `${weddingLine(npc, c2.rng)} #joy#`, changes };
       } },
       { id: 'no', label: 'Say no', effect: (c2, sl) => {
         const npc = findNpc(c2.state, sl.npcId);
@@ -13436,7 +13571,8 @@ registerEvents([
         const changes = apply(c2, { happiness: 20, zeni: -c2.rng.int(5000, 40000), health: -3 });
         fact(c2, `${child.name} was born.`, { type: 'child', weight: 7, subject: child.id, tags: ['family'] });
         thread(c2, 'parenthood', child.id, { title: `Raising ${child.name}`, heat: 60, maxStage: 5 });
-        return { text: `${child.name}. {Small, loud, and already stronger than they should be|They have your eyes and somebody else's temper|You hold them and something in your chest reorganises itself}. ${child.inheritedPower > c2.character.power ? `{Something in them is already bigger than you|Their potential is frightening|You can feel it, and it is enormous}.` : ``}`, changes };
+        const reaction = partner ? birthLine(partner, c2.rng) : `{Small, loud, and already stronger than they should be|They have your eyes and somebody else's temper|You hold them and something in your chest reorganises itself}.`;
+        return { text: `${child.name}. ${reaction} ${child.inheritedPower > c2.character.power ? `{Something in them is already bigger than you|Their potential is frightening|You can feel it, and it is enormous}.` : ``}`, changes };
       } },
       { id: 'unready', label: 'You are not built for this', effect: (c2, sl) => {
         const partner = sl.partnerId ? findNpc(c2.state, sl.partnerId) : null;
@@ -23594,7 +23730,7 @@ const { render } = __mod_engine_text_js;
 const { adjust, findNpc, currentYear, addNpc } = __mod_engine_state_js;
 const { addFact } = __mod_engine_memory_js;
 const { combatPower, weaponAttackBonus } = __mod_engine_stats_js;
-const { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild } = __mod_engine_npc_js;
+const { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild, weddingLine, courtLine, birthLine } = __mod_engine_npc_js;
 const { npcBag } = __mod_engine_inventory_js;
 
 /** An NPC's power as it actually shows up in a fight - their base, plus
@@ -23795,7 +23931,7 @@ const SOCIAL_ACTIONS = [
     run: (state, rng, npc) => {
       chargeSocial(npc, { romance: rng.int(10, 20), closeness: 12, trust: 8, tension: -8 });
       adjust(state, { happiness: 16 });
-      return { text: render(`{You go somewhere with no fighting in it|You are extremely bad at relaxing and they find that funny|A whole year of nothing important}. #joy#`, {}, rng) };
+      return { text: `${courtLine(npc, rng)} ${render('#joy#', {}, rng)}` };
     },
   },
   {
@@ -23810,7 +23946,7 @@ const SOCIAL_ACTIONS = [
         chargeSocial(npc, { romance: 20, closeness: 15, trust: 12 });
         adjust(state, { happiness: 24, zeni: -rng.int(20000, 250000) });
         note(state, `Married ${npc.name}.`, { type: 'marriage', subject: npc.id, tags: ['romance', 'family'], weight: 7 });
-        return { text: render(`{It is a small wedding|Somebody destroys part of the venue and it is still the best day of the year|Half the guests could level a city and none of them do}.`, {}, rng) };
+        return { text: weddingLine(npc, rng) };
       }
       chargeSocial(npc, { romance: -15, tension: 12 });
       adjust(state, { happiness: -18 });
@@ -23829,7 +23965,7 @@ const SOCIAL_ACTIONS = [
       adjust(state, { happiness: 22, zeni: -rng.int(5000, 60000) });
       note(state, `${child.name} was born.`, { type: 'child', subject: child.id, tags: ['family'], weight: 7 });
       return {
-        text: `${child.name}. ${render(`{Small, loud, and already stronger than they should be|They have your eyes and somebody else's temper|You hold them and something in your chest reorganises itself}.`, {}, rng)}`
+        text: `${child.name}. ${birthLine(npc, rng)}`
           + (child.inheritedPower > state.character.power ? ' Something in them is already bigger than you.' : ''),
       };
     },
@@ -25804,7 +25940,9 @@ function panelGive(npcId) {
     main.appendChild(el('div', 'row-note', row.desc));
     b.appendChild(main);
     b.addEventListener('click', () => {
-      const res = giveItem(GAME, npc, row.id);
+      const rng = getRng(GAME);
+      const res = giveItem(GAME, rng, npc, row.id);
+      saveRng(GAME, rng);
       flash(res.text);
       logLine({ kind: 'event', title: `You gave ${npc.name} ${row.name}`, text: res.text });
       renderHud();

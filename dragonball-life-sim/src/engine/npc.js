@@ -8,6 +8,7 @@ import { RACES, getRace, raceHasTail } from '../data/races.js';
 import { getCanon, canonPower, canonAlive } from '../data/canon.js';
 import { getPlace } from '../data/places.js';
 import { canonLook, SPECIES_LOOK } from '../data/canonlooks.js';
+import { render } from './text.js';
 
 export const RELATIONS = {
   parent: { label: 'Parent', family: true },
@@ -497,6 +498,64 @@ export function relationshipTick(rng, npc, character) {
     npc.power = Math.round(npc.power * rng.float(1.05, 1.28));
   }
   if (npc.romance > 0) npc.romance = clamp(npc.romance - rng.float(0, 1.5) + (npc.closeness > 65 ? 1.2 : 0), 0, 100);
+}
+
+/**
+ * A shorthand read on who somebody is, for the systems that need to speak
+ * about a spouse or partner as a person rather than a stat block. Nothing
+ * here is stored; it is recomputed from what the NPC already carries.
+ */
+export function spouseFlavor(npc) {
+  const tags = npc.tags || [];
+  return {
+    fighter: (npc.power || 0) > 1000 || npc.isCanon,
+    gentle: tags.some((t) => t === 'gentle' || t === 'kind' || t === 'patient'),
+    fierce: tags.some((t) => t === 'reckless' || t === 'vengeful' || t === 'ambitious' || t === 'brave'),
+    vain: tags.includes('vain') || !!(npc.appearance && npc.appearance.vain),
+    jealous: tags.includes('jealous'),
+    funny: tags.includes('funny'),
+    grim: tags.includes('grim') || tags.includes('cold'),
+  };
+}
+
+/** The wedding you actually get, not a generic one, going by who is standing next to you. */
+export function weddingLine(npc, rng) {
+  const f = spouseFlavor(npc);
+  if (f.fighter && f.fierce) {
+    return render(`{Half the guests could level a city and at least one of them nearly does|Somebody destroys part of the venue and it is still the best day of the year|The vows are short, because neither of you is built for standing still that long}.`, {}, rng);
+  }
+  if (f.fighter) {
+    return render(`{It is disciplined and quiet, more like a promotion than a party|Everyone in the room could kill you and nobody does|The toast is one sentence, and it is enough}.`, {}, rng);
+  }
+  if (f.vain) {
+    return render(`{Nothing about the day is understated, on purpose|What you are wearing gets more attention than the vows, and neither of you minds|It is the kind of wedding people are still talking about a decade later}.`, {}, rng);
+  }
+  if (f.gentle) {
+    return render(`{It is a small wedding, exactly as quiet as they wanted it|Nobody makes a scene, which is the whole point|It is soft, brief, and exactly right}.`, {}, rng);
+  }
+  if (f.funny) {
+    return render(`{Somebody's toast goes on twice as long as it should and gets funnier every minute|The ceremony keeps almost breaking down into laughing|It is not a solemn day and was never going to be}.`, {}, rng);
+  }
+  return render(`{It is a small wedding|It is an enormous wedding|Somewhere in between, and better for it}.`, {}, rng);
+}
+
+/** How a year spent on a partner actually goes, by who they are. */
+export function courtLine(npc, rng) {
+  const f = spouseFlavor(npc);
+  if (f.fighter) return render(`{You spend the year sparring as often as you talk, and call that romance|Half your dates end in a friendly beating|You relax the only way either of you knows how, which is not very}.`, {}, rng);
+  if (f.vain) return render(`{You go somewhere with good light and better company|They pick everything, and they are right every time|It is extravagant and you do not regret a zeni of it}.`, {}, rng);
+  if (f.gentle) return render(`{You go somewhere with no fighting in it and mean to keep it that way|A whole year of nothing important, which turns out to be everything|Quiet, mostly, and better for it}.`, {}, rng);
+  if (f.grim) return render(`{Neither of you says much, and somehow that is the point|It is not a loud year, and you would not trade it|Some of the best time you spend together is spent in silence}.`, {}, rng);
+  return render(`{You go somewhere with no fighting in it|You are extremely bad at relaxing and they find that funny|A whole year of nothing important}.`, {}, rng);
+}
+
+/** A birth reaction shaped by who is holding the other end of it. */
+export function birthLine(npc, rng) {
+  const f = spouseFlavor(npc);
+  if (f.fighter) return render(`{They are already talking about training|"Look at the grip on this one"|They hold the baby like something they need to protect, which is new}.`, {}, rng);
+  if (f.gentle) return render(`{They cry, quietly, and do not explain why|They do not put the baby down for the first two days|It is the softest you have ever seen them}.`, {}, rng);
+  if (f.funny) return render(`{They are already making jokes about who the kid takes after|"This one's going to be trouble, I can tell"|They will not stop narrating what the baby is thinking}.`, {}, rng);
+  return render(`{Small, loud, and already stronger than they should be|They have your eyes and somebody else's temper|You hold them and something in your chest reorganises itself}.`, {}, rng);
 }
 
 /**

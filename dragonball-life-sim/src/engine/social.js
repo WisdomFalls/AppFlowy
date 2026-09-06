@@ -12,7 +12,8 @@ import { render } from './text.js';
 import { adjust, findNpc, currentYear, addNpc } from './state.js';
 import { addFact } from './memory.js';
 import { combatPower, weaponAttackBonus } from './stats.js';
-import { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild } from './npc.js';
+import { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild,
+  weddingLine, courtLine, birthLine } from './npc.js';
 import { npcBag } from './inventory.js';
 
 /** An NPC's power as it actually shows up in a fight - their base, plus
@@ -213,7 +214,7 @@ export const SOCIAL_ACTIONS = [
     run: (state, rng, npc) => {
       chargeSocial(npc, { romance: rng.int(10, 20), closeness: 12, trust: 8, tension: -8 });
       adjust(state, { happiness: 16 });
-      return { text: render(`{You go somewhere with no fighting in it|You are extremely bad at relaxing and they find that funny|A whole year of nothing important}. #joy#`, {}, rng) };
+      return { text: `${courtLine(npc, rng)} ${render('#joy#', {}, rng)}` };
     },
   },
   {
@@ -228,7 +229,7 @@ export const SOCIAL_ACTIONS = [
         chargeSocial(npc, { romance: 20, closeness: 15, trust: 12 });
         adjust(state, { happiness: 24, zeni: -rng.int(20000, 250000) });
         note(state, `Married ${npc.name}.`, { type: 'marriage', subject: npc.id, tags: ['romance', 'family'], weight: 7 });
-        return { text: render(`{It is a small wedding|Somebody destroys part of the venue and it is still the best day of the year|Half the guests could level a city and none of them do}.`, {}, rng) };
+        return { text: weddingLine(npc, rng) };
       }
       chargeSocial(npc, { romance: -15, tension: 12 });
       adjust(state, { happiness: -18 });
@@ -247,7 +248,7 @@ export const SOCIAL_ACTIONS = [
       adjust(state, { happiness: 22, zeni: -rng.int(5000, 60000) });
       note(state, `${child.name} was born.`, { type: 'child', subject: child.id, tags: ['family'], weight: 7 });
       return {
-        text: `${child.name}. ${render(`{Small, loud, and already stronger than they should be|They have your eyes and somebody else's temper|You hold them and something in your chest reorganises itself}.`, {}, rng)}`
+        text: `${child.name}. ${birthLine(npc, rng)}`
           + (child.inheritedPower > state.character.power ? ' Something in them is already bigger than you.' : ''),
       };
     },

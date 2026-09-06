@@ -1191,7 +1191,9 @@ function panelGive(npcId) {
     main.appendChild(el('div', 'row-note', row.desc));
     b.appendChild(main);
     b.addEventListener('click', () => {
-      const res = giveItem(GAME, npc, row.id);
+      const rng = getRng(GAME);
+      const res = giveItem(GAME, rng, npc, row.id);
+      saveRng(GAME, rng);
       flash(res.text);
       logLine({ kind: 'event', title: `You gave ${npc.name} ${row.name}`, text: res.text });
       renderHud();
