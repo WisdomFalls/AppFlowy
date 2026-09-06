@@ -15449,6 +15449,23 @@ const TIMELINE_TOURNAMENTS = {
   tournament_of_power: { formatId: 'top', purse: 0, placeId: 'top_arena', size: 12 },
 };
 
+/**
+ * Whether anybody who would actually be on Universe 7's ten would bring you.
+ * Being strong enough to survive it and being invited to it are different
+ * questions - this one is about who vouches for you, not what you can do.
+ */
+function tournamentInvite(ctx) {
+  const roster = canonAvailable(ctx.year, (c) => c.tags.some((t) => ['hero', 'rival', 'antihero', 'ally'].includes(t))
+    && !c.tags.some((t) => ['divine', 'destroyer', 'angel', 'omniking', 'dragon'].includes(t)));
+  const rosterIds = new Set(roster.map((c) => c.id));
+  const knownWell = Object.values(ctx.state.npcs).some((n) => n.isCanon && n.alive
+    && rosterIds.has(n.canonId) && (n.closeness || 0) > 40);
+  // Famous or strong enough that the organisers went looking for you
+  // specifically, the way they did for a handful of outsiders historically.
+  const soughtOut = ctx.character.fame > 55 || combatPower(ctx.character) > worldPowerBaseline(ctx.year) * 3;
+  return knownWell || soughtOut;
+}
+
 function timelineTournament(c2, ev) {
   const spec = TIMELINE_TOURNAMENTS[ev.id];
   if (!spec) return null;
@@ -15480,14 +15497,23 @@ registerEvents([
           && !(t.cancelIf && ctx.state.world.flags[t.cancelIf]));
       if (!ev) return null;
       const here = getPlace(ctx.character.placeId);
-      const reachable = ev.planet === here.planet || ev.scope === 'multiverse' || ev.planet === 'void'
+      const canGetThere = ev.planet === here.planet || ev.scope === 'multiverse' || ev.planet === 'void'
         || ctx.character.items.includes('spaceship') || ctx.character.techniques.includes('instant_transmission');
-      return { evId: ev.id, evName: ev.name, evBlurb: ev.blurb, evThreat: ev.threat, reachable };
+      // Getting to the Null Realm is not a travel problem. It only takes
+      // fighters somebody already picked, so being there at all needs
+      // somebody from that roster to actually bring you - being fast enough
+      // to arrive is not the same question as being invited.
+      const invited = ev.id !== 'tournament_of_power' || tournamentInvite(ctx);
+      const reachable = canGetThere && invited;
+      return { evId: ev.id, evName: ev.name, evBlurb: ev.blurb, evThreat: ev.threat, reachable, invited, canGetThere };
     },
     title: (ctx, s) => s.evName,
     text: (ctx, s) => `[evBlurb] ${s.reachable
       ? `{You could be there in a day|You are close enough to reach it|Nothing is stopping you but sense}.`
-      : `{It is happening a long way from here|You hear about it days late|You have no way to get there}.`}
+      : (s.canGetThere && !s.invited)
+        ? `{Getting there is not the problem. Nobody picked you|You are strong enough to go and nobody asked you to|`
+          + `There is a roster, and your name is not on it, and nobody close enough to you put it there}.`
+        : `{It is happening a long way from here|You hear about it days late|You have no way to get there}.`}
       ${describeGap(combatPower(ctx.character), s.evThreat)}`,
     choices: (ctx, s) => {
       const list = [];
