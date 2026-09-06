@@ -722,6 +722,7 @@ export function portraitSvg(character, opts = {}) {
   const hairColour = look(HAIR_COLOURS, a.hairColour, 'black').hex;
   const eyeColour = look(EYE_COLOURS, a.eyeColour, 'black').hex;
   const outfit = look(OUTFITS, a.outfit, 'gi_orange');
+  const isArmour = outfit.id.startsWith('armour');
   const style = a.hairStyle || 'spiked';
   const face = a.face || 'square';
   const build = a.buildShape || 'balanced';
@@ -839,8 +840,8 @@ export function portraitSvg(character, opts = {}) {
       L${cx + side * (shoulderWidth - 18)} ${H}
       C${cx + side * (shoulderWidth - 10)} ${chin + 96} ${sx - side * 6} ${chin + 40} ${cx + side * (shoulderWidth - 16)} ${chin + 22} Z"
       fill="${bodyColour}"/>`);
-    // Wrist and hand, in skin, where the sleeve runs out.
-    parts.push(`<ellipse cx="${cx + side * (shoulderWidth + armReach * 0.5 - 6)}" cy="${H - 8}" rx="9" ry="11" fill="${skin}"/>`);
+    // Wrist and hand - bare skin, except battle armour comes with gloves.
+    parts.push(`<ellipse cx="${cx + side * (shoulderWidth + armReach * 0.5 - 6)}" cy="${H - 8}" rx="9" ry="11" fill="${isArmour ? '#e8e2d6' : skin}"/>`);
   }
 
   // Torso and clothing.
@@ -891,11 +892,29 @@ export function portraitSvg(character, opts = {}) {
     }
   }
   if (outfit.main) {
-    parts.push(`<path d="M${cx - 16} ${chin + 14} L${cx} ${chin + 44} L${cx + 16} ${chin + 14}
-      L${cx + 26} ${chin + 22} L${cx} ${H} L${cx - 26} ${chin + 22} Z" fill="${trimColour}" opacity="0.9"/>`);
-    if (outfit.id.startsWith('armour')) {
-      parts.push(`<path d="M${cx - shoulderWidth + 2} ${chin + 34} q${shoulderWidth} -22 ${shoulderWidth * 2 - 4} 0"
-        fill="none" stroke="${trimColour}" stroke-width="6"/>`);
+    if (isArmour) {
+      // Battle armour reads as plates, not a lapel: a pale chest guard down
+      // the sternum (narrow enough to leave a bust's outline showing past
+      // its edges), rounded pauldrons over each shoulder, and a waist band -
+      // the shapes every Saiyan/Frieza Force set actually has, instead of
+      // one thin arc standing in for all of it.
+      const plateColour = '#e8e2d6';
+      parts.push(`<path d="M${cx - shoulderWidth * 0.3} ${chin + 16}
+        Q${cx} ${chin + 7} ${cx + shoulderWidth * 0.3} ${chin + 16}
+        L${cx + waist * 0.36} ${waistY - 5}
+        Q${cx} ${waistY + 7} ${cx - waist * 0.36} ${waistY - 5} Z" fill="${plateColour}"/>`);
+      parts.push(`<path d="M${cx} ${chin + 9} L${cx} ${waistY}" stroke="${shade(plateColour, -0.2)}" stroke-width="2" opacity="0.55"/>`);
+      parts.push(`<path d="M${cx - waist * 0.36} ${waistY - 5} Q${cx} ${waistY + 7} ${cx + waist * 0.36} ${waistY - 5}"
+        fill="none" stroke="${trimColour}" stroke-width="4"/>`);
+      for (const side of [-1, 1]) {
+        const px = cx + side * (shoulderWidth - 14);
+        parts.push(`<ellipse cx="${px}" cy="${chin + 18}" rx="15" ry="9" fill="${trimColour}"
+          transform="rotate(${side * 20} ${px} ${chin + 18})"/>`);
+      }
+      parts.push(`<rect x="${cx - waist * 0.55}" y="${waistY - 3}" width="${waist * 1.1}" height="9" rx="4" fill="${trimColour}"/>`);
+    } else {
+      parts.push(`<path d="M${cx - 16} ${chin + 14} L${cx} ${chin + 44} L${cx + 16} ${chin + 14}
+        L${cx + 26} ${chin + 22} L${cx} ${H} L${cx - 26} ${chin + 22} Z" fill="${trimColour}" opacity="0.9"/>`);
     }
     if (grime >= 1) {
       // Dirt does not sit evenly across a body - it collects at the hems,
