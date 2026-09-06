@@ -7,6 +7,7 @@ import { generateFullName, generateTitle, generateEpithet, generateSignatureName
 import { RACES, getRace } from '../data/races.js';
 import { getCanon, canonPower, canonAlive } from '../data/canon.js';
 import { getPlace } from '../data/places.js';
+import { canonLook, SPECIES_LOOK } from '../data/canonlooks.js';
 
 export const RELATIONS = {
   parent: { label: 'Parent', family: true },
@@ -59,6 +60,43 @@ const GOALS = ['to be the strongest', 'to find their missing sibling', 'to open 
   'to beat you specifically', 'to earn a name worth saying'];
 
 /** A brand new person, appropriate to the era and place. */
+const NPC_HAIR = ['spiked', 'wild', 'long', 'ponytail', 'bob', 'cropped', 'mohawk', 'bald', 'braid', 'topknot'];
+const NPC_MARKS = ['scar_cheek', 'scar_brow', 'burn_arm', 'dots', 'tattoo_arm', 'birthmark', 'missing_ear'];
+const NPC_ACC = ['headband', 'bandana', 'glasses', 'earring', 'necklace', 'wristbands', 'scarf', 'hat', 'cape'];
+
+/**
+ * An appearance record in the same shape the player uses, so one drawing
+ * routine serves everybody. Species decides the ground rules, the roll does
+ * the rest, and it is stored rather than regenerated so a person looks the
+ * same every time you see them.
+ */
+export function makeAppearance(rng, raceId, sex) {
+  const sp = SPECIES_LOOK[raceId] || SPECIES_LOOK.other;
+  const hairless = ['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(raceId);
+  const build = rng.pick(['small', 'wiry', 'lean', 'balanced', 'balanced', 'stocky', 'massive']);
+  const base = {
+    saiyan: [168, 66], halfsaiyan: [170, 64], earthling: [168, 62], namekian: [196, 78],
+    frostdemon: [158, 52], majin: [180, 96], android: [170, 64], bioandroid: [198, 92],
+    shinjin: [150, 46], tuffle: [140, 40], yardratian: [146, 38], cerealian: [172, 66],
+  }[raceId] || [168, 64];
+  return {
+    skin: sp.skin,
+    face: rng.chance(0.5) ? sp.face : rng.pick(['square', 'round', 'angular', 'long']),
+    eyeShape: rng.pick(['sharp', 'round', 'narrow', 'heavy', 'wide']),
+    eyeColour: rng.chance(0.55) ? sp.eyeColour : rng.pick(['black', 'brown', 'green', 'blue', 'grey', 'gold']),
+    hairStyle: hairless ? 'bald' : (rng.chance(0.4) ? sp.hairStyle : rng.pick(NPC_HAIR)),
+    hairColour: sp.hairColour,
+    outfit: rng.chance(0.55) ? sp.outfit : rng.pick(['casual', 'coat', 'gi_orange', 'gi_blue', 'gi_black', 'lab']),
+    buildShape: build,
+    heightCm: Math.round(rng.gauss(base[0], 9, 90, 260)),
+    weightKg: Math.round(rng.gauss(base[1], 8, 20, 300)),
+    marks: rng.chance(0.35) ? [rng.pick(NPC_MARKS)] : [],
+    accessories: rng.chance(0.4) ? [rng.pick(NPC_ACC)] : [],
+    // Some people change how they look; most do not.
+    vain: rng.chance(0.22),
+  };
+}
+
 export function makeNpc(rng, opts = {}) {
   const raceId = opts.raceId || pickRaceFor(rng, opts);
   const race = getRace(raceId);
@@ -110,6 +148,8 @@ export function makeNpc(rng, opts = {}) {
     isCanon: false,
     signature: rng.chance(0.25) ? generateSignatureName(rng) : null,
 
+    appearance: opts.appearance || makeAppearance(rng, raceId, opts.sex || 'male'),
+
     // The dossier. Most of it stays hidden until you have earned a look at it.
     look: {
       hair: rng.pick(APPEARANCE_HAIR),
@@ -156,8 +196,10 @@ function pickRaceFor(rng, opts) {
 export function makeCanonNpc(rng, canonId, year, relation = 'acquaintance') {
   const c = getCanon(canonId);
   if (!c) return null;
+  const look = canonLook(canonId, year, c.race);
   return {
     id: 'canon_' + canonId,
+    appearance: { heightCm: 170, weightKg: 68, ...look },
     name: c.name,
     raceId: c.race,
     canonId,
@@ -278,6 +320,66 @@ const FOCUS_PATHS = ['power', 'technique', 'family', 'money', 'peace'];
  *
  * Returns a line of news when something happened worth hearing about.
  */
+const DRIFT_HAIR = ['spiked', 'wild', 'long', 'ponytail', 'bob', 'cropped', 'mohawk', 'bald', 'braid', 'topknot'];
+
+/**
+ * People change how they look. Not often, and mostly the ones who care: a new
+ * haircut, something they started wearing, a scar that did not heal, and grey
+ * when the species is one that goes grey.
+ */
+export function driftAppearance(rng, npc, year) {
+  const a = npc.appearance;
+  if (!a || npc.isCanon) return null;
+  const race = getRace(npc.raceId);
+  const hairless = ['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(npc.raceId);
+  let news = null;
+
+  if (!hairless && rng.chance(a.vain ? 0.14 : 0.03)) {
+    const was = a.hairStyle;
+    a.hairStyle = rng.pick(DRIFT_HAIR.filter((h) => h !== was));
+    news = `${npc.name} has done something to their hair.`;
+  }
+  if (rng.chance(a.vain ? 0.1 : 0.03)) {
+    a.outfit = rng.pick(['casual', 'coat', 'gi_orange', 'gi_blue', 'gi_black', 'armour_saiyan', 'namek_robe']);
+  }
+  if (rng.chance(0.04)) {
+    const acc = rng.pick(NPC_ACC);
+    a.accessories = a.accessories || [];
+    if (!a.accessories.includes(acc)) {
+      a.accessories.push(acc);
+      if (!news) news = `${npc.name} is wearing something new.`;
+    }
+  }
+  // Grey, once, when the species ages at anything like a human rate.
+  if (!a.wentGrey && npc.age > 55 && (race.agingRate ?? 1) >= 0.7 && rng.chance(0.08)) {
+    a.wentGrey = true;
+    a.hairColour = rng.chance(0.5) ? 'silver' : 'white';
+    news = `${npc.name} has gone grey.`;
+  }
+  const order = ['small', 'wiry', 'lean', 'balanced', 'stocky', 'massive'];
+  const i = order.indexOf(a.buildShape);
+  if (i >= 0 && npc.growthFocus === 'power' && npc.age < 45 && i < order.length - 1 && rng.chance(0.04)) {
+    a.buildShape = order[i + 1];
+  }
+  return news;
+}
+
+/** A fight leaves something behind on them too. */
+export function scarNpc(rng, npc, from) {
+  const a = npc.appearance;
+  if (!a || npc.isCanon) return null;
+  if (['namekian', 'majin', 'android', 'bioandroid'].includes(npc.raceId)) return null;
+  a.marks = a.marks || [];
+  const pool = ['scar_cheek', 'scar_brow', 'scar_chest', 'scar_arm', 'burn_arm']
+    .filter((m) => !a.marks.includes(m));
+  if (!pool.length) return null;
+  const mark = rng.pick(pool);
+  a.marks.push(mark);
+  npc.scarStory = npc.scarStory || [];
+  npc.scarStory.push({ mark, from: from || 'a fight', year: npc.birthYear + npc.age, text: `A scar from ${from || 'a fight'}.` });
+  return `${npc.name} carries something from that fight now.`;
+}
+
 export function progressNpc(rng, npc, year, opts = {}) {
   if (!npc.alive || npc.isCanon) return null;
   let news = null;
@@ -354,6 +456,8 @@ export function progressNpc(rng, npc, year, opts = {}) {
     npc.mood = rng.pick(['steady', 'restless', 'grieving', 'furious about something', 'quietly pleased',
       'exhausted', 'obsessive', 'content', 'frightened', 'spoiling for a fight']);
   }
+  const lookNews = driftAppearance(rng, npc, year);
+  if (lookNews && !news) news = lookNews;
   if (rng.chance(0.04)) npc.hasDragonBall = true;
 
   return news;

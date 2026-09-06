@@ -716,3 +716,23 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
 
 .row-count { font-family: var(--font-mono); font-weight: 800; font-size: 13px; color: var(--gi); }
 .row-when { font-family: var(--font-mono); font-size: 9.5px; color: var(--ink-3); letter-spacing: .06em; }
+
+/* ------------------------------------------------------------- portraits */
+
+.row-face {
+  width: 40px; height: 47px; flex: none; border-radius: 7px; overflow: hidden;
+  border: 1px solid var(--line-soft); background: var(--ground);
+}
+.row-face svg { display: block; }
+
+.npc-portrait {
+  width: 130px; margin: 4px auto 12px; border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--ground);
+}
+.npc-portrait svg { display: block; }
+
+.foe-face {
+  width: 46px; height: 54px; flex: none; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--ground); margin-right: 10px;
+}
+.foe-face svg { display: block; }

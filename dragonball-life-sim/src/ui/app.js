@@ -16,7 +16,8 @@ import { PLACES, getPlace } from '../data/places.js';
 import { APPEARANCE } from '../engine/state.js';
 import { portraitSvg, defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS,
   SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES as STANCE_LIST,
-  MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks } from './portrait.js';
+  MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks,
+  npcPortrait, lifeStage } from './portrait.js';
 import { eraName, worldPowerBaseline } from '../data/timeline.js';
 import { generateFullName } from '../data/names.js';
 import { BRANCHES, TECH_BY_ID } from '../data/techniques.js';
@@ -672,6 +673,9 @@ function panelPeople() {
     for (const npc of set.slice(0, 40)) {
       const row = el('button', 'row');
       row.type = 'button';
+      const face = el('div', 'row-face');
+      face.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1 });
+      row.appendChild(face);
       const main = el('div', 'row-main');
       main.appendChild(el('div', 'row-title', npc.name + (npc.isCanon ? ' \u2605' : '')));
       const romance = romanceLabel(npc);
@@ -714,6 +718,10 @@ function panelPerson(npcId) {
   const romance = romanceLabel(npc);
   body.appendChild(el('p', 'row-note',
     `${relationLabel(npc)} - ${bondLabel(npc)}${romance ? ' - ' + romance : ''}`));
+
+  const shot = el('div', 'npc-portrait');
+  shot.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1 });
+  body.appendChild(shot);
 
   if (npc.isCanon && npc.personality) {
     body.appendChild(el('p', 'entry-text', npc.personality));
@@ -1637,6 +1645,14 @@ function pushBattleLines(lines, cls) {
 
 function renderBattle() {
   const st = battleStatus(BATTLE);
+  const foeNpc = BATTLE.context && (GAME.npcs[BATTLE.context.npcId] || GAME.npcs['canon_' + BATTLE.context.canonId]);
+  const foeFace = $('foe-face');
+  if (foeFace) {
+    foeFace.innerHTML = foeNpc
+      ? npcPortrait(foeNpc, { maturityRate: getRace(foeNpc.raceId).maturityRate ?? 1 })
+      : '';
+    foeFace.hidden = !foeNpc;
+  }
   $('foe-name').textContent = st.them.name;
   $('foe-sub').textContent = [st.them.tier, st.them.form, st.them.stance].filter(Boolean).join(' - ');
   // A number on the foe panel is a scouter reading, not a birthright.

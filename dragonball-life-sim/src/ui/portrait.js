@@ -257,9 +257,9 @@ function hairBackPath(style, headTop, cx, headR, headH) {
         L${L + 11} ${y + 102} L${L - 7} ${y + 108} Z`;
     case 'ponytail':
       // Gathered at the back of the crown, falling behind the shoulder.
-      return `M${R - 12} ${sk.temple - 6} Q${R + 10} ${sk.temple - 2} ${R + 13} ${sk.temple + 18}
-        L${R + 19} ${sk.temple + 74} L${R + 3} ${sk.temple + 76}
-        L${R - 4} ${sk.temple + 20} Q${R - 14} ${sk.temple + 6} ${R - 12} ${sk.temple - 6} Z`;
+      return `M${R - 10} ${sk.temple - 8} Q${R + 7} ${sk.temple - 4} ${R + 9} ${sk.temple + 14}
+        L${R + 12} ${sk.temple + 62} L${R + 2} ${sk.temple + 64}
+        L${R - 2} ${sk.temple + 16} Q${R - 11} ${sk.temple + 4} ${R - 10} ${sk.temple - 8} Z`;
     case 'braid':
       // Down the back of the neck, not the face.
       return `M${sk.cx - 7} ${sk.chin - 6} L${sk.cx + 7} ${sk.chin - 6}
@@ -331,6 +331,52 @@ function hairPath(style, headTop, cx, headR, headH) {
     default:
       return '';
   }
+}
+
+/**
+ * A body at each point of a life. Proportions, not just size: an infant is
+ * mostly head, a child is head-heavy and short-limbed, an elder has lost a
+ * little height and stands differently. Everything here multiplies the adult
+ * geometry, so one drawing serves every age.
+ */
+export const LIFE_STAGES = [
+  { id: 'infant',  name: 'Infant',  until: 2,  head: 1.34, body: 0.42, neck: 0.5, drop: 62, hair: 0.35 },
+  { id: 'toddler', name: 'Toddler', until: 5,  head: 1.24, body: 0.55, neck: 0.62, drop: 48, hair: 0.6 },
+  { id: 'child',   name: 'Child',   until: 11, head: 1.14, body: 0.7,  neck: 0.74, drop: 32, hair: 0.85 },
+  { id: 'teen',    name: 'Teenager', until: 17, head: 1.05, body: 0.87, neck: 0.88, drop: 14, hair: 1 },
+  { id: 'adult',   name: 'Adult',   until: 55, head: 1,    body: 1,    neck: 1,    drop: 0,  hair: 1 },
+  { id: 'elder',   name: 'Elder',   until: 999, head: 1,   body: 0.94, neck: 0.95, drop: 6,  hair: 1 },
+];
+
+/** Which stage this character is at, in biological rather than calendar years. */
+export function lifeStage(character) {
+  const bio = character.bioAge !== undefined
+    ? character.bioAge
+    : (character.age || 0) * (character.maturityRate || 1);
+  return LIFE_STAGES.find((s) => bio < s.until) || LIFE_STAGES[LIFE_STAGES.length - 1];
+}
+
+/**
+ * Draw anybody. NPCs keep their scars under `appearance.marks` and their
+ * carried gear under `gear`, and their species decides how fast they mature,
+ * so a 40-year-old Namekian is not drawn as middle-aged.
+ */
+export function npcPortrait(npc, opts = {}) {
+  return portraitSvg({
+    raceId: npc.raceId,
+    sex: npc.sex,
+    age: npc.age,
+    maturityRate: opts.maturityRate ?? npc.maturityRate ?? 1,
+    appearance: npc.appearance || {},
+    items: npc.items || [],
+    scars: (npc.scarStory || []),
+    tail: !!npc.tail,
+    inAfterlife: npc.alive === false,
+    vitals: npc.vitals || { health: 90, happiness: 60 },
+    stats: npc.stats || {},
+    karma: npc.karma || 0,
+    flags: {},
+  }, opts);
 }
 
 export const EXPRESSIONS = [
@@ -448,20 +494,27 @@ export function portraitSvg(character, opts = {}) {
   const build = a.buildShape || 'balanced';
   const race = character.raceId;
 
+  const stage = opts.stage || lifeStage(character);
+
   const W = 220;
   const H = 260;
   const cx = W / 2;
-  const headTop = 44;
-  const headR = face === 'round' ? 40 : face === 'long' ? 36 : 38;
-  const headH = face === 'long' ? 52 : face === 'round' ? 42 : 46;
-  const chin = headTop + headH + 18;
+  // A small body sits lower in the frame; a big head starts higher on it.
+  const headTop = 44 + stage.drop;
+  const headR = Math.round((face === 'round' ? 40 : face === 'long' ? 36 : 38) * stage.head);
+  const headH = Math.round((face === 'long' ? 52 : face === 'round' ? 42 : 46)
+    * (stage.id === 'infant' ? 0.86 : stage.id === 'toddler' ? 0.92 : 1) * stage.head);
+  const chin = headTop + headH + Math.round(18 * stage.head);
 
   // Frame differs by sex as well as build: narrower shoulders and neck, a
   // softer jaw, a waist that comes in rather than going straight down.
-  const fem = character.sex === 'female';
-  const sexScale = fem ? 0.84 : 1;
+  // Sex only shapes a grown body. Children are children.
+  const grown = stage.id === 'adult' || stage.id === 'elder' || stage.id === 'teen';
+  const fem = character.sex === 'female' && grown;
+  const sexScale = (fem ? 0.84 : 1) * stage.body;
   const shoulderWidth = Math.round(({ small: 44, wiry: 50, lean: 56, balanced: 62, stocky: 70, massive: 80 }[build] || 62) * sexScale);
-  const neckWidth = Math.round(({ small: 11, wiry: 12, lean: 13, balanced: 15, stocky: 18, massive: 21 }[build] || 15) * (fem ? 0.82 : 1));
+  const neckWidth = Math.max(7, Math.round(({ small: 11, wiry: 12, lean: 13, balanced: 15, stocky: 18, massive: 21 }[build] || 15)
+    * (fem ? 0.82 : 1) * stage.neck));
   // A female frame comes in at the waist and back out; the male one tapers.
   const waist = Math.round(shoulderWidth * (fem ? 0.7 : 0.94));
   const hip = Math.round(shoulderWidth * (fem ? 0.98 : 0.9));
@@ -491,15 +544,17 @@ export function portraitSvg(character, opts = {}) {
   parts.push(`<rect width="${W}" height="${H}" fill="url(#pg-bg)"/>`);
   if (auraColour) parts.push(`<rect width="${W}" height="${H}" fill="url(#pg-aura)"/>`);
 
-  // Saiyan tail, behind the body.
+  // Saiyan tail, behind the body and sized to it.
   if (character.tail) {
-    parts.push(`<path d="M${cx + shoulderWidth - 6} ${H - 10} C${cx + shoulderWidth + 34} ${H - 60}
-      ${cx + shoulderWidth + 10} ${H - 108} ${cx + shoulderWidth - 16} ${H - 96}"
-      fill="none" stroke="#7a4a24" stroke-width="9" stroke-linecap="round"/>`);
+    const reach = 34 * stage.body + 8;
+    parts.push(`<path d="M${cx + shoulderWidth - 6} ${H - 10} C${cx + shoulderWidth + reach} ${H - 60 * stage.body - 10}
+      ${cx + shoulderWidth + reach * 0.3} ${chin + 30} ${cx + shoulderWidth - 14} ${chin + 34}"
+      fill="none" stroke="#7a4a24" stroke-width="${6 * stage.body + 3}" stroke-linecap="round"/>`);
   }
 
   // Hair that hangs down goes behind everything else.
-  const hasHair = !['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(race) && style !== 'bald';
+  const hasHair = !['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(race)
+    && style !== 'bald' && stage.hair > 0.4;
   if (hasHair) {
     const back = hairBackPath(style, headTop, cx, headR, headH);
     if (back) parts.push(`<path d="${back.replace(/\s+/g, ' ')}" fill="${finalHair}" opacity="0.92"/>`);
@@ -514,7 +569,7 @@ export function portraitSvg(character, opts = {}) {
     C${cx + shoulderWidth} ${chin + 44} ${cx + waist} ${waistY - 22} ${cx + waist} ${waistY}
     C${cx + waist} ${waistY + 14} ${cx + hip} ${H - 30} ${cx + hip} ${H} Z"
     fill="${outfit.main || skin}"/>`);
-  if (fem) {
+  if (fem && stage.id !== 'teen') {
     // A chest, shaped by build rather than uniform.
     const bust = { small: 7, wiry: 8, lean: 9, balanced: 11, stocky: 13, massive: 14 }[build] || 11;
     const by = chin + 40;
@@ -574,7 +629,7 @@ export function portraitSvg(character, opts = {}) {
   const eyeGap = fem ? 14 : 15;
   parts.push(eyeShape(a.eyeShape || 'sharp', cx - eyeGap, eyeY, eyeColour, mood, -1));
   parts.push(eyeShape(a.eyeShape || 'sharp', cx + eyeGap, eyeY, eyeColour, mood, 1));
-  if (fem) {
+  if (fem && grown) {
     // Lashes at the outer corner, which is most of the visual difference at
     // this scale without leaning on anything sillier.
     parts.push(`<path d="M${cx - eyeGap - 9} ${eyeY - 3} l-5 -3 M${cx + eyeGap + 9} ${eyeY - 3} l5 -3" stroke="rgba(0,0,0,.5)" stroke-width="2" stroke-linecap="round"/>`);
@@ -584,7 +639,10 @@ export function portraitSvg(character, opts = {}) {
   parts.push(faceExpression(mood, cx, eyeY, headTop + 52, browColour));
 
   drawMarks(parts, character, { cx, headTop, headH, headR, chin, eyeY, eyeColour, skin, shoulderWidth, H });
-  drawAccessories(parts, character, { cx, headTop, headH, headR, chin, eyeY, skin, shoulderWidth, H, hasHair, hairColour: finalHair, outfit });
+  drawAccessories(parts, character, {
+    cx, headTop, headH, headR, chin, eyeY, skin, shoulderWidth, H,
+    hasHair, hairColour: finalHair, outfit, stage,
+  });
 
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" role="img" aria-label="Character portrait" xmlns="http://www.w3.org/2000/svg">${parts.join('')}</svg>`;
 }
@@ -747,13 +805,17 @@ function drawAccessories(parts, character, g) {
         parts.push(`<path d="M${cx - shoulderWidth - 8} ${chin + 40} q${shoulderWidth + 8} -18 ${(shoulderWidth + 8) * 2} 0 L${cx + shoulderWidth + 4} ${chin + 60} L${cx - shoulderWidth - 4} ${chin + 60} Z" fill="#6b5a3a" opacity="0.9"/>`);
         parts.push(`<path d="M${cx - shoulderWidth + 6} ${chin + 30} L${cx + shoulderWidth - 6} ${chin + 30}" stroke="#6b5a3a" stroke-width="5"/>`);
         break;
-      case 'sword':
-        parts.push(`<path d="M${cx + shoulderWidth - 30} ${chin + 20} l-16 -50" stroke="#5a4a3a" stroke-width="6" stroke-linecap="round"/>`);
-        parts.push(`<path d="M${cx + shoulderWidth - 40} ${chin - 20} l-12 -6 M${cx + shoulderWidth - 44} ${chin - 32} l12 -3" stroke="#c9a227" stroke-width="4" stroke-linecap="round"/>`);
-        parts.push(`<path d="M${cx - shoulderWidth + 6} ${chin + 26} L${cx + shoulderWidth - 6} ${H - 30}" stroke="#5a4a3a" stroke-width="4"/>`);
+      case 'sword': {
+        // A hilt over the shoulder is all you see of a sheathed sword from the
+        // front. Drawing the whole blade put a plank across the chest.
+        const sx = cx + shoulderWidth - 12;
+        const sy = chin + 20;
+        parts.push(`<path d="M${sx} ${sy} l6 ${-26 * g.stage.body - 8}" stroke="#4a3d32" stroke-width="${4 * g.stage.body + 1.5}" stroke-linecap="round"/>`);
+        parts.push(`<path d="M${sx + 1} ${sy - 22 * g.stage.body - 8} l10 -3" stroke="#c9a227" stroke-width="3" stroke-linecap="round"/>`);
         break;
+      }
       case 'pole':
-        parts.push(`<path d="M${cx - shoulderWidth + 20} ${chin - 40} L${cx + shoulderWidth - 20} ${H}" stroke="#c0392b" stroke-width="5" stroke-linecap="round"/>`);
+        parts.push(`<path d="M${cx + shoulderWidth - 4} ${chin + 6} L${cx + shoulderWidth + 4} ${H}" stroke="#c0392b" stroke-width="${4 * g.stage.body + 1.5}" stroke-linecap="round"/>`);
         break;
       case 'halo':
         parts.push(`<ellipse cx="${cx}" cy="${headTop - 30}" rx="24" ry="6" stroke="#f5c451" stroke-width="4" fill="none" opacity="0.95"/>`);

@@ -720,6 +720,26 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
 .row-count { font-family: var(--font-mono); font-weight: 800; font-size: 13px; color: var(--gi); }
 .row-when { font-family: var(--font-mono); font-size: 9.5px; color: var(--ink-3); letter-spacing: .06em; }
 
+/* ------------------------------------------------------------- portraits */
+
+.row-face {
+  width: 40px; height: 47px; flex: none; border-radius: 7px; overflow: hidden;
+  border: 1px solid var(--line-soft); background: var(--ground);
+}
+.row-face svg { display: block; }
+
+.npc-portrait {
+  width: 130px; margin: 4px auto 12px; border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--ground);
+}
+.npc-portrait svg { display: block; }
+
+.foe-face {
+  width: 46px; height: 54px; flex: none; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--ground); margin-right: 10px;
+}
+.foe-face svg { display: block; }
+
 </style>
 <div id="app">
 
@@ -823,6 +843,7 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
   <section class="screen" id="screen-battle">
     <header class="foe-head">
       <div class="foe-top">
+        <div class="foe-face" id="foe-face" hidden></div>
         <div>
           <div class="foe-name" id="foe-name">-</div>
           <div class="foe-sub" id="foe-sub">-</div>
@@ -3169,9 +3190,9 @@ function hairBackPath(style, headTop, cx, headR, headH) {
         L${L + 11} ${y + 102} L${L - 7} ${y + 108} Z`;
     case 'ponytail':
       // Gathered at the back of the crown, falling behind the shoulder.
-      return `M${R - 12} ${sk.temple - 6} Q${R + 10} ${sk.temple - 2} ${R + 13} ${sk.temple + 18}
-        L${R + 19} ${sk.temple + 74} L${R + 3} ${sk.temple + 76}
-        L${R - 4} ${sk.temple + 20} Q${R - 14} ${sk.temple + 6} ${R - 12} ${sk.temple - 6} Z`;
+      return `M${R - 10} ${sk.temple - 8} Q${R + 7} ${sk.temple - 4} ${R + 9} ${sk.temple + 14}
+        L${R + 12} ${sk.temple + 62} L${R + 2} ${sk.temple + 64}
+        L${R - 2} ${sk.temple + 16} Q${R - 11} ${sk.temple + 4} ${R - 10} ${sk.temple - 8} Z`;
     case 'braid':
       // Down the back of the neck, not the face.
       return `M${sk.cx - 7} ${sk.chin - 6} L${sk.cx + 7} ${sk.chin - 6}
@@ -3243,6 +3264,52 @@ function hairPath(style, headTop, cx, headR, headH) {
     default:
       return '';
   }
+}
+
+/**
+ * A body at each point of a life. Proportions, not just size: an infant is
+ * mostly head, a child is head-heavy and short-limbed, an elder has lost a
+ * little height and stands differently. Everything here multiplies the adult
+ * geometry, so one drawing serves every age.
+ */
+const LIFE_STAGES = [
+  { id: 'infant',  name: 'Infant',  until: 2,  head: 1.34, body: 0.42, neck: 0.5, drop: 62, hair: 0.35 },
+  { id: 'toddler', name: 'Toddler', until: 5,  head: 1.24, body: 0.55, neck: 0.62, drop: 48, hair: 0.6 },
+  { id: 'child',   name: 'Child',   until: 11, head: 1.14, body: 0.7,  neck: 0.74, drop: 32, hair: 0.85 },
+  { id: 'teen',    name: 'Teenager', until: 17, head: 1.05, body: 0.87, neck: 0.88, drop: 14, hair: 1 },
+  { id: 'adult',   name: 'Adult',   until: 55, head: 1,    body: 1,    neck: 1,    drop: 0,  hair: 1 },
+  { id: 'elder',   name: 'Elder',   until: 999, head: 1,   body: 0.94, neck: 0.95, drop: 6,  hair: 1 },
+];
+
+/** Which stage this character is at, in biological rather than calendar years. */
+function lifeStage(character) {
+  const bio = character.bioAge !== undefined
+    ? character.bioAge
+    : (character.age || 0) * (character.maturityRate || 1);
+  return LIFE_STAGES.find((s) => bio < s.until) || LIFE_STAGES[LIFE_STAGES.length - 1];
+}
+
+/**
+ * Draw anybody. NPCs keep their scars under `appearance.marks` and their
+ * carried gear under `gear`, and their species decides how fast they mature,
+ * so a 40-year-old Namekian is not drawn as middle-aged.
+ */
+function npcPortrait(npc, opts = {}) {
+  return portraitSvg({
+    raceId: npc.raceId,
+    sex: npc.sex,
+    age: npc.age,
+    maturityRate: opts.maturityRate ?? npc.maturityRate ?? 1,
+    appearance: npc.appearance || {},
+    items: npc.items || [],
+    scars: (npc.scarStory || []),
+    tail: !!npc.tail,
+    inAfterlife: npc.alive === false,
+    vitals: npc.vitals || { health: 90, happiness: 60 },
+    stats: npc.stats || {},
+    karma: npc.karma || 0,
+    flags: {},
+  }, opts);
 }
 
 const EXPRESSIONS = [
@@ -3360,20 +3427,27 @@ function portraitSvg(character, opts = {}) {
   const build = a.buildShape || 'balanced';
   const race = character.raceId;
 
+  const stage = opts.stage || lifeStage(character);
+
   const W = 220;
   const H = 260;
   const cx = W / 2;
-  const headTop = 44;
-  const headR = face === 'round' ? 40 : face === 'long' ? 36 : 38;
-  const headH = face === 'long' ? 52 : face === 'round' ? 42 : 46;
-  const chin = headTop + headH + 18;
+  // A small body sits lower in the frame; a big head starts higher on it.
+  const headTop = 44 + stage.drop;
+  const headR = Math.round((face === 'round' ? 40 : face === 'long' ? 36 : 38) * stage.head);
+  const headH = Math.round((face === 'long' ? 52 : face === 'round' ? 42 : 46)
+    * (stage.id === 'infant' ? 0.86 : stage.id === 'toddler' ? 0.92 : 1) * stage.head);
+  const chin = headTop + headH + Math.round(18 * stage.head);
 
   // Frame differs by sex as well as build: narrower shoulders and neck, a
   // softer jaw, a waist that comes in rather than going straight down.
-  const fem = character.sex === 'female';
-  const sexScale = fem ? 0.84 : 1;
+  // Sex only shapes a grown body. Children are children.
+  const grown = stage.id === 'adult' || stage.id === 'elder' || stage.id === 'teen';
+  const fem = character.sex === 'female' && grown;
+  const sexScale = (fem ? 0.84 : 1) * stage.body;
   const shoulderWidth = Math.round(({ small: 44, wiry: 50, lean: 56, balanced: 62, stocky: 70, massive: 80 }[build] || 62) * sexScale);
-  const neckWidth = Math.round(({ small: 11, wiry: 12, lean: 13, balanced: 15, stocky: 18, massive: 21 }[build] || 15) * (fem ? 0.82 : 1));
+  const neckWidth = Math.max(7, Math.round(({ small: 11, wiry: 12, lean: 13, balanced: 15, stocky: 18, massive: 21 }[build] || 15)
+    * (fem ? 0.82 : 1) * stage.neck));
   // A female frame comes in at the waist and back out; the male one tapers.
   const waist = Math.round(shoulderWidth * (fem ? 0.7 : 0.94));
   const hip = Math.round(shoulderWidth * (fem ? 0.98 : 0.9));
@@ -3403,15 +3477,17 @@ function portraitSvg(character, opts = {}) {
   parts.push(`<rect width="${W}" height="${H}" fill="url(#pg-bg)"/>`);
   if (auraColour) parts.push(`<rect width="${W}" height="${H}" fill="url(#pg-aura)"/>`);
 
-  // Saiyan tail, behind the body.
+  // Saiyan tail, behind the body and sized to it.
   if (character.tail) {
-    parts.push(`<path d="M${cx + shoulderWidth - 6} ${H - 10} C${cx + shoulderWidth + 34} ${H - 60}
-      ${cx + shoulderWidth + 10} ${H - 108} ${cx + shoulderWidth - 16} ${H - 96}"
-      fill="none" stroke="#7a4a24" stroke-width="9" stroke-linecap="round"/>`);
+    const reach = 34 * stage.body + 8;
+    parts.push(`<path d="M${cx + shoulderWidth - 6} ${H - 10} C${cx + shoulderWidth + reach} ${H - 60 * stage.body - 10}
+      ${cx + shoulderWidth + reach * 0.3} ${chin + 30} ${cx + shoulderWidth - 14} ${chin + 34}"
+      fill="none" stroke="#7a4a24" stroke-width="${6 * stage.body + 3}" stroke-linecap="round"/>`);
   }
 
   // Hair that hangs down goes behind everything else.
-  const hasHair = !['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(race) && style !== 'bald';
+  const hasHair = !['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(race)
+    && style !== 'bald' && stage.hair > 0.4;
   if (hasHair) {
     const back = hairBackPath(style, headTop, cx, headR, headH);
     if (back) parts.push(`<path d="${back.replace(/\s+/g, ' ')}" fill="${finalHair}" opacity="0.92"/>`);
@@ -3426,7 +3502,7 @@ function portraitSvg(character, opts = {}) {
     C${cx + shoulderWidth} ${chin + 44} ${cx + waist} ${waistY - 22} ${cx + waist} ${waistY}
     C${cx + waist} ${waistY + 14} ${cx + hip} ${H - 30} ${cx + hip} ${H} Z"
     fill="${outfit.main || skin}"/>`);
-  if (fem) {
+  if (fem && stage.id !== 'teen') {
     // A chest, shaped by build rather than uniform.
     const bust = { small: 7, wiry: 8, lean: 9, balanced: 11, stocky: 13, massive: 14 }[build] || 11;
     const by = chin + 40;
@@ -3486,7 +3562,7 @@ function portraitSvg(character, opts = {}) {
   const eyeGap = fem ? 14 : 15;
   parts.push(eyeShape(a.eyeShape || 'sharp', cx - eyeGap, eyeY, eyeColour, mood, -1));
   parts.push(eyeShape(a.eyeShape || 'sharp', cx + eyeGap, eyeY, eyeColour, mood, 1));
-  if (fem) {
+  if (fem && grown) {
     // Lashes at the outer corner, which is most of the visual difference at
     // this scale without leaning on anything sillier.
     parts.push(`<path d="M${cx - eyeGap - 9} ${eyeY - 3} l-5 -3 M${cx + eyeGap + 9} ${eyeY - 3} l5 -3" stroke="rgba(0,0,0,.5)" stroke-width="2" stroke-linecap="round"/>`);
@@ -3496,7 +3572,10 @@ function portraitSvg(character, opts = {}) {
   parts.push(faceExpression(mood, cx, eyeY, headTop + 52, browColour));
 
   drawMarks(parts, character, { cx, headTop, headH, headR, chin, eyeY, eyeColour, skin, shoulderWidth, H });
-  drawAccessories(parts, character, { cx, headTop, headH, headR, chin, eyeY, skin, shoulderWidth, H, hasHair, hairColour: finalHair, outfit });
+  drawAccessories(parts, character, {
+    cx, headTop, headH, headR, chin, eyeY, skin, shoulderWidth, H,
+    hasHair, hairColour: finalHair, outfit, stage,
+  });
 
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" role="img" aria-label="Character portrait" xmlns="http://www.w3.org/2000/svg">${parts.join('')}</svg>`;
 }
@@ -3659,13 +3738,17 @@ function drawAccessories(parts, character, g) {
         parts.push(`<path d="M${cx - shoulderWidth - 8} ${chin + 40} q${shoulderWidth + 8} -18 ${(shoulderWidth + 8) * 2} 0 L${cx + shoulderWidth + 4} ${chin + 60} L${cx - shoulderWidth - 4} ${chin + 60} Z" fill="#6b5a3a" opacity="0.9"/>`);
         parts.push(`<path d="M${cx - shoulderWidth + 6} ${chin + 30} L${cx + shoulderWidth - 6} ${chin + 30}" stroke="#6b5a3a" stroke-width="5"/>`);
         break;
-      case 'sword':
-        parts.push(`<path d="M${cx + shoulderWidth - 30} ${chin + 20} l-16 -50" stroke="#5a4a3a" stroke-width="6" stroke-linecap="round"/>`);
-        parts.push(`<path d="M${cx + shoulderWidth - 40} ${chin - 20} l-12 -6 M${cx + shoulderWidth - 44} ${chin - 32} l12 -3" stroke="#c9a227" stroke-width="4" stroke-linecap="round"/>`);
-        parts.push(`<path d="M${cx - shoulderWidth + 6} ${chin + 26} L${cx + shoulderWidth - 6} ${H - 30}" stroke="#5a4a3a" stroke-width="4"/>`);
+      case 'sword': {
+        // A hilt over the shoulder is all you see of a sheathed sword from the
+        // front. Drawing the whole blade put a plank across the chest.
+        const sx = cx + shoulderWidth - 12;
+        const sy = chin + 20;
+        parts.push(`<path d="M${sx} ${sy} l6 ${-26 * g.stage.body - 8}" stroke="#4a3d32" stroke-width="${4 * g.stage.body + 1.5}" stroke-linecap="round"/>`);
+        parts.push(`<path d="M${sx + 1} ${sy - 22 * g.stage.body - 8} l10 -3" stroke="#c9a227" stroke-width="3" stroke-linecap="round"/>`);
         break;
+      }
       case 'pole':
-        parts.push(`<path d="M${cx - shoulderWidth + 20} ${chin - 40} L${cx + shoulderWidth - 20} ${H}" stroke="#c0392b" stroke-width="5" stroke-linecap="round"/>`);
+        parts.push(`<path d="M${cx + shoulderWidth - 4} ${chin + 6} L${cx + shoulderWidth + 4} ${H}" stroke="#c0392b" stroke-width="${4 * g.stage.body + 1.5}" stroke-linecap="round"/>`);
         break;
       case 'halo':
         parts.push(`<ellipse cx="${cx}" cy="${headTop - 30}" rx="24" ry="6" stroke="#f5c451" stroke-width="4" fill="none" opacity="0.95"/>`);
@@ -3724,7 +3807,7 @@ function defaultAppearance(rng, raceId) {
     stanceName: '',
   };
 }
-  return { HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS, SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES, BUILD_SHAPES, MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks, EXPRESSIONS, expressionFor, portraitSvg, defaultAppearance };
+  return { HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS, SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES, BUILD_SHAPES, MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks, LIFE_STAGES, lifeStage, npcPortrait, EXPRESSIONS, expressionFor, portraitSvg, defaultAppearance };
 })();
 
 /* ==== engine/origins.js ==== */
@@ -4437,6 +4520,458 @@ function mentorsAvailable(year) {
   return { CANON, CANON_BY_ID, getCanon, canonPower, canonAlive, canonAvailable, mentorsAvailable };
 })();
 
+/* ==== data/canonlooks.js ==== */
+const __mod_data_canonlooks_js = (function () {
+// What the canon cast actually look like.
+//
+// The engine could draw the player and nobody else, so every famous fighter in
+// the game was a name on a row. These are appearance records in the same shape
+// the player's uses, so one drawing routine serves all of them.
+//
+// `eras` lets a character change across the timeline the way they do in the
+// source: Goku is a child at the 21st tournament and a grandfather by Age 790,
+// and the entry that applies is the last one whose year has passed.
+
+const CANON_LOOKS = {
+  goku: {
+    sex: 'male', skin: 'light', face: 'square', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'spiked', hairColour: 'black', outfit: 'gi_orange', buildShape: 'balanced',
+    accessories: [], marks: [],
+    eras: [
+      { from: 749, buildShape: 'small', accessories: ['pole'] },
+      { from: 756, buildShape: 'lean' },
+      { from: 761, buildShape: 'stocky', accessories: [] },
+      { from: 774, buildShape: 'stocky', accessories: ['belt'] },
+    ],
+  },
+  vegeta: {
+    sex: 'male', skin: 'light', face: 'angular', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'spiked', hairColour: 'black', outfit: 'armour_saiyan', buildShape: 'stocky',
+    accessories: ['scouter'], marks: [],
+    eras: [
+      { from: 762, accessories: [] },
+      { from: 767, outfit: 'gi_blue' },
+      { from: 780, outfit: 'armour_saiyan' },
+    ],
+  },
+  bulma: {
+    sex: 'female', skin: 'pale', face: 'round', eyeShape: 'wide', eyeColour: 'blue',
+    hairStyle: 'long', hairColour: 'blue', outfit: 'casual', buildShape: 'lean',
+    accessories: ['earrings'], marks: [],
+    eras: [{ from: 767, hairStyle: 'bob' }, { from: 780, hairStyle: 'bob', hairColour: 'lavender' }],
+  },
+  krillin: {
+    sex: 'male', skin: 'light', face: 'round', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'gi_orange', buildShape: 'small',
+    accessories: [], marks: ['dots'],
+    eras: [{ from: 774, hairStyle: 'cropped', marks: [] }],
+  },
+  roshi: {
+    sex: 'male', skin: 'light', face: 'round', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'white', outfit: 'casual', buildShape: 'small',
+    accessories: ['sunglasses', 'shell'], marks: [],
+  },
+  chichi: {
+    sex: 'female', skin: 'light', face: 'square', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'ponytail', hairColour: 'black', outfit: 'gi_black', buildShape: 'lean',
+    accessories: [], marks: [],
+    eras: [{ from: 767, hairStyle: 'topknot', outfit: 'casual' }],
+  },
+  gohan: {
+    sex: 'male', skin: 'light', face: 'square', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'spiked', hairColour: 'black', outfit: 'gi_orange', buildShape: 'lean',
+    accessories: [], marks: [],
+    eras: [
+      { from: 761, buildShape: 'small' },
+      { from: 767, buildShape: 'lean', hairStyle: 'cropped' },
+      { from: 774, outfit: 'casual', accessories: ['glasses'] },
+    ],
+  },
+  goten: {
+    sex: 'male', skin: 'light', face: 'round', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'spiked', hairColour: 'black', outfit: 'gi_orange', buildShape: 'small',
+    accessories: [], marks: [],
+    eras: [{ from: 780, buildShape: 'lean', hairStyle: 'cropped' }],
+  },
+  trunks: {
+    sex: 'male', skin: 'light', face: 'square', eyeShape: 'sharp', eyeColour: 'blue',
+    hairStyle: 'bob', hairColour: 'lavender', outfit: 'armour_saiyan', buildShape: 'lean',
+    accessories: [], marks: [],
+    eras: [{ from: 780, outfit: 'casual', hairStyle: 'cropped' }],
+  },
+  piccolo: {
+    sex: 'male', skin: 'green', face: 'angular', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'namek_robe', buildShape: 'lean',
+    accessories: ['turban', 'cape'], marks: [],
+  },
+  kami: {
+    sex: 'male', skin: 'green', face: 'long', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'namek_robe', buildShape: 'wiry',
+    accessories: ['cape'], marks: [],
+  },
+  frieza: {
+    sex: 'male', skin: 'white', face: 'angular', eyeShape: 'sharp', eyeColour: 'red',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'none', buildShape: 'small',
+    accessories: ['scouter'], marks: [],
+    eras: [{ from: 763, accessories: [] }, { from: 779, accessories: [] }],
+  },
+  king_cold: {
+    sex: 'male', skin: 'white', face: 'long', eyeShape: 'sharp', eyeColour: 'red',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'none', buildShape: 'massive',
+    accessories: ['cape'], marks: [],
+  },
+  cell: {
+    sex: 'male', skin: 'green', face: 'angular', eyeShape: 'sharp', eyeColour: 'violet',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'none', buildShape: 'massive',
+    accessories: [], marks: ['dots'],
+  },
+  cooler: {
+    sex: 'male', skin: 'blue', face: 'angular', eyeShape: 'narrow', eyeColour: 'red',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'none', buildShape: 'lean',
+    accessories: [], marks: [],
+  },
+  nappa: {
+    sex: 'male', skin: 'tan', face: 'square', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'armour_saiyan', buildShape: 'massive',
+    accessories: ['scouter'], marks: [],
+  },
+  raditz: {
+    sex: 'male', skin: 'tan', face: 'angular', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'long', hairColour: 'black', outfit: 'armour_saiyan', buildShape: 'stocky',
+    accessories: ['scouter'], marks: [],
+  },
+  bardock: {
+    sex: 'male', skin: 'tan', face: 'angular', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'spiked', hairColour: 'black', outfit: 'armour_saiyan', buildShape: 'stocky',
+    accessories: ['scouter'], marks: ['scar_cheek'],
+  },
+  tien: {
+    sex: 'male', skin: 'light', face: 'square', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'gi_black', buildShape: 'stocky',
+    accessories: [], marks: ['thirdeye'],
+  },
+  yamcha: {
+    sex: 'male', skin: 'light', face: 'square', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'long', hairColour: 'black', outfit: 'gi_orange', buildShape: 'lean',
+    accessories: [], marks: ['scar_cheek'],
+    eras: [{ from: 761, hairStyle: 'cropped' }],
+  },
+  android_18: {
+    sex: 'female', skin: 'pale', face: 'square', eyeShape: 'sharp', eyeColour: 'blue',
+    hairStyle: 'bob', hairColour: 'blonde', outfit: 'casual', buildShape: 'lean',
+    accessories: ['earring'], marks: [],
+  },
+  android_17: {
+    sex: 'male', skin: 'pale', face: 'square', eyeShape: 'sharp', eyeColour: 'blue',
+    hairStyle: 'bob', hairColour: 'black', outfit: 'casual', buildShape: 'lean',
+    accessories: ['scarf'], marks: [],
+  },
+  beerus: {
+    sex: 'male', skin: 'purple', face: 'long', eyeShape: 'narrow', eyeColour: 'gold',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'kai', buildShape: 'wiry',
+    accessories: ['earrings'], marks: [],
+  },
+  whis: {
+    sex: 'male', skin: 'blue', face: 'long', eyeShape: 'narrow', eyeColour: 'violet',
+    hairStyle: 'cropped', hairColour: 'white', outfit: 'kai', buildShape: 'wiry',
+    accessories: ['necklace'], marks: [],
+  },
+  king_kai: {
+    sex: 'male', skin: 'blue', face: 'round', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'cropped', hairColour: 'black', outfit: 'kai', buildShape: 'small',
+    accessories: ['sunglasses'], marks: ['dots'],
+  },
+  supreme_kai: {
+    sex: 'male', skin: 'purple', face: 'square', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'mohawk', hairColour: 'white', outfit: 'kai', buildShape: 'small',
+    accessories: ['potara'], marks: [],
+  },
+  hit: {
+    sex: 'male', skin: 'pale', face: 'angular', eyeShape: 'narrow', eyeColour: 'red',
+    hairStyle: 'mohawk', hairColour: 'red', outfit: 'coat', buildShape: 'lean',
+    accessories: [], marks: [],
+  },
+  cabba: {
+    sex: 'male', skin: 'tan', face: 'square', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'spiked', hairColour: 'black', outfit: 'armour_saiyan', buildShape: 'lean',
+    accessories: [], marks: [],
+  },
+  kale: {
+    sex: 'female', skin: 'tan', face: 'round', eyeShape: 'wide', eyeColour: 'black',
+    hairStyle: 'ponytail', hairColour: 'black', outfit: 'armour_saiyan', buildShape: 'wiry',
+    accessories: [], marks: [],
+  },
+  caulifla: {
+    sex: 'female', skin: 'tan', face: 'angular', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'wild', hairColour: 'black', outfit: 'armour_saiyan', buildShape: 'lean',
+    accessories: [], marks: [],
+  },
+  jiren: {
+    sex: 'male', skin: 'grey', face: 'square', eyeShape: 'wide', eyeColour: 'grey',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'gi_black', buildShape: 'massive',
+    accessories: [], marks: [],
+  },
+  broly: {
+    sex: 'male', skin: 'tan', face: 'square', eyeShape: 'wide', eyeColour: 'black',
+    hairStyle: 'wild', hairColour: 'black', outfit: 'none', buildShape: 'massive',
+    accessories: ['necklace'], marks: ['scar_chest'],
+  },
+  buu: {
+    sex: 'male', skin: 'pink', face: 'round', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'none', buildShape: 'massive',
+    accessories: ['cape'], marks: [],
+  },
+  videl: {
+    sex: 'female', skin: 'light', face: 'square', eyeShape: 'sharp', eyeColour: 'blue',
+    hairStyle: 'ponytail', hairColour: 'black', outfit: 'casual', buildShape: 'lean',
+    accessories: [], marks: [],
+    eras: [{ from: 776, hairStyle: 'bob' }],
+  },
+  satan: {
+    sex: 'male', skin: 'tan', face: 'square', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'wild', hairColour: 'black', outfit: 'casual', buildShape: 'massive',
+    accessories: ['belt'], marks: [],
+  },
+  korin: {
+    sex: 'male', skin: 'white', face: 'round', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'white', outfit: 'none', buildShape: 'small',
+    accessories: [], marks: [],
+  },
+  recoome: {
+    sex: 'male', skin: 'light', face: 'square', eyeShape: 'wide', eyeColour: 'blue',
+    hairStyle: 'wild', hairColour: 'red', outfit: 'armour_frieza', buildShape: 'massive',
+    accessories: ['scouter'], marks: [],
+  },
+  burter: {
+    sex: 'male', skin: 'blue', face: 'long', eyeShape: 'narrow', eyeColour: 'red',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'armour_frieza', buildShape: 'wiry',
+    accessories: ['scouter'], marks: [],
+  },
+  jeice: {
+    sex: 'male', skin: 'pink', face: 'square', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'long', hairColour: 'white', outfit: 'armour_frieza', buildShape: 'lean',
+    accessories: ['scouter'], marks: [],
+  },
+  moori: {
+    sex: 'male', skin: 'green', face: 'long', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'namek_robe', buildShape: 'lean',
+    accessories: [], marks: [],
+  },
+  oolong: {
+    sex: 'male', skin: 'pink', face: 'round', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'casual', buildShape: 'small',
+    accessories: [], marks: [],
+  },
+  puar: {
+    sex: 'male', skin: 'blue', face: 'round', eyeShape: 'wide', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'none', buildShape: 'small',
+    accessories: [], marks: [],
+  },
+  shenron: {
+    sex: 'male', skin: 'green', face: 'long', eyeShape: 'sharp', eyeColour: 'red',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'none', buildShape: 'massive',
+    accessories: [], marks: [],
+  },
+  porunga: {
+    sex: 'male', skin: 'green', face: 'square', eyeShape: 'wide', eyeColour: 'red',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'none', buildShape: 'massive',
+    accessories: [], marks: [],
+  },
+  gine: {
+    sex: 'female', skin: 'tan', face: 'round', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'wild', hairColour: 'black', outfit: 'casual', buildShape: 'lean',
+    accessories: [], marks: [],
+  },
+  turles: {
+    sex: 'male', skin: 'tan', face: 'angular', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'spiked', hairColour: 'black', outfit: 'armour_saiyan', buildShape: 'stocky',
+    accessories: ['scouter'], marks: [],
+  },
+  paragus: {
+    sex: 'male', skin: 'tan', face: 'long', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'long', hairColour: 'black', outfit: 'armour_saiyan', buildShape: 'lean',
+    accessories: ['eyepatch'], marks: ['missing_eye'],
+  },
+  zarbon: {
+    sex: 'male', skin: 'green', face: 'long', eyeShape: 'sharp', eyeColour: 'gold',
+    hairStyle: 'braid', hairColour: 'green', outfit: 'armour_frieza', buildShape: 'lean',
+    accessories: ['scouter', 'earrings'], marks: [],
+  },
+  dodoria: {
+    sex: 'male', skin: 'pink', face: 'round', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'armour_frieza', buildShape: 'massive',
+    accessories: ['scouter'], marks: [],
+  },
+  ginyu: {
+    sex: 'male', skin: 'purple', face: 'long', eyeShape: 'sharp', eyeColour: 'red',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'armour_frieza', buildShape: 'stocky',
+    accessories: ['scouter'], marks: ['dots'],
+  },
+  gero: {
+    sex: 'male', skin: 'pale', face: 'long', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'cropped', hairColour: 'white', outfit: 'lab', buildShape: 'wiry',
+    accessories: ['glasses'], marks: [],
+  },
+  dende: {
+    sex: 'male', skin: 'green', face: 'round', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'namek_robe', buildShape: 'small',
+    accessories: [], marks: [],
+  },
+  guru: {
+    sex: 'male', skin: 'green', face: 'round', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'namek_robe', buildShape: 'massive',
+    accessories: [], marks: [],
+  },
+  nail: {
+    sex: 'male', skin: 'green', face: 'angular', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'namek_robe', buildShape: 'stocky',
+    accessories: [], marks: [],
+  },
+  babidi: {
+    sex: 'male', skin: 'grey', face: 'long', eyeShape: 'wide', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'coat', buildShape: 'small',
+    accessories: [], marks: [],
+  },
+  dabura: {
+    sex: 'male', skin: 'grey', face: 'angular', eyeShape: 'sharp', eyeColour: 'red',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'coat', buildShape: 'stocky',
+    accessories: ['cape'], marks: [],
+  },
+  future_trunks: {
+    sex: 'male', skin: 'light', face: 'square', eyeShape: 'sharp', eyeColour: 'blue',
+    hairStyle: 'bob', hairColour: 'lavender', outfit: 'coat', buildShape: 'lean',
+    accessories: ['sword'], marks: [],
+  },
+  pan: {
+    sex: 'female', skin: 'light', face: 'round', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'bob', hairColour: 'black', outfit: 'casual', buildShape: 'small',
+    accessories: ['bandana'], marks: [],
+  },
+  bulla: {
+    sex: 'female', skin: 'pale', face: 'round', eyeShape: 'wide', eyeColour: 'blue',
+    hairStyle: 'long', hairColour: 'blue', outfit: 'casual', buildShape: 'lean',
+    accessories: ['earrings'], marks: [],
+  },
+  marron: {
+    sex: 'female', skin: 'pale', face: 'round', eyeShape: 'round', eyeColour: 'blue',
+    hairStyle: 'ponytail', hairColour: 'blonde', outfit: 'casual', buildShape: 'small',
+    accessories: [], marks: [],
+  },
+  uub: {
+    sex: 'male', skin: 'deep', face: 'square', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'mohawk', hairColour: 'black', outfit: 'gi_orange', buildShape: 'lean',
+    accessories: [], marks: [],
+  },
+  chiaotzu: {
+    sex: 'male', skin: 'pale', face: 'round', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'gi_black', buildShape: 'small',
+    accessories: [], marks: [],
+  },
+  yajirobe: {
+    sex: 'male', skin: 'light', face: 'round', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'long', hairColour: 'black', outfit: 'coat', buildShape: 'stocky',
+    accessories: ['sword'], marks: [],
+  },
+  ox_king: {
+    sex: 'male', skin: 'tan', face: 'square', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'coat', buildShape: 'massive',
+    accessories: ['hat'], marks: [],
+  },
+  popo: {
+    sex: 'male', skin: 'deep', face: 'round', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'namek_robe', buildShape: 'stocky',
+    accessories: ['turban'], marks: [],
+  },
+  baba: {
+    sex: 'female', skin: 'light', face: 'round', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'white', outfit: 'coat', buildShape: 'small',
+    accessories: ['hat'], marks: [],
+  },
+  old_kai: {
+    sex: 'male', skin: 'purple', face: 'long', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'topknot', hairColour: 'white', outfit: 'kai', buildShape: 'small',
+    accessories: ['potara'], marks: [],
+  },
+  tao: {
+    sex: 'male', skin: 'light', face: 'angular', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'braid', hairColour: 'black', outfit: 'coat', buildShape: 'lean',
+    accessories: ['sunglasses'], marks: [],
+  },
+  crane_hermit: {
+    sex: 'male', skin: 'light', face: 'long', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'white', outfit: 'coat', buildShape: 'wiry',
+    accessories: ['sunglasses'], marks: [],
+  },
+  launch: {
+    sex: 'female', skin: 'light', face: 'round', eyeShape: 'wide', eyeColour: 'blue',
+    hairStyle: 'long', hairColour: 'blonde', outfit: 'casual', buildShape: 'lean',
+    accessories: [], marks: [],
+  },
+  pilaf: {
+    sex: 'male', skin: 'blue', face: 'round', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'coat', buildShape: 'small',
+    accessories: ['cape'], marks: [],
+  },
+  yardrat_elder: {
+    sex: 'male', skin: 'blue', face: 'long', eyeShape: 'narrow', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'white', outfit: 'namek_robe', buildShape: 'small',
+    accessories: [], marks: [],
+  },
+  android_16: {
+    sex: 'male', skin: 'light', face: 'square', eyeShape: 'sharp', eyeColour: 'green',
+    hairStyle: 'mohawk', hairColour: 'orange', outfit: 'casual', buildShape: 'massive',
+    accessories: ['earrings'], marks: [],
+  },
+  zeno: {
+    sex: 'male', skin: 'blue', face: 'round', eyeShape: 'round', eyeColour: 'black',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'kai', buildShape: 'small',
+    accessories: [], marks: [],
+  },
+  yemma: {
+    sex: 'male', skin: 'deep', face: 'square', eyeShape: 'sharp', eyeColour: 'black',
+    hairStyle: 'topknot', hairColour: 'black', outfit: 'coat', buildShape: 'massive',
+    accessories: [], marks: [],
+  },
+};
+
+/** Fallbacks by species, so a character with no entry still looks like itself. */
+const SPECIES_LOOK = {
+  saiyan: { skin: 'tan', hairStyle: 'spiked', hairColour: 'black', outfit: 'armour_saiyan', eyeColour: 'black', face: 'angular' },
+  halfsaiyan: { skin: 'light', hairStyle: 'spiked', hairColour: 'black', outfit: 'gi_orange', eyeColour: 'black', face: 'square' },
+  earthling: { skin: 'light', hairStyle: 'cropped', hairColour: 'black', outfit: 'gi_orange', eyeColour: 'black', face: 'square' },
+  namekian: { skin: 'green', hairStyle: 'bald', hairColour: 'black', outfit: 'namek_robe', eyeColour: 'black', face: 'angular' },
+  frostdemon: { skin: 'white', hairStyle: 'bald', hairColour: 'white', outfit: 'none', eyeColour: 'red', face: 'angular' },
+  majin: { skin: 'pink', hairStyle: 'bald', hairColour: 'black', outfit: 'none', eyeColour: 'black', face: 'round' },
+  android: { skin: 'pale', hairStyle: 'cropped', hairColour: 'blonde', outfit: 'casual', eyeColour: 'blue', face: 'square' },
+  bioandroid: { skin: 'green', hairStyle: 'bald', hairColour: 'black', outfit: 'none', eyeColour: 'violet', face: 'angular' },
+  shinjin: { skin: 'purple', hairStyle: 'mohawk', hairColour: 'white', outfit: 'kai', eyeColour: 'black', face: 'square' },
+  tuffle: { skin: 'grey', hairStyle: 'cropped', hairColour: 'brown', outfit: 'lab', eyeColour: 'brown', face: 'round' },
+  yardratian: { skin: 'blue', hairStyle: 'bald', hairColour: 'white', outfit: 'namek_robe', eyeColour: 'black', face: 'long' },
+  cerealian: { skin: 'tan', hairStyle: 'long', hairColour: 'white', outfit: 'coat', eyeColour: 'grey', face: 'angular' },
+  other: { skin: 'tan', hairStyle: 'cropped', hairColour: 'black', outfit: 'coat', eyeColour: 'black', face: 'square' },
+};
+
+/**
+ * The appearance a canon character has in a given year: the base record with
+ * every era entry up to that year folded in, so they change on schedule and
+ * stay the same in between.
+ */
+function canonLook(canonId, year, raceId) {
+  const base = CANON_LOOKS[canonId];
+  if (!base) {
+    const sp = SPECIES_LOOK[raceId] || SPECIES_LOOK.other;
+    return { ...sp, buildShape: 'balanced', eyeShape: 'sharp', accessories: [], marks: [] };
+  }
+  const out = { ...base };
+  delete out.eras;
+  for (const era of base.eras || []) {
+    if (year >= era.from) Object.assign(out, era);
+  }
+  return out;
+}
+  return { CANON_LOOKS, SPECIES_LOOK, canonLook };
+})();
+
 /* ==== engine/npc.js ==== */
 const __mod_engine_npc_js = (function () {
 // People. Everyone who is not the player is an NPC record: generated strangers,
@@ -4448,6 +4983,7 @@ const { generateFullName, generateTitle, generateEpithet, generateSignatureName 
 const { RACES, getRace } = __mod_data_races_js;
 const { getCanon, canonPower, canonAlive } = __mod_data_canon_js;
 const { getPlace } = __mod_data_places_js;
+const { canonLook, SPECIES_LOOK } = __mod_data_canonlooks_js;
 
 const RELATIONS = {
   parent: { label: 'Parent', family: true },
@@ -4500,6 +5036,43 @@ const GOALS = ['to be the strongest', 'to find their missing sibling', 'to open 
   'to beat you specifically', 'to earn a name worth saying'];
 
 /** A brand new person, appropriate to the era and place. */
+const NPC_HAIR = ['spiked', 'wild', 'long', 'ponytail', 'bob', 'cropped', 'mohawk', 'bald', 'braid', 'topknot'];
+const NPC_MARKS = ['scar_cheek', 'scar_brow', 'burn_arm', 'dots', 'tattoo_arm', 'birthmark', 'missing_ear'];
+const NPC_ACC = ['headband', 'bandana', 'glasses', 'earring', 'necklace', 'wristbands', 'scarf', 'hat', 'cape'];
+
+/**
+ * An appearance record in the same shape the player uses, so one drawing
+ * routine serves everybody. Species decides the ground rules, the roll does
+ * the rest, and it is stored rather than regenerated so a person looks the
+ * same every time you see them.
+ */
+function makeAppearance(rng, raceId, sex) {
+  const sp = SPECIES_LOOK[raceId] || SPECIES_LOOK.other;
+  const hairless = ['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(raceId);
+  const build = rng.pick(['small', 'wiry', 'lean', 'balanced', 'balanced', 'stocky', 'massive']);
+  const base = {
+    saiyan: [168, 66], halfsaiyan: [170, 64], earthling: [168, 62], namekian: [196, 78],
+    frostdemon: [158, 52], majin: [180, 96], android: [170, 64], bioandroid: [198, 92],
+    shinjin: [150, 46], tuffle: [140, 40], yardratian: [146, 38], cerealian: [172, 66],
+  }[raceId] || [168, 64];
+  return {
+    skin: sp.skin,
+    face: rng.chance(0.5) ? sp.face : rng.pick(['square', 'round', 'angular', 'long']),
+    eyeShape: rng.pick(['sharp', 'round', 'narrow', 'heavy', 'wide']),
+    eyeColour: rng.chance(0.55) ? sp.eyeColour : rng.pick(['black', 'brown', 'green', 'blue', 'grey', 'gold']),
+    hairStyle: hairless ? 'bald' : (rng.chance(0.4) ? sp.hairStyle : rng.pick(NPC_HAIR)),
+    hairColour: sp.hairColour,
+    outfit: rng.chance(0.55) ? sp.outfit : rng.pick(['casual', 'coat', 'gi_orange', 'gi_blue', 'gi_black', 'lab']),
+    buildShape: build,
+    heightCm: Math.round(rng.gauss(base[0], 9, 90, 260)),
+    weightKg: Math.round(rng.gauss(base[1], 8, 20, 300)),
+    marks: rng.chance(0.35) ? [rng.pick(NPC_MARKS)] : [],
+    accessories: rng.chance(0.4) ? [rng.pick(NPC_ACC)] : [],
+    // Some people change how they look; most do not.
+    vain: rng.chance(0.22),
+  };
+}
+
 function makeNpc(rng, opts = {}) {
   const raceId = opts.raceId || pickRaceFor(rng, opts);
   const race = getRace(raceId);
@@ -4551,6 +5124,8 @@ function makeNpc(rng, opts = {}) {
     isCanon: false,
     signature: rng.chance(0.25) ? generateSignatureName(rng) : null,
 
+    appearance: opts.appearance || makeAppearance(rng, raceId, opts.sex || 'male'),
+
     // The dossier. Most of it stays hidden until you have earned a look at it.
     look: {
       hair: rng.pick(APPEARANCE_HAIR),
@@ -4597,8 +5172,10 @@ function pickRaceFor(rng, opts) {
 function makeCanonNpc(rng, canonId, year, relation = 'acquaintance') {
   const c = getCanon(canonId);
   if (!c) return null;
+  const look = canonLook(canonId, year, c.race);
   return {
     id: 'canon_' + canonId,
+    appearance: { heightCm: 170, weightKg: 68, ...look },
     name: c.name,
     raceId: c.race,
     canonId,
@@ -4719,6 +5296,66 @@ const FOCUS_PATHS = ['power', 'technique', 'family', 'money', 'peace'];
  *
  * Returns a line of news when something happened worth hearing about.
  */
+const DRIFT_HAIR = ['spiked', 'wild', 'long', 'ponytail', 'bob', 'cropped', 'mohawk', 'bald', 'braid', 'topknot'];
+
+/**
+ * People change how they look. Not often, and mostly the ones who care: a new
+ * haircut, something they started wearing, a scar that did not heal, and grey
+ * when the species is one that goes grey.
+ */
+function driftAppearance(rng, npc, year) {
+  const a = npc.appearance;
+  if (!a || npc.isCanon) return null;
+  const race = getRace(npc.raceId);
+  const hairless = ['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(npc.raceId);
+  let news = null;
+
+  if (!hairless && rng.chance(a.vain ? 0.14 : 0.03)) {
+    const was = a.hairStyle;
+    a.hairStyle = rng.pick(DRIFT_HAIR.filter((h) => h !== was));
+    news = `${npc.name} has done something to their hair.`;
+  }
+  if (rng.chance(a.vain ? 0.1 : 0.03)) {
+    a.outfit = rng.pick(['casual', 'coat', 'gi_orange', 'gi_blue', 'gi_black', 'armour_saiyan', 'namek_robe']);
+  }
+  if (rng.chance(0.04)) {
+    const acc = rng.pick(NPC_ACC);
+    a.accessories = a.accessories || [];
+    if (!a.accessories.includes(acc)) {
+      a.accessories.push(acc);
+      if (!news) news = `${npc.name} is wearing something new.`;
+    }
+  }
+  // Grey, once, when the species ages at anything like a human rate.
+  if (!a.wentGrey && npc.age > 55 && (race.agingRate ?? 1) >= 0.7 && rng.chance(0.08)) {
+    a.wentGrey = true;
+    a.hairColour = rng.chance(0.5) ? 'silver' : 'white';
+    news = `${npc.name} has gone grey.`;
+  }
+  const order = ['small', 'wiry', 'lean', 'balanced', 'stocky', 'massive'];
+  const i = order.indexOf(a.buildShape);
+  if (i >= 0 && npc.growthFocus === 'power' && npc.age < 45 && i < order.length - 1 && rng.chance(0.04)) {
+    a.buildShape = order[i + 1];
+  }
+  return news;
+}
+
+/** A fight leaves something behind on them too. */
+function scarNpc(rng, npc, from) {
+  const a = npc.appearance;
+  if (!a || npc.isCanon) return null;
+  if (['namekian', 'majin', 'android', 'bioandroid'].includes(npc.raceId)) return null;
+  a.marks = a.marks || [];
+  const pool = ['scar_cheek', 'scar_brow', 'scar_chest', 'scar_arm', 'burn_arm']
+    .filter((m) => !a.marks.includes(m));
+  if (!pool.length) return null;
+  const mark = rng.pick(pool);
+  a.marks.push(mark);
+  npc.scarStory = npc.scarStory || [];
+  npc.scarStory.push({ mark, from: from || 'a fight', year: npc.birthYear + npc.age, text: `A scar from ${from || 'a fight'}.` });
+  return `${npc.name} carries something from that fight now.`;
+}
+
 function progressNpc(rng, npc, year, opts = {}) {
   if (!npc.alive || npc.isCanon) return null;
   let news = null;
@@ -4795,6 +5432,8 @@ function progressNpc(rng, npc, year, opts = {}) {
     npc.mood = rng.pick(['steady', 'restless', 'grieving', 'furious about something', 'quietly pleased',
       'exhausted', 'obsessive', 'content', 'frightened', 'spoiling for a fight']);
   }
+  const lookNews = driftAppearance(rng, npc, year);
+  if (lookNews && !news) news = lookNews;
   if (rng.chance(0.04)) npc.hasDragonBall = true;
 
   return news;
@@ -4942,7 +5581,7 @@ function learnAbout(npc, amount = 1) {
   npc.knowledge = Math.min(4, (npc.knowledge || 0) + amount);
   return npc.knowledge;
 }
-  return { RELATIONS, resetNpcCounter, nextNpcId, makeNpc, makeCanonNpc, makeFamily, makeChild, progressNpc, relationshipTick, dossier, describeNpc, relationLabel, bondScore, bondLabel, romanceLabel, KNOWLEDGE_LEVELS, knowledgeLabel, learnAbout };
+  return { RELATIONS, resetNpcCounter, nextNpcId, makeAppearance, makeNpc, makeCanonNpc, makeFamily, makeChild, driftAppearance, scarNpc, progressNpc, relationshipTick, dossier, describeNpc, relationLabel, bondScore, bondLabel, romanceLabel, KNOWLEDGE_LEVELS, knowledgeLabel, learnAbout };
 })();
 
 /* ==== engine/state.js ==== */
@@ -17832,7 +18471,7 @@ const { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, 
 const { RACES, getRace, UPBRINGINGS, TEMPERAMENTS, BODY_TYPES } = __mod_data_races_js;
 const { PLACES, getPlace } = __mod_data_places_js;
 const { APPEARANCE } = __mod_engine_state_js;
-const { portraitSvg, defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS, SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES: STANCE_LIST, MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks } = __mod_ui_portrait_js;
+const { portraitSvg, defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS, SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES: STANCE_LIST, MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks, npcPortrait, lifeStage } = __mod_ui_portrait_js;
 const { eraName, worldPowerBaseline } = __mod_data_timeline_js;
 const { generateFullName } = __mod_data_names_js;
 const { BRANCHES, TECH_BY_ID } = __mod_data_techniques_js;
@@ -18484,6 +19123,9 @@ function panelPeople() {
     for (const npc of set.slice(0, 40)) {
       const row = el('button', 'row');
       row.type = 'button';
+      const face = el('div', 'row-face');
+      face.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1 });
+      row.appendChild(face);
       const main = el('div', 'row-main');
       main.appendChild(el('div', 'row-title', npc.name + (npc.isCanon ? ' \u2605' : '')));
       const romance = romanceLabel(npc);
@@ -18526,6 +19168,10 @@ function panelPerson(npcId) {
   const romance = romanceLabel(npc);
   body.appendChild(el('p', 'row-note',
     `${relationLabel(npc)} - ${bondLabel(npc)}${romance ? ' - ' + romance : ''}`));
+
+  const shot = el('div', 'npc-portrait');
+  shot.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1 });
+  body.appendChild(shot);
 
   if (npc.isCanon && npc.personality) {
     body.appendChild(el('p', 'entry-text', npc.personality));
@@ -19449,6 +20095,14 @@ function pushBattleLines(lines, cls) {
 
 function renderBattle() {
   const st = battleStatus(BATTLE);
+  const foeNpc = BATTLE.context && (GAME.npcs[BATTLE.context.npcId] || GAME.npcs['canon_' + BATTLE.context.canonId]);
+  const foeFace = $('foe-face');
+  if (foeFace) {
+    foeFace.innerHTML = foeNpc
+      ? npcPortrait(foeNpc, { maturityRate: getRace(foeNpc.raceId).maturityRate ?? 1 })
+      : '';
+    foeFace.hidden = !foeNpc;
+  }
   $('foe-name').textContent = st.them.name;
   $('foe-sub').textContent = [st.them.tier, st.them.form, st.them.stance].filter(Boolean).join(' - ');
   // A number on the foe panel is a scouter reading, not a birthright.
