@@ -6808,10 +6808,19 @@ function makeCanonNpc(rng, canonId, year, relation = 'acquaintance') {
   };
 }
 
+// Upbringings whose own opening narration (prologue.js) says outright that
+// no parent was there - alone in a pod, raised by animals, raised by
+// nobody, grown in a tank. makeFamily() used to hand these characters two
+// living parents anyway, which meant the story you were told at Age 0 and
+// the relationships list you could check five minutes later flatly
+// contradicted each other.
+const PARENTLESS_UPBRINGINGS = ['orphan_pod', 'animals', 'self_raised', 'lab'];
+
 /** Parents, and possibly siblings, for a newborn player character. */
 function makeFamily(rng, character, year) {
   const out = [];
   const race = getRace(character.raceId);
+  if (PARENTLESS_UPBRINGINGS.includes(character.upbringingId)) return out;
   const parentRace = character.raceId === 'halfsaiyan'
     ? ['saiyan', 'earthling']
     : [character.raceId, character.raceId];
