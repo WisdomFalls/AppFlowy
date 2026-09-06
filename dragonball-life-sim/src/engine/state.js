@@ -4,6 +4,7 @@ import { Rng, clamp, hashSeed } from './rng.js';
 import { createMemory, addFact } from './memory.js';
 import { RACES, getRace, UPBRINGINGS, BODY_TYPES, TEMPERAMENTS, hasPerk, maturity, raceHasTail } from '../data/races.js';
 import { getPlace } from '../data/places.js';
+import { getPlanet } from '../data/planets.js';
 import { eraName, worldPowerBaseline } from '../data/timeline.js';
 import { generateFullName } from '../data/names.js';
 import { rollOrigin } from './origins.js';
@@ -113,6 +114,10 @@ export function createGame(creation, seedInput) {
     death: null,
     inAfterlife: false,
     keptBody: false,
+    // Which of the twelve universes this life actually started in - Sadala
+    // is Universe 6, not 7, and travel logic needs to keep knowing that
+    // even after you leave, not just while you happen to be standing there.
+    universe: getPlanet(getPlace(placeId).planet).universe || 7,
 
     stats,
     vitals: { health: 100, healthMax: 100, happiness: 65, ki: 40, kiMax: 60, stamina: 100, staminaMax: 100 },

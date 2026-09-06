@@ -21,7 +21,7 @@ export const PLANETS = [
     strength: 'Everyone can fight. Most of them are worse at it than they believe.',
   },
   {
-    id: 'sadala', name: 'Planet Sadala', distance: 40,
+    id: 'sadala', name: 'Planet Sadala', distance: 40, universe: 6,
     inhabitants: 'Saiyans who never became conquerors',
     population: 'millions', tech: 'modern', alignment: 'proud',
     law: 'Honour duels, formally supervised.',
