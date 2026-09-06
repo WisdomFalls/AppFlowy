@@ -7825,6 +7825,136 @@ function interpretWishLocally(text) {
   return { ITEMS, ITEM_BY_ID, LOCAL_GOODS, getItem, shopStock, DRAGONS, WISH_GROUPS, WISHES, WISH_BY_ID, interpretWishLocally };
 })();
 
+/* ==== engine/market.js ==== */
+const __mod_engine_market_js = (function () {
+// What a shop actually has today.
+//
+// shopStock() in the data layer answers "what could this world ever sell" -
+// a fixed menu keyed off tags and local goods. This answers "what is on the
+// shelf this season": some of that fixed menu is temporarily out, something
+// imported and unusual has turned up, demand on particular goods drifts up
+// and down, and selling into real demand often enough starts a standing
+// arrangement that pays better for good.
+
+const { ITEMS, ITEM_BY_ID, LOCAL_GOODS, shopStock } = __mod_data_items_js;
+const { clamp } = __mod_engine_rng_js;
+const { currentYear } = __mod_engine_state_js;
+
+const ROTATION_YEARS = 3;
+
+function marketsOf(state) {
+  state.world.markets = state.world.markets || {};
+  return state.world.markets;
+}
+
+function marketFor(state, planetId) {
+  const markets = marketsOf(state);
+  if (!markets[planetId]) {
+    markets[planetId] = { rotatedYear: null, outOfStock: [], arrival: null, demand: {}, contracts: {} };
+  }
+  return markets[planetId];
+}
+
+/**
+ * Reroll a world's shelf, if the season has actually turned over. Called from
+ * the year tick for wherever the player currently is, because rolling it
+ * requires the game's rng stream and the shop screen itself only gets a
+ * read-only state - this keeps the shelf stable within a visit instead of
+ * reshuffling on every render.
+ */
+function rollMarketYear(state, rng, planetId) {
+  const m = marketFor(state, planetId);
+  const year = currentYear(state);
+  if (m.rotatedYear !== null && year - m.rotatedYear < ROTATION_YEARS) return m;
+  m.rotatedYear = year;
+
+  const general = ITEMS.filter((i) => i.cost > 0 && !(LOCAL_GOODS[planetId] || []).includes(i.id));
+  const outCount = rng.int(0, Math.min(3, Math.floor(general.length * 0.25)));
+  m.outOfStock = rng.sample(general, outCount).map((i) => i.id);
+
+  // Something imported and temporary - a taste of what another world makes
+  // for itself, at a price that reflects how far it travelled.
+  const foreign = [...new Set(Object.entries(LOCAL_GOODS)
+    .filter(([pid]) => pid !== planetId)
+    .flatMap(([, ids]) => ids)
+    .filter((id) => ITEM_BY_ID[id]))];
+  m.arrival = foreign.length && rng.chance(0.5) ? rng.pick(foreign) : null;
+
+  // Demand drifts on a chunk of the catalogue each rotation. A thing
+  // everybody suddenly wants pays better to sell; a glut pays worse.
+  m.demand = m.demand || {};
+  for (const i of general) {
+    if (rng.chance(0.3)) {
+      m.demand[i.id] = Math.round(clamp((m.demand[i.id] ?? 1) + rng.float(-0.5, 0.6), 0.5, 2.2) * 100) / 100;
+    }
+  }
+  return m;
+}
+
+/**
+ * What is actually buyable here right now, rotation and imports applied. Pure
+ * read - if nobody has rolled this world's season yet, it is just the full
+ * static menu, which is a perfectly fine thing to see on a first visit.
+ */
+function liveShopStock(state, placeTags, planetId) {
+  const m = marketFor(state, planetId);
+  const base = shopStock(placeTags, planetId).filter((i) => !m.outOfStock.includes(i.id));
+  if (m.arrival && ITEM_BY_ID[m.arrival] && !base.some((i) => i.id === m.arrival)) {
+    base.unshift(ITEM_BY_ID[m.arrival]);
+  }
+  return base;
+}
+
+function demandFor(state, planetId, itemId) {
+  return marketFor(state, planetId).demand[itemId] ?? 1;
+}
+
+function isImportedHere(state, planetId, itemId) {
+  return marketFor(state, planetId).arrival === itemId;
+}
+
+function priceMult(state, planetId, itemId) {
+  let mult = demandFor(state, planetId, itemId);
+  if (isImportedHere(state, planetId, itemId)) mult *= 1.6;
+  return mult;
+}
+
+// ------------------------------------------------------ trade relationships
+
+/**
+ * Sell into real demand often enough and the shop stops treating you as a
+ * stranger. A standing order is a permanent, better price for that one good
+ * on this one world - not a quota to keep meeting, just a relationship that,
+ * once it exists, does not go away.
+ */
+function tryStartTrade(state, rng, planetId, itemId) {
+  const m = marketFor(state, planetId);
+  if (m.contracts[itemId]) return null;
+  const demand = m.demand[itemId] ?? 1;
+  if (demand < 1.4) return null;
+  if (!rng.chance(0.28 + (demand - 1.4) * 0.45)) return null;
+  m.contracts[itemId] = { since: currentYear(state), item: itemId };
+  return m.contracts[itemId];
+}
+
+function hasTrade(state, planetId, itemId) {
+  return !!marketFor(state, planetId).contracts[itemId];
+}
+
+function tradeSellBonus(state, planetId, itemId) {
+  return hasTrade(state, planetId, itemId) ? 1.3 : 1;
+}
+
+/** Every standing arrangement you have on this world, for the shop screen. */
+function tradeRelationships(state, planetId) {
+  const m = marketFor(state, planetId);
+  return Object.values(m.contracts).map((c) => ({
+    ...c, name: (ITEM_BY_ID[c.item] || {}).name || c.item,
+  }));
+}
+  return { rollMarketYear, liveShopStock, demandFor, isImportedHere, priceMult, tryStartTrade, hasTrade, tradeSellBonus, tradeRelationships };
+})();
+
 /* ==== engine/inventory.js ==== */
 const __mod_engine_inventory_js = (function () {
 // Things you own.
@@ -7838,6 +7968,7 @@ const { clamp } = __mod_engine_rng_js;
 const { getItem, ITEMS } = __mod_data_items_js;
 const { currencyFor, priceIn, credit, debit, canAfford, balance, formatMoney } = __mod_data_currency_js;
 const { getPlace } = __mod_data_places_js;
+const { priceMult, tradeSellBonus, tryStartTrade } = __mod_engine_market_js;
 
 /** Slots a wearable item can occupy. One thing per slot. */
 const SLOTS = {
@@ -7952,11 +8083,16 @@ function valueHere(state, itemId, opts = {}) {
   // are worth a great deal to the right buyer.
   const base = item.cost || (item.passive && item.passive.unique ? 5000000 : 40000);
   const sell = opts.sell ? 0.45 : 1;
-  return { amount: Math.max(1, priceIn(Math.round(base * wear * sell), cur.id)), currency: cur.id, cur };
+  // What this world happens to want right now, and whether you are somebody
+  // it already does business with.
+  const demand = opts.sell ? priceMult(state, planet, itemId) * tradeSellBonus(state, planet, itemId)
+    : priceMult(state, planet, itemId);
+  return { amount: Math.max(1, priceIn(Math.round(base * wear * sell * demand), cur.id)), currency: cur.id, cur };
 }
 
-/** Sell to whoever is buying on this world. */
-function sellItem(state, itemId) {
+/** Sell to whoever is buying on this world. A shop that wants enough of
+ * something often enough will start asking you to keep bringing it. */
+function sellItem(state, rng, itemId) {
   const item = getItem(itemId);
   if (!item) return { ok: false, text: 'Nothing to sell.' };
   const entry = findEntry(state.character, itemId);
@@ -7965,7 +8101,13 @@ function sellItem(state, itemId) {
   const { amount, currency } = valueHere(state, itemId, { sell: true });
   removeItem(state.character, itemId, 1);
   credit(state.character, currency, amount);
-  return { ok: true, amount, currency, text: `Sold. ${formatMoney(amount, currency)}.` };
+  const planet = getPlace(state.character.placeId).planet;
+  let text = `Sold. ${formatMoney(amount, currency)}.`;
+  if (rng) {
+    const started = tryStartTrade(state, rng, planet, itemId);
+    if (started) text += ` They ask if you can keep bringing ${item.name.toLowerCase()}. Standing order, from now on.`;
+  }
+  return { ok: true, amount, currency, text };
 }
 
 /** Buy from whoever is selling. */
@@ -19421,6 +19563,7 @@ const { prologueEntries } = __mod_engine_prologue_js;
 const { getRng, saveRng, currentYear, livingNpcs, adjust, place: placeOf, characterSummary } = __mod_engine_state_js;
 const { getCareer } = __mod_data_jobs_js;
 const { resetYearBudget } = __mod_engine_economy_js;
+const { rollMarketYear } = __mod_engine_market_js;
 const { resolveTrial } = __mod_engine_trials_js;
 const { getItem } = __mod_data_items_js;
 const { checkEarnedTraits, traitEffect } = __mod_data_traits_js;
@@ -19574,6 +19717,9 @@ function startYear(state) {
   state.stats.yearsPlayed++;
   if (c.inAfterlife) c.yearsInAfterlife = (c.yearsInAfterlife || 0) + 1;
   resetYearBudget(state);
+  // The shelf turns over on wherever you actually are. Everywhere else
+  // rotates lazily, the first time you are there to see it.
+  if (!c.inAfterlife) rollMarketYear(state, rng, getPlace(c.placeId).planet);
 
   const entries = [];
   // The opening. Told once, as it happens, before anything else does.
@@ -21551,7 +21697,8 @@ const { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique } = __mod_data
 const { getTransformation } = __mod_data_transformations_js;
 const { unlockableForms, tryUnlockForm, nearbyForms } = __mod_engine_progression_js;
 const { getPlace, PLACES } = __mod_data_places_js;
-const { shopStock, getItem, ITEMS } = __mod_data_items_js;
+const { getItem, ITEMS } = __mod_data_items_js;
+const { liveShopStock, demandFor, isImportedHere, tradeRelationships } = __mod_engine_market_js;
 const { buyItem, valueHere, hasItem } = __mod_engine_inventory_js;
 const { topicsFor, converse } = __mod_engine_conversation_js;
 const { homeOptions, settleHome, homeOf } = __mod_engine_settlement_js;
@@ -22076,14 +22223,17 @@ const ACTIONS = [
     options: (s) => {
       const place = getPlace(s.character.placeId);
       const cur = currencyFor(place.planet);
-      return shopStock(place.tags, place.planet)
+      return liveShopStock(s, place.tags, place.planet)
         .filter((i) => !hasItem(s.character, i.id))
         .map((i) => {
           const price = valueHere(s, i.id);
+          const imported = isImportedHere(s, place.planet, i.id);
+          const demand = demandFor(s, place.planet, i.id);
+          const tag = imported ? 'Imported, here only for now - ' : demand > 1.4 ? 'In demand - ' : demand < 0.75 ? 'A glut, cheaper for it - ' : '';
           return {
             id: i.id,
             label: `${i.name} - ${formatMoney(price.amount, price.currency)}`,
-            hint: i.desc,
+            hint: `${tag}${i.desc}`,
             disabled: balance(s.character, cur.id) < price.amount,
           };
         });
@@ -25424,7 +25574,14 @@ function panelInventory() {
       const sellPrice = valueHere(GAME, row.id, { sell: true });
       const sl = el('button', 'mini', `Sell ${formatMoney(sellPrice.amount, sellPrice.currency)}`);
       sl.type = 'button';
-      sl.addEventListener('click', () => { flash(sellItem(GAME, row.id).text); renderHud(); panelInventory(); });
+      sl.addEventListener('click', () => {
+        const rng = getRng(GAME);
+        const res = sellItem(GAME, rng, row.id);
+        saveRng(GAME, rng);
+        flash(res.text);
+        renderHud();
+        panelInventory();
+      });
       acts.appendChild(sl);
       b.appendChild(acts);
       body.appendChild(b);

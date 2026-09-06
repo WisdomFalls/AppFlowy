@@ -1260,7 +1260,14 @@ function panelInventory() {
       const sellPrice = valueHere(GAME, row.id, { sell: true });
       const sl = el('button', 'mini', `Sell ${formatMoney(sellPrice.amount, sellPrice.currency)}`);
       sl.type = 'button';
-      sl.addEventListener('click', () => { flash(sellItem(GAME, row.id).text); renderHud(); panelInventory(); });
+      sl.addEventListener('click', () => {
+        const rng = getRng(GAME);
+        const res = sellItem(GAME, rng, row.id);
+        saveRng(GAME, rng);
+        flash(res.text);
+        renderHud();
+        panelInventory();
+      });
       acts.appendChild(sl);
       b.appendChild(acts);
       body.appendChild(b);

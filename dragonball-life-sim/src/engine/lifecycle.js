@@ -16,6 +16,7 @@ import { prologueEntries } from './prologue.js';
 import { getRng, saveRng, currentYear, livingNpcs, adjust, place as placeOf, characterSummary } from './state.js';
 import { getCareer } from '../data/jobs.js';
 import { resetYearBudget } from './economy.js';
+import { rollMarketYear } from './market.js';
 import { resolveTrial } from './trials.js';
 import { getItem } from '../data/items.js';
 import { checkEarnedTraits, traitEffect } from '../data/traits.js';
@@ -169,6 +170,9 @@ export function startYear(state) {
   state.stats.yearsPlayed++;
   if (c.inAfterlife) c.yearsInAfterlife = (c.yearsInAfterlife || 0) + 1;
   resetYearBudget(state);
+  // The shelf turns over on wherever you actually are. Everywhere else
+  // rotates lazily, the first time you are there to see it.
+  if (!c.inAfterlife) rollMarketYear(state, rng, getPlace(c.placeId).planet);
 
   const entries = [];
   // The opening. Told once, as it happens, before anything else does.

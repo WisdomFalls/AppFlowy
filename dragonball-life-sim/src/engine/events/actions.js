@@ -11,7 +11,8 @@ import { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique } from '../..
 import { getTransformation } from '../../data/transformations.js';
 import { unlockableForms, tryUnlockForm, nearbyForms } from '../progression.js';
 import { getPlace, PLACES } from '../../data/places.js';
-import { shopStock, getItem, ITEMS } from '../../data/items.js';
+import { getItem, ITEMS } from '../../data/items.js';
+import { liveShopStock, demandFor, isImportedHere, tradeRelationships } from '../market.js';
 import { buyItem, valueHere, hasItem } from '../inventory.js';
 import { topicsFor, converse } from '../conversation.js';
 import { homeOptions, settleHome, homeOf } from '../settlement.js';
@@ -537,14 +538,17 @@ export const ACTIONS = [
     options: (s) => {
       const place = getPlace(s.character.placeId);
       const cur = currencyFor(place.planet);
-      return shopStock(place.tags, place.planet)
+      return liveShopStock(s, place.tags, place.planet)
         .filter((i) => !hasItem(s.character, i.id))
         .map((i) => {
           const price = valueHere(s, i.id);
+          const imported = isImportedHere(s, place.planet, i.id);
+          const demand = demandFor(s, place.planet, i.id);
+          const tag = imported ? 'Imported, here only for now - ' : demand > 1.4 ? 'In demand - ' : demand < 0.75 ? 'A glut, cheaper for it - ' : '';
           return {
             id: i.id,
             label: `${i.name} - ${formatMoney(price.amount, price.currency)}`,
-            hint: i.desc,
+            hint: `${tag}${i.desc}`,
             disabled: balance(s.character, cur.id) < price.amount,
           };
         });

@@ -9,6 +9,7 @@ import { clamp } from './rng.js';
 import { getItem, ITEMS } from '../data/items.js';
 import { currencyFor, priceIn, credit, debit, canAfford, balance, formatMoney } from '../data/currency.js';
 import { getPlace } from '../data/places.js';
+import { priceMult, tradeSellBonus, tryStartTrade } from './market.js';
 
 /** Slots a wearable item can occupy. One thing per slot. */
 export const SLOTS = {
@@ -123,11 +124,16 @@ export function valueHere(state, itemId, opts = {}) {
   // are worth a great deal to the right buyer.
   const base = item.cost || (item.passive && item.passive.unique ? 5000000 : 40000);
   const sell = opts.sell ? 0.45 : 1;
-  return { amount: Math.max(1, priceIn(Math.round(base * wear * sell), cur.id)), currency: cur.id, cur };
+  // What this world happens to want right now, and whether you are somebody
+  // it already does business with.
+  const demand = opts.sell ? priceMult(state, planet, itemId) * tradeSellBonus(state, planet, itemId)
+    : priceMult(state, planet, itemId);
+  return { amount: Math.max(1, priceIn(Math.round(base * wear * sell * demand), cur.id)), currency: cur.id, cur };
 }
 
-/** Sell to whoever is buying on this world. */
-export function sellItem(state, itemId) {
+/** Sell to whoever is buying on this world. A shop that wants enough of
+ * something often enough will start asking you to keep bringing it. */
+export function sellItem(state, rng, itemId) {
   const item = getItem(itemId);
   if (!item) return { ok: false, text: 'Nothing to sell.' };
   const entry = findEntry(state.character, itemId);
@@ -136,7 +142,13 @@ export function sellItem(state, itemId) {
   const { amount, currency } = valueHere(state, itemId, { sell: true });
   removeItem(state.character, itemId, 1);
   credit(state.character, currency, amount);
-  return { ok: true, amount, currency, text: `Sold. ${formatMoney(amount, currency)}.` };
+  const planet = getPlace(state.character.placeId).planet;
+  let text = `Sold. ${formatMoney(amount, currency)}.`;
+  if (rng) {
+    const started = tryStartTrade(state, rng, planet, itemId);
+    if (started) text += ` They ask if you can keep bringing ${item.name.toLowerCase()}. Standing order, from now on.`;
+  }
+  return { ok: true, amount, currency, text };
 }
 
 /** Buy from whoever is selling. */
