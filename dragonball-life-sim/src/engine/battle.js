@@ -1050,6 +1050,37 @@ export function battleAftermath(state, rng, battle, opts = {}) {
     return { lines, text: lines.join(' '), death: `Killed by ${battle.them.name}` };
   }
 
+  // Somebody you finished is somebody who is now somewhere. Every kill is
+  // recorded with what they were worth at the time, because Hell is a place in
+  // this setting and they do not stop training when they get there.
+  if (outcome === 'won' && battle.stakes === 'lethal') {
+    const year = c.birthYear + c.age;
+    for (const foe of (battle.squad || [battle.them])) {
+      if (foe.hp > 0) continue;
+      state.stats.kills += 1;
+      state.world.ended = state.world.ended || [];
+      state.world.ended.push({
+        name: foe.name,
+        power: Math.round(foe.basePower || 1),
+        year,
+        canonId: (foe.ref && foe.ref.canonId) || battle.foeRef.canonId || null,
+        npcId: (foe.ref && foe.ref.npcId) || battle.foeRef.npcId || null,
+        raceId: foe.raceId || 'other',
+        how: battle.reason || 'a fight',
+      });
+      const npc = ((foe.ref && foe.ref.npcId) && state.npcs[foe.ref.npcId])
+        || (battle.foeRef.npcId && state.npcs[battle.foeRef.npcId]);
+      if (npc && npc.alive) {
+        npc.alive = false;
+        npc.mourned = true;
+        npc.deadSince = year;
+        npc.causeOfDeath = 'killed by you';
+        npc.killedByPlayer = true;
+      }
+    }
+    if (state.world.ended.length > 40) state.world.ended = state.world.ended.slice(-40);
+  }
+
   // Whoever you fought, and why, decides what the fight changed.
   const ctxInfo = battle.context || {};
   const npc = ctxInfo.npcId ? state.npcs[ctxInfo.npcId] : (ctxInfo.canonId ? state.npcs['canon_' + ctxInfo.canonId] : null);

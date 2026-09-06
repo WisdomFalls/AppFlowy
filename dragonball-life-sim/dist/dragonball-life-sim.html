@@ -9590,6 +9590,37 @@ function battleAftermath(state, rng, battle, opts = {}) {
     return { lines, text: lines.join(' '), death: `Killed by ${battle.them.name}` };
   }
 
+  // Somebody you finished is somebody who is now somewhere. Every kill is
+  // recorded with what they were worth at the time, because Hell is a place in
+  // this setting and they do not stop training when they get there.
+  if (outcome === 'won' && battle.stakes === 'lethal') {
+    const year = c.birthYear + c.age;
+    for (const foe of (battle.squad || [battle.them])) {
+      if (foe.hp > 0) continue;
+      state.stats.kills += 1;
+      state.world.ended = state.world.ended || [];
+      state.world.ended.push({
+        name: foe.name,
+        power: Math.round(foe.basePower || 1),
+        year,
+        canonId: (foe.ref && foe.ref.canonId) || battle.foeRef.canonId || null,
+        npcId: (foe.ref && foe.ref.npcId) || battle.foeRef.npcId || null,
+        raceId: foe.raceId || 'other',
+        how: battle.reason || 'a fight',
+      });
+      const npc = ((foe.ref && foe.ref.npcId) && state.npcs[foe.ref.npcId])
+        || (battle.foeRef.npcId && state.npcs[battle.foeRef.npcId]);
+      if (npc && npc.alive) {
+        npc.alive = false;
+        npc.mourned = true;
+        npc.deadSince = year;
+        npc.causeOfDeath = 'killed by you';
+        npc.killedByPlayer = true;
+      }
+    }
+    if (state.world.ended.length > 40) state.world.ended = state.world.ended.slice(-40);
+  }
+
   // Whoever you fought, and why, decides what the fight changed.
   const ctxInfo = battle.context || {};
   const npc = ctxInfo.npcId ? state.npcs[ctxInfo.npcId] : (ctxInfo.canonId ? state.npcs['canon_' + ctxInfo.canonId] : null);
@@ -19804,6 +19835,7 @@ const __mod_engine_events_afterlife_js = (function () {
 const { registerEvents, npcSlot } = __mod_engine_generator_js;
 const { apply, fact, stranger, relate, thread, trainYear, powerLine, meetCanon, odds, findNpc, scaledFoePower, moveTo } = __mod_engine_events_helpers_js;
 const { canonHere, offerBattle } = __mod_engine_events_helpers_js;
+const { spreadWord, DEED_SCALE } = __mod_engine_settlement_js;
 const { reviveCharacter } = __mod_engine_lifecycle_js;
 const { fight, narrateFight, describeGap, runTournament, buildField } = __mod_engine_combat_js;
 const { combatPower } = __mod_engine_stats_js;
@@ -20245,6 +20277,192 @@ registerEvents([
         const changes = apply(ctx, { stats: { discipline: 4 } });
         return { text: `{You are not finished|There are still fights here|Not yet}. ${powerLine(t.gained)}`, changes };
       } },
+    ],
+  },
+]);
+
+// --------------------------------------------------- the people you ended
+//
+// Hell is a place in this setting, not a metaphor, and the dead train in it.
+// Anybody you killed is down here, they have had every year since to work,
+// and some of them came out of it with something they did not have when you
+// finished them.
+
+/** What a life gets you after death: hard training and nothing else to do. */
+function hellPower(record, year) {
+  const years = Math.max(0, year - record.year);
+  // Nothing to eat, nothing to fear, and no reason to stop.
+  const growth = Math.pow(1.16, Math.min(years, 60));
+  const escalation = ESCALATIONS[record.canonId];
+  return Math.round(record.power * growth * (escalation ? escalation.mult : 1));
+}
+
+/**
+ * The ones who found something down here. Frieza is the named case: he spent
+ * four months in Hell doing the one thing he had never done, which was train,
+ * and came back gold.
+ */
+const ESCALATIONS = {
+  frieza: { mult: 90, name: 'Golden Frieza',
+    text: 'He has been training. Frieza, who never trained once in his life, has spent every year since you finished him doing nothing else. He is gold now, and he wants you to see it.' },
+  cell: { mult: 30, name: 'a Cell that has kept eating',
+    text: 'It has been absorbing things down here. There is nothing to absorb down here, which raises a question nobody wants answered.' },
+  buu: { mult: 25, name: 'something Buu-shaped and wrong',
+    text: 'Whatever it was has come apart and put itself back together several times, and each version is worse.' },
+  king_piccolo: { mult: 20, name: 'the Demon King, restored',
+    text: 'He is young again. Down here that is a thing you can simply decide to be.' },
+  broly: { mult: 40, name: 'Broly, still going',
+    text: 'He has not stopped. He does not appear to have noticed that he died.' },
+};
+
+function endedList(ctx) {
+  return (ctx.state.world.ended || []).filter((e) => e.name);
+}
+
+registerEvents([
+  {
+    id: 'they_are_here', tags: ['afterlife', 'villain', 'consequence'], weight: 46,
+    requiresAfterlife: true,
+    when: (ctx) => ctx.character.placeId === 'hell' && endedList(ctx).length > 0,
+    slots: (ctx) => {
+      const list = endedList(ctx);
+      // The strongest thing you killed is the one that finds you first.
+      const rec = ctx.rng.weighted(list, (e) => 1 + Math.log10(Math.max(10, e.power)));
+      const now = hellPower(rec, ctx.year);
+      const esc = ESCALATIONS[rec.canonId];
+      return {
+        who: esc ? esc.name : rec.name,
+        original: rec.name,
+        years: String(Math.max(1, ctx.year - rec.year)),
+        power: now,
+        was: rec.power,
+        grew: now > rec.power * 4 ? 'yes' : 'no',
+        escText: esc ? esc.text : '',
+        canonId: rec.canonId || '',
+      };
+    },
+    title: (ctx, s) => `${s.original}, Again`,
+    text: (ctx, s) => `{You have been expecting this|It was always going to happen|`
+      + `Hell is smaller than it looks}. `
+      + `{[original] finds you|[original] has been looking for you since you got here|`
+      + `Somebody says your name and you know the voice before you turn round}. `
+      + `{It has been [years] years down here for them|[years] years, and nothing to do but one thing|`
+      + `They have had [years] years and no body to get tired}. `
+      + (s.escText || (s.grew === 'yes'
+        ? `{They are not what you left|Whatever you beat, this is not that|The number has moved a very long way}.`
+        : `{They are much as you left them|Death has not improved them|Nothing has changed except the address}.`)),
+    choices: (ctx, s) => [
+      {
+        id: 'fight', label: 'Finish it again', danger: true,
+        hint: 'Nothing stays broken here, and neither of you can die twice.',
+        effect: (c2, sl) => offerBattle(c2, {
+          name: sl.who, power: sl.power, canonId: sl.canonId || null,
+          raceId: 'other', techniques: ['ki_blast', 'death_beam', 'death_ball'],
+        }, {
+          reason: 'hell', canonId: sl.canonId || null, stakes: 'spar',
+          intro: `${sl.who}. There is no ground to lose and no bottom to fall off.`,
+        }),
+      },
+      {
+        id: 'talk', label: 'Ask them what it was like', effect: (c2, sl) => {
+          c2.character.flags.faced_the_dead = true;
+          return {
+            text: `{They tell you|It takes a long time and they tell you all of it|`
+              + `Nobody down here has been asked a question in years}. `
+              + `{What you did is a thing that happened to somebody|`
+              + `They describe the last thing they saw and it was you|`
+              + `You listen to the whole thing without once explaining yourself}. `
+              + `{It does not make either of you feel better|Something changes and neither of you names it|`
+              + `They stop wanting to kill you somewhere in the middle of it}.`,
+            changes: apply(c2, { karma: 10, happiness: -8, stats: { intellect: 4, charisma: 3 } }),
+            view: { who: sl.who },
+          };
+        },
+      },
+      {
+        id: 'train', label: 'Train with them', hint: 'You have both got the time.',
+        effect: (c2, sl) => {
+          const t = trainYear(c2, { intensity: 1.8, placeMult: 2.4, mentorMult: 1.5 });
+          fact(c2, `Trained in Hell with ${sl.original}, who they had killed.`,
+            { type: 'afterlife', weight: 7, tags: ['villain', 'death'] });
+          return {
+            text: `{It is the strangest arrangement of your life|Neither of you says why|`
+              + `You do not become friends. You become something with no word for it}. `
+              + `{They are better than they were and they are better because of you|`
+              + `Every session ends the moment one of you smiles|`
+              + `You are both getting something out of this and neither will say what}. ${powerLine(t.gained)}`,
+            changes: apply(c2, { karma: -4, stats: { technique: 5, discipline: 4 } }),
+          };
+        },
+      },
+      {
+        id: 'avoid', label: 'Go the other way', effect: (c2, sl) => ({
+          text: `{You do not turn round|There is a lot of Hell and you use all of it|`
+            + `You spend the next stretch somewhere they are not}. `
+            + `{They will find you eventually|It is not over|Hell is not that big}.`,
+          changes: apply(c2, { happiness: -6 }),
+        }),
+      },
+    ],
+  },
+
+  // The ones who got out, and what they did with it.
+  {
+    id: 'they_got_out', tags: ['world', 'villain', 'consequence'], weight: 20,
+    minBioAge: 14,
+    when: (ctx) => !ctx.character.inAfterlife
+      && endedList(ctx).some((e) => ESCALATIONS[e.canonId])
+      && ctx.year >= 779,
+    slots: (ctx) => {
+      const rec = ctx.rng.pick(endedList(ctx).filter((e) => ESCALATIONS[e.canonId]));
+      const esc = ESCALATIONS[rec.canonId];
+      return {
+        who: esc.name, original: rec.name, canonId: rec.canonId,
+        power: hellPower(rec, ctx.year), escText: esc.text,
+        years: String(Math.max(1, ctx.year - rec.year)),
+      };
+    },
+    title: (ctx, s) => `${s.original} Is Back`,
+    text: (ctx, s) => `{Somebody wished them back|An army with more money than judgement gathered the balls|`
+      + `You hear it before you see it}. `
+      + `[original], [years] years dead, is standing on a planet again. ${s.escText}`,
+    choices: (ctx, s) => [
+      {
+        id: 'meet', label: 'Go and meet them', danger: true,
+        effect: (c2, sl) => offerBattle(c2, {
+          name: sl.who, power: sl.power, canonId: sl.canonId, raceId: 'other',
+          techniques: ['ki_blast', 'death_beam', 'death_ball', 'supernova'],
+        }, {
+          reason: 'revenge', canonId: sl.canonId, stakes: 'lethal', protecting: true,
+          intro: `${sl.who}. They have been waiting for this considerably longer than you have.`,
+        }),
+      },
+      {
+        id: 'prepare', label: 'Get ready first', effect: (c2, sl) => {
+          const t = trainYear(c2, { intensity: 2.0, placeMult: 1.6 });
+          c2.character.flags.expecting_revenge = true;
+          return {
+            text: `{You do not go|Not yet. Not at this|You go up the mountain and you do not come down for a year}. `
+              + `{They are not looking for you specifically. Not yet|`
+              + `Whatever they do in the meantime is on you and you know it|`
+              + `You buy yourself a year and it costs somebody else}. ${powerLine(t.gained)}`,
+            changes: apply(c2, { happiness: -10, karma: -6, stats: { discipline: 5 } }),
+          };
+        },
+      },
+      {
+        id: 'warn', label: 'Tell everyone who needs to know', effect: (c2, sl) => {
+          const rep = spreadWord(c2.state, { scale: DEED_SCALE.world_saved * 0.3, karma: 8 });
+          return {
+            text: `{You spend the year on a ship telling people|`
+              + `You go to everybody who fought them the first time|`
+              + `Half of them do not believe you and the other half already knew}. `
+              + `{When it happens, nobody is surprised|People are ready, which is not nothing|`
+              + `About ${numberish(rep.gained)} more people know your name and why}.`,
+            changes: apply(c2, { fame: 6, karma: 8 }),
+          };
+        },
+      },
     ],
   },
 ]);
