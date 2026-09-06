@@ -129,7 +129,7 @@ export function createGame(creation, seedInput) {
     peakPower: startPower,
     zenkaiCount: 0,
 
-    fame: 0,
+    fame: origin.lineageFameBonus || 0,
     karma: temperament.tags.includes('evil') ? -10 : temperament.tags.includes('good') ? 10 : 0,
     zeni: Math.round(5000 * upbringing.wealth),
 
@@ -149,7 +149,7 @@ export function createGame(creation, seedInput) {
     mentors: [],
     tail: raceHasTail(creation.raceId),
     fightingStyle: ['martial_arts', 'weapons', 'both'].includes(creation.fightingStyle) ? creation.fightingStyle : 'martial_arts',
-    flags: {},
+    flags: origin.lineage ? { saiyanLineage: origin.lineage } : {},
     achievements: [],
     lifeExpectancy: 80,
     trainingFocus: null,

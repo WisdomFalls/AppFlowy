@@ -144,6 +144,29 @@ function bodyFor(rng, raceId, bodyId) {
 }
 
 /**
+ * Which battle armour a Saiyan is born into, by family circumstance. Royalty
+ * and warrior clans hand down (or can afford) something well-made; a child
+ * with nobody to fit them properly - an orphan, an exile, someone raised
+ * self-taught after a war - ends up in whatever fits, scavenged or handed
+ * on from someone else's dead relative. `fameBonus` is small: a name people
+ * already recognise, not power you actually earned.
+ */
+const SAIYAN_ARMOUR_BY_UPBRINGING = {
+  royal: { outfit: 'armour_saiyan_elite', lineage: 'royal', fameBonus: 25 },
+  warrior_clan: { outfit: 'armour_saiyan_elite', lineage: 'elite', fameBonus: 10 },
+  wealthy: { outfit: 'armour_saiyan', lineage: 'common', fameBonus: 4 },
+  saiyan_creche: { outfit: 'armour_saiyan', lineage: 'common', fameBonus: 0 },
+  city: { outfit: 'armour_saiyan', lineage: 'common', fameBonus: 0 },
+  foster: { outfit: 'armour_saiyan', lineage: 'common', fameBonus: 0 },
+  farm: { outfit: 'armour_saiyan', lineage: 'common', fameBonus: 0 },
+  orphan_pod: { outfit: 'armour_saiyan_low', lineage: 'low', fameBonus: 0 },
+  exile: { outfit: 'armour_saiyan_low', lineage: 'low', fameBonus: 0 },
+  self_raised: { outfit: 'armour_saiyan_low', lineage: 'low', fameBonus: 0 },
+  conquered: { outfit: 'armour_saiyan_low', lineage: 'low', fameBonus: 0 },
+  default: { outfit: 'armour_saiyan', lineage: 'common', fameBonus: 0 },
+};
+
+/**
  * Roll a whole origin. The player picked a species, a century and a name;
  * everything below is what the universe decided about them.
  */
@@ -159,6 +182,20 @@ export function rollOrigin(rng, raceId, birthYear, opts = {}) {
   const look = defaultAppearance(rng, raceId);
   Object.assign(look, bodyFor(rng, raceId, body.id));
   look.buildShape = body.id;
+
+  // Full-blooded Saiyans do not pick their clothes, they inherit them: every
+  // household on Planet Vegeta (or off it) has its own battle armour, handed
+  // down or issued, and what it looks like says something about the family
+  // it came from before a word is spoken. Half-Saiyans raised off-world do
+  // not get this - they dress like wherever they actually grew up.
+  let lineage = null;
+  let lineageFameBonus = 0;
+  if (raceId === 'saiyan') {
+    const tier = SAIYAN_ARMOUR_BY_UPBRINGING[upbringing.id] || SAIYAN_ARMOUR_BY_UPBRINGING.default;
+    look.outfit = tier.outfit;
+    lineage = tier.lineage;
+    lineageFameBonus = tier.fameBonus;
+  }
 
   // Upbringing leaves a mark before the life even starts.
   if (upbringing.id === 'animals') {
@@ -185,6 +222,8 @@ export function rollOrigin(rng, raceId, birthYear, opts = {}) {
     bodyId: body.id,
     placeId,
     look,
+    lineage,
+    lineageFameBonus,
     // Everything a life sim ought to roll rather than let you shop for.
     potential: Math.round(rng.gauss(50, 18, 5, 99)),
     battleInstinct: Math.round(rng.gauss(50, 18, 5, 99)),

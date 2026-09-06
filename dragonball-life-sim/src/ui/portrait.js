@@ -80,6 +80,8 @@ export const OUTFITS = [
   { id: 'gi_blue', name: 'Blue gi', main: '#2f5bb7', trim: '#e8e2d6' },
   { id: 'gi_black', name: 'Black gi', main: '#25222e', trim: '#c0392b' },
   { id: 'armour_saiyan', name: 'Saiyan battle armour', main: '#3a4250', trim: '#c9a227' },
+  { id: 'armour_saiyan_elite', name: 'Saiyan battle armour (fine make)', main: '#1f2c47', trim: '#e6c94a' },
+  { id: 'armour_saiyan_low', name: 'Saiyan battle armour (worn/scavenged)', main: '#5b5347', trim: '#8a7c5a' },
   { id: 'armour_frieza', name: 'Frieza Force armour', main: '#4b3f6b', trim: '#d8dde6' },
   { id: 'namek_robe', name: 'Namekian robes', main: '#6d4aa0', trim: '#d8d2c4' },
   { id: 'casual', name: 'Ordinary clothes', main: '#6d7280', trim: '#e8e2d6' },
