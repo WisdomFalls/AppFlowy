@@ -4,7 +4,7 @@
 
 import { clamp } from './rng.js';
 import { generateFullName, generateTitle, generateEpithet, generateSignatureName } from '../data/names.js';
-import { RACES, getRace, raceHasTail } from '../data/races.js';
+import { RACES, getRace, raceHasTail, sexesFor } from '../data/races.js';
 import { getCanon, canonPower, canonAlive } from '../data/canon.js';
 import { getPlace } from '../data/places.js';
 import { canonLook, SPECIES_LOOK } from '../data/canonlooks.js';
@@ -124,7 +124,7 @@ export function makeNpc(rng, opts = {}) {
     name: opts.name || generateFullName(rng, raceId),
     raceId,
     canonId: null,
-    sex: opts.sex || rng.pick(['male', 'female']),
+    sex: opts.sex || rng.pick(sexesFor(raceId)),
     age,
     birthYear: year - age,
     alive: true,
@@ -257,8 +257,10 @@ export function makeFamily(rng, character, year) {
     ? ['saiyan', 'earthling']
     : [character.raceId, character.raceId];
 
-  if (race.perks.includes('asexualBirth') && rng.chance(0.6)) {
-    // Namekians can produce a single child alone.
+  if (race.perks.includes('asexualBirth') || sexesFor(character.raceId).length === 1) {
+    // Namekians produce a single child alone; a species canon never shows
+    // with more than one sex is not given a second parent invented to
+    // fill the other half of a pairing that doesn't exist for them.
     const parent = makeNpc(rng, {
       raceId: character.raceId, relation: 'parent', year,
       age: rng.int(60, 300), closeness: 60, respect: 55, placeId: character.placeId,
@@ -282,11 +284,13 @@ export function makeFamily(rng, character, year) {
   }
 
   for (let i = 0; i < 2; i++) {
+    const wanted = i === 0 ? 'female' : 'male';
+    const options = sexesFor(parentRace[i]);
     const p = makeNpc(rng, {
       raceId: parentRace[i], relation: 'parent', year,
       age: rng.int(20, 44), closeness: rng.int(45, 80), respect: rng.int(40, 75),
       placeId: character.placeId, metHow: 'family',
-      sex: i === 0 ? 'female' : 'male',
+      sex: options.includes(wanted) ? wanted : options[0],
     });
     out.push(p);
   }

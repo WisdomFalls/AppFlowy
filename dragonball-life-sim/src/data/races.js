@@ -27,6 +27,7 @@ export const RACES = [
     id: 'halfsaiyan',
     name: 'Half-Saiyan',
     short: 'Half-Saiyan',
+    hybrid: true,
     blurb: 'Earth blood and Saiyan blood. Latent potential that erupts when someone you love is in danger.',
     homeworlds: ['paozu', 'satan_city', 'west_city'],
     base: { strength: 52, speed: 52, technique: 48, kiControl: 50, durability: 54, intellect: 55, charisma: 52, discipline: 44 },
@@ -69,6 +70,7 @@ export const RACES = [
     id: 'namekian',
     name: 'Namekian',
     short: 'Namekian',
+    sexes: ['male'],
     blurb: 'Regeneration, a body that stretches, and a species memory older than most empires.',
     homeworlds: ['namek', 'new_namek', 'yunzabit'],
     base: { strength: 50, speed: 48, technique: 56, kiControl: 62, durability: 58, intellect: 62, charisma: 40, discipline: 66 },
@@ -90,6 +92,7 @@ export const RACES = [
     id: 'frostdemon',
     name: 'Frost Demon',
     short: 'Frost Demon',
+    sexes: ['male'],
     blurb: 'Born at a power most warriors die chasing. The question is whether you ever bother to train.',
     homeworlds: ['frieza_ship', 'planet_frieza_79'],
     base: { strength: 66, speed: 64, technique: 46, kiControl: 60, durability: 64, intellect: 60, charisma: 50, discipline: 24 },
@@ -270,6 +273,7 @@ export const RACES = [
     id: 'half_android',
     name: 'Half-Android',
     short: 'Half-Android',
+    hybrid: true,
     blurb: 'Augmented rather than built. Fully human where it counts, and no longer entirely, underneath.',
     homeworlds: ['red_ribbon_lab', 'east_city', 'west_city'],
     base: { strength: 52, speed: 51, technique: 55, kiControl: 44, durability: 55, intellect: 62, charisma: 51, discipline: 58 },
@@ -291,6 +295,7 @@ export const RACES = [
     id: 'half_frostkin',
     name: 'Half-Frostkin',
     short: 'Half-Frostkin',
+    hybrid: true,
     blurb: 'Human on one side, an emperor\'s bloodline on the other. Neither half asked the other\'s permission.',
     homeworlds: ['east_city', 'west_city', 'planet_frieza_79'],
     base: { strength: 53, speed: 53, technique: 53, kiControl: 59, durability: 52, intellect: 59, charisma: 54, discipline: 40 },
@@ -313,6 +318,7 @@ export const RACES = [
     id: 'frost_android',
     name: 'Frost-Android',
     short: 'Frost-Android',
+    hybrid: true,
     blurb: 'Imperial bloodline and Red Ribbon engineering in the same body. Neither program was designed to share.',
     homeworlds: ['planet_frieza_79', 'red_ribbon_lab'],
     base: { strength: 65, speed: 62, technique: 48, kiControl: 45, durability: 67, intellect: 63, charisma: 47, discipline: 42 },
@@ -358,8 +364,19 @@ export const RACES = [
 
 export const RACE_BY_ID = Object.fromEntries(RACES.map((r) => [r.id, r]));
 
+// Half-breeds are what happens when two species meet, not a starting point -
+// nobody is born a Half-Saiyan by choosing it on a menu. Creation offers
+// only the races a life can actually begin as; makeChild() still routes to
+// every hybrid here the moment the right pairing happens in play.
+export const CREATABLE_RACES = RACES.filter((r) => !r.hybrid);
+
 export function getRace(id) {
   return RACE_BY_ID[id] || RACE_BY_ID.earthling;
+}
+
+/** Which sexes a race actually shows. Most have both; a few, canonically, do not. */
+export function sexesFor(raceId) {
+  return getRace(raceId).sexes || ['female', 'male'];
 }
 
 /**

@@ -11,7 +11,7 @@ import {
   eventsRemaining, openingLogEntry,
   save, load, listSaves, clearSlot, exportString, importString,
 } from '../game.js';
-import { RACES, getRace, UPBRINGINGS, TEMPERAMENTS, BODY_TYPES } from '../data/races.js';
+import { CREATABLE_RACES, getRace, sexesFor, UPBRINGINGS, TEMPERAMENTS, BODY_TYPES } from '../data/races.js';
 import { PLACES, getPlace } from '../data/places.js';
 import { APPEARANCE } from '../engine/state.js';
 import { portraitSvg, defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS,
@@ -146,7 +146,7 @@ function labelled(container, text) {
 function renderCreation() {
   const race = getRace(DRAFT.raceId);
 
-  optionRow($('opt-race'), RACES.map((r) => ({ id: r.id, name: r.short })), DRAFT.raceId, (id) => {
+  optionRow($('opt-race'), CREATABLE_RACES.map((r) => ({ id: r.id, name: r.short })), DRAFT.raceId, (id) => {
     DRAFT.raceId = id;
     if (!DRAFT.nameTouched) DRAFT.name = generateFullName(new Rng(Date.now()), id);
     renderCreation();
@@ -170,12 +170,15 @@ function renderCreation() {
     `${eraName(DRAFT.birthYear)}. A serious fighter of this era is around ${numberish(worldPowerBaseline(DRAFT.birthYear))}.`
     + originHint(DRAFT.raceId, DRAFT.birthYear);
 
+  const allowedSexes = sexesFor(DRAFT.raceId);
+  if (!allowedSexes.includes(DRAFT.sex)) DRAFT.sex = allowedSexes[0];
   const sexes = $('opt-sex');
   sexes.innerHTML = '';
-  for (const sx of [['female', 'Female'], ['male', 'Male']]) {
-    const b = el('button', 'opt' + (DRAFT.sex === sx[0] ? ' on' : ''), sx[1]);
+  const SEX_LABEL = { female: 'Female', male: 'Male' };
+  for (const sx of allowedSexes) {
+    const b = el('button', 'opt' + (DRAFT.sex === sx ? ' on' : ''), SEX_LABEL[sx]);
     b.type = 'button';
-    b.addEventListener('click', () => { DRAFT.sex = sx[0]; renderCreation(); });
+    b.addEventListener('click', () => { DRAFT.sex = sx; renderCreation(); });
     sexes.appendChild(b);
   }
 

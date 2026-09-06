@@ -800,6 +800,14 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
     transition: margin-right .2s ease, max-width .2s ease;
   }
 
+  /* A wider window deserves bigger targets, not the same phone-sized
+     buttons stretched across more empty space. */
+  .tab-btn { width: 64px; padding: 11px 0; gap: 5px; font-size: 10.5px; }
+  .tab-btn span { font-size: 21px; }
+  .age-btn, .primary-btn { font-size: 22px; padding: 16px; }
+  .bact { padding: 14px 16px; }
+  .bact-label { font-size: 16px; }
+
   /* The sheet: a fixed right-hand column, not a bottom drawer. */
   .sheet {
     top: 0;
@@ -1618,6 +1626,7 @@ const RACES = [
     id: 'halfsaiyan',
     name: 'Half-Saiyan',
     short: 'Half-Saiyan',
+    hybrid: true,
     blurb: 'Earth blood and Saiyan blood. Latent potential that erupts when someone you love is in danger.',
     homeworlds: ['paozu', 'satan_city', 'west_city'],
     base: { strength: 52, speed: 52, technique: 48, kiControl: 50, durability: 54, intellect: 55, charisma: 52, discipline: 44 },
@@ -1660,6 +1669,7 @@ const RACES = [
     id: 'namekian',
     name: 'Namekian',
     short: 'Namekian',
+    sexes: ['male'],
     blurb: 'Regeneration, a body that stretches, and a species memory older than most empires.',
     homeworlds: ['namek', 'new_namek', 'yunzabit'],
     base: { strength: 50, speed: 48, technique: 56, kiControl: 62, durability: 58, intellect: 62, charisma: 40, discipline: 66 },
@@ -1681,6 +1691,7 @@ const RACES = [
     id: 'frostdemon',
     name: 'Frost Demon',
     short: 'Frost Demon',
+    sexes: ['male'],
     blurb: 'Born at a power most warriors die chasing. The question is whether you ever bother to train.',
     homeworlds: ['frieza_ship', 'planet_frieza_79'],
     base: { strength: 66, speed: 64, technique: 46, kiControl: 60, durability: 64, intellect: 60, charisma: 50, discipline: 24 },
@@ -1861,6 +1872,7 @@ const RACES = [
     id: 'half_android',
     name: 'Half-Android',
     short: 'Half-Android',
+    hybrid: true,
     blurb: 'Augmented rather than built. Fully human where it counts, and no longer entirely, underneath.',
     homeworlds: ['red_ribbon_lab', 'east_city', 'west_city'],
     base: { strength: 52, speed: 51, technique: 55, kiControl: 44, durability: 55, intellect: 62, charisma: 51, discipline: 58 },
@@ -1882,6 +1894,7 @@ const RACES = [
     id: 'half_frostkin',
     name: 'Half-Frostkin',
     short: 'Half-Frostkin',
+    hybrid: true,
     blurb: 'Human on one side, an emperor\'s bloodline on the other. Neither half asked the other\'s permission.',
     homeworlds: ['east_city', 'west_city', 'planet_frieza_79'],
     base: { strength: 53, speed: 53, technique: 53, kiControl: 59, durability: 52, intellect: 59, charisma: 54, discipline: 40 },
@@ -1904,6 +1917,7 @@ const RACES = [
     id: 'frost_android',
     name: 'Frost-Android',
     short: 'Frost-Android',
+    hybrid: true,
     blurb: 'Imperial bloodline and Red Ribbon engineering in the same body. Neither program was designed to share.',
     homeworlds: ['planet_frieza_79', 'red_ribbon_lab'],
     base: { strength: 65, speed: 62, technique: 48, kiControl: 45, durability: 67, intellect: 63, charisma: 47, discipline: 42 },
@@ -1949,8 +1963,19 @@ const RACES = [
 
 const RACE_BY_ID = Object.fromEntries(RACES.map((r) => [r.id, r]));
 
+// Half-breeds are what happens when two species meet, not a starting point -
+// nobody is born a Half-Saiyan by choosing it on a menu. Creation offers
+// only the races a life can actually begin as; makeChild() still routes to
+// every hybrid here the moment the right pairing happens in play.
+const CREATABLE_RACES = RACES.filter((r) => !r.hybrid);
+
 function getRace(id) {
   return RACE_BY_ID[id] || RACE_BY_ID.earthling;
+}
+
+/** Which sexes a race actually shows. Most have both; a few, canonically, do not. */
+function sexesFor(raceId) {
+  return getRace(raceId).sexes || ['female', 'male'];
 }
 
 /**
@@ -2021,7 +2046,7 @@ const TEMPERAMENTS = [
   { id: 'curious', name: 'Curious', stats: { intellect: 6, technique: 3, durability: -2 }, tags: ['seeker'] },
   { id: 'cruel', name: 'Cruel', stats: { strength: 3, charisma: -5, discipline: 3 }, tags: ['evil'] },
 ];
-  return { RACES, RACE_BY_ID, getRace, maturity, hasPerk, raceHasTail, UPBRINGINGS, BODY_TYPES, TEMPERAMENTS };
+  return { RACES, RACE_BY_ID, CREATABLE_RACES, getRace, sexesFor, maturity, hasPerk, raceHasTail, UPBRINGINGS, BODY_TYPES, TEMPERAMENTS };
 })();
 
 /* ==== data/places.js ==== */
@@ -6778,7 +6803,7 @@ const __mod_engine_npc_js = (function () {
 
 const { clamp } = __mod_engine_rng_js;
 const { generateFullName, generateTitle, generateEpithet, generateSignatureName } = __mod_data_names_js;
-const { RACES, getRace, raceHasTail } = __mod_data_races_js;
+const { RACES, getRace, raceHasTail, sexesFor } = __mod_data_races_js;
 const { getCanon, canonPower, canonAlive } = __mod_data_canon_js;
 const { getPlace } = __mod_data_places_js;
 const { canonLook, SPECIES_LOOK } = __mod_data_canonlooks_js;
@@ -6898,7 +6923,7 @@ function makeNpc(rng, opts = {}) {
     name: opts.name || generateFullName(rng, raceId),
     raceId,
     canonId: null,
-    sex: opts.sex || rng.pick(['male', 'female']),
+    sex: opts.sex || rng.pick(sexesFor(raceId)),
     age,
     birthYear: year - age,
     alive: true,
@@ -7031,8 +7056,10 @@ function makeFamily(rng, character, year) {
     ? ['saiyan', 'earthling']
     : [character.raceId, character.raceId];
 
-  if (race.perks.includes('asexualBirth') && rng.chance(0.6)) {
-    // Namekians can produce a single child alone.
+  if (race.perks.includes('asexualBirth') || sexesFor(character.raceId).length === 1) {
+    // Namekians produce a single child alone; a species canon never shows
+    // with more than one sex is not given a second parent invented to
+    // fill the other half of a pairing that doesn't exist for them.
     const parent = makeNpc(rng, {
       raceId: character.raceId, relation: 'parent', year,
       age: rng.int(60, 300), closeness: 60, respect: 55, placeId: character.placeId,
@@ -7056,11 +7083,13 @@ function makeFamily(rng, character, year) {
   }
 
   for (let i = 0; i < 2; i++) {
+    const wanted = i === 0 ? 'female' : 'male';
+    const options = sexesFor(parentRace[i]);
     const p = makeNpc(rng, {
       raceId: parentRace[i], relation: 'parent', year,
       age: rng.int(20, 44), closeness: rng.int(45, 80), respect: rng.int(40, 75),
       placeId: character.placeId, metHow: 'family',
-      sex: i === 0 ? 'female' : 'male',
+      sex: options.includes(wanted) ? wanted : options[0],
     });
     out.push(p);
   }
@@ -7473,7 +7502,7 @@ const __mod_engine_state_js = (function () {
 
 const { Rng, clamp, hashSeed } = __mod_engine_rng_js;
 const { createMemory, addFact } = __mod_engine_memory_js;
-const { RACES, getRace, UPBRINGINGS, BODY_TYPES, TEMPERAMENTS, hasPerk, maturity, raceHasTail } = __mod_data_races_js;
+const { CREATABLE_RACES, getRace, sexesFor, UPBRINGINGS, BODY_TYPES, TEMPERAMENTS, hasPerk, maturity, raceHasTail } = __mod_data_races_js;
 const { getPlace } = __mod_data_places_js;
 const { getPlanet } = __mod_data_planets_js;
 const { eraName, worldPowerBaseline } = __mod_data_timeline_js;
@@ -7497,12 +7526,12 @@ const APPEARANCE = {
 };
 
 function defaultCreation(rng) {
-  const raceId = rng.pick(RACES).id;
+  const raceId = rng.pick(CREATABLE_RACES).id;
   const race = getRace(raceId);
   return {
     name: generateFullName(rng, raceId),
     raceId,
-    sex: rng.pick(['male', 'female']),
+    sex: rng.pick(sexesFor(raceId)),
     upbringingId: rng.pick(UPBRINGINGS).id,
     temperamentId: rng.pick(TEMPERAMENTS).id,
     bodyId: rng.pick(BODY_TYPES).id,
@@ -7550,7 +7579,11 @@ function createGame(creation, seedInput) {
   const character = {
     name: creation.name || generateFullName(rng, creation.raceId),
     raceId: creation.raceId,
-    sex: creation.sex === 'female' ? 'female' : 'male',
+    sex: (() => {
+      const allowed = sexesFor(creation.raceId);
+      if (allowed.includes(creation.sex)) return creation.sex;
+      return allowed.includes('male') ? 'male' : allowed[0];
+    })(),
     appearance: Object.assign({
       build: body.name,
       buildShape: body.id,
@@ -25090,7 +25123,7 @@ const __mod_ui_app_js = (function () {
 // the interesting part, so the interface stays boring on purpose.
 
 const { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, insertEvent, renarrateLast, skipRemaining, ladderStatus, nearbyForms, availableActions, runAction, actionOptions, Rng, initSampling, improviseEvent, narrateOutcome, backendName, getApiKey, setApiKey, errorCopy, interpretWish, eventsRemaining, openingLogEntry, save, load, listSaves, clearSlot, exportString, importString } = __mod_game_js;
-const { RACES, getRace, UPBRINGINGS, TEMPERAMENTS, BODY_TYPES } = __mod_data_races_js;
+const { CREATABLE_RACES, getRace, sexesFor, UPBRINGINGS, TEMPERAMENTS, BODY_TYPES } = __mod_data_races_js;
 const { PLACES, getPlace } = __mod_data_places_js;
 const { APPEARANCE } = __mod_engine_state_js;
 const { portraitSvg, defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS, SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES: STANCE_LIST, MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks, npcPortrait, lifeStage } = __mod_ui_portrait_js;
@@ -25217,7 +25250,7 @@ function labelled(container, text) {
 function renderCreation() {
   const race = getRace(DRAFT.raceId);
 
-  optionRow($('opt-race'), RACES.map((r) => ({ id: r.id, name: r.short })), DRAFT.raceId, (id) => {
+  optionRow($('opt-race'), CREATABLE_RACES.map((r) => ({ id: r.id, name: r.short })), DRAFT.raceId, (id) => {
     DRAFT.raceId = id;
     if (!DRAFT.nameTouched) DRAFT.name = generateFullName(new Rng(Date.now()), id);
     renderCreation();
@@ -25241,12 +25274,15 @@ function renderCreation() {
     `${eraName(DRAFT.birthYear)}. A serious fighter of this era is around ${numberish(worldPowerBaseline(DRAFT.birthYear))}.`
     + originHint(DRAFT.raceId, DRAFT.birthYear);
 
+  const allowedSexes = sexesFor(DRAFT.raceId);
+  if (!allowedSexes.includes(DRAFT.sex)) DRAFT.sex = allowedSexes[0];
   const sexes = $('opt-sex');
   sexes.innerHTML = '';
-  for (const sx of [['female', 'Female'], ['male', 'Male']]) {
-    const b = el('button', 'opt' + (DRAFT.sex === sx[0] ? ' on' : ''), sx[1]);
+  const SEX_LABEL = { female: 'Female', male: 'Male' };
+  for (const sx of allowedSexes) {
+    const b = el('button', 'opt' + (DRAFT.sex === sx ? ' on' : ''), SEX_LABEL[sx]);
     b.type = 'button';
-    b.addEventListener('click', () => { DRAFT.sex = sx[0]; renderCreation(); });
+    b.addEventListener('click', () => { DRAFT.sex = sx; renderCreation(); });
     sexes.appendChild(b);
   }
 

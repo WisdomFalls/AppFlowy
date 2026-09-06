@@ -2,7 +2,7 @@
 
 import { Rng, clamp, hashSeed } from './rng.js';
 import { createMemory, addFact } from './memory.js';
-import { RACES, getRace, UPBRINGINGS, BODY_TYPES, TEMPERAMENTS, hasPerk, maturity, raceHasTail } from '../data/races.js';
+import { CREATABLE_RACES, getRace, sexesFor, UPBRINGINGS, BODY_TYPES, TEMPERAMENTS, hasPerk, maturity, raceHasTail } from '../data/races.js';
 import { getPlace } from '../data/places.js';
 import { getPlanet } from '../data/planets.js';
 import { eraName, worldPowerBaseline } from '../data/timeline.js';
@@ -26,12 +26,12 @@ export const APPEARANCE = {
 };
 
 export function defaultCreation(rng) {
-  const raceId = rng.pick(RACES).id;
+  const raceId = rng.pick(CREATABLE_RACES).id;
   const race = getRace(raceId);
   return {
     name: generateFullName(rng, raceId),
     raceId,
-    sex: rng.pick(['male', 'female']),
+    sex: rng.pick(sexesFor(raceId)),
     upbringingId: rng.pick(UPBRINGINGS).id,
     temperamentId: rng.pick(TEMPERAMENTS).id,
     bodyId: rng.pick(BODY_TYPES).id,
@@ -79,7 +79,11 @@ export function createGame(creation, seedInput) {
   const character = {
     name: creation.name || generateFullName(rng, creation.raceId),
     raceId: creation.raceId,
-    sex: creation.sex === 'female' ? 'female' : 'male',
+    sex: (() => {
+      const allowed = sexesFor(creation.raceId);
+      if (allowed.includes(creation.sex)) return creation.sex;
+      return allowed.includes('male') ? 'male' : allowed[0];
+    })(),
     appearance: Object.assign({
       build: body.name,
       buildShape: body.id,

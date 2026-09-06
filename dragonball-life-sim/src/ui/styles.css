@@ -795,6 +795,14 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
     transition: margin-right .2s ease, max-width .2s ease;
   }
 
+  /* A wider window deserves bigger targets, not the same phone-sized
+     buttons stretched across more empty space. */
+  .tab-btn { width: 64px; padding: 11px 0; gap: 5px; font-size: 10.5px; }
+  .tab-btn span { font-size: 21px; }
+  .age-btn, .primary-btn { font-size: 22px; padding: 16px; }
+  .bact { padding: 14px 16px; }
+  .bact-label { font-size: 16px; }
+
   /* The sheet: a fixed right-hand column, not a bottom drawer. */
   .sheet {
     top: 0;
