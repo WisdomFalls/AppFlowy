@@ -808,11 +808,13 @@ export function portraitSvg(character, opts = {}) {
     const reach = 34 * stage.body + 8;
     const path = `M${cx + shoulderWidth - 6} ${H - 10} C${cx + shoulderWidth + reach} ${H - 60 * stage.body - 10}
       ${cx + shoulderWidth + reach * 0.3} ${chin + 30} ${cx + shoulderWidth - 14} ${chin + 34}`;
-    if (race === 'frostdemon') {
+    if (['frostdemon', 'half_frostkin', 'frost_android'].includes(race)) {
       const tailColour = shade(skin, -0.08);
-      parts.push(`<path d="${path}" fill="none" stroke="${tailColour}" stroke-width="${5 * stage.body + 2}" stroke-linecap="round"/>`);
+      // Thicker than it was - a Frost Demon-line tail is a limb, not a
+      // decoration, and gets used as one (see the combat power tail bonus).
+      parts.push(`<path d="${path}" fill="none" stroke="${tailColour}" stroke-width="${6.5 * stage.body + 3}" stroke-linecap="round"/>`);
       // A darker tip, the way Frieza's tail reads on screen.
-      parts.push(`<circle cx="${cx + shoulderWidth - 14}" cy="${chin + 34}" r="${3.4 * stage.body + 1.5}" fill="${shade(skin, -0.35)}"/>`);
+      parts.push(`<circle cx="${cx + shoulderWidth - 14}" cy="${chin + 34}" r="${4 * stage.body + 2}" fill="${shade(skin, -0.35)}"/>`);
     } else {
       parts.push(`<path d="${path}" fill="none" stroke="#7a4a24" stroke-width="${6 * stage.body + 3}" stroke-linecap="round"/>`);
     }
@@ -876,7 +878,7 @@ export function portraitSvg(character, opts = {}) {
     // line - so each bulge spans from near the middle of the chest out to
     // the torso edge (and a little past it), centred well inboard of the
     // shoulders instead of glued to them.
-    const innerEdge = torsoEdgeAtChest * 0.22;
+    const innerEdge = torsoEdgeAtChest * 0.12;
     const rx = Math.max(7, (outerEdge - innerEdge) / 2);
     const ry = rx * 1.05;
     const bxOff = innerEdge + rx;

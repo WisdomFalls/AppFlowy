@@ -146,8 +146,13 @@ export function combatPower(character, opts = {}) {
   // their own style; a martial artist and someone trained in both never lose
   // anything for having empty hands.
   const disarmed = character.fightingStyle === 'weapons' && !equippedWeapon(character) ? 0.9 : 1;
+  // A tail is a real extra limb in a fight - balance, a grab, a whip-strike -
+  // for species that get no Great Ape payoff from carrying one. A Saiyan's
+  // tail is already worth far more as a route to Oozaru, so this is not
+  // stacked on top of that.
+  const tailBonus = (character.tail && !hasPerk(character, 'oozaru')) ? 1.06 : 1;
   const condition = opts.ignoreCondition ? 1 : health * ki;
-  return Math.max(1, character.power * mult * techFactor * skill * condition * disarmed);
+  return Math.max(1, character.power * mult * techFactor * skill * condition * disarmed * tailBonus);
 }
 
 /** A readable descriptor, because raw power levels stop meaning much at 1e12. */
