@@ -601,12 +601,86 @@ function faceExpression(mood, cx, eyeY, mouthY, browColour) {
 }
 
 /**
+ * What each transformation actually looks like, keyed by the transformation's
+ * own id rather than pattern-matched off its name - a name match let "Super
+ * Saiyan Blue" match the plain "Super Saiyan" gold-hair rule, so Blue forms
+ * were rendered gold. hair/eyes/skin are colour overrides (undefined means
+ * unchanged); aura tints the background glow; lift is how far the hairstyle
+ * is pushed up ('mild' | 'strong' | 'extreme'), independent of which style it
+ * actually is, so a lifted ponytail and a lifted afro both read as "standing
+ * up" without needing a hand-built spiked variant of every hairstyle.
+ */
+const FORM_VISUALS = {
+  golden_oozaru: { aura: '#ffd24a' },
+  ssj: { hair: '#f2cf4a', eyes: '#3ecf4a', aura: '#ffd24a', lift: 'strong' },
+  ssj_full: { hair: '#f2cf4a', eyes: '#3ecf4a', aura: '#ffd24a', lift: 'strong' },
+  ssj2: { hair: '#f5d65a', eyes: '#3ecf4a', aura: '#ffe066', lift: 'strong' },
+  ssj3: { hair: '#f5d65a', eyes: '#3ecf4a', aura: '#ffe066', lift: 'extreme' },
+  ssg: { hair: '#b3324c', eyes: '#ff9fb0', aura: '#ff5f7a', lift: 'mild' },
+  ssb: { hair: '#3f7fe0', eyes: '#bfe4ff', aura: '#4fa8ff', lift: 'mild' },
+  ssb_kaioken: { hair: '#3f7fe0', eyes: '#bfe4ff', aura: '#ff4d4d', lift: 'mild' },
+  ultra_ego: { eyes: '#ff3355', aura: '#ff2f55', lift: 'mild' },
+  ui_sign: { hair: '#cfd3de', eyes: '#dfe7ef', aura: '#dfe7ef', lift: 'mild' },
+  ui_mastered: { hair: '#e4e7ee', eyes: '#eef2f8', aura: '#eef2f8', lift: 'mild' },
+  legendary_ss: { hair: '#8ee85a', eyes: '#c8ffb0', aura: '#8bffb0', lift: 'extreme' },
+  kaioken: { aura: '#ff4d4d' },
+  kaioken_x10: { aura: '#ff2b2b' },
+  destroyer_aura: { eyes: '#c98cff', aura: '#a13cff' },
+  // Frost Demon: forms change skin, not hair - most of the line is hairless.
+  fd_second: { skin: '#b8c4d6' },
+  fd_third: { skin: '#8a5fb0' },
+  fd_final: { skin: '#e7e2ea' },
+  fd_hundred: { skin: '#f4eef7' },
+  golden: { skin: '#e8c53a', eyes: '#fff3b0', aura: '#ffd24a' },
+  black_form: { skin: '#241a33', eyes: '#ff3355', aura: '#8a2be2' },
+  // Namekian
+  giant_form: { },
+  super_namekian: { aura: '#8bffb0' },
+  orange_piccolo: { skin: '#e0862f', aura: '#ffb15c' },
+  // Majin
+  majin_super: { aura: '#ff8fd6' },
+  majin_pure: { skin: '#ffd4ea', aura: '#ffd0ea' },
+  majin_ultra: { skin: '#ffb3da', aura: '#ff5fae', eyes: '#fff0f8' },
+  // Android/Bioandroid
+  overclock: { aura: '#7ad8ff' },
+  core_mk2: { aura: '#5cc4ff' },
+  core_mk3: { aura: '#3fb0ff', eyes: '#bfe9ff' },
+  hell_mode: { eyes: '#ff3355', aura: '#ff5050' },
+  semi_perfect: { aura: '#c9ff5c' },
+  perfect_form: { aura: '#b0ff5c', skin: '#c9c04a' },
+  super_perfect: { aura: '#e8ff5c', eyes: '#f4ffb0' },
+  // Kai
+  kai_ascension: { aura: '#ffe27a' },
+  // Tuffle
+  machine_mutant: { aura: '#7ad8ff' },
+  parasite_host: { aura: '#c9ff5c', eyes: '#e0ff9a' },
+  // Yardratian
+  spirit_expansion: { aura: '#b98cff' },
+  spirit_giant: { aura: '#b98cff' },
+  // Shared
+  potential_unleashed: { aura: '#ffe27a' },
+  spirit_overflow: { aura: '#b98cff' },
+  ancestral_rage: { eyes: '#ff5f5f', aura: '#ff5f5f', lift: 'mild' },
+  hive_surge: { aura: '#c9ff5c' },
+  broodcall: { aura: '#8bffb0' },
+  potara_fusion: { aura: '#ffd24a' },
+  dance_fusion: { aura: '#b98cff' },
+};
+
+/** Anything not named above still gets a form-tier aura rather than none. */
+function formVisualsFallback(form) {
+  const tier = form.tier || 1;
+  const hue = Math.max(0, 260 - tier * 14);
+  return { aura: `hsl(${hue}, 90%, 68%)` };
+}
+
+/**
  * Build the portrait. `character` is the live character object; `opts.form`
  * adds the aura and hair changes of an active transformation.
  */
 export function portraitSvg(character, opts = {}) {
   const a = character.appearance || {};
-  const skin = look(SKIN_TONES, a.skin, 'light').hex;
+  let skin = look(SKIN_TONES, a.skin, 'light').hex;
   const hairColour = look(HAIR_COLOURS, a.hairColour, 'black').hex;
   const eyeColour = look(EYE_COLOURS, a.eyeColour, 'black').hex;
   const outfit = look(OUTFITS, a.outfit, 'gi_orange');
@@ -648,13 +722,20 @@ export function portraitSvg(character, opts = {}) {
   const bodyColour = grime ? shade(outfit.main || skin, -0.11 * grime) : (outfit.main || skin);
   const trimColour = grime ? shade(outfit.trim || '#c9a227', -0.14 * grime) : (outfit.trim || '#c9a227');
 
-  const goldHair = opts.form && /Super Saiyan|Golden/.test(opts.form.name);
-  const finalHair = goldHair ? '#f2cf4a' : hairColour;
-  const auraColour = !opts.form ? null
-    : /Blue/.test(opts.form.name) ? '#4fa8ff'
-      : /God|Ultra Ego/.test(opts.form.name) ? '#ff5f7a'
-        : /Ultra Instinct|Mastered/.test(opts.form.name) ? '#dfe7ef'
-          : goldHair ? '#ffd24a' : '#b98cff';
+  const visuals = opts.form ? (FORM_VISUALS[opts.form.id] || formVisualsFallback(opts.form)) : null;
+  const finalHair = visuals && visuals.hair ? visuals.hair : hairColour;
+  const finalEyeColour = visuals && visuals.eyes ? visuals.eyes : eyeColour;
+  const auraColour = visuals ? visuals.aura : null;
+  if (visuals && visuals.skin) skin = visuals.skin;
+  // A transformed character's hair does not lie the way it usually does -
+  // scaled and lifted from a point near the crown so it reads as standing
+  // up (or, for the calmer forms, just faintly raised) regardless of which
+  // hairstyle it is actually made of, rather than needing a hand-built
+  // spiked variant of every style.
+  const hairLiftAmt = { mild: 0.07, strong: 0.16, extreme: 0.26 }[visuals && visuals.lift] || 0;
+  const hairLiftAttr = hairLiftAmt
+    ? ` style="transform-origin:${cx}px ${headTop + headR * 0.85}px; transform: scaleY(${1 + hairLiftAmt}) translateY(${Math.round(-hairLiftAmt * 26)}px);"`
+    : '';
 
   const parts = [];
 
@@ -693,7 +774,7 @@ export function portraitSvg(character, opts = {}) {
     && style !== 'bald' && stage.hair > 0.4;
   if (hasHair) {
     const back = hairBackPath(style, headTop, cx, headR, headH);
-    if (back) parts.push(`<path d="${back.replace(/\s+/g, ' ')}" fill="${finalHair}" opacity="0.92"/>`);
+    if (back) parts.push(`<g${hairLiftAttr}><path d="${back.replace(/\s+/g, ' ')}" fill="${finalHair}" opacity="0.92"/></g>`);
   }
 
   // Arms. There were none - the body was a torso silhouette with nothing
@@ -792,9 +873,14 @@ export function portraitSvg(character, opts = {}) {
     parts.push(`<path d="M${cx - 12} ${headTop - 6} q2 -22 -8 -30" fill="none" stroke="${skin}" stroke-width="5" stroke-linecap="round"/>`);
     parts.push(`<path d="M${cx + 12} ${headTop - 6} q-2 -22 8 -30" fill="none" stroke="${skin}" stroke-width="5" stroke-linecap="round"/>`);
   } else if (race === 'frostdemon') {
-    parts.push(`<path d="M${cx - headR + 6} ${headTop + 6} l-20 -14 l6 20 Z" fill="#c8b8d8"/>`);
-    parts.push(`<path d="M${cx + headR - 6} ${headTop + 6} l20 -14 l-6 20 Z" fill="#c8b8d8"/>`);
-    parts.push(`<ellipse cx="${cx}" cy="${headTop + 4}" rx="${headR - 8}" ry="14" fill="#b7a6cc" opacity="0.85"/>`);
+    // The head fins and crown band tint with whatever form is active, so a
+    // Golden or Black Form carries all the way through instead of stopping
+    // at the face.
+    const finColour = visuals && visuals.skin ? shade(skin, 0.12) : '#c8b8d8';
+    const bandColour = visuals && visuals.skin ? shade(skin, 0.05) : '#b7a6cc';
+    parts.push(`<path d="M${cx - headR + 6} ${headTop + 6} l-20 -14 l6 20 Z" fill="${finColour}"/>`);
+    parts.push(`<path d="M${cx + headR - 6} ${headTop + 6} l20 -14 l-6 20 Z" fill="${finColour}"/>`);
+    parts.push(`<ellipse cx="${cx}" cy="${headTop + 4}" rx="${headR - 8}" ry="14" fill="${bandColour}" opacity="0.85"/>`);
   } else if (race === 'majin') {
     parts.push(`<path d="M${cx + 6} ${headTop - 8} c14 -18 34 -8 26 12 c-6 14 -22 12 -26 2"
       fill="none" stroke="${skin}" stroke-width="9" stroke-linecap="round"/>`);
@@ -808,9 +894,10 @@ export function portraitSvg(character, opts = {}) {
 
   // Hair.
   if (hasHair) {
+    const hairParts = [];
     const d = hairPath(style, headTop, cx, headR, headH);
     if (d) {
-      parts.push(`<path d="${d.replace(/\s+/g, ' ')}" fill="${finalHair}" stroke="${shade(finalHair, 0.22)}" stroke-width="1"/>`);
+      hairParts.push(`<path d="${d.replace(/\s+/g, ' ')}" fill="${finalHair}" stroke="${shade(finalHair, 0.22)}" stroke-width="1"/>`);
     }
     if (grime >= 1) {
       // A few strands out of place. Not a haircut, a body that has not had
@@ -819,17 +906,18 @@ export function portraitSvg(character, opts = {}) {
       const strands = grime + 1;
       for (let i = 0; i < strands; i++) {
         const sxp = cx - headR * 0.6 + (headR * 1.2 * i) / Math.max(1, strands - 1);
-        parts.push(`<path d="M${sxp} ${headTop - 2} q${(i % 2 ? 6 : -6)} -10 ${(i % 2 ? -3 : 3)} -18"
+        hairParts.push(`<path d="M${sxp} ${headTop - 2} q${(i % 2 ? 6 : -6)} -10 ${(i % 2 ? -3 : 3)} -18"
           fill="none" stroke="${strandColour}" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/>`);
       }
     }
+    parts.push(`<g${hairLiftAttr}>${hairParts.join('')}</g>`);
   }
 
   // Face. The expression is read off the character, not chosen.
   const eyeY = headTop + 30;
   const eyeGap = fem ? 14 : 15;
-  parts.push(eyeShape(a.eyeShape || 'sharp', cx - eyeGap, eyeY, eyeColour, mood, -1));
-  parts.push(eyeShape(a.eyeShape || 'sharp', cx + eyeGap, eyeY, eyeColour, mood, 1));
+  parts.push(eyeShape(a.eyeShape || 'sharp', cx - eyeGap, eyeY, finalEyeColour, mood, -1));
+  parts.push(eyeShape(a.eyeShape || 'sharp', cx + eyeGap, eyeY, finalEyeColour, mood, 1));
   if (fem && grown) {
     // Lashes at the outer corner, which is most of the visual difference at
     // this scale without leaning on anything sillier.
@@ -839,7 +927,7 @@ export function portraitSvg(character, opts = {}) {
   const browColour = hasHair ? shade(finalHair, -0.25) : 'rgba(0,0,0,.32)';
   parts.push(faceExpression(mood, cx, eyeY, headTop + 52, browColour));
 
-  drawMarks(parts, character, { cx, headTop, headH, headR, chin, eyeY, eyeColour, skin, shoulderWidth, H });
+  drawMarks(parts, character, { cx, headTop, headH, headR, chin, eyeY, eyeColour: finalEyeColour, skin, shoulderWidth, H });
   drawAccessories(parts, character, {
     cx, headTop, headH, headR, chin, eyeY, skin, shoulderWidth, H,
     hasHair, hairColour: finalHair, outfit, stage,

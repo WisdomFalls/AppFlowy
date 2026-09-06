@@ -247,6 +247,15 @@ function bestOwnedForm(c) {
   return forms.sort((a, b) => b.mult - a.mult)[0];
 }
 
+/** Same idea for an NPC - so somebody who has unlocked a form actually
+ * looks like it, not just the player. */
+function bestNpcForm(npc) {
+  if (!npc.transformations || !npc.transformations.length) return null;
+  const forms = npc.transformations.map(getTransformation).filter(Boolean);
+  if (!forms.length) return null;
+  return forms.sort((a, b) => b.mult - a.mult)[0];
+}
+
 function renderHud() {
   const s = characterSummary(GAME);
   const c = GAME.character;
@@ -742,7 +751,7 @@ function panelPeople() {
       const row = el('button', 'row');
       row.type = 'button';
       const face = el('div', 'row-face');
-      face.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1 });
+      face.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1, form: bestNpcForm(npc) });
       row.appendChild(face);
       const main = el('div', 'row-main');
       main.appendChild(el('div', 'row-title', npc.name + (npc.isCanon ? ' \u2605' : '')));
@@ -788,7 +797,7 @@ function panelPerson(npcId) {
     `${relationLabel(npc)} - ${bondLabel(npc)}${romance ? ' - ' + romance : ''}`));
 
   const shot = el('div', 'npc-portrait');
-  shot.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1 });
+  shot.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1, form: bestNpcForm(npc) });
   body.appendChild(shot);
 
   if (npc.isCanon && npc.personality) {
@@ -2215,7 +2224,7 @@ function renderBattle() {
   const foeFace = $('foe-face');
   if (foeFace) {
     foeFace.innerHTML = foeNpc
-      ? npcPortrait(foeNpc, { maturityRate: getRace(foeNpc.raceId).maturityRate ?? 1 })
+      ? npcPortrait(foeNpc, { maturityRate: getRace(foeNpc.raceId).maturityRate ?? 1, form: bestNpcForm(foeNpc) })
       : '';
     foeFace.hidden = !foeNpc;
   }
