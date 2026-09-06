@@ -4936,15 +4936,19 @@ function eyeShape(shape, x, y, colour, mood = 'neutral', flip = 1) {
 }
 
 /** Brow angle and mouth shape, which is most of what an expression is. */
-function faceExpression(mood, cx, eyeY, mouthY, browColour) {
+function faceExpression(mood, cx, eyeY, mouthY, browColour, noBrows) {
   const parts = [];
   const brows = {
     neutral: [-4, -4], grin: [-6, -6], scowl: [5, 5], focused: [2, 2],
     tired: [-2, -2], sad: [-7, -7], smug: [-8, 3], shock: [-9, -9],
     rage: [8, 8], serene: [-3, -3],
   }[mood] || [-4, -4];
-  parts.push(`<path d="M${cx - 21} ${eyeY - 11 + brows[0]} l15 ${-brows[0] * 0.9 - 3}" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
-  parts.push(`<path d="M${cx + 21} ${eyeY - 11 + brows[1]} l-15 ${-brows[1] * 0.9 - 3}" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
+  // Some forms (Super Saiyan 3) burn the eyebrows off entirely - a real
+  // detail from the source, not an accident.
+  if (!noBrows) {
+    parts.push(`<path d="M${cx - 21} ${eyeY - 11 + brows[0]} l15 ${-brows[0] * 0.9 - 3}" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
+    parts.push(`<path d="M${cx + 21} ${eyeY - 11 + brows[1]} l-15 ${-brows[1] * 0.9 - 3}" stroke="${browColour}" stroke-width="3.5" stroke-linecap="round"/>`);
+  }
 
   const ink = 'rgba(0,0,0,.45)';
   const mouths = {
@@ -4987,7 +4991,7 @@ const FORM_VISUALS = {
   ssj_grade3: { hair: '#eec53f', eyes: '#3ecf4a', aura: '#ffcf3a', lift: 'strong' },
   ssj_full: { hair: '#f2cf4a', eyes: '#3ecf4a', aura: '#ffd24a', lift: 'strong' },
   ssj2: { hair: '#f5d65a', eyes: '#3ecf4a', aura: '#ffe066', lift: 'strong' },
-  ssj3: { hair: '#f5d65a', eyes: '#3ecf4a', aura: '#ffe066', lift: 'extreme' },
+  ssj3: { hair: '#f5d65a', eyes: '#3ecf4a', aura: '#ffe066', lift: 'extreme', longHair: true, noBrows: true },
   ssg: { hair: '#b3324c', eyes: '#ff9fb0', aura: '#ff5f7a', lift: 'mild' },
   ssb: { hair: '#3f7fe0', eyes: '#bfe4ff', aura: '#4fa8ff', lift: 'mild' },
   ssb_mastered: { hair: '#4a8bef', eyes: '#d6f0ff', aura: '#5fb4ff', lift: 'mild' },
@@ -5116,6 +5120,11 @@ function portraitSvg(character, opts = {}) {
   const hairLiftAttr = hairLiftAmt
     ? ` style="transform-origin:${cx}px ${headTop + headR * 0.85}px; transform: scaleY(${1 + hairLiftAmt}) translateY(${Math.round(-hairLiftAmt * 26)}px);"`
     : '';
+  // Some forms overrule the hairstyle entirely - Super Saiyan 3's mane down
+  // the back has nothing to do with whatever the character usually wears it
+  // as, so it borrows the 'long' geometry regardless of the base style.
+  const renderStyle = (visuals && visuals.longHair) ? 'long' : style;
+  const noBrows = !!(visuals && visuals.noBrows);
 
   const parts = [];
 
@@ -5151,9 +5160,9 @@ function portraitSvg(character, opts = {}) {
 
   // Hair that hangs down goes behind everything else.
   const hasHair = !['namekian', 'frostdemon', 'majin', 'bioandroid'].includes(race)
-    && style !== 'bald' && stage.hair > 0.4;
+    && renderStyle !== 'bald' && stage.hair > 0.4;
   if (hasHair) {
-    const back = hairBackPath(style, headTop, cx, headR, headH);
+    const back = hairBackPath(renderStyle, headTop, cx, headR, headH);
     if (back) parts.push(`<g${hairLiftAttr}><path d="${back.replace(/\s+/g, ' ')}" fill="${finalHair}" opacity="0.92"/></g>`);
   }
 
@@ -5289,7 +5298,7 @@ function portraitSvg(character, opts = {}) {
   // Hair.
   if (hasHair) {
     const hairParts = [];
-    const d = hairPath(style, headTop, cx, headR, headH);
+    const d = hairPath(renderStyle, headTop, cx, headR, headH);
     if (d) {
       hairParts.push(`<path d="${d.replace(/\s+/g, ' ')}" fill="${finalHair}" stroke="${shade(finalHair, 0.22)}" stroke-width="1"/>`);
     }
@@ -5319,7 +5328,7 @@ function portraitSvg(character, opts = {}) {
   }
   // A shade off the hair, so the brows do not merge into the hairline.
   const browColour = hasHair ? shade(finalHair, -0.25) : 'rgba(0,0,0,.32)';
-  parts.push(faceExpression(mood, cx, eyeY, headTop + 52, browColour));
+  parts.push(faceExpression(mood, cx, eyeY, headTop + 52, browColour, noBrows));
 
   if (grime >= 2) {
     // Not washed, not rested. Shadows under the eyes read as a body running
