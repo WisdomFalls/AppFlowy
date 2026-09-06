@@ -248,6 +248,44 @@ export function makeCanonNpc(rng, canonId, year, relation = 'acquaintance') {
 // contradicted each other.
 const PARENTLESS_UPBRINGINGS = ['orphan_pod', 'animals', 'self_raised', 'lab'];
 
+/**
+ * Parents are not just two adults with a relation tag rolled from the same
+ * generic pool everyone else uses - a Saiyan household runs on a fairly
+ * consistent split (Bardock and Gine are the canon shape of it), and it is
+ * worth naming on purpose rather than leaving to the dice. Other species
+ * keep the fully random tag draw; this only overrides it where the culture
+ * actually implies something specific.
+ */
+const PARENT_ARCHETYPES = {
+  saiyan: {
+    male: {
+      id: 'stern_saiyan_father', tags: ['blunt', 'ambitious', 'protective'], mood: 'steady',
+      goal: 'to be the strongest',
+      personality: 'Strict, and measures you by strength before anything else. Approval is rare '
+        + "and has to be earned - but it is not the same as not caring, and everyone who knows him knows that.",
+    },
+    female: {
+      id: 'warm_saiyan_mother', tags: ['gentle', 'protective', 'brave'], mood: 'quietly pleased',
+      goal: 'to protect one specific person',
+      personality: 'Soft-spoken and warm at home, and the first one off the ground in any fight '
+        + 'that comes near her family. Nobody mistakes the gentleness for softness twice.',
+    },
+  },
+};
+
+function applyParentArchetype(rng, npc, raceId, sex) {
+  const pool = PARENT_ARCHETYPES[raceId];
+  const arche = pool && pool[sex];
+  if (!arche) return npc;
+  const extra = rng.sample(PERSONALITY_TAGS.filter((t) => !arche.tags.includes(t)), 1);
+  npc.tags = arche.tags.concat(extra);
+  npc.mood = arche.mood;
+  npc.goal = arche.goal;
+  npc.personality = arche.personality;
+  npc.parentArchetype = arche.id;
+  return npc;
+}
+
 /** Parents, and possibly siblings, for a newborn player character. */
 export function makeFamily(rng, character, year) {
   const out = [];
@@ -286,12 +324,14 @@ export function makeFamily(rng, character, year) {
   for (let i = 0; i < 2; i++) {
     const wanted = i === 0 ? 'female' : 'male';
     const options = sexesFor(parentRace[i]);
+    const sex = options.includes(wanted) ? wanted : options[0];
     const p = makeNpc(rng, {
       raceId: parentRace[i], relation: 'parent', year,
       age: rng.int(20, 44), closeness: rng.int(45, 80), respect: rng.int(40, 75),
       placeId: character.placeId, metHow: 'family',
-      sex: options.includes(wanted) ? wanted : options[0],
+      sex,
     });
+    applyParentArchetype(rng, p, parentRace[i], sex);
     out.push(p);
   }
 

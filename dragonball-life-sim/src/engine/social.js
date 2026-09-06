@@ -38,6 +38,17 @@ function note(state, text, opts = {}) {
 const ROMANCE_MIN_AGE = 15;      // before this it is a childhood crush and nothing else
 const CRUSH_MIN_AGE = 10;
 const COMMIT_MIN_AGE = 16;
+// A body has to be old enough to actually threaten, rob or fight somebody
+// with intent - not just physically capable of it (a Saiyan toddler can hit
+// hard), but old enough to be doing it on purpose.
+const HOSTILE_MIN_AGE = 8;
+const COMBAT_MIN_AGE = 6;
+
+/** Blood and marriage. What you can do to a stranger is not what you can do
+ * to your own family, whatever else is true about you. */
+function isCloseKin(npc) {
+  return ['parent', 'child', 'sibling', 'spouse'].includes(npc.relation);
+}
 
 function chargeSocial(npc, changes) {
   if (changes.closeness) npc.closeness = clamp(npc.closeness + changes.closeness, 0, 100);
@@ -258,7 +269,8 @@ export const SOCIAL_ACTIONS = [
   {
     id: 'threaten', name: 'Threaten them', tone: 'hostile', slots: 0, maxPerYear: 3,
     desc: 'Make it clear what you could do.',
-    available: () => true,
+    available: (state, npc) => state.character.age >= HOSTILE_MIN_AGE && npc.age >= HOSTILE_MIN_AGE
+      && !isCloseKin(npc),
     run: (state, rng, npc) => {
       const scared = combatPower(state.character) > npc.power * 1.5;
       chargeSocial(npc, { tension: rng.int(18, 35), closeness: -12, trust: -20, respect: scared ? 6 : -10 });
@@ -273,7 +285,8 @@ export const SOCIAL_ACTIONS = [
   {
     id: 'extort', name: 'Take what they have', tone: 'hostile', slots: 1, maxPerYear: 2,
     desc: 'Money, gear, whatever they were carrying.',
-    available: (state, npc) => (npc.zeni || 0) > 1000 || combatPower(state.character) > npc.power,
+    available: (state, npc) => state.character.age >= HOSTILE_MIN_AGE && npc.age >= HOSTILE_MIN_AGE
+      && !isCloseKin(npc) && ((npc.zeni || 0) > 1000 || combatPower(state.character) > npc.power),
     run: (state, rng, npc) => {
       if (npc.power > combatPower(state.character) * 1.2) {
         chargeSocial(npc, { tension: 40, closeness: -25 });
@@ -292,7 +305,8 @@ export const SOCIAL_ACTIONS = [
   {
     id: 'humiliate', name: 'Humiliate them publicly', tone: 'hostile', slots: 1, maxPerYear: 2,
     desc: 'Do it where people can see.',
-    available: (state, npc) => combatPower(state.character) > npc.power * 1.4,
+    available: (state, npc) => state.character.age >= HOSTILE_MIN_AGE && npc.age >= HOSTILE_MIN_AGE
+      && !isCloseKin(npc) && combatPower(state.character) > npc.power * 1.4,
     run: (state, rng, npc) => {
       chargeSocial(npc, { tension: 55, closeness: -40, respect: -25, trust: -40 });
       npc.relation = 'enemy';
@@ -305,7 +319,8 @@ export const SOCIAL_ACTIONS = [
   {
     id: 'kidnap', name: 'Take them', tone: 'hostile', slots: 2, maxPerYear: 1,
     desc: 'Against their will, to somewhere they cannot leave.',
-    available: (state, npc) => combatPower(state.character) > npc.power * 1.3 && npc.relation !== 'spouse',
+    available: (state, npc) => state.character.age >= HOSTILE_MIN_AGE && npc.age >= HOSTILE_MIN_AGE
+      && !isCloseKin(npc) && combatPower(state.character) > npc.power * 1.3,
     run: (state, rng, npc) => {
       npc.relation = 'enemy';
       npc.captive = true;
@@ -319,7 +334,8 @@ export const SOCIAL_ACTIONS = [
   {
     id: 'mind_probe', name: 'Read their mind', tone: 'hostile', slots: 1, maxPerYear: 2,
     desc: 'Everything they know, taken without asking. They will feel it.',
-    available: (state) => state.character.techniques.includes('telepathy') || state.character.techniques.includes('mind_control'),
+    available: (state, npc) => !isCloseKin(npc)
+      && (state.character.techniques.includes('telepathy') || state.character.techniques.includes('mind_control')),
     run: (state, rng, npc) => {
       const resisted = rng.chance(clamp((npc.stats?.discipline || 40) / 200, 0.05, 0.5));
       if (resisted) {
@@ -342,7 +358,8 @@ export const SOCIAL_ACTIONS = [
   {
     id: 'duel_death', name: 'Challenge them to the death', tone: 'hostile', slots: 2, maxPerYear: 2,
     desc: 'One of you does not walk away.',
-    available: (state, npc) => npc.alive && npc.power > 1,
+    available: (state, npc) => npc.alive && npc.power > 1
+      && state.character.age >= COMBAT_MIN_AGE && npc.age >= COMBAT_MIN_AGE,
     run: (state, rng, npc) => ({
       text: `You say it out loud, in front of whoever is there. ${npc.name} does not refuse.`,
       battle: {
@@ -359,7 +376,8 @@ export const SOCIAL_ACTIONS = [
   {
     id: 'spar', name: 'Spar', tone: 'warm', slots: 2, maxPerYear: 3,
     desc: 'The Dragon Ball way of getting to know somebody.',
-    available: (state, npc) => npc.alive && npc.power > 1,
+    available: (state, npc) => npc.alive && npc.power > 1
+      && state.character.age >= COMBAT_MIN_AGE && npc.age >= COMBAT_MIN_AGE,
     run: (state, rng, npc) => ({
       text: `${npc.name} is already stretching.`,
       battle: {

@@ -800,7 +800,7 @@ function panelPerson(npcId) {
   shot.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1, form: bestNpcForm(npc) });
   body.appendChild(shot);
 
-  if (npc.isCanon && npc.personality) {
+  if (npc.personality) {
     body.appendChild(el('p', 'entry-text', npc.personality));
   }
 

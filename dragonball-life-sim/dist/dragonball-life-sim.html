@@ -7261,6 +7261,44 @@ function makeCanonNpc(rng, canonId, year, relation = 'acquaintance') {
 // contradicted each other.
 const PARENTLESS_UPBRINGINGS = ['orphan_pod', 'animals', 'self_raised', 'lab'];
 
+/**
+ * Parents are not just two adults with a relation tag rolled from the same
+ * generic pool everyone else uses - a Saiyan household runs on a fairly
+ * consistent split (Bardock and Gine are the canon shape of it), and it is
+ * worth naming on purpose rather than leaving to the dice. Other species
+ * keep the fully random tag draw; this only overrides it where the culture
+ * actually implies something specific.
+ */
+const PARENT_ARCHETYPES = {
+  saiyan: {
+    male: {
+      id: 'stern_saiyan_father', tags: ['blunt', 'ambitious', 'protective'], mood: 'steady',
+      goal: 'to be the strongest',
+      personality: 'Strict, and measures you by strength before anything else. Approval is rare '
+        + "and has to be earned - but it is not the same as not caring, and everyone who knows him knows that.",
+    },
+    female: {
+      id: 'warm_saiyan_mother', tags: ['gentle', 'protective', 'brave'], mood: 'quietly pleased',
+      goal: 'to protect one specific person',
+      personality: 'Soft-spoken and warm at home, and the first one off the ground in any fight '
+        + 'that comes near her family. Nobody mistakes the gentleness for softness twice.',
+    },
+  },
+};
+
+function applyParentArchetype(rng, npc, raceId, sex) {
+  const pool = PARENT_ARCHETYPES[raceId];
+  const arche = pool && pool[sex];
+  if (!arche) return npc;
+  const extra = rng.sample(PERSONALITY_TAGS.filter((t) => !arche.tags.includes(t)), 1);
+  npc.tags = arche.tags.concat(extra);
+  npc.mood = arche.mood;
+  npc.goal = arche.goal;
+  npc.personality = arche.personality;
+  npc.parentArchetype = arche.id;
+  return npc;
+}
+
 /** Parents, and possibly siblings, for a newborn player character. */
 function makeFamily(rng, character, year) {
   const out = [];
@@ -7299,12 +7337,14 @@ function makeFamily(rng, character, year) {
   for (let i = 0; i < 2; i++) {
     const wanted = i === 0 ? 'female' : 'male';
     const options = sexesFor(parentRace[i]);
+    const sex = options.includes(wanted) ? wanted : options[0];
     const p = makeNpc(rng, {
       raceId: parentRace[i], relation: 'parent', year,
       age: rng.int(20, 44), closeness: rng.int(45, 80), respect: rng.int(40, 75),
       placeId: character.placeId, metHow: 'family',
-      sex: options.includes(wanted) ? wanted : options[0],
+      sex,
     });
+    applyParentArchetype(rng, p, parentRace[i], sex);
     out.push(p);
   }
 
@@ -24234,6 +24274,17 @@ function note(state, text, opts = {}) {
 const ROMANCE_MIN_AGE = 15;      // before this it is a childhood crush and nothing else
 const CRUSH_MIN_AGE = 10;
 const COMMIT_MIN_AGE = 16;
+// A body has to be old enough to actually threaten, rob or fight somebody
+// with intent - not just physically capable of it (a Saiyan toddler can hit
+// hard), but old enough to be doing it on purpose.
+const HOSTILE_MIN_AGE = 8;
+const COMBAT_MIN_AGE = 6;
+
+/** Blood and marriage. What you can do to a stranger is not what you can do
+ * to your own family, whatever else is true about you. */
+function isCloseKin(npc) {
+  return ['parent', 'child', 'sibling', 'spouse'].includes(npc.relation);
+}
 
 function chargeSocial(npc, changes) {
   if (changes.closeness) npc.closeness = clamp(npc.closeness + changes.closeness, 0, 100);
@@ -24454,7 +24505,8 @@ const SOCIAL_ACTIONS = [
   {
     id: 'threaten', name: 'Threaten them', tone: 'hostile', slots: 0, maxPerYear: 3,
     desc: 'Make it clear what you could do.',
-    available: () => true,
+    available: (state, npc) => state.character.age >= HOSTILE_MIN_AGE && npc.age >= HOSTILE_MIN_AGE
+      && !isCloseKin(npc),
     run: (state, rng, npc) => {
       const scared = combatPower(state.character) > npc.power * 1.5;
       chargeSocial(npc, { tension: rng.int(18, 35), closeness: -12, trust: -20, respect: scared ? 6 : -10 });
@@ -24469,7 +24521,8 @@ const SOCIAL_ACTIONS = [
   {
     id: 'extort', name: 'Take what they have', tone: 'hostile', slots: 1, maxPerYear: 2,
     desc: 'Money, gear, whatever they were carrying.',
-    available: (state, npc) => (npc.zeni || 0) > 1000 || combatPower(state.character) > npc.power,
+    available: (state, npc) => state.character.age >= HOSTILE_MIN_AGE && npc.age >= HOSTILE_MIN_AGE
+      && !isCloseKin(npc) && ((npc.zeni || 0) > 1000 || combatPower(state.character) > npc.power),
     run: (state, rng, npc) => {
       if (npc.power > combatPower(state.character) * 1.2) {
         chargeSocial(npc, { tension: 40, closeness: -25 });
@@ -24488,7 +24541,8 @@ const SOCIAL_ACTIONS = [
   {
     id: 'humiliate', name: 'Humiliate them publicly', tone: 'hostile', slots: 1, maxPerYear: 2,
     desc: 'Do it where people can see.',
-    available: (state, npc) => combatPower(state.character) > npc.power * 1.4,
+    available: (state, npc) => state.character.age >= HOSTILE_MIN_AGE && npc.age >= HOSTILE_MIN_AGE
+      && !isCloseKin(npc) && combatPower(state.character) > npc.power * 1.4,
     run: (state, rng, npc) => {
       chargeSocial(npc, { tension: 55, closeness: -40, respect: -25, trust: -40 });
       npc.relation = 'enemy';
@@ -24501,7 +24555,8 @@ const SOCIAL_ACTIONS = [
   {
     id: 'kidnap', name: 'Take them', tone: 'hostile', slots: 2, maxPerYear: 1,
     desc: 'Against their will, to somewhere they cannot leave.',
-    available: (state, npc) => combatPower(state.character) > npc.power * 1.3 && npc.relation !== 'spouse',
+    available: (state, npc) => state.character.age >= HOSTILE_MIN_AGE && npc.age >= HOSTILE_MIN_AGE
+      && !isCloseKin(npc) && combatPower(state.character) > npc.power * 1.3,
     run: (state, rng, npc) => {
       npc.relation = 'enemy';
       npc.captive = true;
@@ -24515,7 +24570,8 @@ const SOCIAL_ACTIONS = [
   {
     id: 'mind_probe', name: 'Read their mind', tone: 'hostile', slots: 1, maxPerYear: 2,
     desc: 'Everything they know, taken without asking. They will feel it.',
-    available: (state) => state.character.techniques.includes('telepathy') || state.character.techniques.includes('mind_control'),
+    available: (state, npc) => !isCloseKin(npc)
+      && (state.character.techniques.includes('telepathy') || state.character.techniques.includes('mind_control')),
     run: (state, rng, npc) => {
       const resisted = rng.chance(clamp((npc.stats?.discipline || 40) / 200, 0.05, 0.5));
       if (resisted) {
@@ -24538,7 +24594,8 @@ const SOCIAL_ACTIONS = [
   {
     id: 'duel_death', name: 'Challenge them to the death', tone: 'hostile', slots: 2, maxPerYear: 2,
     desc: 'One of you does not walk away.',
-    available: (state, npc) => npc.alive && npc.power > 1,
+    available: (state, npc) => npc.alive && npc.power > 1
+      && state.character.age >= COMBAT_MIN_AGE && npc.age >= COMBAT_MIN_AGE,
     run: (state, rng, npc) => ({
       text: `You say it out loud, in front of whoever is there. ${npc.name} does not refuse.`,
       battle: {
@@ -24555,7 +24612,8 @@ const SOCIAL_ACTIONS = [
   {
     id: 'spar', name: 'Spar', tone: 'warm', slots: 2, maxPerYear: 3,
     desc: 'The Dragon Ball way of getting to know somebody.',
-    available: (state, npc) => npc.alive && npc.power > 1,
+    available: (state, npc) => npc.alive && npc.power > 1
+      && state.character.age >= COMBAT_MIN_AGE && npc.age >= COMBAT_MIN_AGE,
     run: (state, rng, npc) => ({
       text: `${npc.name} is already stretching.`,
       battle: {
@@ -26126,7 +26184,7 @@ function panelPerson(npcId) {
   shot.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1, form: bestNpcForm(npc) });
   body.appendChild(shot);
 
-  if (npc.isCanon && npc.personality) {
+  if (npc.personality) {
     body.appendChild(el('p', 'entry-text', npc.personality));
   }
 
