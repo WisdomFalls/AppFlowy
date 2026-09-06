@@ -5049,32 +5049,41 @@ function portraitSvg(character, opts = {}) {
     C${cx + waist} ${waistY + 14} ${cx + hip} ${H - 30} ${cx + hip} ${H} Z"
     fill="${bodyColour}"/>`);
   if (fem && stage.id !== 'teen') {
-    // A chest, as an actual bump in the silhouette rather than a stroke that
-    // read as a crease in the fabric. Sized off its own rolled trait, not off
+    // A chest, positioned on the chest rather than up near the collarbone
+    // and shoulder seam - it was landing close enough to the shoulder width
+    // that it read as a pair of pads sitting on top of the shoulders rather
+    // than a bulge on the torso. Sized off its own rolled trait, not off
     // build - a wiry frame and a heavy one can each land anywhere on it, so a
     // wide chest over a narrow waist is a real combination rather than a
     // contradiction the renderer could not produce.
     const bustSize = Math.max(0.5, Math.min(1.8, a.bust ?? 1));
-    const by = chin + 44;
+    // Lower than the collar and the top of the arm seam (chin+22..26), so
+    // it reads as chest rather than shoulder.
+    const by = chin + 52;
     // Where the torso's own outline already sits at chest height (a linear
     // reading of the bezier between the shoulder point and the waist point),
-    // so the bulge has a real baseline to push past rather than a guess that
-    // usually landed inside the existing fill and never showed.
-    const torsoEdgeAtChest = shoulderWidth - (shoulderWidth - waist) * 0.375;
-    const bulge = (bustSize - 0.5) * 15 * stage.body;
+    // used only as the far edge each bulge is allowed to push past - not as
+    // where its centre sits.
+    const torsoEdgeAtChest = shoulderWidth - (shoulderWidth - waist) * 0.5;
+    const bulge = (bustSize - 0.5) * 19 * stage.body;
     const outerEdge = torsoEdgeAtChest + bulge;
-    const rx = Math.max(6, bulge * 0.85 + 5);
-    const ry = rx * 1.18;
-    const bxOff = outerEdge - rx;
+    // The inner curve sits close to the sternum, not at the body's centre
+    // line - so each bulge spans from near the middle of the chest out to
+    // the torso edge (and a little past it), centred well inboard of the
+    // shoulders instead of glued to them.
+    const innerEdge = torsoEdgeAtChest * 0.22;
+    const rx = Math.max(7, (outerEdge - innerEdge) / 2);
+    const ry = rx * 1.05;
+    const bxOff = innerEdge + rx;
     for (const bside of [-1, 1]) {
       const bx = cx + bside * bxOff;
       parts.push(`<ellipse cx="${bx}" cy="${by}" rx="${rx}" ry="${ry}" fill="${bodyColour}"/>`);
       // A highlight near the top and a shadow along the underside, so it
       // reads as a curve rather than a flat disc glued to the chest.
-      parts.push(`<ellipse cx="${bx - bside * rx * 0.22}" cy="${by - ry * 0.3}" rx="${rx * 0.4}" ry="${ry * 0.32}"
+      parts.push(`<ellipse cx="${bx - bside * rx * 0.22}" cy="${by - ry * 0.32}" rx="${rx * 0.4}" ry="${ry * 0.3}"
         fill="${shade(bodyColour, 0.14)}" opacity="0.4"/>`);
-      parts.push(`<path d="M${bx - rx * 0.75} ${by + ry * 0.35} Q${bx} ${by + ry * 0.85} ${bx + rx * 0.75} ${by + ry * 0.35}"
-        fill="none" stroke="${shade(bodyColour, -0.28)}" stroke-width="2" stroke-linecap="round" opacity="0.55"/>`);
+      parts.push(`<path d="M${bx - rx * 0.7} ${by + ry * 0.4} Q${bx} ${by + ry * 0.85} ${bx + rx * 0.7} ${by + ry * 0.4}"
+        fill="none" stroke="${shade(bodyColour, -0.28)}" stroke-width="2" stroke-linecap="round" opacity="0.5"/>`);
     }
   }
   if (outfit.main) {
