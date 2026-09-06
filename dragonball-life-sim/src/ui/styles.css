@@ -382,6 +382,11 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
 .opt.on { border-color: var(--gi); color: var(--gi); background: var(--gi-soft); }
 .opt:hover { border-color: var(--gi); }
 
+.feature-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.feature-list li { font-size: 14px; color: var(--ink-2); padding-left: 18px; position: relative; line-height: 1.4; }
+.feature-list li::before { content: '\2726'; position: absolute; left: 0; top: 0; color: var(--gi); font-size: 11px; }
+.slot-empty { padding: 10px 12px; color: var(--ink-3); font-family: var(--font-mono); font-size: 12px; }
+
 .race-card {
   margin-top: 8px; padding: 12px 13px; border-radius: var(--radius-s);
   border: 1px solid var(--line); background: var(--surface);

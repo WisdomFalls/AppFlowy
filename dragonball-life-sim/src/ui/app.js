@@ -52,6 +52,7 @@ import {
   standings, payout, placementLine, describeField, settle,
 } from '../engine/tournament.js';
 import { playTrial } from './trialui.js';
+import { setAmbienceEnabled, isAmbienceEnabled, setMood } from './ambience.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => {
@@ -64,6 +65,7 @@ const el = (tag, cls, text) => {
 let GAME = null;
 let DRAFT = null;
 let SHEET_MODE = null;
+let CURRENT_SLOT = 'auto';
 let AI_MODE = 'mixed';        // off | mixed | always
 let AI_BUSY = false;
 let PENDING_ACTION = null;
@@ -1708,7 +1710,7 @@ function panelRecords() {
   const saveBtn = el('button', 'ghost-btn', 'Save to this browser');
   saveBtn.type = 'button';
   saveBtn.addEventListener('click', () => {
-    const res = save(GAME, 'auto');
+    const res = save(GAME, CURRENT_SLOT);
     flash(res.ok ? 'Saved.' : 'Could not save in this browser.');
   });
   body.appendChild(saveBtn);
@@ -1744,14 +1746,23 @@ function panelRecords() {
   quitBtn.type = 'button';
   quitBtn.addEventListener('click', () => {
     if (!confirm('Abandon this life and start a new one?')) return;
-    clearSlot('auto');
+    clearSlot(CURRENT_SLOT);
     GAME = null;
     closeSheet();
-    DRAFT = newDraft();
-    renderCreation();
-    showScreen('create');
+    renderTitle();
+    showScreen('title');
   });
   body.appendChild(quitBtn);
+
+  const titleBtn = el('button', 'ghost-btn', 'Title screen');
+  titleBtn.type = 'button';
+  titleBtn.addEventListener('click', () => {
+    autosave();
+    closeSheet();
+    renderTitle();
+    showScreen('title');
+  });
+  body.appendChild(titleBtn);
 
   openSheet('panel');
 }
@@ -2445,11 +2456,10 @@ function showDeath() {
   const again = el('button', 'ghost-btn', 'Start a new life');
   again.type = 'button';
   again.addEventListener('click', () => {
-    clearSlot('auto');
+    clearSlot(CURRENT_SLOT);
     GAME = null;
-    DRAFT = newDraft();
-    renderCreation();
-    showScreen('create');
+    renderTitle();
+    showScreen('title');
   });
   node.appendChild(again);
 
@@ -2458,9 +2468,17 @@ function showDeath() {
 
 // ----------------------------------------------------------------- screens
 
+const SCREEN_MOOD = {
+  title: 'calm', create: 'calm', play: 'calm',
+  battle: 'battle', survival: 'battle', tourney: 'battle',
+  trial: 'tense', hunt: 'tense',
+  death: 'tense',
+};
+
 function showScreen(name) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
   $('screen-' + name).classList.add('active');
+  setMood(SCREEN_MOOD[name] || 'calm');
 }
 
 function showPlay() {
@@ -2470,7 +2488,7 @@ function showPlay() {
 }
 
 function autosave() {
-  save(GAME, 'auto');
+  save(GAME, CURRENT_SLOT);
 }
 
 // -------------------------------------------------------------------- boot
@@ -2497,6 +2515,10 @@ function startGame() {
 
 function wire() {
   $('btn-begin').addEventListener('click', startGame);
+  $('btn-back-title').addEventListener('click', () => {
+    renderTitle();
+    showScreen('title');
+  });
   $('btn-reroll-name').addEventListener('click', () => {
     DRAFT.name = generateFullName(new Rng(Date.now() ^ Math.floor(Math.random() * 1e9)), DRAFT.raceId);
     DRAFT.nameTouched = false;
@@ -2529,21 +2551,115 @@ function wire() {
   });
 }
 
+const TITLE_FEATURES = [
+  'A full simulated life across the Dragon Ball timeline, year by year, or an era you pick yourself',
+  'Twelve playable species plus three half-breeds, each with its own stats, ladder and look',
+  'Procedural portraits: hairstyles, gear, scars and grooming that actually show up on your character',
+  'Turn-based battles, brackets, and an 80-fighter, 8-universe Tournament of Power',
+  'Marriage, gifts that land or miss depending on who you give them to, rivalries, and children',
+  'Weapons and martial arts, chosen at creation and switchable later, side by side with ki techniques',
+  'Death is not the end: train in the Other World, visit Hell, or come back for one more year',
+  'A living economy - shop stock rotates by planet, and selling enough starts a trade relationship',
+];
+
+const SLOT_LABEL = { auto: 'Slot 1', a: 'Slot 2', b: 'Slot 3', c: 'Slot 4' };
+
+function renderTitle() {
+  const list = $('title-features');
+  if (list) {
+    list.innerHTML = '';
+    for (const f of TITLE_FEATURES) list.appendChild(el('li', null, f));
+  }
+
+  const savesBox = $('title-saves');
+  if (savesBox) {
+    savesBox.innerHTML = '';
+    for (const s of listSaves()) {
+      const row = el('div', 'row');
+      const main = el('div', 'row-main');
+      if (s.empty) {
+        main.appendChild(el('div', 'row-title', SLOT_LABEL[s.slot] || s.slot));
+        main.appendChild(el('div', 'row-note', s.corrupt ? 'Unreadable save. Starting fresh here replaces it.' : 'Empty.'));
+      } else {
+        const race = getRace(s.raceId);
+        const when = s.savedAt ? new Date(s.savedAt).toLocaleDateString() : '';
+        main.appendChild(el('div', 'row-title', `${SLOT_LABEL[s.slot] || s.slot}: ${s.name}, age ${s.age}`));
+        main.appendChild(el('div', 'row-note',
+          `${race ? race.short : s.raceId} - ${numberish(s.power)} power - `
+          + `${s.afterlife ? 'in the Other World' : s.alive ? 'alive' : 'deceased'}${when ? ` - saved ${when}` : ''}`
+          + `${s.generation > 1 ? ` - generation ${s.generation}` : ''}`));
+      }
+      row.appendChild(main);
+
+      const acts = el('div', 'item-acts');
+      if (!s.empty) {
+        const cont = el('button', 'mini', 'Continue');
+        cont.type = 'button';
+        cont.addEventListener('click', () => {
+          const loaded = load(s.slot);
+          if (!loaded || !loaded.character) { flash('Could not load that save.'); return; }
+          CURRENT_SLOT = s.slot;
+          GAME = loaded;
+          showPlay();
+        });
+        acts.appendChild(cont);
+
+        const del = el('button', 'mini', 'Delete');
+        del.type = 'button';
+        del.addEventListener('click', () => {
+          if (!confirm(`Delete ${s.corrupt ? 'this save' : s.name + "'s save"}?`)) return;
+          clearSlot(s.slot);
+          renderTitle();
+        });
+        acts.appendChild(del);
+      } else {
+        const start = el('button', 'mini', 'New life');
+        start.type = 'button';
+        start.addEventListener('click', () => {
+          CURRENT_SLOT = s.slot;
+          DRAFT = newDraft();
+          renderCreation();
+          showScreen('create');
+        });
+        acts.appendChild(start);
+      }
+      row.appendChild(acts);
+      savesBox.appendChild(row);
+    }
+  }
+
+  const ambienceRow = $('opt-ambience');
+  if (ambienceRow) {
+    ambienceRow.innerHTML = '';
+    for (const [on, label] of [[false, 'Off'], [true, 'On']]) {
+      const b = el('button', 'opt' + (isAmbienceEnabled() === on ? ' on' : ''), label);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        setAmbienceEnabled(on);
+        try { localStorage.setItem('dbls.ambience', on ? '1' : '0'); } catch (e) { /* best effort */ }
+        renderTitle();
+      });
+      ambienceRow.appendChild(b);
+    }
+  }
+  const ambienceNote = $('ambience-note');
+  if (ambienceNote) {
+    ambienceNote.textContent = 'Three generated tones that shift with the moment - calm, tense, or mid-fight. '
+      + 'Not a soundtrack, just a mood, and silent until you turn it on.';
+  }
+}
+
 async function boot() {
   DRAFT = newDraft();
   renderCreation();
   wire();
 
-  const saved = load('auto');
-  if (saved && saved.character) {
-    const btn = $('btn-continue');
-    btn.hidden = false;
-    btn.textContent = `Continue: ${saved.character.name}, age ${saved.character.age}`;
-    btn.addEventListener('click', () => {
-      GAME = saved;
-      showPlay();
-    });
-  }
+  try {
+    if (localStorage.getItem('dbls.ambience') === '1') setAmbienceEnabled(true);
+  } catch (e) { /* best effort */ }
+
+  renderTitle();
+  showScreen('title');
 
   await initSampling();
   const note = $('create-ai-note');

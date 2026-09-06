@@ -1,7 +1,33 @@
 <div id="app">
 
+  <!-- ==================================================== title screen -->
+  <section class="screen active" id="screen-title">
+    <div class="create">
+      <h1 class="logo">Dragon Ball<em>Mortal Coil</em></h1>
+      <p class="tagline">A full simulated life inside the Dragon Ball universe. Pick a species and an
+        era, then live it one year at a time: training, family, rivalries, war, death, and whatever the
+        Dragon Balls still owe you by the end.</p>
+
+      <div class="field">
+        <span class="field-label">What's here</span>
+        <ul class="feature-list" id="title-features"></ul>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Continue a life</span>
+        <div id="title-saves"></div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Ambience</span>
+        <div class="opts" id="opt-ambience"></div>
+        <p class="row-note" id="ambience-note" style="margin-top:6px"></p>
+      </div>
+    </div>
+  </section>
+
   <!-- ============================================ character creation -->
-  <section class="screen active" id="screen-create">
+  <section class="screen" id="screen-create">
     <div class="create">
       <h1 class="logo">Dragon Ball<em>Mortal Coil</em></h1>
       <p class="tagline">One life, one year at a time. Pick a species and a century. Everything
@@ -47,7 +73,7 @@
         like, and what you were born capable of — is rolled for you. You find out by living it.</p>
 
       <button class="primary-btn" id="btn-begin">Begin a life</button>
-      <button class="ghost-btn" id="btn-continue" hidden>Continue saved life</button>
+      <button class="ghost-btn" id="btn-back-title">Back to title</button>
       <p class="hint-text" id="create-ai-note"></p>
     </div>
   </section>

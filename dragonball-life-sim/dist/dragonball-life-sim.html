@@ -385,6 +385,11 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
 .opt.on { border-color: var(--gi); color: var(--gi); background: var(--gi-soft); }
 .opt:hover { border-color: var(--gi); }
 
+.feature-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.feature-list li { font-size: 14px; color: var(--ink-2); padding-left: 18px; position: relative; line-height: 1.4; }
+.feature-list li::before { content: '\2726'; position: absolute; left: 0; top: 0; color: var(--gi); font-size: 11px; }
+.slot-empty { padding: 10px 12px; color: var(--ink-3); font-family: var(--font-mono); font-size: 12px; }
+
 .race-card {
   margin-top: 8px; padding: 12px 13px; border-radius: var(--radius-s);
   border: 1px solid var(--line); background: var(--surface);
@@ -888,8 +893,34 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
 </style>
 <div id="app">
 
+  <!-- ==================================================== title screen -->
+  <section class="screen active" id="screen-title">
+    <div class="create">
+      <h1 class="logo">Dragon Ball<em>Mortal Coil</em></h1>
+      <p class="tagline">A full simulated life inside the Dragon Ball universe. Pick a species and an
+        era, then live it one year at a time: training, family, rivalries, war, death, and whatever the
+        Dragon Balls still owe you by the end.</p>
+
+      <div class="field">
+        <span class="field-label">What's here</span>
+        <ul class="feature-list" id="title-features"></ul>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Continue a life</span>
+        <div id="title-saves"></div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Ambience</span>
+        <div class="opts" id="opt-ambience"></div>
+        <p class="row-note" id="ambience-note" style="margin-top:6px"></p>
+      </div>
+    </div>
+  </section>
+
   <!-- ============================================ character creation -->
-  <section class="screen active" id="screen-create">
+  <section class="screen" id="screen-create">
     <div class="create">
       <h1 class="logo">Dragon Ball<em>Mortal Coil</em></h1>
       <p class="tagline">One life, one year at a time. Pick a species and a century. Everything
@@ -935,7 +966,7 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
         like, and what you were born capable of — is rolled for you. You find out by living it.</p>
 
       <button class="primary-btn" id="btn-begin">Begin a life</button>
-      <button class="ghost-btn" id="btn-continue" hidden>Continue saved life</button>
+      <button class="ghost-btn" id="btn-back-title">Back to title</button>
       <p class="hint-text" id="create-ai-note"></p>
     </div>
   </section>
@@ -24847,6 +24878,104 @@ function runRampage(trial, stage, foot, onDone) {
   return { playTrial };
 })();
 
+/* ==== ui/ambience.js ==== */
+const __mod_ui_ambience_js = (function () {
+// Procedural ambience. Not a soundtrack - there is nowhere to put licensed
+// music in a single self-contained HTML file without either bloating it far
+// past reason or reaching out to a server this game does not otherwise need.
+// Instead this is three detuned oscillators through a low-pass filter, and
+// the only thing that changes between "training" and "somebody is trying to
+// kill you" is which knobs are turned. Off by default - browsers refuse to
+// play audio before a user gesture anyway, and plenty of people would rather
+// not have a hum regardless.
+
+const MOODS = {
+  calm: { freqs: [110, 165, 220], filter: 900, gain: 0.05, detune: 3 },
+  tense: { freqs: [98, 147, 196], filter: 500, gain: 0.06, detune: 9 },
+  battle: { freqs: [82, 123.5, 164.8], filter: 340, gain: 0.075, detune: 15 },
+};
+
+let ctx = null;
+let master = null;
+let filter = null;
+let oscs = null;
+let currentMood = 'calm';
+let enabled = false;
+
+function ensureContext() {
+  if (ctx) return ctx;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    ctx = new AC();
+    master = ctx.createGain();
+    master.gain.value = 0;
+    filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 900;
+    filter.connect(master);
+    master.connect(ctx.destination);
+    const m = MOODS[currentMood];
+    oscs = m.freqs.map((f, i) => {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      o.detune.value = i === 1 ? m.detune : i === 2 ? -m.detune : 0;
+      o.connect(filter);
+      o.start();
+      return o;
+    });
+    return ctx;
+  } catch (e) {
+    return null;
+  }
+}
+
+function applyMood(mood, rampSeconds) {
+  const m = MOODS[mood];
+  if (!m || !ctx || !oscs) return;
+  const t = ctx.currentTime + rampSeconds;
+  oscs[0].frequency.linearRampToValueAtTime(m.freqs[0], t);
+  oscs[1].frequency.linearRampToValueAtTime(m.freqs[1], t);
+  oscs[2].frequency.linearRampToValueAtTime(m.freqs[2], t);
+  oscs[1].detune.linearRampToValueAtTime(m.detune, t);
+  oscs[2].detune.linearRampToValueAtTime(-m.detune, t);
+  filter.frequency.linearRampToValueAtTime(m.filter, t);
+  if (enabled) master.gain.linearRampToValueAtTime(m.gain, t);
+}
+
+/** Turn the ambience on or off. Must be called from inside a user gesture
+ * (a click) the first time, or the browser will simply ignore it. */
+function setAmbienceEnabled(on) {
+  enabled = !!on;
+  try {
+    if (!enabled) {
+      if (master && ctx) master.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.6);
+      return;
+    }
+    if (!ensureContext()) { enabled = false; return; }
+    if (ctx.state === 'suspended') ctx.resume();
+    applyMood(currentMood, 0.8);
+  } catch (e) {
+    enabled = false;
+  }
+}
+
+function isAmbienceEnabled() {
+  return enabled;
+}
+
+/** What the game is doing right now: 'calm', 'tense', or 'battle'. Safe to
+ * call constantly - it is a no-op whenever ambience is off. */
+function setMood(mood) {
+  if (!MOODS[mood] || mood === currentMood) { if (MOODS[mood]) currentMood = mood; return; }
+  currentMood = mood;
+  if (!enabled || !ctx) return;
+  try { applyMood(mood, 1.4); } catch (e) { /* audio is best-effort */ }
+}
+  return { setAmbienceEnabled, isAmbienceEnabled, setMood };
+})();
+
 /* ==== ui/app.js ==== */
 const __mod_ui_app_js = (function () {
 // UI controller. Vanilla DOM, one render pass per change - the simulation is
@@ -24886,6 +25015,7 @@ const { ballsHeld, ballManifest, pingSquare, GRID } = __mod_engine_dragonballs_j
 const { resolveTrial, getMastery } = __mod_engine_trials_js;
 const { FORMATS, createTournament, roundName, playerMatch, playerOpponent, resolveOtherMatches, recordPlayerResult, matchBattleSpec, bracketSummary, standings, payout, placementLine, describeField, settle } = __mod_engine_tournament_js;
 const { playTrial } = __mod_ui_trialui_js;
+const { setAmbienceEnabled, isAmbienceEnabled, setMood } = __mod_ui_ambience_js;
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => {
@@ -24898,6 +25028,7 @@ const el = (tag, cls, text) => {
 let GAME = null;
 let DRAFT = null;
 let SHEET_MODE = null;
+let CURRENT_SLOT = 'auto';
 let AI_MODE = 'mixed';        // off | mixed | always
 let AI_BUSY = false;
 let PENDING_ACTION = null;
@@ -26542,7 +26673,7 @@ function panelRecords() {
   const saveBtn = el('button', 'ghost-btn', 'Save to this browser');
   saveBtn.type = 'button';
   saveBtn.addEventListener('click', () => {
-    const res = save(GAME, 'auto');
+    const res = save(GAME, CURRENT_SLOT);
     flash(res.ok ? 'Saved.' : 'Could not save in this browser.');
   });
   body.appendChild(saveBtn);
@@ -26578,14 +26709,23 @@ function panelRecords() {
   quitBtn.type = 'button';
   quitBtn.addEventListener('click', () => {
     if (!confirm('Abandon this life and start a new one?')) return;
-    clearSlot('auto');
+    clearSlot(CURRENT_SLOT);
     GAME = null;
     closeSheet();
-    DRAFT = newDraft();
-    renderCreation();
-    showScreen('create');
+    renderTitle();
+    showScreen('title');
   });
   body.appendChild(quitBtn);
+
+  const titleBtn = el('button', 'ghost-btn', 'Title screen');
+  titleBtn.type = 'button';
+  titleBtn.addEventListener('click', () => {
+    autosave();
+    closeSheet();
+    renderTitle();
+    showScreen('title');
+  });
+  body.appendChild(titleBtn);
 
   openSheet('panel');
 }
@@ -27279,11 +27419,10 @@ function showDeath() {
   const again = el('button', 'ghost-btn', 'Start a new life');
   again.type = 'button';
   again.addEventListener('click', () => {
-    clearSlot('auto');
+    clearSlot(CURRENT_SLOT);
     GAME = null;
-    DRAFT = newDraft();
-    renderCreation();
-    showScreen('create');
+    renderTitle();
+    showScreen('title');
   });
   node.appendChild(again);
 
@@ -27292,9 +27431,17 @@ function showDeath() {
 
 // ----------------------------------------------------------------- screens
 
+const SCREEN_MOOD = {
+  title: 'calm', create: 'calm', play: 'calm',
+  battle: 'battle', survival: 'battle', tourney: 'battle',
+  trial: 'tense', hunt: 'tense',
+  death: 'tense',
+};
+
 function showScreen(name) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
   $('screen-' + name).classList.add('active');
+  setMood(SCREEN_MOOD[name] || 'calm');
 }
 
 function showPlay() {
@@ -27304,7 +27451,7 @@ function showPlay() {
 }
 
 function autosave() {
-  save(GAME, 'auto');
+  save(GAME, CURRENT_SLOT);
 }
 
 // -------------------------------------------------------------------- boot
@@ -27331,6 +27478,10 @@ function startGame() {
 
 function wire() {
   $('btn-begin').addEventListener('click', startGame);
+  $('btn-back-title').addEventListener('click', () => {
+    renderTitle();
+    showScreen('title');
+  });
   $('btn-reroll-name').addEventListener('click', () => {
     DRAFT.name = generateFullName(new Rng(Date.now() ^ Math.floor(Math.random() * 1e9)), DRAFT.raceId);
     DRAFT.nameTouched = false;
@@ -27363,21 +27514,115 @@ function wire() {
   });
 }
 
+const TITLE_FEATURES = [
+  'A full simulated life across the Dragon Ball timeline, year by year, or an era you pick yourself',
+  'Twelve playable species plus three half-breeds, each with its own stats, ladder and look',
+  'Procedural portraits: hairstyles, gear, scars and grooming that actually show up on your character',
+  'Turn-based battles, brackets, and an 80-fighter, 8-universe Tournament of Power',
+  'Marriage, gifts that land or miss depending on who you give them to, rivalries, and children',
+  'Weapons and martial arts, chosen at creation and switchable later, side by side with ki techniques',
+  'Death is not the end: train in the Other World, visit Hell, or come back for one more year',
+  'A living economy - shop stock rotates by planet, and selling enough starts a trade relationship',
+];
+
+const SLOT_LABEL = { auto: 'Slot 1', a: 'Slot 2', b: 'Slot 3', c: 'Slot 4' };
+
+function renderTitle() {
+  const list = $('title-features');
+  if (list) {
+    list.innerHTML = '';
+    for (const f of TITLE_FEATURES) list.appendChild(el('li', null, f));
+  }
+
+  const savesBox = $('title-saves');
+  if (savesBox) {
+    savesBox.innerHTML = '';
+    for (const s of listSaves()) {
+      const row = el('div', 'row');
+      const main = el('div', 'row-main');
+      if (s.empty) {
+        main.appendChild(el('div', 'row-title', SLOT_LABEL[s.slot] || s.slot));
+        main.appendChild(el('div', 'row-note', s.corrupt ? 'Unreadable save. Starting fresh here replaces it.' : 'Empty.'));
+      } else {
+        const race = getRace(s.raceId);
+        const when = s.savedAt ? new Date(s.savedAt).toLocaleDateString() : '';
+        main.appendChild(el('div', 'row-title', `${SLOT_LABEL[s.slot] || s.slot}: ${s.name}, age ${s.age}`));
+        main.appendChild(el('div', 'row-note',
+          `${race ? race.short : s.raceId} - ${numberish(s.power)} power - `
+          + `${s.afterlife ? 'in the Other World' : s.alive ? 'alive' : 'deceased'}${when ? ` - saved ${when}` : ''}`
+          + `${s.generation > 1 ? ` - generation ${s.generation}` : ''}`));
+      }
+      row.appendChild(main);
+
+      const acts = el('div', 'item-acts');
+      if (!s.empty) {
+        const cont = el('button', 'mini', 'Continue');
+        cont.type = 'button';
+        cont.addEventListener('click', () => {
+          const loaded = load(s.slot);
+          if (!loaded || !loaded.character) { flash('Could not load that save.'); return; }
+          CURRENT_SLOT = s.slot;
+          GAME = loaded;
+          showPlay();
+        });
+        acts.appendChild(cont);
+
+        const del = el('button', 'mini', 'Delete');
+        del.type = 'button';
+        del.addEventListener('click', () => {
+          if (!confirm(`Delete ${s.corrupt ? 'this save' : s.name + "'s save"}?`)) return;
+          clearSlot(s.slot);
+          renderTitle();
+        });
+        acts.appendChild(del);
+      } else {
+        const start = el('button', 'mini', 'New life');
+        start.type = 'button';
+        start.addEventListener('click', () => {
+          CURRENT_SLOT = s.slot;
+          DRAFT = newDraft();
+          renderCreation();
+          showScreen('create');
+        });
+        acts.appendChild(start);
+      }
+      row.appendChild(acts);
+      savesBox.appendChild(row);
+    }
+  }
+
+  const ambienceRow = $('opt-ambience');
+  if (ambienceRow) {
+    ambienceRow.innerHTML = '';
+    for (const [on, label] of [[false, 'Off'], [true, 'On']]) {
+      const b = el('button', 'opt' + (isAmbienceEnabled() === on ? ' on' : ''), label);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        setAmbienceEnabled(on);
+        try { localStorage.setItem('dbls.ambience', on ? '1' : '0'); } catch (e) { /* best effort */ }
+        renderTitle();
+      });
+      ambienceRow.appendChild(b);
+    }
+  }
+  const ambienceNote = $('ambience-note');
+  if (ambienceNote) {
+    ambienceNote.textContent = 'Three generated tones that shift with the moment - calm, tense, or mid-fight. '
+      + 'Not a soundtrack, just a mood, and silent until you turn it on.';
+  }
+}
+
 async function boot() {
   DRAFT = newDraft();
   renderCreation();
   wire();
 
-  const saved = load('auto');
-  if (saved && saved.character) {
-    const btn = $('btn-continue');
-    btn.hidden = false;
-    btn.textContent = `Continue: ${saved.character.name}, age ${saved.character.age}`;
-    btn.addEventListener('click', () => {
-      GAME = saved;
-      showPlay();
-    });
-  }
+  try {
+    if (localStorage.getItem('dbls.ambience') === '1') setAmbienceEnabled(true);
+  } catch (e) { /* best effort */ }
+
+  renderTitle();
+  showScreen('title');
 
   await initSampling();
   const note = $('create-ai-note');
