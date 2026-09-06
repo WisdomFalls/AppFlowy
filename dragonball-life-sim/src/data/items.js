@@ -15,6 +15,33 @@ export const ITEMS = [
     desc: 'Reads power levels, transmits everything you see to whoever issued it.' },
   { id: 'battle_armour', name: 'Saiyan Battle Armour', cat: 'gear', cost: 120000, passive: { defence: 12, stretch: true },
     desc: 'Stretches to any size, survives most things, and never quite fits over the shoulders.' },
+  // -------------------------------------------------- goods with an address
+  { id: 'namek_jar', name: 'Sealed Water Jar', cat: 'consumable', cost: 400, use: { heal: 20 },
+    desc: 'Namekians drink and nothing else. The water keeps for a century in these and tastes of the clay.' },
+  { id: 'ajisa_seed', name: 'Ajisa Seedling', cat: 'treasure', cost: 1800, passive: { comfort: 3 },
+    desc: 'The tree that grows everywhere on Namek and nowhere else. Elders give them to people they expect to see again.' },
+  { id: 'yardrat_text', name: 'Yardrat Instruction Scroll', cat: 'gear', cost: 220000, passive: { learnMult: 1.3 },
+    desc: 'Written in a script with no verbs. Reading it is most of the training.' },
+  { id: 'spirit_silk', name: 'Spirit-Woven Cloth', cat: 'accessory', cost: 60000, wear: 'scarf', passive: { kiRegen: 3 },
+    desc: 'Yardratian weave. It does not burn, and it is warm in the direction you are facing.' },
+  { id: 'merit_sigil', name: 'Class Sigil', cat: 'accessory', cost: 40000, wear: 'necklace', passive: { standing: 6 },
+    desc: 'Worn at the collar. It says what you were born as, which on this world is the whole conversation.' },
+  { id: 'sadala_ration', name: 'Sadalan Field Ration', cat: 'consumable', cost: 900, use: { heal: 15 },
+    desc: 'Dense, salty, and enough for a Saiyan, which means enough for nine of anybody else.' },
+  { id: 'cereal_grain', name: 'Cereal Longgrain', cat: 'consumable', cost: 600, use: { heal: 12, happiness: 6 },
+    desc: 'The crop the planet is named for. It survived the occupation. Most things did not.' },
+  { id: 'force_rations', name: 'Force Field Rations', cat: 'consumable', cost: 1200, use: { heal: 18 },
+    desc: 'Issued by the case. Nutritionally complete and actively unpleasant.' },
+  { id: 'field_medkit', name: 'Regeneration Field Kit', cat: 'consumable', cost: 45000, use: { heal: 60 },
+    desc: 'A tank in a box. Frieza Force issue, and the only genuinely good thing they make.' },
+  { id: 'dragon_radar_kit', name: 'Radar Kit', cat: 'gear', cost: 500000, passive: { dragonSearch: 0.3 },
+    desc: 'Capsule Corp sells the parts and a schematic. Assembling it is your problem.' },
+  { id: 'pride_uniform', name: 'Pride Trooper Uniform', cat: 'accessory', cost: 80000, wear: 'cape', passive: { standing: 8 },
+    desc: 'Universe 11 issue. Wearing one without the rank is a specific and named offence.' },
+  { id: 'devotion_beads', name: 'Devotion Beads', cat: 'accessory', cost: 30000, wear: 'necklace', passive: { kiRegen: 2 },
+    desc: 'Universe 10. One bead per year of discipline, and a god who counts them.' },
+  { id: 'halo_polish', name: 'Halo Polish', cat: 'consumable', cost: 100, use: { happiness: 8 },
+    desc: 'Sold in the Other World by somebody who has been dead a very long time and is bored.' },
   { id: 'z_sword', name: 'The Z-Sword', cat: 'gear', cost: 0, passive: { attack: 25, unique: true },
     desc: 'Stuck in a rock on the Sacred World for generations. Heavier than it has any right to be.' },
   { id: 'power_pole', name: 'Power Pole', cat: 'gear', cost: 0, passive: { attack: 10, reach: 0.3 },
@@ -77,11 +104,29 @@ export const ITEMS = [
 
 export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
 
+// Goods you can only buy in one place. A shop that sells the same six things
+// on every world is not a shop, it is a menu; these are the things a world
+// makes for itself.
+export const LOCAL_GOODS = {
+  earth: ['capsule_house', 'dragon_radar_kit'],
+  planet_vegeta: ['battle_armour', 'scouter', 'attack_ball', 'merit_sigil'],
+  sadala: ['battle_armour', 'sadala_ration'],
+  namek: ['namek_jar', 'ajisa_seed'],
+  new_namek: ['namek_jar', 'ajisa_seed'],
+  yardrat: ['yardrat_text', 'spirit_silk'],
+  cereal: ['cereal_grain'],
+  frieza_79: ['scouter', 'battle_armour', 'force_rations', 'field_medkit'],
+  u11_world: ['pride_uniform'],
+  u10_world: ['devotion_beads'],
+  otherworld: ['halo_polish'],
+};
+
 export function getItem(id) {
   return ITEM_BY_ID[id];
 }
 
 export function shopStock(placeTags, planetId) {
+  const local = (LOCAL_GOODS[planetId] || []).map((id) => ITEM_BY_ID[id]).filter(Boolean);
   // What a world sells is what a world has. Nobody on Namek stocks a hovercar,
   // and the Frieza Force does not sell you a Flying Nimbus.
   const off = {
@@ -92,7 +137,11 @@ export function shopStock(placeTags, planetId) {
     planet_vegeta: ['property', 'accessory'],
     yardrat: ['transport', 'property'],
   }[planetId] || [];
-  return ITEMS.filter((i) => {
+  const general = ITEMS.filter((i) => {
+    // Something another world makes for itself is not on the shelf here.
+    const madeElsewhere = Object.entries(LOCAL_GOODS)
+      .some(([pid, ids]) => pid !== planetId && ids.includes(i.id) && !(LOCAL_GOODS[planetId] || []).includes(i.id));
+    if (madeElsewhere) return false;
     if (off.includes(i.cat)) return false;
     if (i.cost === 0) return false;
     if (i.cat === 'accessory' && !placeTags.includes('civilised') && !placeTags.includes('urban') && !placeTags.includes('tournament')) return false;
@@ -102,6 +151,8 @@ export function shopStock(placeTags, planetId) {
     if ((i.id === 'gravity_chamber' || i.id === 'spaceship' || i.id === 'gravity_capsule') && !placeTags.includes('tech')) return false;
     return true;
   });
+  // Local goods first: they are the reason to shop here rather than anywhere.
+  return local.concat(general.filter((i) => !local.includes(i)));
 }
 
 // Wishes the Dragon Balls can grant. `power` is what a dragon has to be able

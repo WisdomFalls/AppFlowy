@@ -50,6 +50,9 @@ export const PLANET_CURRENCY = {
   frieza_79: 'scrip',
   void: 'scrip',
   otherworld: 'favour',
+  // The universes next door run on their own paperwork.
+  u11_world: 'favour',
+  u10_world: 'favour',
 };
 
 export function currencyFor(planetId) {

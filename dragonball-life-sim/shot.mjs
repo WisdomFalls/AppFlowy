@@ -43,8 +43,10 @@ for (let i = 0; i < 8; i++) {
   }
   await p.waitForTimeout(120);
 }
-await tap('#screen-play .navbtn:has-text("POWER"), button:has-text("POWER")');
-await p.waitForTimeout(600);
+await tap('button:has-text("LIFE")');
+await p.waitForTimeout(500);
+await tap('button.row:has-text("The worlds")');
+await p.waitForTimeout(500);
 console.log('--- sheet ---');
 console.log(await p.evaluate(() => (document.getElementById('sheet')||{}).innerText || 'no sheet'));
 await p.screenshot({ path: process.argv[2] || '/tmp/x.png', fullPage: false });

@@ -882,6 +882,9 @@ select.text-input { font-family: var(--font-mono); font-size: 13px; }
 .uteam-c { color: var(--muted); font-variant-numeric: tabular-nums; }
 .surv-actions { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px 20px; }
 
+/* A faction's colours, shown next to its name. */
+.emblem { display: inline-block; width: 20px; height: 20px; border-radius: 4px; border: 1px solid var(--line); flex: none; }
+
 </style>
 <div id="app">
 
@@ -4721,6 +4724,9 @@ const PLANET_CURRENCY = {
   frieza_79: 'scrip',
   void: 'scrip',
   otherworld: 'favour',
+  // The universes next door run on their own paperwork.
+  u11_world: 'favour',
+  u10_world: 'favour',
 };
 
 function currencyFor(planetId) {
@@ -7337,6 +7343,33 @@ const ITEMS = [
     desc: 'Reads power levels, transmits everything you see to whoever issued it.' },
   { id: 'battle_armour', name: 'Saiyan Battle Armour', cat: 'gear', cost: 120000, passive: { defence: 12, stretch: true },
     desc: 'Stretches to any size, survives most things, and never quite fits over the shoulders.' },
+  // -------------------------------------------------- goods with an address
+  { id: 'namek_jar', name: 'Sealed Water Jar', cat: 'consumable', cost: 400, use: { heal: 20 },
+    desc: 'Namekians drink and nothing else. The water keeps for a century in these and tastes of the clay.' },
+  { id: 'ajisa_seed', name: 'Ajisa Seedling', cat: 'treasure', cost: 1800, passive: { comfort: 3 },
+    desc: 'The tree that grows everywhere on Namek and nowhere else. Elders give them to people they expect to see again.' },
+  { id: 'yardrat_text', name: 'Yardrat Instruction Scroll', cat: 'gear', cost: 220000, passive: { learnMult: 1.3 },
+    desc: 'Written in a script with no verbs. Reading it is most of the training.' },
+  { id: 'spirit_silk', name: 'Spirit-Woven Cloth', cat: 'accessory', cost: 60000, wear: 'scarf', passive: { kiRegen: 3 },
+    desc: 'Yardratian weave. It does not burn, and it is warm in the direction you are facing.' },
+  { id: 'merit_sigil', name: 'Class Sigil', cat: 'accessory', cost: 40000, wear: 'necklace', passive: { standing: 6 },
+    desc: 'Worn at the collar. It says what you were born as, which on this world is the whole conversation.' },
+  { id: 'sadala_ration', name: 'Sadalan Field Ration', cat: 'consumable', cost: 900, use: { heal: 15 },
+    desc: 'Dense, salty, and enough for a Saiyan, which means enough for nine of anybody else.' },
+  { id: 'cereal_grain', name: 'Cereal Longgrain', cat: 'consumable', cost: 600, use: { heal: 12, happiness: 6 },
+    desc: 'The crop the planet is named for. It survived the occupation. Most things did not.' },
+  { id: 'force_rations', name: 'Force Field Rations', cat: 'consumable', cost: 1200, use: { heal: 18 },
+    desc: 'Issued by the case. Nutritionally complete and actively unpleasant.' },
+  { id: 'field_medkit', name: 'Regeneration Field Kit', cat: 'consumable', cost: 45000, use: { heal: 60 },
+    desc: 'A tank in a box. Frieza Force issue, and the only genuinely good thing they make.' },
+  { id: 'dragon_radar_kit', name: 'Radar Kit', cat: 'gear', cost: 500000, passive: { dragonSearch: 0.3 },
+    desc: 'Capsule Corp sells the parts and a schematic. Assembling it is your problem.' },
+  { id: 'pride_uniform', name: 'Pride Trooper Uniform', cat: 'accessory', cost: 80000, wear: 'cape', passive: { standing: 8 },
+    desc: 'Universe 11 issue. Wearing one without the rank is a specific and named offence.' },
+  { id: 'devotion_beads', name: 'Devotion Beads', cat: 'accessory', cost: 30000, wear: 'necklace', passive: { kiRegen: 2 },
+    desc: 'Universe 10. One bead per year of discipline, and a god who counts them.' },
+  { id: 'halo_polish', name: 'Halo Polish', cat: 'consumable', cost: 100, use: { happiness: 8 },
+    desc: 'Sold in the Other World by somebody who has been dead a very long time and is bored.' },
   { id: 'z_sword', name: 'The Z-Sword', cat: 'gear', cost: 0, passive: { attack: 25, unique: true },
     desc: 'Stuck in a rock on the Sacred World for generations. Heavier than it has any right to be.' },
   { id: 'power_pole', name: 'Power Pole', cat: 'gear', cost: 0, passive: { attack: 10, reach: 0.3 },
@@ -7399,11 +7432,29 @@ const ITEMS = [
 
 const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
 
+// Goods you can only buy in one place. A shop that sells the same six things
+// on every world is not a shop, it is a menu; these are the things a world
+// makes for itself.
+const LOCAL_GOODS = {
+  earth: ['capsule_house', 'dragon_radar_kit'],
+  planet_vegeta: ['battle_armour', 'scouter', 'attack_ball', 'merit_sigil'],
+  sadala: ['battle_armour', 'sadala_ration'],
+  namek: ['namek_jar', 'ajisa_seed'],
+  new_namek: ['namek_jar', 'ajisa_seed'],
+  yardrat: ['yardrat_text', 'spirit_silk'],
+  cereal: ['cereal_grain'],
+  frieza_79: ['scouter', 'battle_armour', 'force_rations', 'field_medkit'],
+  u11_world: ['pride_uniform'],
+  u10_world: ['devotion_beads'],
+  otherworld: ['halo_polish'],
+};
+
 function getItem(id) {
   return ITEM_BY_ID[id];
 }
 
 function shopStock(placeTags, planetId) {
+  const local = (LOCAL_GOODS[planetId] || []).map((id) => ITEM_BY_ID[id]).filter(Boolean);
   // What a world sells is what a world has. Nobody on Namek stocks a hovercar,
   // and the Frieza Force does not sell you a Flying Nimbus.
   const off = {
@@ -7414,7 +7465,11 @@ function shopStock(placeTags, planetId) {
     planet_vegeta: ['property', 'accessory'],
     yardrat: ['transport', 'property'],
   }[planetId] || [];
-  return ITEMS.filter((i) => {
+  const general = ITEMS.filter((i) => {
+    // Something another world makes for itself is not on the shelf here.
+    const madeElsewhere = Object.entries(LOCAL_GOODS)
+      .some(([pid, ids]) => pid !== planetId && ids.includes(i.id) && !(LOCAL_GOODS[planetId] || []).includes(i.id));
+    if (madeElsewhere) return false;
     if (off.includes(i.cat)) return false;
     if (i.cost === 0) return false;
     if (i.cat === 'accessory' && !placeTags.includes('civilised') && !placeTags.includes('urban') && !placeTags.includes('tournament')) return false;
@@ -7424,6 +7479,8 @@ function shopStock(placeTags, planetId) {
     if ((i.id === 'gravity_chamber' || i.id === 'spaceship' || i.id === 'gravity_capsule') && !placeTags.includes('tech')) return false;
     return true;
   });
+  // Local goods first: they are the reason to shop here rather than anywhere.
+  return local.concat(general.filter((i) => !local.includes(i)));
 }
 
 // Wishes the Dragon Balls can grant. `power` is what a dragon has to be able
@@ -7542,7 +7599,7 @@ function interpretWishLocally(text) {
   for (const [re, id] of rules) if (re.test(t)) return id;
   return null;
 }
-  return { ITEMS, ITEM_BY_ID, getItem, shopStock, DRAGONS, WISH_GROUPS, WISHES, WISH_BY_ID, interpretWishLocally };
+  return { ITEMS, ITEM_BY_ID, LOCAL_GOODS, getItem, shopStock, DRAGONS, WISH_GROUPS, WISHES, WISH_BY_ID, interpretWishLocally };
 })();
 
 /* ==== engine/inventory.js ==== */
@@ -7967,7 +8024,9 @@ function planetExists(planetId, year) {
   if (planetId === 'planet_vegeta') return year < 737;
   if (planetId === 'namek') return year < 763;
   if (planetId === 'new_namek') return year >= 763;
-  if (planetId === 'cereal') return year < 740 || year > 780;
+  // Cereal is occupied from Age 740, not destroyed. It is still a place you
+  // can go; whether you would want to be born there is a separate question,
+  // and origins.js answers that one.
   return true;
 }
 
@@ -20467,7 +20526,7 @@ const __mod_engine_worlds_js = (function () {
 // who turns up when you go too far.
 
 const { clamp } = __mod_engine_rng_js;
-const { PLANETS, getPlanet, travelYears, TRAVEL_METHODS } = __mod_data_planets_js;
+const { PLANETS, getPlanet, travelYears, TRAVEL_METHODS, planetExists } = __mod_data_planets_js;
 const { getPlace, PLACES } = __mod_data_places_js;
 const { canonAvailable, canonPower, getCanon } = __mod_data_canon_js;
 const { combatPower } = __mod_engine_stats_js;
@@ -20656,7 +20715,12 @@ function worldResponse(state, rng, planetId, act) {
 
 /** Everything the player has done across the worlds, for the UI. */
 function worldManifest(state) {
-  return PLANETS.filter((p) => !['otherworld', 'void'].includes(p.id)).map((p) => {
+  const year = state.character.birthYear + state.character.age;
+  return PLANETS.filter((p) => !['otherworld', 'void'].includes(p.id))
+    // A world that has not been settled yet, or was blown up last decade, is
+    // not somewhere you can have standing.
+    .filter((p) => planetExists(p.id, year) || worldRecord(state, p.id).visits > 0)
+    .map((p) => {
     const r = worldRecord(state, p.id);
     return {
       id: p.id, name: p.name, standing: standingOn(state, p.id),
@@ -20664,6 +20728,7 @@ function worldManifest(state) {
       inhabitants: p.inhabitants, law: p.law, alignment: p.alignment,
       strength: p.strength, flora: p.flora,
       here: getPlace(state.character.placeId).planet === p.id,
+      gone: !planetExists(p.id, year),
     };
   });
 }
@@ -23340,6 +23405,9 @@ const { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSen
 const { getRng, saveRng } = __mod_engine_state_js;
 const { ceilingFor, ceilingBlock, ceilingPressure, masteryLabel } = __mod_engine_mastery_js;
 const { injuryList } = __mod_engine_body_js;
+const { worldManifest } = __mod_engine_worlds_js;
+const { factionsPresent } = __mod_data_factions_js;
+const { getPlanet } = __mod_data_planets_js;
 const { startSurvival, survivalActions, survivalTurn, survivalStatus, RULES } = __mod_engine_survival_js;
 const { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } = __mod_engine_battle_js;
 const { costLabel, limitFor, usedThisYear, yearCapacity } = __mod_engine_economy_js;
@@ -24632,6 +24700,65 @@ function panelTraits() {
   openSheet('panel');
 }
 
+/**
+ * The map: where you are, what each world thinks of you, and which standing
+ * forces operate there. The systems existed; there was nowhere to look at them.
+ */
+function panelWorlds() {
+  const c = GAME.character;
+  const here = getPlace(c.placeId);
+  const year = currentYear(GAME);
+  const { body } = sheetShell('The worlds', getPlanet(here.planet).name);
+
+  body.appendChild(el('div', 'group-label', 'Where you are'));
+  const nowRow = el('div', 'row owned');
+  const nowMain = el('div', 'row-main');
+  nowMain.appendChild(el('div', 'row-title', `${here.name}, ${getPlanet(here.planet).name}`));
+  nowMain.appendChild(el('div', 'row-note', here.desc));
+  nowRow.appendChild(nowMain);
+  body.appendChild(nowRow);
+
+  const forces = factionsPresent(year, here.planet);
+  if (forces.length) {
+    body.appendChild(el('div', 'group-label', 'Who operates here'));
+    for (const f of forces) {
+      const row = el('div', 'row' + (c.faction === f.id ? ' owned' : ''));
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', f.name + (c.faction === f.id ? ' - yours' : '')));
+      main.appendChild(el('div', 'row-note', `${f.emblem} ${f.goal}`));
+      row.appendChild(main);
+      const swatch = el('span', 'emblem');
+      swatch.style.background = `linear-gradient(135deg, ${f.colours[0]} 50%, ${f.colours[1]} 50%)`;
+      row.appendChild(swatch);
+      body.appendChild(row);
+    }
+  }
+
+  body.appendChild(el('div', 'group-label', 'Standing'));
+  for (const w of worldManifest(GAME)) {
+    if (!w.visits && !w.here && w.standing === 'Does not know you') continue;
+    const row = el('div', 'row' + (w.here ? ' owned' : ''));
+    const main = el('div', 'row-main');
+    main.appendChild(el('div', 'row-title', w.name + (w.here ? ' - here' : '')));
+    main.appendChild(el('div', 'row-note',
+      `${w.standing}. ${w.inhabitants}. `
+      + `${w.visits ? `Visited ${w.visits} time${w.visits === 1 ? '' : 's'}.` : 'Never been.'}`
+      + `${w.gone ? ' It is not there any more.' : ''}`));
+    row.appendChild(main);
+    row.appendChild(el('div', 'row-value', w.influence ? w.influence + '%' : '-'));
+    body.appendChild(row);
+  }
+
+  body.appendChild(el('div', 'group-label', 'Everywhere else'));
+  for (const w of worldManifest(GAME)) {
+    if (w.visits || w.here || w.standing !== 'Does not know you') continue;
+    const memo = el('div', 'memo');
+    memo.innerHTML = `<b>${w.name.replace(/[<>]/g, '')}</b> ${String(w.inhabitants).replace(/[<>]/g, '')}. ${String(w.law).replace(/[<>]/g, '')}`;
+    body.appendChild(memo);
+  }
+  openSheet('panel');
+}
+
 function panelRecords() {
   const { body } = sheetShell('Life', `Age ${GAME.character.age}`);
   const c = GAME.character;
@@ -24666,9 +24793,11 @@ function panelRecords() {
   }
 
   body.appendChild(el('div', 'group-label', 'You'));
+  const here = getPlace(c.placeId);
   for (const [title, note, fn] of [
     ['What you carry', `${(c.bag || c.items || []).length} things, and the money for where you are`, panelInventory],
     ['What you are', `${(c.traits2 || []).length} traits, and what you were born with`, panelTraits],
+    ['The worlds', `${getPlanet(here.planet).name} and everywhere you have been`, panelWorlds],
   ]) {
     const r = el('button', 'row');
     r.type = 'button';

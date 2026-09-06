@@ -38,6 +38,9 @@ import { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSe
 import { getRng, saveRng } from '../engine/state.js';
 import { ceilingFor, ceilingBlock, ceilingPressure, masteryLabel } from '../engine/mastery.js';
 import { injuryList } from '../engine/body.js';
+import { worldManifest } from '../engine/worlds.js';
+import { factionsPresent } from '../data/factions.js';
+import { getPlanet } from '../data/planets.js';
 import { startSurvival, survivalActions, survivalTurn, survivalStatus, RULES } from '../engine/survival.js';
 import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } from '../engine/battle.js';
 import { costLabel, limitFor, usedThisYear, yearCapacity } from '../engine/economy.js';
@@ -1334,6 +1337,65 @@ function panelTraits() {
   openSheet('panel');
 }
 
+/**
+ * The map: where you are, what each world thinks of you, and which standing
+ * forces operate there. The systems existed; there was nowhere to look at them.
+ */
+function panelWorlds() {
+  const c = GAME.character;
+  const here = getPlace(c.placeId);
+  const year = currentYear(GAME);
+  const { body } = sheetShell('The worlds', getPlanet(here.planet).name);
+
+  body.appendChild(el('div', 'group-label', 'Where you are'));
+  const nowRow = el('div', 'row owned');
+  const nowMain = el('div', 'row-main');
+  nowMain.appendChild(el('div', 'row-title', `${here.name}, ${getPlanet(here.planet).name}`));
+  nowMain.appendChild(el('div', 'row-note', here.desc));
+  nowRow.appendChild(nowMain);
+  body.appendChild(nowRow);
+
+  const forces = factionsPresent(year, here.planet);
+  if (forces.length) {
+    body.appendChild(el('div', 'group-label', 'Who operates here'));
+    for (const f of forces) {
+      const row = el('div', 'row' + (c.faction === f.id ? ' owned' : ''));
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', f.name + (c.faction === f.id ? ' - yours' : '')));
+      main.appendChild(el('div', 'row-note', `${f.emblem} ${f.goal}`));
+      row.appendChild(main);
+      const swatch = el('span', 'emblem');
+      swatch.style.background = `linear-gradient(135deg, ${f.colours[0]} 50%, ${f.colours[1]} 50%)`;
+      row.appendChild(swatch);
+      body.appendChild(row);
+    }
+  }
+
+  body.appendChild(el('div', 'group-label', 'Standing'));
+  for (const w of worldManifest(GAME)) {
+    if (!w.visits && !w.here && w.standing === 'Does not know you') continue;
+    const row = el('div', 'row' + (w.here ? ' owned' : ''));
+    const main = el('div', 'row-main');
+    main.appendChild(el('div', 'row-title', w.name + (w.here ? ' - here' : '')));
+    main.appendChild(el('div', 'row-note',
+      `${w.standing}. ${w.inhabitants}. `
+      + `${w.visits ? `Visited ${w.visits} time${w.visits === 1 ? '' : 's'}.` : 'Never been.'}`
+      + `${w.gone ? ' It is not there any more.' : ''}`));
+    row.appendChild(main);
+    row.appendChild(el('div', 'row-value', w.influence ? w.influence + '%' : '-'));
+    body.appendChild(row);
+  }
+
+  body.appendChild(el('div', 'group-label', 'Everywhere else'));
+  for (const w of worldManifest(GAME)) {
+    if (w.visits || w.here || w.standing !== 'Does not know you') continue;
+    const memo = el('div', 'memo');
+    memo.innerHTML = `<b>${w.name.replace(/[<>]/g, '')}</b> ${String(w.inhabitants).replace(/[<>]/g, '')}. ${String(w.law).replace(/[<>]/g, '')}`;
+    body.appendChild(memo);
+  }
+  openSheet('panel');
+}
+
 function panelRecords() {
   const { body } = sheetShell('Life', `Age ${GAME.character.age}`);
   const c = GAME.character;
@@ -1368,9 +1430,11 @@ function panelRecords() {
   }
 
   body.appendChild(el('div', 'group-label', 'You'));
+  const here = getPlace(c.placeId);
   for (const [title, note, fn] of [
     ['What you carry', `${(c.bag || c.items || []).length} things, and the money for where you are`, panelInventory],
     ['What you are', `${(c.traits2 || []).length} traits, and what you were born with`, panelTraits],
+    ['The worlds', `${getPlanet(here.planet).name} and everywhere you have been`, panelWorlds],
   ]) {
     const r = el('button', 'row');
     r.type = 'button';

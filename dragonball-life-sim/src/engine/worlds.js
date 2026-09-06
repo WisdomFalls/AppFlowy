@@ -2,7 +2,7 @@
 // who turns up when you go too far.
 
 import { clamp } from './rng.js';
-import { PLANETS, getPlanet, travelYears, TRAVEL_METHODS } from '../data/planets.js';
+import { PLANETS, getPlanet, travelYears, TRAVEL_METHODS, planetExists } from '../data/planets.js';
 import { getPlace, PLACES } from '../data/places.js';
 import { canonAvailable, canonPower, getCanon } from '../data/canon.js';
 import { combatPower } from './stats.js';
@@ -191,7 +191,12 @@ export function worldResponse(state, rng, planetId, act) {
 
 /** Everything the player has done across the worlds, for the UI. */
 export function worldManifest(state) {
-  return PLANETS.filter((p) => !['otherworld', 'void'].includes(p.id)).map((p) => {
+  const year = state.character.birthYear + state.character.age;
+  return PLANETS.filter((p) => !['otherworld', 'void'].includes(p.id))
+    // A world that has not been settled yet, or was blown up last decade, is
+    // not somewhere you can have standing.
+    .filter((p) => planetExists(p.id, year) || worldRecord(state, p.id).visits > 0)
+    .map((p) => {
     const r = worldRecord(state, p.id);
     return {
       id: p.id, name: p.name, standing: standingOn(state, p.id),
@@ -199,6 +204,7 @@ export function worldManifest(state) {
       inhabitants: p.inhabitants, law: p.law, alignment: p.alignment,
       strength: p.strength, flora: p.flora,
       here: getPlace(state.character.placeId).planet === p.id,
+      gone: !planetExists(p.id, year),
     };
   });
 }

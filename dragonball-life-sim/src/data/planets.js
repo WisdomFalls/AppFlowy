@@ -120,7 +120,9 @@ export function planetExists(planetId, year) {
   if (planetId === 'planet_vegeta') return year < 737;
   if (planetId === 'namek') return year < 763;
   if (planetId === 'new_namek') return year >= 763;
-  if (planetId === 'cereal') return year < 740 || year > 780;
+  // Cereal is occupied from Age 740, not destroyed. It is still a place you
+  // can go; whether you would want to be born there is a separate question,
+  // and origins.js answers that one.
   return true;
 }
 
