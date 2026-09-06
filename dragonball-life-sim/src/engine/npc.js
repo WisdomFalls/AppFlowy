@@ -77,7 +77,7 @@ export function makeAppearance(rng, raceId, sex) {
   const hairless = ['namekian', 'frostdemon', 'majin', 'bioandroid', 'kryllian'].includes(raceId);
   const build = rng.pick(['small', 'wiry', 'lean', 'balanced', 'balanced', 'stocky', 'massive']);
   const base = {
-    saiyan: [168, 66], halfsaiyan: [170, 64], earthling: [168, 62], namekian: [196, 78],
+    saiyan: [168, 66], halfsaiyan: [170, 64], earthling: [168, 62], namekian: [212, 82],
     frostdemon: [158, 52], majin: [180, 96], android: [170, 64], bioandroid: [198, 92],
     shinjin: [150, 46], tuffle: [140, 40], yardratian: [146, 38], cerealian: [172, 66],
     kryllian: [174, 70],

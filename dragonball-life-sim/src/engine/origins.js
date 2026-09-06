@@ -130,7 +130,7 @@ function placeFor(rng, raceId, upbringingId, year) {
 /** Height and weight from species and build, not from a slider. */
 function bodyFor(rng, raceId, bodyId) {
   const base = {
-    saiyan: [168, 66], halfsaiyan: [170, 64], earthling: [168, 62], namekian: [196, 78],
+    saiyan: [168, 66], halfsaiyan: [170, 64], earthling: [168, 62], namekian: [212, 82],
     frostdemon: [158, 52], majin: [180, 96], android: [170, 64], bioandroid: [198, 92],
     shinjin: [150, 46], tuffle: [140, 40], yardratian: [146, 38], cerealian: [172, 66],
   }[raceId] || [168, 64];
