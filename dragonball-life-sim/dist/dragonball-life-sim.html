@@ -14097,6 +14097,47 @@ registerEvents([
   },
 
   {
+    id: 'npc_confession', tags: ['social', 'romance'], weight: 16,
+    minBioAge: 13,
+    when: (ctx) => !ctx.rel('spouse').length && ['friend', 'bestfriend', 'acquaintance', 'colleague'].some((rel) =>
+      ctx.rel(rel).some((n) => (n.romance || 0) > 40 && n.closeness > 45 && n.age >= 13)),
+    slots: (ctx) => {
+      const pool = ['friend', 'bestfriend', 'acquaintance', 'colleague']
+        .flatMap((rel) => ctx.rel(rel))
+        .filter((n) => (n.romance || 0) > 40 && n.closeness > 45 && n.age >= 13);
+      const npc = pool.sort((a, b) => (b.romance || 0) - (a.romance || 0))[0];
+      // Delivery matches who they are - shy people do not confess like bold
+      // ones do, and neither reads as the other.
+      const bold = npc.tags.some((t) => ['blunt', 'reckless', 'vain', 'ambitious'].includes(t));
+      const shy = npc.tags.some((t) => ['gentle', 'patient', 'superstitious'].includes(t));
+      return { ...npcSlot(npc), bold, shy };
+    },
+    title: (ctx, s) => `${s.npcName} Has Something To Say`,
+    text: (ctx, s) => (s.bold
+      ? `[npcName] does not build up to it. {"I like you. A lot. You should know that."|"I have wanted to say this for a while and I am done waiting."|They say it plainly, like a fact, and wait for you to catch up}.`
+      : s.shy
+        ? `{[npcName] has been working up to this for weeks|You can tell something is coming from how badly they are handling small talk|They start three sentences and finish none of them} before finally getting it out, quietly. {"I like you. I just - wanted you to know."|"This is hard to say, but I think about you a lot."|Barely a whisper, and then it is said}.`
+        : `[npcName] {finds a moment alone with you|waits until it is just the two of you|picks an ordinary afternoon and says it anyway}: {"I have feelings for you."|"I think I am supposed to tell you this."|"You should know how I feel."}`),
+    choices: (ctx, s) => [
+      { id: 'return', label: 'Feel the same way', effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        relate(c2, npc, { romance: 15, closeness: 15 });
+        npc.relation = 'lover';
+        const changes = apply(c2, { happiness: 14 });
+        fact(c2, `${npc.name} confessed their feelings, and you returned them.`, { type: 'romance', weight: 5, subject: npc.id, tags: ['romance'] });
+        return { text: `{You feel the same, and say so|It is not really a surprise to either of you|You have both been waiting for the other to say it first}. ${npc.name} {looks like a weight just came off them|actually laughs from relief|does not let go of your hand for a while}.`, changes };
+      } },
+      { id: 'gentle_no', label: 'Let them down gently', effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        relate(c2, npc, { romance: -20, closeness: -5, respect: 5 });
+        const changes = apply(c2, { happiness: -2, karma: 3 });
+        fact(c2, `Turned down ${npc.name}, as kindly as it could be done.`, { type: 'romance', weight: 3, subject: npc.id, tags: ['romance'] });
+        return { text: `{You are careful with it, and it still hurts them|There is no good way to say no, only a less bad one|You mean the kindness, and they can tell}. ${npc.name} {says they understand|needs a minute before they can look at you again|thanks you for at least being honest}. The friendship survives it, mostly.`, changes };
+      } },
+    ],
+  },
+
+  {
     id: 'marriage', maxUses: 3, tags: ['social', 'romance'], weight: 26,
     minBioAge: 17,
     when: (ctx) => ctx.rel('lover').some((n) => n.romance > 55 && n.closeness > 55) && !ctx.rel('spouse').length,
