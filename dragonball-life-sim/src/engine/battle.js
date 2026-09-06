@@ -1142,17 +1142,31 @@ function markBody(state, rng, battle) {
   const from = battle.them.name;
   const year = c.birthYear + c.age;
 
-  // Losing badly to something lethal can cost more than skin. This is the
-  // part of the series everybody remembers: Gohan's arm, Vegeta's tail,
-  // Yamcha's leg. Losing does not have to kill you to change you.
-  if (battle.stakes === 'lethal' && battle.outcome === 'lost' && rng.chance(0.2)) {
-    const gap = ratioOf(battle.them, battle.me, battle);
-    const table = gap > 6
-      ? ['lost_arm', 'lost_leg', 'lost_eye', 'lost_hand', 'broken_back']
-      : ['lost_eye', 'lost_hand', 'ruined_lungs'];
-    if (c.tail && rng.chance(0.3)) table.unshift('lost_tail');
-    const line = maim(state, rng, rng.pick(table), from);
-    if (line) return line;
+  // Losing badly to something lethal can cost more than skin, and so - less
+  // often, because you were the one left standing - can winning one at the
+  // very edge of your own hp. This is the part of the series everybody
+  // remembers: Gohan's arm, Vegeta's tail, Yamcha's leg. The result of the
+  // fight is not what decides whether you walk away whole; how outclassed
+  // and outskilled you were is.
+  if (battle.stakes === 'lethal' && (battle.outcome === 'lost' || battle.outcome === 'won')) {
+    // Raw power at the start of the fight, not what is left of either side
+    // now - a beaten opponent's current hp says nothing about how dangerous
+    // they actually were. Technique count stands in for skill: nobody gets
+    // this close to killing you by luck alone. Your own durability is the
+    // one thing actively working against all of it.
+    const gap = battle.them.basePower / Math.max(1, battle.me.basePower);
+    const theirSkill = (battle.them.techniques || []).length;
+    const durability = clamp((c.stats.durability || 50) / 100, 0.25, 1.4);
+    const base = battle.outcome === 'lost' ? 0.2 : 0.07;
+    const chance = clamp((base + theirSkill * 0.02 + Math.max(0, Math.log10(Math.max(1, gap))) * 0.05) / durability, 0.02, 0.6);
+    if (rng.chance(chance)) {
+      const table = gap > 6
+        ? ['lost_arm', 'lost_leg', 'lost_eye', 'lost_hand', 'broken_back']
+        : ['lost_eye', 'lost_hand', 'ruined_lungs'];
+      if (c.tail && rng.chance(0.3)) table.unshift('lost_tail');
+      const line = maim(state, rng, rng.pick(table), from);
+      if (line) return line;
+    }
   }
 
   // Past that, a body that puts itself back together keeps no record.
