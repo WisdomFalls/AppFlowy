@@ -151,8 +151,17 @@ export function combatPower(character, opts = {}) {
   // tail is already worth far more as a route to Oozaru, so this is not
   // stacked on top of that.
   const tailBonus = (character.tail && !hasPerk(character, 'oozaru')) ? 1.06 : 1;
+  // A standing mark (Babidi's Majin brand, or whatever a fighter picks up in
+  // its place) stacks on top of whatever you already are rather than
+  // replacing it - a real amplifier, not a form. How much of it you can
+  // actually hold is discipline: a controlled mind gets close to the full
+  // amplification, a weak one barely more than the base jolt and none of
+  // the ceiling.
+  const markBoost = character.flags.majinMark
+    ? 1.15 + clamp((character.stats.discipline - 40) / 200, 0, 0.35)
+    : 1;
   const condition = opts.ignoreCondition ? 1 : health * ki;
-  return Math.max(1, character.power * mult * techFactor * skill * condition * disarmed * tailBonus);
+  return Math.max(1, character.power * mult * techFactor * skill * condition * disarmed * tailBonus * markBoost);
 }
 
 /** A readable descriptor, because raw power levels stop meaning much at 1e12. */

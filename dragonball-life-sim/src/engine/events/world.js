@@ -6,6 +6,7 @@ import { registerEvents, npcSlot } from '../generator.js';
 import { clamp } from '../rng.js';
 import { apply, fact, stranger, relate, thread, trainYear, powerLine, meetCanon, canonHere,
   odds, killNpc, findNpc, scaledFoePower, moveTo, setWorldFlag, offerBattle, localMoney } from './helpers.js';
+import { livingNpcs } from '../state.js';
 import { fight, narrateFight, describeGap, runTournament, buildField } from '../combat.js';
 import { combatPower, powerTier } from '../stats.js';
 import { TIMELINE, isTournamentYear, worldPowerBaseline, eraName } from '../../data/timeline.js';
@@ -550,6 +551,62 @@ registerEvents([
         const changes = apply(ctx, { zeni: -cost, karma: -2 });
         return { text: `${localMoney(ctx, cost)} for one bean. {It is robbery|You pay it|The seller does not tell you where it came from and you do not ask}.`, changes };
       } },
+    ],
+  },
+
+  {
+    // Not a form - a standing amplifier stacked on top of whatever you
+    // already are, same idea as Kaio-ken but permanent rather than
+    // triggered, and won by circumstance rather than training. Babidi puts
+    // an M on the forehead of everyone he owns; anyone else offering the
+    // same trade is doing the same thing under a different name.
+    id: 'majin_mark_offer', tags: ['world', 'dark', 'cosmic'], weight: 8,
+    when: (ctx) => !ctx.character.flags.majinMark && !ctx.character.flags.majinMarkOffered
+      && combatPower(ctx.character) > worldPowerBaseline(ctx.year) * 0.15
+      && (ctx.character.karma <= 5 || ctx.character.flags.destroyer_training),
+    slots: (ctx) => {
+      const babidiAlive = canonAvailable(ctx.year, (c) => c.id === 'babidi').length > 0;
+      return { babidiAlive, sourceName: babidiAlive ? 'Babidi' : 'a wizard who never gives his name' };
+    },
+    title: (ctx, s) => 'A Mark Is Offered',
+    text: (ctx, s) => `[sourceName] {finds you somewhere quiet|has been watching for longer than you noticed|already knows what you want before you say it}.
+      "{An M, on your forehead|A little of my magic for a little of your temper|You will not be entirely yourself after. You will be more.}"`,
+    choices: (ctx, s) => [
+      { id: 'accept', label: 'Accept the mark', danger: true, effect: (c2, sl) => {
+        c2.character.flags.majinMark = true;
+        c2.character.flags.majinMarkOffered = true;
+        if (sl.babidiAlive) meetCanon(c2, 'babidi', 'acquaintance');
+        const changes = apply(c2, { karma: -18, happiness: -6 });
+        const lines = ['{Something settles into you that was not there before|The mark burns for a second and then does not|You feel the ceiling move, all at once}.'];
+        // Discipline is what keeps it in a drawer instead of driving. A weak
+        // mind gets the jolt of power and none of the control, which is
+        // exactly what "could damage other if not wielded properly" means -
+        // the first thing it does is something you did not choose.
+        const close = livingNpcs(c2.state).filter((n) => n.closeness > 40);
+        if (c2.character.stats.discipline < 45 && close.length && odds(c2, 0.55)) {
+          const victim = c2.rng.pick(close);
+          relate(c2, victim, { closeness: -25, trust: -15, tension: 25 });
+          apply(c2, { karma: -6 });
+          lines.push(`It is not patient. Something in you turns on ${victim.name} before you decide to let it, and by the time you have it back down there is no explaining it away.`);
+        } else if (c2.character.stats.discipline < 45) {
+          apply(c2, { health: -14 });
+          lines.push('It looks for somewhere to go and finds only you. You spend the rest of the year favouring one side.');
+        } else {
+          lines.push('You hold it. Whatever it wanted, it does not get it this time.');
+        }
+        fact(c2, 'Took a mark that is not entirely yours to control.', { type: 'transformation', weight: 8, tags: ['transformation', 'dark'] });
+        return { text: lines.join(' '), changes };
+      } },
+      { id: 'refuse', label: 'Refuse', effect: (c2, sl) => {
+        c2.character.flags.majinMarkOffered = true;
+        const changes = apply(c2, { happiness: -2 });
+        return { text: `{"Your loss." They are gone before you can answer twice|You say no and they do not ask again|"Suit yourself." Whatever they wanted you for, someone else will do}.`, changes };
+      } },
+      { id: 'fight', label: 'Attack them instead', effect: (c2, sl) => offerBattle(c2, {
+        name: sl.sourceName, power: Math.max(1, combatPower(c2.character) * 0.35), raceId: 'other',
+        techniques: ['mind_control', 'life_drain'],
+      }, { reason: 'fight', stakes: 'serious', intro: 'Whatever this was going to cost you, better to end it here.' }),
+      },
     ],
   },
 ]);

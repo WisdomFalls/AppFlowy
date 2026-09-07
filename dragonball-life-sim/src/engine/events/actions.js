@@ -171,6 +171,29 @@ export const ACTIONS = [
     },
   },
 
+  {
+    id: 'resist_mark', maxPerYear: 2, slots: 2, name: 'Fight the mark for control', cat: 'mind', cost: 'A season',
+    desc: 'Whatever is riding along with your power, put it back where it belongs - or break it off entirely.',
+    available: (s) => !!s.character.flags.majinMark,
+    run: (s, rng) => {
+      // Discipline is what it always was: the thing standing between you and
+      // whatever the mark wants. High enough, and it stops being a fight at
+      // all - a clean break instead of just this year's ground held.
+      const chance = clamp(0.15 + (s.character.stats.discipline - 40) / 140, 0.05, 0.85);
+      if (s.character.stats.discipline >= 75 && rng.chance(chance)) {
+        delete s.character.flags.majinMark;
+        adjust(s, { happiness: 10, karma: 8, stats: { discipline: 3 } });
+        return { text: render(`{It goes all at once, like a held breath finally let out|You put it down and it does not come back up|Whatever was riding along with you is simply not there any more}. The mark is gone.`, {}, rng) };
+      }
+      if (rng.chance(chance)) {
+        adjust(s, { happiness: 4, stats: { discipline: 2 } });
+        return { text: render(`{You hold it. That is all this year buys you - held, not broken|It does not go, but it does not get anything either|A quieter year than the mark wanted}.`, {}, rng) };
+      }
+      adjust(s, { health: -10, happiness: -6 });
+      return { text: render(`{It pushes back harder than you expected|You lose more ground than you meant to|Not this year}.`, {}, rng) };
+    },
+  },
+
   // ------------------------------------------------------------ progression
   {
     id: 'attempt_form', maxPerYear: 2, minMaturity: 10, tooYoung: 'Whatever is in you is not ready to come out yet.', slots: 2, name: 'Reach for a transformation', cat: 'power',

@@ -3954,8 +3954,17 @@ function combatPower(character, opts = {}) {
   // tail is already worth far more as a route to Oozaru, so this is not
   // stacked on top of that.
   const tailBonus = (character.tail && !hasPerk(character, 'oozaru')) ? 1.06 : 1;
+  // A standing mark (Babidi's Majin brand, or whatever a fighter picks up in
+  // its place) stacks on top of whatever you already are rather than
+  // replacing it - a real amplifier, not a form. How much of it you can
+  // actually hold is discipline: a controlled mind gets close to the full
+  // amplification, a weak one barely more than the base jolt and none of
+  // the ceiling.
+  const markBoost = character.flags.majinMark
+    ? 1.15 + clamp((character.stats.discipline - 40) / 200, 0, 0.35)
+    : 1;
   const condition = opts.ignoreCondition ? 1 : health * ki;
-  return Math.max(1, character.power * mult * techFactor * skill * condition * disarmed * tailBonus);
+  return Math.max(1, character.power * mult * techFactor * skill * condition * disarmed * tailBonus * markBoost);
 }
 
 /** A readable descriptor, because raw power levels stop meaning much at 1e12. */
@@ -18762,6 +18771,7 @@ const __mod_engine_events_world_js = (function () {
 const { registerEvents, npcSlot } = __mod_engine_generator_js;
 const { clamp } = __mod_engine_rng_js;
 const { apply, fact, stranger, relate, thread, trainYear, powerLine, meetCanon, canonHere, odds, killNpc, findNpc, scaledFoePower, moveTo, setWorldFlag, offerBattle, localMoney } = __mod_engine_events_helpers_js;
+const { livingNpcs } = __mod_engine_state_js;
 const { fight, narrateFight, describeGap, runTournament, buildField } = __mod_engine_combat_js;
 const { combatPower, powerTier } = __mod_engine_stats_js;
 const { TIMELINE, isTournamentYear, worldPowerBaseline, eraName } = __mod_data_timeline_js;
@@ -19306,6 +19316,62 @@ registerEvents([
         const changes = apply(ctx, { zeni: -cost, karma: -2 });
         return { text: `${localMoney(ctx, cost)} for one bean. {It is robbery|You pay it|The seller does not tell you where it came from and you do not ask}.`, changes };
       } },
+    ],
+  },
+
+  {
+    // Not a form - a standing amplifier stacked on top of whatever you
+    // already are, same idea as Kaio-ken but permanent rather than
+    // triggered, and won by circumstance rather than training. Babidi puts
+    // an M on the forehead of everyone he owns; anyone else offering the
+    // same trade is doing the same thing under a different name.
+    id: 'majin_mark_offer', tags: ['world', 'dark', 'cosmic'], weight: 8,
+    when: (ctx) => !ctx.character.flags.majinMark && !ctx.character.flags.majinMarkOffered
+      && combatPower(ctx.character) > worldPowerBaseline(ctx.year) * 0.15
+      && (ctx.character.karma <= 5 || ctx.character.flags.destroyer_training),
+    slots: (ctx) => {
+      const babidiAlive = canonAvailable(ctx.year, (c) => c.id === 'babidi').length > 0;
+      return { babidiAlive, sourceName: babidiAlive ? 'Babidi' : 'a wizard who never gives his name' };
+    },
+    title: (ctx, s) => 'A Mark Is Offered',
+    text: (ctx, s) => `[sourceName] {finds you somewhere quiet|has been watching for longer than you noticed|already knows what you want before you say it}.
+      "{An M, on your forehead|A little of my magic for a little of your temper|You will not be entirely yourself after. You will be more.}"`,
+    choices: (ctx, s) => [
+      { id: 'accept', label: 'Accept the mark', danger: true, effect: (c2, sl) => {
+        c2.character.flags.majinMark = true;
+        c2.character.flags.majinMarkOffered = true;
+        if (sl.babidiAlive) meetCanon(c2, 'babidi', 'acquaintance');
+        const changes = apply(c2, { karma: -18, happiness: -6 });
+        const lines = ['{Something settles into you that was not there before|The mark burns for a second and then does not|You feel the ceiling move, all at once}.'];
+        // Discipline is what keeps it in a drawer instead of driving. A weak
+        // mind gets the jolt of power and none of the control, which is
+        // exactly what "could damage other if not wielded properly" means -
+        // the first thing it does is something you did not choose.
+        const close = livingNpcs(c2.state).filter((n) => n.closeness > 40);
+        if (c2.character.stats.discipline < 45 && close.length && odds(c2, 0.55)) {
+          const victim = c2.rng.pick(close);
+          relate(c2, victim, { closeness: -25, trust: -15, tension: 25 });
+          apply(c2, { karma: -6 });
+          lines.push(`It is not patient. Something in you turns on ${victim.name} before you decide to let it, and by the time you have it back down there is no explaining it away.`);
+        } else if (c2.character.stats.discipline < 45) {
+          apply(c2, { health: -14 });
+          lines.push('It looks for somewhere to go and finds only you. You spend the rest of the year favouring one side.');
+        } else {
+          lines.push('You hold it. Whatever it wanted, it does not get it this time.');
+        }
+        fact(c2, 'Took a mark that is not entirely yours to control.', { type: 'transformation', weight: 8, tags: ['transformation', 'dark'] });
+        return { text: lines.join(' '), changes };
+      } },
+      { id: 'refuse', label: 'Refuse', effect: (c2, sl) => {
+        c2.character.flags.majinMarkOffered = true;
+        const changes = apply(c2, { happiness: -2 });
+        return { text: `{"Your loss." They are gone before you can answer twice|You say no and they do not ask again|"Suit yourself." Whatever they wanted you for, someone else will do}.`, changes };
+      } },
+      { id: 'fight', label: 'Attack them instead', effect: (c2, sl) => offerBattle(c2, {
+        name: sl.sourceName, power: Math.max(1, combatPower(c2.character) * 0.35), raceId: 'other',
+        techniques: ['mind_control', 'life_drain'],
+      }, { reason: 'fight', stakes: 'serious', intro: 'Whatever this was going to cost you, better to end it here.' }),
+      },
     ],
   },
 ]);
@@ -23863,6 +23929,29 @@ const ACTIONS = [
         + `You take the time to look presentable, which is its own kind of effort}. `
         + `{It does not fix anything, but it helps|Small thing. It still helps|`
         + `Nobody has to know how the year has gone, looking at you}.`, {}, rng) };
+    },
+  },
+
+  {
+    id: 'resist_mark', maxPerYear: 2, slots: 2, name: 'Fight the mark for control', cat: 'mind', cost: 'A season',
+    desc: 'Whatever is riding along with your power, put it back where it belongs - or break it off entirely.',
+    available: (s) => !!s.character.flags.majinMark,
+    run: (s, rng) => {
+      // Discipline is what it always was: the thing standing between you and
+      // whatever the mark wants. High enough, and it stops being a fight at
+      // all - a clean break instead of just this year's ground held.
+      const chance = clamp(0.15 + (s.character.stats.discipline - 40) / 140, 0.05, 0.85);
+      if (s.character.stats.discipline >= 75 && rng.chance(chance)) {
+        delete s.character.flags.majinMark;
+        adjust(s, { happiness: 10, karma: 8, stats: { discipline: 3 } });
+        return { text: render(`{It goes all at once, like a held breath finally let out|You put it down and it does not come back up|Whatever was riding along with you is simply not there any more}. The mark is gone.`, {}, rng) };
+      }
+      if (rng.chance(chance)) {
+        adjust(s, { happiness: 4, stats: { discipline: 2 } });
+        return { text: render(`{You hold it. That is all this year buys you - held, not broken|It does not go, but it does not get anything either|A quieter year than the mark wanted}.`, {}, rng) };
+      }
+      adjust(s, { health: -10, happiness: -6 });
+      return { text: render(`{It pushes back harder than you expected|You lose more ground than you meant to|Not this year}.`, {}, rng) };
     },
   },
 
