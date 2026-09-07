@@ -14361,7 +14361,19 @@ const CUSTOM = {
     || state.character.mentors.includes('whis') || state.character.mentors.includes('beerus'),
   destroyer_path: (state) => !!state.character.flags.destroyer_training
     || state.character.mentors.includes('beerus'),
-  ui_trigger: (state) => !!state.character.flags.ui_trigger,
+  // Never actually reachable before this - nothing anywhere set the flag,
+  // which meant Ultra Instinct Sign could not be unlocked at all, by anyone,
+  // ever. The organic path canon actually uses is a beating, not a ritual:
+  // Goku surfaces Sign only after Jiren puts him down hard, not through
+  // training alone. brink_of_death and humiliated (battle.js's finish())
+  // are exactly that - nearly dying, or losing badly outmatched - so either
+  // is the trigger, on top of the power and stat floor already required.
+  // Whis (or another angel) can still show a fighter the door directly,
+  // same as the god-tier forms above.
+  ui_trigger: (state) => !!state.character.flags.ui_trigger
+    || !!state.character.flags.humiliated
+    || !!state.character.flags.brink_of_death
+    || state.character.mentors.includes('whis'),
   namek_fusion: (state) => !!state.character.flags.assimilated,
   dragon_wish_potential: (state) => !!state.character.flags.wish_potential,
   unlock_ritual: (state) => !!state.character.flags.potential_unlocked,
