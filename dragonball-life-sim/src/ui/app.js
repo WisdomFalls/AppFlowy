@@ -24,7 +24,7 @@ import { BRANCHES, TECH_BY_ID } from '../data/techniques.js';
 import { getTransformation } from '../data/transformations.js';
 import { STAT_KEYS, STAT_LABELS, combatPower, powerTier } from '../engine/stats.js';
 import { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } from '../engine/npc.js';
-import { npcActions, runNpcAction } from '../engine/social.js';
+import { npcActions, runNpcAction, canVisitLiving } from '../engine/social.js';
 import { scoreReplyLocally, applyReply, impressionLabel } from '../engine/dialogue.js';
 import { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } from '../engine/ai.js';
 import { numberish, zeni } from '../engine/text.js';
@@ -820,6 +820,22 @@ function panelPerson(npcId) {
     table.appendChild(line);
   }
   body.appendChild(table);
+
+  // Dead, and they are not: nothing past reading the dossier is yours to do
+  // unless King Yemma has actually granted a day back among the living
+  // (day_pass_offer, afterlife.js). No asking, buying, taking, gifting, or
+  // any social action - that used to just work regardless, which meant the
+  // afterlife had no actual wall around it.
+  if (!canVisitLiving(GAME, npc)) {
+    body.appendChild(el('p', 'row-note',
+      `You are dead, and ${npc.name} is not. Whatever this was, it waits for a day King Yemma actually grants you.`));
+    const back0 = el('button', 'ghost-btn', 'Back to everyone');
+    back0.type = 'button';
+    back0.addEventListener('click', panelPeople);
+    body.appendChild(back0);
+    openSheet('panel');
+    return;
+  }
 
   // What they are carrying, as far as you have seen. Ask, buy, or take it.
   const rng0 = getRng(GAME);

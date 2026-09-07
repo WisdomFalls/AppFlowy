@@ -25364,8 +25364,21 @@ const SOCIAL_ACTIONS = [
 
 const SOCIAL_BY_ID = Object.fromEntries(SOCIAL_ACTIONS.map((a) => [a.id, a]));
 
+/**
+ * Whether the player can interact with this NPC at all right now. Dead
+ * talking to dead is always fine (Hell, Other World reunions) - it is the
+ * player being dead and the other person still being alive that the setting
+ * only grants for a King Yemma's Leave day (day_pass_offer, afterlife.js),
+ * not as standing access back into the world of the living.
+ */
+function canVisitLiving(state, npc) {
+  if (!state.character.inAfterlife || !npc.alive) return true;
+  return !!state.character.flags[`day_pass_${currentYear(state)}`];
+}
+
 function npcActions(state, npc) {
   const out = [];
+  if (!canVisitLiving(state, npc)) return out;
   for (const action of SOCIAL_ACTIONS) {
     let ok = false;
     try { ok = action.available(state, npc); } catch (e) { ok = false; }
@@ -25388,6 +25401,9 @@ function runNpcAction(state, rng, npcId, actionId) {
   const npc = findNpc(state, npcId);
   const action = SOCIAL_BY_ID[actionId];
   if (!npc || !action) return { text: 'Nothing happens.', refused: true };
+  if (!canVisitLiving(state, npc)) {
+    return { text: 'You are dead, and they are not. That takes King Yemma\'s leave, not a walk over.', refused: true };
+  }
   if (!action.available(state, npc)) return { text: 'Not with them, not now.', refused: true };
 
   const key = `social:${action.id}:${npc.id}`;
@@ -25400,7 +25416,7 @@ function runNpcAction(state, rng, npcId, actionId) {
 
   return action.run(state, rng, npc) || { text: 'Nothing much comes of it.' };
 }
-  return { SOCIAL_ACTIONS, SOCIAL_BY_ID, npcActions, runNpcAction, bondLabel, romanceLabel, relationLabel };
+  return { SOCIAL_ACTIONS, SOCIAL_BY_ID, canVisitLiving, npcActions, runNpcAction, bondLabel, romanceLabel, relationLabel };
 })();
 
 /* ==== engine/dialogue.js ==== */
@@ -26146,7 +26162,7 @@ const { BRANCHES, TECH_BY_ID } = __mod_data_techniques_js;
 const { getTransformation } = __mod_data_transformations_js;
 const { STAT_KEYS, STAT_LABELS, combatPower, powerTier } = __mod_engine_stats_js;
 const { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } = __mod_engine_npc_js;
-const { npcActions, runNpcAction } = __mod_engine_social_js;
+const { npcActions, runNpcAction, canVisitLiving } = __mod_engine_social_js;
 const { scoreReplyLocally, applyReply, impressionLabel } = __mod_engine_dialogue_js;
 const { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } = __mod_engine_ai_js;
 const { numberish, zeni } = __mod_engine_text_js;
@@ -26937,6 +26953,22 @@ function panelPerson(npcId) {
     table.appendChild(line);
   }
   body.appendChild(table);
+
+  // Dead, and they are not: nothing past reading the dossier is yours to do
+  // unless King Yemma has actually granted a day back among the living
+  // (day_pass_offer, afterlife.js). No asking, buying, taking, gifting, or
+  // any social action - that used to just work regardless, which meant the
+  // afterlife had no actual wall around it.
+  if (!canVisitLiving(GAME, npc)) {
+    body.appendChild(el('p', 'row-note',
+      `You are dead, and ${npc.name} is not. Whatever this was, it waits for a day King Yemma actually grants you.`));
+    const back0 = el('button', 'ghost-btn', 'Back to everyone');
+    back0.type = 'button';
+    back0.addEventListener('click', panelPeople);
+    body.appendChild(back0);
+    openSheet('panel');
+    return;
+  }
 
   // What they are carrying, as far as you have seen. Ask, buy, or take it.
   const rng0 = getRng(GAME);

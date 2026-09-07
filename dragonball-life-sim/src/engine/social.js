@@ -407,8 +407,21 @@ export const SOCIAL_ACTIONS = [
 
 export const SOCIAL_BY_ID = Object.fromEntries(SOCIAL_ACTIONS.map((a) => [a.id, a]));
 
+/**
+ * Whether the player can interact with this NPC at all right now. Dead
+ * talking to dead is always fine (Hell, Other World reunions) - it is the
+ * player being dead and the other person still being alive that the setting
+ * only grants for a King Yemma's Leave day (day_pass_offer, afterlife.js),
+ * not as standing access back into the world of the living.
+ */
+export function canVisitLiving(state, npc) {
+  if (!state.character.inAfterlife || !npc.alive) return true;
+  return !!state.character.flags[`day_pass_${currentYear(state)}`];
+}
+
 export function npcActions(state, npc) {
   const out = [];
+  if (!canVisitLiving(state, npc)) return out;
   for (const action of SOCIAL_ACTIONS) {
     let ok = false;
     try { ok = action.available(state, npc); } catch (e) { ok = false; }
@@ -431,6 +444,9 @@ export function runNpcAction(state, rng, npcId, actionId) {
   const npc = findNpc(state, npcId);
   const action = SOCIAL_BY_ID[actionId];
   if (!npc || !action) return { text: 'Nothing happens.', refused: true };
+  if (!canVisitLiving(state, npc)) {
+    return { text: 'You are dead, and they are not. That takes King Yemma\'s leave, not a walk over.', refused: true };
+  }
   if (!action.available(state, npc)) return { text: 'Not with them, not now.', refused: true };
 
   const key = `social:${action.id}:${npc.id}`;
