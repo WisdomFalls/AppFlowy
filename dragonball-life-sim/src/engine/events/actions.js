@@ -108,6 +108,54 @@ export const ACTIONS = [
     },
   },
   {
+    id: 'sadala_academy', maxPerYear: 4, minMaturity: 5, tooYoung: 'Too young for the academy yet.', slots: 2, name: 'The Sadala Academy', cat: 'body',
+    desc: 'A real curriculum, real instructors, and classmates who are also trying to get better than you - the one place in known space that turned fighting into a syllabus. Nowhere else offers anything but a mentor, if you can find one.',
+    available: (s) => getPlace(s.character.placeId).tags.includes('academy'),
+    options: () => ['strength', 'technique', 'kiControl', 'discipline'].map((stat) => ({
+      id: stat, label: STAT_LABELS[stat], hint: `${TRIAL_KINDS[STAT_TRIALS[stat].kind].name} drill, taught properly.`,
+    })),
+    run: (s, rng, params) => {
+      const c = s.character;
+      const stat = (params && params.option) || 'technique';
+      if (!c.flags.sadala_academy) {
+        c.flags.sadala_academy = true;
+        c.flags.sadala_academy_sessions = 0;
+        fact(s, 'Enrolled at the Sadala Academy.', { type: 'career', weight: 3, tags: ['academy'] });
+      }
+      c.flags.sadala_academy_sessions = (c.flags.sadala_academy_sessions || 0) + 1;
+      const sessions = c.flags.sadala_academy_sessions;
+
+      const cfg = STAT_TRIALS[stat] || STAT_TRIALS.technique;
+      const difficulty = clamp(1 + Math.floor((c.stats[stat] || 50) / 24), 1, 5);
+      const trial = startTrial(s, rng, {
+        kind: cfg.kind, difficulty, purpose: 'training',
+        label: `Academy: ${STAT_LABELS[stat]}`,
+        blurb: 'A real classroom, drilling this the way it is actually meant to be taught.',
+        payload: { stat },
+      });
+
+      const lines = ['Real instructors, a real syllabus - nobody here is guessing at the fundamentals.'];
+      const known = livingNpcs(s).filter((n) => n.workplaceId === 'sadala_academy');
+      if (known.length < 4 && rng.chance(0.3)) {
+        const classmate = makeNpc(rng, {
+          year: currentYear(s), placeId: c.placeId, relation: 'colleague',
+          minAge: Math.max(6, c.age - 4), maxAge: c.age + 4,
+        });
+        classmate.workplaceId = 'sadala_academy';
+        classmate.closeness = rng.int(15, 35);
+        addNpc(s, classmate);
+        lines.push(`${classmate.name} is in the same year as you.`);
+      }
+      if (sessions === 12 && !c.flags.sadala_academy_graduate) {
+        c.flags.sadala_academy_graduate = true;
+        adjust(s, { happiness: 10, fame: 4 });
+        fact(s, 'Graduated from the Sadala Academy.', { type: 'career', weight: 6, tags: ['academy'] });
+        lines.push('That is the syllabus finished. Whatever you do with it now is yours.');
+      }
+      return { text: lines.join(' '), trial };
+    },
+  },
+  {
     id: 'meditate', maxPerYear: 4, minMaturity: 5, tooYoung: 'Sitting still on purpose is beyond you yet.', slots: 1, name: 'Meditate', cat: 'mind', cost: 'A season',
     desc: 'Ki control, discipline and a calmer head. Harder than it sounds.',
     available: () => true,
