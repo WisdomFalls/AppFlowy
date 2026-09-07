@@ -2659,14 +2659,16 @@ const TRANSFORMATIONS = [
   {
     id: 'false_ssj', name: 'False Super Saiyan', ladder: ['saiyan', 'halfsaiyan'], tier: 4.5, temporary: true,
     mult: 18, drain: 7, control: -40, strain: 5,
-    req: { power: 15000, anyFlag: ['grief', 'rage_awakened', 'watched_friend_die'] },
+    req: { power: 15000, anyFlag: ['grief', 'rage_awakened', 'watched_friend_die', 'brink_of_death'] },
     hint: 'Reach for Super Saiyan before you are actually strong enough to hold it.',
     desc: 'Reddish hair, blank pupil-less eyes, a scream that will not stay lit. Gone as fast as it came.',
   },
   {
+    // Real Super Saiyan is never the first time it happens - it comes after
+    // the unstable, half-held version, not instead of it.
     id: 'ssj', name: 'Super Saiyan', ladder: ['saiyan', 'halfsaiyan'], tier: 5,
     mult: 50, drain: 3, control: -10, strain: 2,
-    req: { power: 30000, anyFlag: ['grief', 'rage_awakened', 'watched_friend_die', 'brink_of_death'] },
+    req: { parent: 'false_ssj', power: 30000, anyFlag: ['grief', 'rage_awakened', 'watched_friend_die', 'brink_of_death'] },
     hint: 'Enough raw power, and a loss you cannot fight your way out of.',
     desc: 'Gold hair, green eyes, and a rage that finally has somewhere to go.',
   },
@@ -2692,10 +2694,15 @@ const TRANSFORMATIONS = [
     desc: 'You stopped transforming and started simply being this - all of the power, none of the bulk or the strain.',
   },
   {
+    // Grade 3 and Full-Power stay optional side branches off base Super
+    // Saiyan (a fighter can go straight for finesse over bulk), but Grade 2
+    // is the one rung that has to come first - jumping from base Super
+    // Saiyan straight past three grades to SSJ2 read as skipping the whole
+    // climb rather than choosing a path through it.
     id: 'ssj2', name: 'Super Saiyan 2', ladder: ['saiyan', 'halfsaiyan'], tier: 7,
     mult: 100, drain: 5, control: -15, strain: 4,
-    req: { parent: 'ssj', power: 200000, anyFlag: ['fury', 'watched_friend_die', 'protected_someone', 'humiliated'] },
-    hint: 'Master Super Saiyan, then find something worth losing your temper over.',
+    req: { parent: 'ssj_grade2', power: 200000, anyFlag: ['fury', 'watched_friend_die', 'protected_someone', 'humiliated'] },
+    hint: 'Push Super Saiyan into Grade 2, then find something worth losing your temper over.',
     desc: 'Crackling lightning, still eyes. The calm part of you is the dangerous part.',
   },
   {
