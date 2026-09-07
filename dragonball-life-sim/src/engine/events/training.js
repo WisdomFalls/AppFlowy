@@ -300,6 +300,38 @@ registerEvents([
     ],
   },
 
+  // A second chamber, and deliberately not a reskin of the first. The
+  // Lookout's is one year in for one day out; Merus built this one for the
+  // Patrol on his own terms, and the conversion does not match - three years
+  // pass inside it for every day lost outside, which trainYear() reflects
+  // honestly by being called three times over rather than just tripling one
+  // number and calling it done.
+  {
+    id: 'isp_time_chamber', maxUses: 2, tags: ['training', 'extreme', 'opportunity', 'faction'], weight: 16,
+    minBioAge: 12,
+    when: (ctx) => ctx.character.faction === 'galactic_patrol' && (ctx.character.factionRank || 0) >= 2,
+    slots: () => ({}),
+    title: "Merus's Chamber",
+    text: `The Patrol has one too, built - or grown, nobody quite agrees on the word - by Merus himself, and it does not run on the same clock the Lookout's does.
+      {Three years pass in there for every one lost out here|The conversion is steeper than the original and nobody has fully explained why|Merus says the ratio "settled" on its own, which is not an answer}.
+      They do not offer this to every cadet who asks.`,
+    choices: (ctx) => [
+      { id: 'session', label: 'Go inside', effect: (c2) => {
+        let gained = 0;
+        for (let i = 0; i < 3; i++) gained += trainYear(c2, { intensity: 1.55, placeMult: 13 }).gained;
+        const changes = apply(c2, { health: -30, happiness: -20, stats: { discipline: 9, kiControl: 6, durability: 4 } });
+        c2.character.flags.used_isp_chamber = true;
+        fact(c2, "Spent a stretch inside Merus's chamber with the Patrol.", { type: 'training', weight: 6, tags: ['extreme', 'faction'] });
+        return { text: `{Three years pass by the chamber's own reckoning, one outside|`
+          + `You lose count of the days almost immediately, and it does not matter, because the days are not the ones that count|`
+          + `Whatever Merus did to that room, it is not shy about the difference}. `
+          + `You come out {a day later|the next morning}, {three years changed|barely recognisable to yourself}. `
+          + `Power level up ${numberish(gained)}.`, changes };
+      } },
+      { id: 'decline', label: 'Not this time', effect: () => ({ text: `{The offer stands|Merus does not push|Some other rotation}.` }) },
+    ],
+  },
+
   {
     id: 'sparring_partner', tags: ['training', 'social'], weight: 18,
     minBioAge: 10,

@@ -13,6 +13,7 @@ import { PLANETS } from '../../data/planets.js';
 import { getTechnique } from '../../data/techniques.js';
 import { currencyFor, formatMoney, canAfford, debit, priceIn } from '../../data/currency.js';
 import { maturity } from '../../data/races.js';
+import { getCanon } from '../../data/canon.js';
 import { numberish } from '../text.js';
 import { clamp } from '../rng.js';
 import { startTrial } from '../trials.js';
@@ -155,27 +156,56 @@ registerEvents([
     when: (ctx) => !ctx.character.flags.has_chamber && ctx.character.home
       && combatPower(ctx.character) > 100000,
     slots: (ctx) => {
-      const smart = Object.values(ctx.state.npcs).filter((n) => n.alive
-        && ((n.stats && n.stats.intellect >= 75) || n.canonId === 'bulma' || n.canonId === 'gero')
-        && (n.closeness || 0) > 30);
+      const known = Object.values(ctx.state.npcs).filter((n) => n.alive && (n.closeness || 0) > 30);
+      const smart = known.filter((n) => (n.stats && n.stats.intellect >= 75) || n.canonId === 'bulma' || n.canonId === 'gero');
+      // A god does not need to be a genius to build one of these - Kami built
+      // the original by simply being able to. Read that off canon.js's own
+      // tags rather than the NPC's own (which only ever carries temperament),
+      // and require more trust than the merely clever version does.
+      const divine = known.filter((n) => n.canonId && (getCanon(n.canonId)?.tags || []).includes('divine') && (n.closeness || 0) > 50);
+      const pickedSmart = smart.length ? ctx.rng.pick(smart) : null;
+      const pickedDivine = divine.length ? ctx.rng.pick(divine) : null;
       return {
-        who: smart.length ? ctx.rng.pick(smart).name : null,
-        npcId: smart.length ? smart[0].id : null,
+        who: pickedSmart ? pickedSmart.name : null,
+        npcId: pickedSmart ? pickedSmart.id : null,
+        god: pickedDivine ? pickedDivine.name : null,
+        godId: pickedDivine ? pickedDivine.id : null,
         mine: ctx.character.iq >= 130,
       };
     },
     title: 'A Room That Runs Faster',
     text: (ctx, s) => `{You have been thinking about it for years|It comes up because you have run out of places to train|
       Somebody mentions the Lookout and you cannot stop thinking about it}.
-      A room with its own gravity and its own clock. ${s.mine
-    ? '{You could build it|You have worked out most of it already|The maths is not beyond you}.'
-    : s.who
-      ? '{[who] could build it|You could not begin to build it. [who] could|[who] laughs and then stops laughing and starts sketching}.'
-      : '{You would need somebody far cleverer than you|There is nobody within reach who could|You do not know anyone who could build it}.'}`,
+      A room with its own gravity and its own clock. ${s.god
+    ? `{[god] could simply make one|You mention it to [god] and they do not see the difficulty|[god] has built stranger things than this}.`
+    : s.mine
+      ? '{You could build it|You have worked out most of it already|The maths is not beyond you}.'
+      : s.who
+        ? '{[who] could build it|You could not begin to build it. [who] could|[who] laughs and then stops laughing and starts sketching}.'
+        : '{You would need somebody far cleverer than you|There is nobody within reach who could|You do not know anyone who could build it}.'}`,
     choices: (ctx, s) => {
       const list = [];
       const cur = currencyFor(getPlace(ctx.character.placeId).planet);
       const cost = priceIn(14000000, cur.id);
+      if (s.god) {
+        list.push({
+          id: 'divine', label: `Ask ${s.god} to make one`, hint: 'No money changes hands. That is not how this works.',
+          effect: (c2, sl) => {
+            const npc = sl.godId ? findNpc(c2.state, sl.godId) : null;
+            if (npc) relate(c2, npc, { closeness: 6, respect: 10 });
+            c2.character.flags.has_chamber = true;
+            c2.character.chamber = { built: true, rate: 3.6, aging: 1.5, by: sl.god, divine: true };
+            fact(c2, `${sl.god} made them a training chamber, the way a god makes something - by deciding it exists.`,
+              { type: 'property', weight: 9, tags: ['training', 'divine'] });
+            return { text: `{There is no ceremony to it|${sl.god} does not so much build the room as decide it is already there|`
+              + `One moment it is an idea and the next it is a door}. `
+              + `{The gravity is exact. The clock is exact. Nothing about it is improvised|`
+              + `It does not creak, hum, or need maintaining, unlike every other version of this ever made|`
+              + `You get the distinct sense you did not pay the real price for this yet}.`,
+            changes: apply(c2, { happiness: 24, karma: 2 }) };
+          },
+        });
+      }
       if (s.mine) {
         list.push({
           id: 'build_self', label: `Build it yourself - ${formatMoney(cost, cur.id)}`,
