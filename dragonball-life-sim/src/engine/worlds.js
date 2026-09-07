@@ -13,7 +13,7 @@ import { spreadWord, DEED_SCALE } from './settlement.js';
 export function worldRecord(state, planetId) {
   state.world.planets = state.world.planets || {};
   if (!state.world.planets[planetId]) {
-    state.world.planets[planetId] = { influence: 0, fear: 0, love: 0, ruled: false, purged: false, visits: 0 };
+    state.world.planets[planetId] = { influence: 0, fear: 0, love: 0, ruled: false, purged: false, visits: 0, strain: 0, destroyed: false };
   }
   return state.world.planets[planetId];
 }
@@ -109,8 +109,75 @@ export function purgeArea(state, rng, placeId) {
   return { lines, text: lines.join(' '), killed, lovedOnes, fullyGone, response };
 }
 
+// -------------------------------------------------------- wild worlds
+
+/**
+ * A handful of worlds have nobody on them at all - creatures, not people -
+ * which makes them the one place you can go completely all out without a
+ * bystander anywhere in the blast radius. That freedom has its own cost:
+ * enough of that, on a small enough rock, and you eventually do to it what
+ * canon's strongest fighters do to planets without meaning to.
+ */
+export function wildTrainingRisk(state, planetId) {
+  const record = worldRecord(state, planetId);
+  if (record.destroyed) return 0;
+  const power = combatPower(state.character);
+  const threshold = 5e7;
+  // Below half the threshold, nothing you do here adds up to anything -
+  // no amount of repetition turns a light hit into a planet-cracking one.
+  if (power < threshold * 0.5) return 0;
+  const base = clamp((power / threshold - 1) * 0.1, 0, 0.7);
+  const strain = clamp((record.strain || 0) * 0.01, 0, 0.2) * clamp(power / threshold, 0, 1);
+  return clamp(base + strain, 0, 0.85);
+}
+
+export function planetDestroyed(state, planetId) {
+  return !!worldRecord(state, planetId).destroyed;
+}
+
+/** Cutting loose entirely on a wild world. May end with there being no world left. */
+export function trainAllOutOnWild(state, rng) {
+  const c = state.character;
+  const place = getPlace(c.placeId);
+  const planet = getPlanet(place.planet);
+  const record = worldRecord(state, place.planet);
+  const risk = wildTrainingRisk(state, place.planet);
+  record.strain = (record.strain || 0) + rng.int(8, 15);
+  record.visits += 1;
+  if (!rng.chance(risk)) return { destroyed: false, risk };
+
+  record.destroyed = true;
+  record.purged = true;
+  record.ruled = false;
+
+  const here = Object.values(state.npcs || {}).filter((n) => n.alive && n.placeId === place.id);
+  for (const npc of here) {
+    npc.alive = false;
+    npc.deadSince = c.birthYear + c.age;
+    npc.causeOfDeath = `Caught on ${planet.name} when it came apart`;
+  }
+
+  c.flags.destroyed_a_planet = true;
+  adjust(state, { fame: 30, karma: here.length ? -20 : 0 });
+  spreadWord(state, { scale: DEED_SCALE.world_destroyed, karma: here.length ? -20 : 0 });
+
+  addFact(state.memory, {
+    type: 'world', year: c.age, weight: 10, tags: ['world', 'destroyed'],
+    text: `Went too far training on ${planet.name}. It is rubble now, and you are the reason.`
+      + (here.length ? ` ${here.length} ${here.length === 1 ? 'person' : 'people'} died with it.` : ''),
+  });
+
+  // There is nowhere left to stand. The shockwave puts you back somewhere
+  // that is still there.
+  const fallback = PLACES.find((p) => p.planet === 'earth') || PLACES[0];
+  c.placeId = fallback.id;
+
+  return { destroyed: true, risk, planetName: planet.name, fallbackName: fallback.name, killed: here.length };
+}
+
 export function standingOn(state, planetId) {
   const r = worldRecord(state, planetId);
+  if (r.destroyed) return 'Destroyed';
   if (r.purged) return 'Erased';
   const areas = planetAreas(state, planetId);
   const purgedCount = areas.filter((a) => a.purged).length;
@@ -293,7 +360,9 @@ export function worldResponse(state, rng, planetId, act) {
 /** Everything the player has done across the worlds, for the UI. */
 export function worldManifest(state) {
   const year = state.character.birthYear + state.character.age;
-  return PLANETS.filter((p) => !['otherworld', 'void'].includes(p.id))
+  // Wild worlds have nobody on them to have an opinion of you - they do not
+  // belong on a ledger of standing, only on the travel list.
+  return PLANETS.filter((p) => !['otherworld', 'void'].includes(p.id) && !p.wild)
     // A world that has not been settled yet, or was blown up last decade, is
     // not somewhere you can have standing.
     .filter((p) => planetExists(p.id, year) || worldRecord(state, p.id).visits > 0)
@@ -306,7 +375,7 @@ export function worldManifest(state) {
       inhabitants: p.inhabitants, law: p.law, alignment: p.alignment,
       strength: p.strength, flora: p.flora,
       here: getPlace(state.character.placeId).planet === p.id,
-      gone: !planetExists(p.id, year) || r.purged,
+      gone: !planetExists(p.id, year) || r.purged || r.destroyed,
       areas,
     };
   });

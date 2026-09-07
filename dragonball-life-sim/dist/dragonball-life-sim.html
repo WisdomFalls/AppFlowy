@@ -2227,6 +2227,8 @@ const PLACES = [
   { id: 'vezra', name: 'Vezra', planet: 'vezra', danger: 1, training: 1.5, tags: ['spirit', 'quiet', 'teachers'], desc: 'Crystal forests that hum faintly in the wind. Nobody here has ever successfully lied to anyone else.' },
   { id: 'verdana', name: 'The Verdana Concourse', planet: 'verdana', danger: 2, training: 1.1, tags: ['urban', 'civilised', 'jobs', 'tournament'], desc: 'A trade city grown into a jungle canopy. A dozen species, one currency board, and no questions asked.' },
   { id: 'coldrift', name: 'Coldrift Mining Colony', planet: 'coldrift', danger: 5, training: 1.7, tags: ['imperial', 'jobs', 'highgrav', 'cold'], desc: 'Ice, crystal dust, and a quota that does not care how many shifts you have already worked.' },
+  { id: 'bestia_wilds', name: 'The Bestia Canopy', planet: 'bestia_prime', danger: 7, training: 2.6, tags: ['feral', 'wild', 'uninhabited', 'jungle'], desc: 'Trees older than any language, and something with too many teeth in almost all of them.' },
+  { id: 'cinder_flats', name: 'The Cinder Flats', planet: 'cinder_reach', danger: 8, training: 2.9, tags: ['feral', 'wild', 'uninhabited', 'volcanic'], desc: 'Heat that cracks stone and beasts that shrug it off. Hit something before it hits you.' },
   { id: 'kai_planet', name: "King Kai's Planet", planet: 'otherworld', danger: 2, training: 3.5, tags: ['divine', 'otherworld', 'highgrav', 'mentor'], desc: 'Ten times gravity on a rock the size of a football pitch, with a monkey and a cricket.' },
   { id: 'sacred_world', name: 'Sacred World of the Kais', planet: 'otherworld', danger: 3, training: 3.0, tags: ['divine', 'otherworld', 'sacred'], desc: 'Where the Z-Sword is stuck in a rock and the trees are all wrong.' },
   { id: 'beerus_world', name: "Beerus's World", planet: 'otherworld', danger: 8, training: 6.0, tags: ['divine', 'destroyer', 'extreme'], desc: 'A pillar in an empty sky, a sleeping cat, and his impossibly polite attendant.' },
@@ -4381,6 +4383,27 @@ const PLANETS = [
     defenders: [],
     flora: 'Ice sheets over a crystal seam. Nothing grows; a great deal is dug up.',
     strength: 'A garrison thin enough that the mines matter more than the soldiers guarding them.',
+  },
+  // Nobody lives on these two. That is the whole point - somewhere to hit as
+  // hard as you actually can with nothing sapient in the blast radius, for
+  // as long as the ground underneath you can take it.
+  {
+    id: 'bestia_prime', name: 'Bestia Prime', distance: 16, wild: true,
+    inhabitants: 'Megafauna. Nothing that talks back.',
+    population: 'none (feral wildlife only)', tech: 'none', alignment: 'untamed',
+    law: 'None. Nothing here can be reasoned with, and nothing here needs to be.',
+    defenders: [],
+    flora: 'Jungle canopy grown thick enough to hide something the size of a building, and it does.',
+    strength: 'Apex predators, plural, that have never once lost a fight to each other.',
+  },
+  {
+    id: 'cinder_reach', name: 'Cinder Reach', distance: 24, wild: true,
+    inhabitants: 'Things that live in the magma and resent being disturbed',
+    population: 'none (feral wildlife only)', tech: 'none', alignment: 'hostile terrain',
+    law: 'None. The ground itself is not on your side.',
+    defenders: [],
+    flora: 'Ash fields and rivers of open magma, with nothing green anywhere.',
+    strength: 'Rock-plated beasts that shrug off anything short of a real hit, and terrain that kills the careless for free.',
   },
   // The universes next door. Reachable only by Kai Kai, an angel, or a pass
   // that a god of destruction has personally signed off on.
@@ -24850,7 +24873,7 @@ const { spreadWord, DEED_SCALE } = __mod_engine_settlement_js;
 function worldRecord(state, planetId) {
   state.world.planets = state.world.planets || {};
   if (!state.world.planets[planetId]) {
-    state.world.planets[planetId] = { influence: 0, fear: 0, love: 0, ruled: false, purged: false, visits: 0 };
+    state.world.planets[planetId] = { influence: 0, fear: 0, love: 0, ruled: false, purged: false, visits: 0, strain: 0, destroyed: false };
   }
   return state.world.planets[planetId];
 }
@@ -24946,8 +24969,75 @@ function purgeArea(state, rng, placeId) {
   return { lines, text: lines.join(' '), killed, lovedOnes, fullyGone, response };
 }
 
+// -------------------------------------------------------- wild worlds
+
+/**
+ * A handful of worlds have nobody on them at all - creatures, not people -
+ * which makes them the one place you can go completely all out without a
+ * bystander anywhere in the blast radius. That freedom has its own cost:
+ * enough of that, on a small enough rock, and you eventually do to it what
+ * canon's strongest fighters do to planets without meaning to.
+ */
+function wildTrainingRisk(state, planetId) {
+  const record = worldRecord(state, planetId);
+  if (record.destroyed) return 0;
+  const power = combatPower(state.character);
+  const threshold = 5e7;
+  // Below half the threshold, nothing you do here adds up to anything -
+  // no amount of repetition turns a light hit into a planet-cracking one.
+  if (power < threshold * 0.5) return 0;
+  const base = clamp((power / threshold - 1) * 0.1, 0, 0.7);
+  const strain = clamp((record.strain || 0) * 0.01, 0, 0.2) * clamp(power / threshold, 0, 1);
+  return clamp(base + strain, 0, 0.85);
+}
+
+function planetDestroyed(state, planetId) {
+  return !!worldRecord(state, planetId).destroyed;
+}
+
+/** Cutting loose entirely on a wild world. May end with there being no world left. */
+function trainAllOutOnWild(state, rng) {
+  const c = state.character;
+  const place = getPlace(c.placeId);
+  const planet = getPlanet(place.planet);
+  const record = worldRecord(state, place.planet);
+  const risk = wildTrainingRisk(state, place.planet);
+  record.strain = (record.strain || 0) + rng.int(8, 15);
+  record.visits += 1;
+  if (!rng.chance(risk)) return { destroyed: false, risk };
+
+  record.destroyed = true;
+  record.purged = true;
+  record.ruled = false;
+
+  const here = Object.values(state.npcs || {}).filter((n) => n.alive && n.placeId === place.id);
+  for (const npc of here) {
+    npc.alive = false;
+    npc.deadSince = c.birthYear + c.age;
+    npc.causeOfDeath = `Caught on ${planet.name} when it came apart`;
+  }
+
+  c.flags.destroyed_a_planet = true;
+  adjust(state, { fame: 30, karma: here.length ? -20 : 0 });
+  spreadWord(state, { scale: DEED_SCALE.world_destroyed, karma: here.length ? -20 : 0 });
+
+  addFact(state.memory, {
+    type: 'world', year: c.age, weight: 10, tags: ['world', 'destroyed'],
+    text: `Went too far training on ${planet.name}. It is rubble now, and you are the reason.`
+      + (here.length ? ` ${here.length} ${here.length === 1 ? 'person' : 'people'} died with it.` : ''),
+  });
+
+  // There is nowhere left to stand. The shockwave puts you back somewhere
+  // that is still there.
+  const fallback = PLACES.find((p) => p.planet === 'earth') || PLACES[0];
+  c.placeId = fallback.id;
+
+  return { destroyed: true, risk, planetName: planet.name, fallbackName: fallback.name, killed: here.length };
+}
+
 function standingOn(state, planetId) {
   const r = worldRecord(state, planetId);
+  if (r.destroyed) return 'Destroyed';
   if (r.purged) return 'Erased';
   const areas = planetAreas(state, planetId);
   const purgedCount = areas.filter((a) => a.purged).length;
@@ -25130,7 +25220,9 @@ function worldResponse(state, rng, planetId, act) {
 /** Everything the player has done across the worlds, for the UI. */
 function worldManifest(state) {
   const year = state.character.birthYear + state.character.age;
-  return PLANETS.filter((p) => !['otherworld', 'void'].includes(p.id))
+  // Wild worlds have nobody on them to have an opinion of you - they do not
+  // belong on a ledger of standing, only on the travel list.
+  return PLANETS.filter((p) => !['otherworld', 'void'].includes(p.id) && !p.wild)
     // A world that has not been settled yet, or was blown up last decade, is
     // not somewhere you can have standing.
     .filter((p) => planetExists(p.id, year) || worldRecord(state, p.id).visits > 0)
@@ -25143,12 +25235,12 @@ function worldManifest(state) {
       inhabitants: p.inhabitants, law: p.law, alignment: p.alignment,
       strength: p.strength, flora: p.flora,
       here: getPlace(state.character.placeId).planet === p.id,
-      gone: !planetExists(p.id, year) || r.purged,
+      gone: !planetExists(p.id, year) || r.purged || r.destroyed,
       areas,
     };
   });
 }
-  return { worldRecord, planetAreas, planetFullyPurged, purgeArea, standingOn, travelOptions, travelTo, actOnWorld, worldResponse, worldManifest };
+  return { worldRecord, planetAreas, planetFullyPurged, purgeArea, wildTrainingRisk, planetDestroyed, trainAllOutOnWild, standingOn, travelOptions, travelTo, actOnWorld, worldResponse, worldManifest };
 })();
 
 /* ==== engine/events/actions.js ==== */
@@ -25181,7 +25273,7 @@ const { canonAvailable, canonPower, canonPlace, canonUniverse } = __mod_data_can
 const { ballsHeld, startHunt, ballsAreInert, summonReady } = __mod_engine_dragonballs_js;
 const { startTrial, STAT_TRIALS, TRIAL_KINDS, getMastery, masteryEffect, inventForm } = __mod_engine_trials_js;
 const { createTournament, autoRunTournament, settle } = __mod_engine_tournament_js;
-const { travelOptions, travelTo, actOnWorld, standingOn, planetAreas } = __mod_engine_worlds_js;
+const { travelOptions, travelTo, actOnWorld, standingOn, planetAreas, wildTrainingRisk, trainAllOutOnWild, planetDestroyed } = __mod_engine_worlds_js;
 const { getPlanet, PLANETS, planetExists } = __mod_data_planets_js;
 const { generateFullName, generateSignatureName } = __mod_data_names_js;
 const { numberish } = __mod_engine_text_js;
@@ -25701,6 +25793,40 @@ const ACTIONS = [
     },
   },
 
+  {
+    id: 'train_wild', maxPerYear: 3, minMaturity: 10, tooYoung: 'You are not ready for this yet.', slots: 2, name: 'Cut loose on a wild world', cat: 'body', danger: true,
+    desc: 'No people here to hold back for. Just you, the local wildlife, and however hard you want to hit.',
+    available: (s) => getPlace(s.character.placeId).tags.includes('feral'),
+    options: (s) => {
+      const planetId = getPlace(s.character.placeId).planet;
+      const risk = Math.round(wildTrainingRisk(s, planetId) * 100);
+      return [
+        { id: 'controlled', label: 'Train hard, stay in control', hint: 'The safe version. Good gains, and the ground survives you.' },
+        {
+          id: 'all_out', label: 'Go all the way',
+          hint: risk > 0 ? `Everything you have, no restraint. Roughly ${risk}% chance this world does not survive it.`
+            : 'Everything you have. Nothing here can push back hard enough to notice.',
+        },
+      ];
+    },
+    run: (s, rng, params) => {
+      const allOut = (params && params.option) === 'all_out';
+      const { gained } = trainOnce(s, rng, { intensity: allOut ? 2.2 : 1.5, slice: allOut ? 0.7 : 0.5 });
+      if (!allOut) {
+        adjust(s, { happiness: 4 });
+        return { text: 'You put everything reasonable into it and the local wildlife regrets ever noticing you. The ground survives.', gained };
+      }
+      const result = trainAllOutOnWild(s, rng);
+      if (!result.destroyed) {
+        return { text: 'You cut loose completely. The shockwave alone should have levelled something, and somehow did not.', gained };
+      }
+      return {
+        text: `You cut loose completely, and this time the planet does not survive it. ${result.planetName} comes apart around you - you make it out, and there was nothing else on it that could.${result.killed ? ' Except, this time, there was.' : ''} You are back on ${result.fallbackName}.`,
+        gained,
+      };
+    },
+  },
+
   // ------------------------------------------------------------------ world
   {
     id: 'hunt_dragonball', maxPerYear: 3, minMaturity: 9, tooYoung: 'You cannot cross a continent on your own yet.', slots: 2, name: 'Search for a Dragon Ball', cat: 'world',
@@ -25739,6 +25865,7 @@ const ACTIONS = [
         if (planet.id === here.planet) continue;
         if (['otherworld', 'void'].includes(planet.id)) continue;
         if (!planetExists(planet.id, s.character.birthYear + s.character.age)) continue;
+        if (planetDestroyed(s, planet.id)) continue;
         const methods = travelOptions(s, planet.id);
         if (!methods.length) continue;
         const best = methods.sort((x, y) => (x.years - y.years) || (x.cost - y.cost))[0];
@@ -25841,7 +25968,7 @@ const ACTIONS = [
   {
     id: 'world_act', maxPerYear: 1, minMaturity: 15, tooYoung: 'Nobody on this world is listening to a child.', slots: 2, name: 'Do something about this world', cat: 'world',
     desc: 'Defend it, take it, empty it, or recruit from it.',
-    available: (s) => !s.character.inAfterlife,
+    available: (s) => !s.character.inAfterlife && !getPlace(s.character.placeId).tags.includes('feral'),
     options: (s) => {
       const here = getPlace(s.character.placeId);
       const planet = getPlanet(here.planet);

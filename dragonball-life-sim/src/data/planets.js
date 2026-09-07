@@ -128,6 +128,27 @@ export const PLANETS = [
     flora: 'Ice sheets over a crystal seam. Nothing grows; a great deal is dug up.',
     strength: 'A garrison thin enough that the mines matter more than the soldiers guarding them.',
   },
+  // Nobody lives on these two. That is the whole point - somewhere to hit as
+  // hard as you actually can with nothing sapient in the blast radius, for
+  // as long as the ground underneath you can take it.
+  {
+    id: 'bestia_prime', name: 'Bestia Prime', distance: 16, wild: true,
+    inhabitants: 'Megafauna. Nothing that talks back.',
+    population: 'none (feral wildlife only)', tech: 'none', alignment: 'untamed',
+    law: 'None. Nothing here can be reasoned with, and nothing here needs to be.',
+    defenders: [],
+    flora: 'Jungle canopy grown thick enough to hide something the size of a building, and it does.',
+    strength: 'Apex predators, plural, that have never once lost a fight to each other.',
+  },
+  {
+    id: 'cinder_reach', name: 'Cinder Reach', distance: 24, wild: true,
+    inhabitants: 'Things that live in the magma and resent being disturbed',
+    population: 'none (feral wildlife only)', tech: 'none', alignment: 'hostile terrain',
+    law: 'None. The ground itself is not on your side.',
+    defenders: [],
+    flora: 'Ash fields and rivers of open magma, with nothing green anywhere.',
+    strength: 'Rock-plated beasts that shrug off anything short of a real hit, and terrain that kills the careless for free.',
+  },
   // The universes next door. Reachable only by Kai Kai, an angel, or a pass
   // that a god of destruction has personally signed off on.
   {

@@ -28,7 +28,7 @@ import { canonAvailable, canonPower, canonPlace, canonUniverse } from '../../dat
 import { ballsHeld, startHunt, ballsAreInert, summonReady } from '../dragonballs.js';
 import { startTrial, STAT_TRIALS, TRIAL_KINDS, getMastery, masteryEffect, inventForm } from '../trials.js';
 import { createTournament, autoRunTournament, settle } from '../tournament.js';
-import { travelOptions, travelTo, actOnWorld, standingOn, planetAreas } from '../worlds.js';
+import { travelOptions, travelTo, actOnWorld, standingOn, planetAreas, wildTrainingRisk, trainAllOutOnWild, planetDestroyed } from '../worlds.js';
 import { getPlanet, PLANETS, planetExists } from '../../data/planets.js';
 import { generateFullName, generateSignatureName } from '../../data/names.js';
 import { numberish } from '../text.js';
@@ -548,6 +548,40 @@ export const ACTIONS = [
     },
   },
 
+  {
+    id: 'train_wild', maxPerYear: 3, minMaturity: 10, tooYoung: 'You are not ready for this yet.', slots: 2, name: 'Cut loose on a wild world', cat: 'body', danger: true,
+    desc: 'No people here to hold back for. Just you, the local wildlife, and however hard you want to hit.',
+    available: (s) => getPlace(s.character.placeId).tags.includes('feral'),
+    options: (s) => {
+      const planetId = getPlace(s.character.placeId).planet;
+      const risk = Math.round(wildTrainingRisk(s, planetId) * 100);
+      return [
+        { id: 'controlled', label: 'Train hard, stay in control', hint: 'The safe version. Good gains, and the ground survives you.' },
+        {
+          id: 'all_out', label: 'Go all the way',
+          hint: risk > 0 ? `Everything you have, no restraint. Roughly ${risk}% chance this world does not survive it.`
+            : 'Everything you have. Nothing here can push back hard enough to notice.',
+        },
+      ];
+    },
+    run: (s, rng, params) => {
+      const allOut = (params && params.option) === 'all_out';
+      const { gained } = trainOnce(s, rng, { intensity: allOut ? 2.2 : 1.5, slice: allOut ? 0.7 : 0.5 });
+      if (!allOut) {
+        adjust(s, { happiness: 4 });
+        return { text: 'You put everything reasonable into it and the local wildlife regrets ever noticing you. The ground survives.', gained };
+      }
+      const result = trainAllOutOnWild(s, rng);
+      if (!result.destroyed) {
+        return { text: 'You cut loose completely. The shockwave alone should have levelled something, and somehow did not.', gained };
+      }
+      return {
+        text: `You cut loose completely, and this time the planet does not survive it. ${result.planetName} comes apart around you - you make it out, and there was nothing else on it that could.${result.killed ? ' Except, this time, there was.' : ''} You are back on ${result.fallbackName}.`,
+        gained,
+      };
+    },
+  },
+
   // ------------------------------------------------------------------ world
   {
     id: 'hunt_dragonball', maxPerYear: 3, minMaturity: 9, tooYoung: 'You cannot cross a continent on your own yet.', slots: 2, name: 'Search for a Dragon Ball', cat: 'world',
@@ -586,6 +620,7 @@ export const ACTIONS = [
         if (planet.id === here.planet) continue;
         if (['otherworld', 'void'].includes(planet.id)) continue;
         if (!planetExists(planet.id, s.character.birthYear + s.character.age)) continue;
+        if (planetDestroyed(s, planet.id)) continue;
         const methods = travelOptions(s, planet.id);
         if (!methods.length) continue;
         const best = methods.sort((x, y) => (x.years - y.years) || (x.cost - y.cost))[0];
@@ -688,7 +723,7 @@ export const ACTIONS = [
   {
     id: 'world_act', maxPerYear: 1, minMaturity: 15, tooYoung: 'Nobody on this world is listening to a child.', slots: 2, name: 'Do something about this world', cat: 'world',
     desc: 'Defend it, take it, empty it, or recruit from it.',
-    available: (s) => !s.character.inAfterlife,
+    available: (s) => !s.character.inAfterlife && !getPlace(s.character.placeId).tags.includes('feral'),
     options: (s) => {
       const here = getPlace(s.character.placeId);
       const planet = getPlanet(here.planet);
