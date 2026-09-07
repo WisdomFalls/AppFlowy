@@ -25281,7 +25281,7 @@ const { limitFor } = __mod_engine_economy_js;
 const { render } = __mod_engine_text_js;
 const { adjust, findNpc, currentYear, addNpc } = __mod_engine_state_js;
 const { addFact } = __mod_engine_memory_js;
-const { combatPower, weaponAttackBonus } = __mod_engine_stats_js;
+const { combatPower, weaponAttackBonus, STAT_KEYS, STAT_LABELS } = __mod_engine_stats_js;
 const { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild, weddingLine, courtLine, birthLine, describeLineage } = __mod_engine_npc_js;
 const { npcBag } = __mod_engine_inventory_js;
 
@@ -25318,6 +25318,24 @@ const COMBAT_MIN_AGE = 6;
  * to your own family, whatever else is true about you. */
 function isCloseKin(npc) {
   return ['parent', 'child', 'sibling', 'spouse'].includes(npc.relation);
+}
+
+// Close enough, or invested enough in you, to actually spend a season
+// pushing you past somewhere you are stuck - a stranger just beats you.
+const TRAIN_WITH_RELATIONS = new Set(['rival', 'spouse', 'lover', 'friend', 'bestfriend',
+  'parent', 'sibling', 'child', 'mentor']);
+
+/** The stat where they have the biggest edge on you, if any - what they
+ * would actually have something to teach you about. */
+function bestTrainableStat(character, npc) {
+  let best = null, bestGap = 0;
+  for (const key of STAT_KEYS) {
+    const theirs = (npc.stats && npc.stats[key]) || 0;
+    const mine = character.stats[key] || 0;
+    const gap = theirs - mine;
+    if (gap > bestGap) { bestGap = gap; best = key; }
+  }
+  return bestGap >= 8 ? best : null;
 }
 
 function chargeSocial(npc, changes) {
@@ -25390,6 +25408,35 @@ const SOCIAL_ACTIONS = [
       adjust(state, { stats: { charisma: 2, technique: 1 } });
       note(state, `Trained ${npc.name}.`, { subject: npc.id, tags: ['mentor'], weight: 3 });
       return { text: `${render(`{They are worse than you expected and then they are not|It takes a season|You are a harsher teacher than you meant to be}.`, {}, rng)} ${npc.name} goes from ${numberish(before)} to ${numberish(npc.power)}.` };
+    },
+  },
+  {
+    id: 'train_with_them', name: 'Ask them to train you', tone: 'warm', slots: 2, maxPerYear: 3,
+    desc: 'Wherever they have the edge on you, let them push you past it.',
+    // Beating you in something is not enough on its own - a stranger who
+    // outclasses you owes you nothing. This only opens up to people who are
+    // actually invested in you (rival, family, spouse, a real friendship, a
+    // mentor) and who think enough of you to bother (respect).
+    available: (state, npc) => TRAIN_WITH_RELATIONS.has(npc.relation)
+      && (npc.respect || 0) >= 35
+      && !!bestTrainableStat(state.character, npc),
+    run: (state, rng, npc) => {
+      const stat = bestTrainableStat(state.character, npc);
+      if (!stat) return { text: `There is nothing left ${npc.name} can show you there.` };
+      const theirs = npc.stats[stat];
+      const c = state.character;
+      const mine = c.stats[stat] || 0;
+      const gap = clamp((theirs - mine) / 100, 0.02, 0.5);
+      const gain = Math.max(2, Math.round(3 + gap * 24));
+      c.stats[stat] = clamp(mine + gain, 1, 99);
+      chargeSocial(npc, { closeness: 8, respect: 3, trust: 4 });
+      note(state, `${npc.name} trained your ${STAT_LABELS[stat].toLowerCase()}.`,
+        { subject: npc.id, tags: ['training'], weight: 3 });
+      return {
+        text: `${render(`{They do not go easy on you|It is a hard season and you are sore the whole way through|`
+          + `They correct you, over and over, until it starts to take}.`, {}, rng)} `
+          + `${STAT_LABELS[stat]} up ${gain}.`,
+      };
     },
   },
   {
