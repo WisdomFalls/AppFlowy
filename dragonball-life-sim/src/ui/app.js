@@ -144,6 +144,26 @@ function labelled(container, text) {
   container.appendChild(el('span', 'field-label', text));
 }
 
+/**
+ * The one place mortality actually gets said out loud. Natural aging and
+ * old-age death (agingDecay/naturalDeathChance in stats.js) were always
+ * race-differentiated under the hood - a human ages at full rate over
+ * 72-96 years, an android at a twelfth of that over centuries - but
+ * nothing in the UI ever told the player so, at creation or in play. The
+ * mechanic existing invisibly reads the same as it not existing at all.
+ */
+function lifespanLine(race) {
+  const [lo, hi] = race.lifespan;
+  const span = `${numberish(lo)}-${numberish(hi)} years`;
+  if (race.agingRate <= 0.15) {
+    return `Ages so slowly it barely shows. A natural lifespan of ${span} - long enough that almost nothing dies of old age first.`;
+  }
+  if (race.agingRate <= 0.4) {
+    return `Ages slowly. A natural lifespan of ${span}, most of it spent looking much as it started.`;
+  }
+  return `Ages at roughly the pace it looks like. A natural lifespan of ${span}.`;
+}
+
 function renderCreation() {
   const race = getRace(DRAFT.raceId);
 
@@ -158,6 +178,7 @@ function renderCreation() {
   card.appendChild(el('div', 'race-name', race.name));
   card.appendChild(el('div', 'race-blurb', race.blurb));
   card.appendChild(el('div', 'race-note', race.notes));
+  card.appendChild(el('div', 'race-note', lifespanLine(race)));
 
   $('in-name').value = DRAFT.name;
 
@@ -1479,6 +1500,9 @@ function panelWorlds() {
 function panelRecords() {
   const { body } = sheetShell('Life', `Age ${GAME.character.age}`);
   const c = GAME.character;
+
+  const race = getRace(c.raceId);
+  body.appendChild(el('p', 'row-note', lifespanLine(race)));
 
   body.appendChild(el('div', 'group-label', 'What is remembered'));
   const facts = GAME.memory.facts.slice().sort((a, b) => b.weight - a.weight || b.year - a.year).slice(0, 18);
