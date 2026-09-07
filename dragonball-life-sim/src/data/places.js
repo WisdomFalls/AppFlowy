@@ -22,6 +22,7 @@ export const PLACES = [
   // Space
   { id: 'planet_vegeta', name: 'Planet Vegeta', planet: 'planet_vegeta', danger: 5, training: 1.9, tags: ['saiyan', 'highgrav', 'doomed'], desc: 'Ten times Earth gravity and a culture that solves everything by hitting it.' },
   { id: 'sadala', name: 'Planet Sadala', planet: 'sadala', danger: 4, training: 1.9, tags: ['saiyan', 'highgrav', 'u6'], desc: 'The Saiyan homeworld that never blew up, in a universe next door.' },
+  { id: 'frost_belt', name: 'The Frost Belt', planet: 'frost_belt', danger: 6, training: 1.7, tags: ['imperial', 'evil', 'jobs', 'u6', 'corporate'], desc: 'Frost Enterprises, in the flesh: gleaming reception halls over sub-levels the tours never reach.' },
   { id: 'namek', name: 'Planet Namek', planet: 'namek', danger: 3, training: 1.5, tags: ['namek', 'dragonballs', 'peaceful'], desc: 'Green sky, blue grass, three suns and no night at all.' },
   { id: 'new_namek', name: 'New Namek', planet: 'new_namek', danger: 2, training: 1.5, tags: ['namek', 'dragonballs', 'peaceful'], desc: 'They rebuilt. Same grass, same sky, better security.' },
   { id: 'frieza_ship', name: "Frieza's Flagship", planet: 'void', danger: 6, training: 1.7, tags: ['imperial', 'evil', 'jobs'], desc: 'Corridors of purple metal and a throne that hovers.' },

@@ -299,6 +299,12 @@ export const CANON = [
     teaches: ['basic_martial_arts', 'iron_body'],
     personality: 'Painfully shy, until jealousy turns her into something the universe cannot hold.',
     quirk: 'Apologises for the buildings afterwards.' },
+  { id: 'frost', name: 'Frost', race: 'frostdemon', years: [670, null], home: 'frost_belt',
+    tags: ['villain', 'imperial', 'threat', 'u6'], temperament: 'charming',
+    power: { 779: 1.2e12, 780: 1.2e12 },
+    teaches: ['death_beam'],
+    personality: 'Frieza with a press office. Runs the same slave-labour empire under a company name and a smile that has fooled entire worlds.',
+    quirk: 'Poisons his own blade before a fight and calls it a fair contest.' },
 
   // ------------------------------------------------------------- Frieza Force
   { id: 'frieza', name: 'Frieza', race: 'frostdemon', years: [680, null], home: 'frieza_ship',

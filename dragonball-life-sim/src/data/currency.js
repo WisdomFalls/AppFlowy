@@ -48,6 +48,7 @@ export const PLANET_CURRENCY = {
   yardrat: 'shard',
   cereal: 'shard',
   frieza_79: 'scrip',
+  frost_belt: 'scrip',
   void: 'scrip',
   otherworld: 'favour',
   // The universes next door run on their own paperwork.

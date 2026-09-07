@@ -29,6 +29,18 @@ export const PLANETS = [
     flora: 'Farmland, mountains, and stadiums.',
     strength: 'A warrior culture with rules, which makes it more dangerous, not less.',
   },
+  // Universe 6's own equivalent of the Frieza Force - not a copy of it, a
+  // parallel: the same kind of arrangement Universe 7 has, run by the
+  // universe's own Frost Demon rather than a visitor from next door.
+  {
+    id: 'frost_belt', name: 'The Frost Belt', distance: 44, universe: 6,
+    inhabitants: 'Whoever Frost Enterprises currently employs, and everyone underneath that word',
+    population: 'tens of thousands', tech: 'corporate-imperial', alignment: 'imperial, publicly denied',
+    law: 'A charter, notarised, that reads nothing like what actually happens here.',
+    defenders: [],
+    flora: 'Manicured approach roads leading to facilities nobody is shown the back of.',
+    strength: 'A press office that has never once had to retract a story, and a labour force that has never once been asked if it wanted the job.',
+  },
   {
     id: 'namek', name: 'Planet Namek', distance: 12,
     inhabitants: 'Namekians, in villages of a hundred or so',

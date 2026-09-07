@@ -2215,6 +2215,7 @@ const PLACES = [
   // Space
   { id: 'planet_vegeta', name: 'Planet Vegeta', planet: 'planet_vegeta', danger: 5, training: 1.9, tags: ['saiyan', 'highgrav', 'doomed'], desc: 'Ten times Earth gravity and a culture that solves everything by hitting it.' },
   { id: 'sadala', name: 'Planet Sadala', planet: 'sadala', danger: 4, training: 1.9, tags: ['saiyan', 'highgrav', 'u6'], desc: 'The Saiyan homeworld that never blew up, in a universe next door.' },
+  { id: 'frost_belt', name: 'The Frost Belt', planet: 'frost_belt', danger: 6, training: 1.7, tags: ['imperial', 'evil', 'jobs', 'u6', 'corporate'], desc: 'Frost Enterprises, in the flesh: gleaming reception halls over sub-levels the tours never reach.' },
   { id: 'namek', name: 'Planet Namek', planet: 'namek', danger: 3, training: 1.5, tags: ['namek', 'dragonballs', 'peaceful'], desc: 'Green sky, blue grass, three suns and no night at all.' },
   { id: 'new_namek', name: 'New Namek', planet: 'new_namek', danger: 2, training: 1.5, tags: ['namek', 'dragonballs', 'peaceful'], desc: 'They rebuilt. Same grass, same sky, better security.' },
   { id: 'frieza_ship', name: "Frieza's Flagship", planet: 'void', danger: 6, training: 1.7, tags: ['imperial', 'evil', 'jobs'], desc: 'Corridors of purple metal and a throne that hovers.' },
@@ -4282,6 +4283,18 @@ const PLANETS = [
     flora: 'Farmland, mountains, and stadiums.',
     strength: 'A warrior culture with rules, which makes it more dangerous, not less.',
   },
+  // Universe 6's own equivalent of the Frieza Force - not a copy of it, a
+  // parallel: the same kind of arrangement Universe 7 has, run by the
+  // universe's own Frost Demon rather than a visitor from next door.
+  {
+    id: 'frost_belt', name: 'The Frost Belt', distance: 44, universe: 6,
+    inhabitants: 'Whoever Frost Enterprises currently employs, and everyone underneath that word',
+    population: 'tens of thousands', tech: 'corporate-imperial', alignment: 'imperial, publicly denied',
+    law: 'A charter, notarised, that reads nothing like what actually happens here.',
+    defenders: [],
+    flora: 'Manicured approach roads leading to facilities nobody is shown the back of.',
+    strength: 'A press office that has never once had to retract a story, and a labour force that has never once been asked if it wanted the job.',
+  },
   {
     id: 'namek', name: 'Planet Namek', distance: 12,
     inhabitants: 'Namekians, in villages of a hundred or so',
@@ -6300,6 +6313,7 @@ const PLANET_CURRENCY = {
   yardrat: 'shard',
   cereal: 'shard',
   frieza_79: 'scrip',
+  frost_belt: 'scrip',
   void: 'scrip',
   otherworld: 'favour',
   // The universes next door run on their own paperwork.
@@ -6687,6 +6701,12 @@ const CANON = [
     teaches: ['basic_martial_arts', 'iron_body'],
     personality: 'Painfully shy, until jealousy turns her into something the universe cannot hold.',
     quirk: 'Apologises for the buildings afterwards.' },
+  { id: 'frost', name: 'Frost', race: 'frostdemon', years: [670, null], home: 'frost_belt',
+    tags: ['villain', 'imperial', 'threat', 'u6'], temperament: 'charming',
+    power: { 779: 1.2e12, 780: 1.2e12 },
+    teaches: ['death_beam'],
+    personality: 'Frieza with a press office. Runs the same slave-labour empire under a company name and a smile that has fooled entire worlds.',
+    quirk: 'Poisons his own blade before a fight and calls it a fair contest.' },
 
   // ------------------------------------------------------------- Frieza Force
   { id: 'frieza', name: 'Frieza', race: 'frostdemon', years: [680, null], home: 'frieza_ship',
@@ -10674,6 +10694,26 @@ const FACTIONS = [
       { name: 'a garrison detachment', power: 0.5, note: 'Bored, badly paid, and a long way from anywhere.' },
       { name: 'an appraisal team', power: 0.3, note: 'They are here to value the planet, not to fight for it.' },
       { name: 'an elite guard', power: 6, note: 'Personally selected. They do not carry scouters.' },
+    ],
+  },
+  {
+    id: 'frost_enterprises',
+    name: 'Frost Enterprises',
+    emblem: 'A clean corporate mark. Nothing in it references what the company actually does.',
+    leader: 'frost',
+    colours: ['#2f6b6b', '#d8dde6'],
+    alignment: -70,
+    from: 765,
+    scope: 'galaxy', universe: 6,
+    goal: 'Run the exact same empire the Frieza Force runs next door, with a charter and a smile instead of a horn insignia.',
+    stance: 'hostile',
+    recruits: true,
+    desc: "Universe 6's answer to the Frieza Force, and it is not a coincidence - it is the same shape of thing, wearing a company name instead of an emperor's crest. The labour is real. The press releases are better.",
+    squads: [
+      { name: 'a compliance team', power: 1, note: 'Here to make sure nobody asks the wrong question twice.' },
+      { name: 'a site security detail', power: 0.6, note: 'Uniformed, insured, and just as willing to hurt you as any purge squad.' },
+      { name: 'an acquisitions specialist', power: 4, note: 'Handles the worlds the charter cannot legally explain.' },
+      { name: 'the board', power: 9, note: 'Frost personally attends when a number gets big enough.', elite: true },
     ],
   },
   {
