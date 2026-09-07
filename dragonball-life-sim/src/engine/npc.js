@@ -6,8 +6,9 @@ import { clamp } from './rng.js';
 import { generateFullName, generateTitle, generateEpithet, generateSignatureName } from '../data/names.js';
 import { RACES, getRace, raceHasTail, sexesFor } from '../data/races.js';
 import { getCanon, canonPower, canonAlive } from '../data/canon.js';
-import { getPlace } from '../data/places.js';
+import { getPlace, PLACES } from '../data/places.js';
 import { getItem } from '../data/items.js';
+import { careersFor, getCareer } from '../data/jobs.js';
 import { canonLook, SPECIES_LOOK } from '../data/canonlooks.js';
 import { render } from './text.js';
 
@@ -746,6 +747,71 @@ export function progressNpc(rng, npc, year, opts = {}) {
     }
   } else {
     npc.power = Math.round(npc.power * rng.float(0.97, 1.02));
+  }
+
+  // Work: unemployed adults sometimes find something where they live;
+  // employed ones sometimes move up. Same ladders the player uses.
+  if (npc.age >= 16 && npc.age < 70) {
+    if (!npc.careerId) {
+      if (rng.chance(0.1)) {
+        const place = getPlace(npc.placeId);
+        const options = careersFor({ stats: npc.stats }, place.tags, place.planet);
+        if (options.length) {
+          const career = rng.pick(options);
+          npc.careerId = career.id;
+          npc.workplaceId = npc.placeId;
+          npc.jobRung = 0;
+          npc.jobTitle = career.rungs[0].title;
+          if (!news && rng.chance(0.3)) news = `${npc.name} started working as a ${npc.jobTitle}.`;
+        }
+      }
+    } else if (rng.chance(0.06)) {
+      const career = getCareer(npc.careerId);
+      if (career && (npc.jobRung ?? 0) < career.rungs.length - 1) {
+        npc.jobRung = (npc.jobRung ?? 0) + 1;
+        npc.jobTitle = career.rungs[npc.jobRung].title;
+        if (!news && rng.chance(0.4)) news = `${npc.name} was promoted to ${npc.jobTitle}.`;
+      }
+    }
+  }
+
+  // Marriage, off-screen, to somebody who is not you and never will be a
+  // full record of their own - a name is all a life outside yours needs.
+  if (npc.age >= 18 && !npc.marriedName && !['spouse', 'lover', 'child'].includes(npc.relation) && rng.chance(0.025)) {
+    npc.marriedName = generateFullName(rng, npc.raceId);
+    news = news || `${npc.name} got married, to somebody you have never met.`;
+  }
+
+  // Travel: nobody who anchors your own life (family, spouse) drifts away
+  // without you noticing, and a rival or nemesis stays findable on purpose -
+  // the confrontation is yours to have, not something that wanders off. The
+  // rest of the people you know keep living somewhere, and that somewhere
+  // moves.
+  const canWander = ['acquaintance', 'colleague', 'friend', 'student', 'mentor'].includes(npc.relation);
+  if (canWander && rng.chance(0.03)) {
+    const options = PLACES.filter((p) => p.id !== npc.placeId);
+    if (options.length) {
+      const dest = rng.pick(options);
+      npc.placeId = dest.id;
+      npc.homePlaceId = dest.id;
+      if (!news && rng.chance(0.25)) news = `${npc.name} moved to ${dest.name}.`;
+    }
+  }
+
+  // A life with real power in it sometimes runs into somebody else's,
+  // somewhere you were not standing. Rivals and nemeses are exempt - the
+  // game keeps those alive on purpose, for the confrontation that is
+  // actually yours to have.
+  if (!['rival', 'nemesis', 'enemy'].includes(npc.relation) && npc.power > 500 && rng.chance(0.03)) {
+    if (rng.chance(0.08)) {
+      // Left silent here on purpose - mournNpc's own sweep, later the same
+      // year, is what actually narrates a death, the same way old age does.
+      npc.causeOfDeath = npc.causeOfDeath || 'Killed in a fight that had nothing to do with you';
+      npc.alive = false;
+    } else {
+      npc.power = Math.round(npc.power * rng.float(1.01, 1.06));
+      if (!news && rng.chance(0.2)) news = `${npc.name} got into a fight with somebody else and came out of it standing.`;
+    }
   }
 
   if (rng.chance(0.25)) {
