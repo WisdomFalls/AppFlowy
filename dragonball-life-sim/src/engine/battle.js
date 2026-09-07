@@ -17,6 +17,7 @@ import { numberish } from './text.js';
 import { damageGear, lootFromDefeated } from './inventory.js';
 import { spreadWord, DEED_SCALE } from './settlement.js';
 import { maim } from './body.js';
+import { makeCanonNpc } from './npc.js';
 
 /**
  * What people say mid-fight. Nobody in this setting fights silently: they
@@ -1015,8 +1016,17 @@ export function finishLethalWin(state, rng, battle) {
       // person is not a slow burn one visit and a prodigy the next.
       pace: rng.float(0.7, 1.6),
     });
-    const npc = ((foe.ref && foe.ref.npcId) && state.npcs[foe.ref.npcId])
-      || (battle.foeRef.npcId && state.npcs[battle.foeRef.npcId]);
+    const refCanonId = (foe.ref && foe.ref.canonId) || battle.foeRef.canonId;
+    let npc = ((foe.ref && foe.ref.npcId) && state.npcs[foe.ref.npcId])
+      || (battle.foeRef.npcId && state.npcs[battle.foeRef.npcId])
+      || (refCanonId && state.npcs['canon_' + refCanonId]);
+    // A canon fighter you never formally "met" before the fight still needs a
+    // real record once you kill them - otherwise the kill lands nowhere and
+    // they read as untouched (alive, and never even acknowledged as fought).
+    if (!npc && refCanonId) {
+      npc = makeCanonNpc(rng, refCanonId, year, 'acquaintance');
+      if (npc) state.npcs[npc.id] = npc;
+    }
     if (npc && npc.alive) {
       npc.alive = false;
       npc.mourned = true;
