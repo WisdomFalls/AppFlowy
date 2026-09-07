@@ -14,10 +14,12 @@ import { getTransformation, ladderFor } from '../data/transformations.js';
 import { getPlace } from '../data/places.js';
 import { getRace, hasPerk } from '../data/races.js';
 import { numberish } from './text.js';
-import { damageGear, lootFromDefeated } from './inventory.js';
+import { damageGear, lootFromDefeated, npcBag } from './inventory.js';
 import { spreadWord, DEED_SCALE } from './settlement.js';
 import { maim } from './body.js';
-import { makeCanonNpc } from './npc.js';
+import { makeCanonNpc, makeNpc } from './npc.js';
+import { addNpc } from './state.js';
+import { openThread } from './memory.js';
 import { getCanon } from '../data/canon.js';
 import { getFaction } from '../data/factions.js';
 
@@ -1240,15 +1242,21 @@ export function killKarmaDelta(state, battle) {
 
 /**
  * Actually kill whoever was downed in a lethal win: recorded to Hell's
- * roster, marked dead on their NPC record if they have one, looted. Called
- * either automatically (a headless fight has nobody to ask) or from the
- * "Finish them" choice once the player has actually chosen it - never
- * implicitly just because the fight ended, or "Let them live" would be a lie.
+ * roster, marked dead on their NPC record if they have one. Called either
+ * automatically (a headless fight has nobody to ask) or from the "Finish
+ * them" choice once the player has actually chosen it - never implicitly
+ * just because the fight ended, or "Let them live" would be a lie.
+ *
+ * Looting is not part of this any more. Whoever is left with a body worth
+ * going through is listed on `battle.lootable`, for whichever caller can
+ * actually ask the player about it - going through a corpse is its own
+ * decision, not something that happens automatically because you won.
  */
 export function finishLethalWin(state, rng, battle) {
   const c = state.character;
   const lines = [];
   const year = c.birthYear + c.age;
+  battle.lootable = [];
   for (const foe of (battle.squad || [battle.them])) {
     if (foe.hp > 0) continue;
     state.stats.kills += 1;
@@ -1288,12 +1296,55 @@ export function finishLethalWin(state, rng, battle) {
       npc.deadSince = year;
       npc.causeOfDeath = 'killed by you';
       npc.killedByPlayer = true;
-      const loot = lootFromDefeated(rng, npc, c);
-      if (loot) lines.push(loot);
+      npcBag(rng, npc);
+      if (npc.bag && npc.bag.length) battle.lootable.push(npc.id);
     }
   }
   if (state.world.ended.length > 40) state.world.ended = state.world.ended.slice(-40);
   return lines;
+}
+
+/**
+ * Going through what somebody left behind, once the player actually
+ * chooses to. Taking a life and taking their things are not the same
+ * decision - this one carries its own risk: somebody notices what you are
+ * carrying, or somebody who mattered to the dead finds out who took it.
+ */
+export function lootDefeatedNpc(state, rng, npcId) {
+  const c = state.character;
+  const npc = state.npcs[npcId];
+  if (!npc) return { looted: false, text: 'There is nothing left to go through.' };
+  const loot = lootFromDefeated(rng, npc, c);
+  if (!loot) return { looted: false, text: `${npc.name} was not carrying anything worth taking.` };
+
+  const lines = [loot];
+  const notability = clamp((npc.fame || 0) / 100 + (npc.canonId ? 0.35 : 0)
+    + Math.log10(Math.max(10, npc.power || 10)) / 40, 0, 0.9);
+  const recognized = rng.chance(notability);
+  if (recognized) {
+    c.karma = clamp(c.karma - 8, -100, 100);
+    spreadWord(state, { scale: DEED_SCALE.street * 2, karma: -6 });
+    lines.push('Somebody recognises what you are carrying. Taking a life is one thing - people notice when you walk away wearing what used to be theirs.');
+  }
+
+  let avenger = null;
+  const revengeChance = clamp(0.12 + (npc.fame || 0) / 300 + (npc.canonId ? 0.15 : 0), 0.05, 0.55);
+  if (rng.chance(revengeChance)) {
+    avenger = makeNpc(rng, {
+      year: c.birthYear + c.age, placeId: c.placeId, raceId: npc.raceId,
+      relation: 'enemy', tension: 80, minAge: 18, maxAge: 60,
+    });
+    avenger.power = Math.max(1, Math.round((npc.power || avenger.power) * rng.float(0.7, 1.2)));
+    addNpc(state, avenger);
+    openThread(state.memory, {
+      kind: 'vendetta', subject: avenger.id, year: c.age,
+      title: `${avenger.name} wants what you took back`,
+      maxStage: 3, heat: 65,
+    });
+    lines.push(`${npc.name} was somebody's. ${avenger.name} finds out what happened to them, and to what they had.`);
+  }
+
+  return { looted: true, recognized, avenger, text: lines.join(' ') };
 }
 
 /**

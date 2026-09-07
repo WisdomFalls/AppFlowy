@@ -42,7 +42,7 @@ import { worldManifest } from '../engine/worlds.js';
 import { factionsPresent } from '../data/factions.js';
 import { getPlanet } from '../data/planets.js';
 import { startSurvival, survivalActions, survivalTurn, survivalStatus, resolveTeamWish, RULES } from '../engine/survival.js';
-import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, finishLethalWin, killKarmaDelta, moralAlignmentOf, STANCES } from '../engine/battle.js';
+import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, finishLethalWin, lootDefeatedNpc, killKarmaDelta, moralAlignmentOf, STANCES } from '../engine/battle.js';
 import { costLabel, limitFor, usedThisYear, yearCapacity } from '../engine/economy.js';
 import { ballsHeld, ballManifest, pingSquare, GRID } from '../engine/dragonballs.js';
 import { resolveTrial, getMastery } from '../engine/trials.js';
@@ -2665,8 +2665,39 @@ function endBattle() {
       kill.remove();
       const s2 = document.querySelector('.bact:not(.wide):not(.kill)');
       if (s2) s2.remove();
+      renderLootChoice();
     });
     wrap.appendChild(kill);
+  }
+
+  // Going through the body is its own decision, offered only once there is
+  // actually something to go through and only after the kill is settled -
+  // never bundled into "Finish them" itself.
+  function renderLootChoice() {
+    if (!BATTLE.lootable || !BATTLE.lootable.length) return;
+    const loot = el('button', 'bact');
+    loot.type = 'button';
+    loot.appendChild(el('span', 'bact-label', 'Loot the body'));
+    loot.appendChild(el('span', 'bact-hint', 'Take what they were carrying. Not everyone lets that go unnoticed.'));
+    const leave = el('button', 'bact');
+    leave.type = 'button';
+    leave.appendChild(el('span', 'bact-label', 'Leave everything'));
+    loot.addEventListener('click', () => {
+      const rng = getRng(GAME);
+      const lines = BATTLE.lootable.map((npcId) => lootDefeatedNpc(GAME, rng, npcId).text);
+      saveRng(GAME, rng);
+      BATTLE.lootable = [];
+      pushBattleLines(lines, 'big');
+      loot.remove();
+      leave.remove();
+    });
+    leave.addEventListener('click', () => {
+      pushBattleLines(['You leave it where it fell.'], 'big');
+      loot.remove();
+      leave.remove();
+    });
+    wrap.appendChild(loot);
+    wrap.appendChild(leave);
   }
 }
 
