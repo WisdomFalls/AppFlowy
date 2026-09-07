@@ -27363,6 +27363,41 @@ function doSocial(npcId, actionId) {
   flash(result.text.slice(0, 140));
 }
 
+/**
+ * Something you made up got named for you, by a generator, with a reroll
+ * that only ever offered another generated name - never your own words.
+ * This is the one place that gets fixed: a plain text box, whatever you
+ * already invented (a signature technique, a form built past its parent)
+ * kept exactly as it was otherwise, renamed to whatever you actually type.
+ */
+function openRenamePanel(title, currentName, onSave) {
+  const { body } = sheetShell(title, 'Yours. Call it whatever you actually want.');
+  const input = document.createElement('input');
+  input.className = 'text-input';
+  input.type = 'text';
+  input.maxLength = 40;
+  input.value = currentName;
+  input.autocomplete = 'off';
+  body.appendChild(input);
+
+  const save = el('button', 'primary-btn', 'Save');
+  save.type = 'button';
+  save.addEventListener('click', () => {
+    const name = input.value.trim();
+    if (!name) { flash('Name it something.'); return; }
+    onSave(name);
+    autosave();
+    panelPower();
+  });
+  body.appendChild(save);
+
+  const cancel = el('button', 'ghost-btn', 'Cancel');
+  cancel.type = 'button';
+  cancel.addEventListener('click', panelPower);
+  body.appendChild(cancel);
+  openSheet('panel');
+}
+
 function panelPower() {
   const c = GAME.character;
   const { body } = sheetShell('Power', powerTier(combatPower(c)));
@@ -27423,6 +27458,13 @@ function panelPower() {
       main.appendChild(el('div', 'row-note', `Built from ${getTransformation(form.baseId) ? getTransformation(form.baseId).name : 'something'} in Age ${form.year}.`));
       row.appendChild(main);
       row.appendChild(el('div', 'row-value', 'x' + numberish(form.mult)));
+      const rename = el('button', 'mini', 'Rename');
+      rename.type = 'button';
+      rename.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openRenamePanel(`Rename ${form.name}`, form.name, (name) => { form.name = name; });
+      });
+      row.appendChild(rename);
       body.appendChild(row);
     }
   }
@@ -27451,6 +27493,13 @@ function panelPower() {
     main.appendChild(el('div', 'row-title', c.signature.name));
     main.appendChild(el('div', 'row-note', `Invented at age ${c.signature.year - c.birthYear >= 0 ? c.signature.year - c.birthYear : c.age}. Nobody else has this.`));
     row.appendChild(main);
+    const rename = el('button', 'mini', 'Rename');
+    rename.type = 'button';
+    rename.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openRenamePanel(`Rename ${c.signature.name}`, c.signature.name, (name) => { c.signature.name = name; });
+    });
+    row.appendChild(rename);
     body.appendChild(row);
   }
 
