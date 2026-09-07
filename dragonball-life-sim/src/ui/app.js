@@ -911,7 +911,11 @@ function panelPerson(npcId) {
       : `${read.text}${(npc.knowledge || 0) >= 2 ? '' : ''}`;
   if (read.broke) flash('Your scouter climbs, screams and comes apart.', 5000);
   const table = el('div', 'dossier');
-  for (const row of dossier(npc, { full: npc.isCanon, powerRead })) {
+  // Being canon does not make somebody an open book - Vegeta does not hand
+  // you his stats because he is famous. Canon NPCs read through the same
+  // knowledge/personality gate as everyone else now; only a King Yemma-style
+  // full lookup (nothing currently calls dossier() that way) should force it.
+  for (const row of dossier(npc, { powerRead, playerPower: combatPower(GAME.character) })) {
     const line = el('div', 'dossier-row');
     line.appendChild(el('span', 'dossier-key', row.label));
     line.appendChild(el('span', 'dossier-val' + (row.value === '\u2014' ? ' unknown' : ''), row.value));

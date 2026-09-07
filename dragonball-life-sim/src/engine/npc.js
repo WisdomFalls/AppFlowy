@@ -222,6 +222,56 @@ function restraintFor(rng, tags = []) {
   return clamp(base + rng.float(-0.06, 0.06), 0.55, 1);
 }
 
+// Canon NPCs carry their temperament (canon.js) as their only tag, which is
+// a different vocabulary from PERSONALITY_TAGS - Vegeta is 'proud', not
+// 'devious'. Read the same guarded/open split out of it separately so canon
+// characters get a real reading instead of defaulting to neutral for
+// everyone with a name.
+const CANON_GUARDED_TEMPERAMENTS = ['cold', 'cruel', 'scheming', 'sly', 'silent', 'quiet',
+  'stoic', 'hard', 'haughty', 'imperious', 'smug', 'spiteful', 'mercenary', 'craven',
+  'shy', 'timid', 'severe', 'proud', 'grave', 'dry', 'urbane', 'capricious'];
+const CANON_OPEN_TEMPERAMENTS = ['boastful', 'boisterous', 'bold', 'booming', 'brash',
+  'cheerful', 'childish', 'childlike', 'earnest', 'easygoing', 'flippant', 'gentle',
+  'jokey', 'jolly', 'kind', 'placid', 'sweet', 'theatrical', 'warm', 'cocky', 'preening'];
+
+/** Net openness from personality: negative means guarded, positive means
+ * an open book. */
+function opennessScore(npc) {
+  let score = 0;
+  for (const t of npc.tags || []) {
+    if (GUARDED_TAGS.includes(t) || CANON_GUARDED_TEMPERAMENTS.includes(t)) score -= 1;
+    if (OPEN_TAGS.includes(t) || CANON_OPEN_TEMPERAMENTS.includes(t)) score += 1;
+  }
+  return score;
+}
+
+/**
+ * What the dossier actually shows, which is not always what npc.knowledge
+ * says you have earned - it is filtered through who they are. A secretive
+ * person sits on what they can do unless you are genuinely close to them,
+ * or you are plainly stronger and there is nothing left to protect, or
+ * their own drive to grow forces their hand (a rival, or a student who
+ * wants your approval, cannot help revealing itself). An open person does
+ * not wait for the usual thresholds at all - "some don't really care and
+ * would spill their beans at an intermediate relationship" - so their
+ * dossier reads a level ahead of what they have actually experienced with
+ * you, once you know them at all.
+ */
+export function effectiveKnowledge(npc, opts = {}) {
+  let k = npc.knowledge || 0;
+  const openness = opennessScore(npc);
+  const veryClose = (npc.closeness || 0) >= 70;
+  const clearlyStronger = opts.playerPower != null && npc.power > 0
+    && opts.playerPower > npc.power * 2.2;
+  const drivenOpen = npc.relation === 'rival' || npc.relation === 'student';
+  if (openness < 0 && !veryClose && !clearlyStronger && !drivenOpen) {
+    k = Math.max(0, k - 1);
+  } else if (openness > 0 && (npc.closeness || 0) >= 40) {
+    k = Math.min(4, k + 1);
+  }
+  return k;
+}
+
 /** A real stat spread for a canon character, on the same 1-99 scale everyone
  * else uses - canon.js only carries power, not the shape it is made of. */
 function canonStats(rng, raceId) {
@@ -739,7 +789,7 @@ export function birthLine(npc, rng) {
  * the gaps are visible and worth closing.
  */
 export function dossier(npc, opts = {}) {
-  const k = opts.full ? 4 : (npc.knowledge || 0);
+  const k = opts.full ? 4 : effectiveKnowledge(npc, opts);
   const unknown = '—';
   const race = getRace(npc.raceId);
   const rows = [];
@@ -763,7 +813,7 @@ export function dossier(npc, opts = {}) {
   // by knowing them socially. Below knowledge 2 ("seen them fight properly")
   // this is a flat unknown row per stat, same as everything else here.
   for (const [key, label] of COMBAT_STATS) {
-    rows.push({ label, value: statReveal(npc, key) ?? unknown });
+    rows.push({ label, value: statReveal(npc, key, k) ?? unknown });
   }
   // Social stats read the other way: talking to somebody on good terms tells
   // you how disciplined, sharp, or charming they are - a spar tells you
@@ -811,16 +861,19 @@ const SOCIAL_STATS = [['discipline', 'Discipline'], ['intellect', 'Intellect'], 
  * What actually fighting them tells you about one stat: what they put on
  * display, scaled down by however much of themselves they were holding back
  * in an ordinary spar - and, once you know them well enough to know what
- * they are hiding (knowledge 3, "you know what they are hiding"), their real
- * number alongside it. Someone who was not holding anything back just shows
- * one number; there is nothing to bracket.
+ * they are hiding (effective knowledge 3, "you know what they are hiding"),
+ * their real number alongside it. Someone who was not holding anything back
+ * just shows one number; there is nothing to bracket. Takes the caller's
+ * already-computed effective knowledge (personality and closeness already
+ * folded in) rather than re-deriving it, so this and the rest of the
+ * dossier never disagree about how much this particular person has shown.
  */
-export function statReveal(npc, key) {
+export function statReveal(npc, key, k) {
   const value = npc.stats && npc.stats[key];
-  if (value == null || (npc.knowledge || 0) < 2) return null;
+  if (value == null || k < 2) return null;
   const restraint = npc.sparRestraint ?? 1;
   const shown = Math.max(1, Math.round(value * restraint));
-  const revealsTrue = (npc.knowledge || 0) >= 3 && restraint < 0.98;
+  const revealsTrue = k >= 3 && restraint < 0.98;
   return revealsTrue ? `${shown} (${value})` : String(shown);
 }
 
