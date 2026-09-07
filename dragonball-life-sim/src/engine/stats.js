@@ -196,6 +196,27 @@ export function applyStatDelta(character, delta, cap = 100) {
 }
 
 /**
+ * How you actually come across, right now - not the roll you were born
+ * with. Visible scars cost you something, upkeep buys a little back, and
+ * a body long past its prime reads that way to everyone else too. This is
+ * deliberately separate from charisma: charisma is how you work a room,
+ * this is what a stranger sees before you say a word.
+ */
+export function looksScore(character) {
+  let score = character.looks ?? 50;
+  score -= Math.min(30, (character.scars || []).length * 4);
+  const groomedRecently = character.flags?.groomedAtAge != null
+    && character.age - character.flags.groomedAtAge <= 1;
+  score += groomedRecently ? 3 : -3;
+  if ((character.vitals?.health || 100) < 40) score -= 6;
+  const race = getRace(character.raceId);
+  const bio = character.age * race.agingRate;
+  if (bio < 4) score -= 8;             // infant, not grown into a face yet
+  else if (bio >= 70) score -= Math.min(24, Math.round((bio - 70) * 0.6)); // old age wears on it
+  return Math.round(clamp(score, 1, 99));
+}
+
+/**
  * How much punishment the body holds. This is not a constant: a fighter who
  * has trained for thirty years and come back from three near-deaths is
  * physically harder to put down than the boy he was, and the number should

@@ -270,6 +270,7 @@ export function rollOrigin(rng, raceId, birthYear, opts = {}) {
     battleInstinct: Math.round(rng.gauss(50, 18, 5, 99)),
     iq: Math.round(rng.gauss(100, 18, 55, 180)),
     luck: Math.round(rng.gauss(50, 20, 1, 99)),
+    looks: Math.round(rng.gauss(50, 19, 3, 99)),
     charismaSeed: Math.round(rng.gauss(50, 18, 5, 99)),
   };
 }

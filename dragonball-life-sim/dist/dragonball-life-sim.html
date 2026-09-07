@@ -4015,6 +4015,27 @@ function applyStatDelta(character, delta, cap = 100) {
 }
 
 /**
+ * How you actually come across, right now - not the roll you were born
+ * with. Visible scars cost you something, upkeep buys a little back, and
+ * a body long past its prime reads that way to everyone else too. This is
+ * deliberately separate from charisma: charisma is how you work a room,
+ * this is what a stranger sees before you say a word.
+ */
+function looksScore(character) {
+  let score = character.looks ?? 50;
+  score -= Math.min(30, (character.scars || []).length * 4);
+  const groomedRecently = character.flags?.groomedAtAge != null
+    && character.age - character.flags.groomedAtAge <= 1;
+  score += groomedRecently ? 3 : -3;
+  if ((character.vitals?.health || 100) < 40) score -= 6;
+  const race = getRace(character.raceId);
+  const bio = character.age * race.agingRate;
+  if (bio < 4) score -= 8;             // infant, not grown into a face yet
+  else if (bio >= 70) score -= Math.min(24, Math.round((bio - 70) * 0.6)); // old age wears on it
+  return Math.round(clamp(score, 1, 99));
+}
+
+/**
  * How much punishment the body holds. This is not a constant: a fighter who
  * has trained for thirty years and come back from three near-deaths is
  * physically harder to put down than the boy he was, and the number should
@@ -4075,7 +4096,7 @@ function naturalDeathChance(character) {
   if (over < 0) return 0.004 + (10 + over) * 0.002;
   return clamp(0.08 + over * 0.06, 0, 0.85);
 }
-  return { STAT_KEYS, STAT_LABELS, ageFactor, agingDecay, trainingRate, zenkaiBoost, bestForm, equippedWeapon, weaponAttackBonus, combatPower, powerTier, winChance, statAverage, applyStatDelta, healthMaxFor, staminaMaxFor, kiMaxFor, lifeExpectancy, naturalDeathChance };
+  return { STAT_KEYS, STAT_LABELS, ageFactor, agingDecay, trainingRate, zenkaiBoost, bestForm, equippedWeapon, weaponAttackBonus, combatPower, powerTier, winChance, statAverage, applyStatDelta, looksScore, healthMaxFor, staminaMaxFor, kiMaxFor, lifeExpectancy, naturalDeathChance };
 })();
 
 /* ==== data/planets.js ==== */
@@ -6020,6 +6041,7 @@ function rollOrigin(rng, raceId, birthYear, opts = {}) {
     battleInstinct: Math.round(rng.gauss(50, 18, 5, 99)),
     iq: Math.round(rng.gauss(100, 18, 55, 180)),
     luck: Math.round(rng.gauss(50, 20, 1, 99)),
+    looks: Math.round(rng.gauss(50, 19, 3, 99)),
     charismaSeed: Math.round(rng.gauss(50, 18, 5, 99)),
   };
 }
@@ -8375,6 +8397,7 @@ function createGame(creation, seedInput) {
     battleInstinct: origin.battleInstinct,
     iq: origin.iq,
     luck: origin.luck,
+    looks: origin.looks,
 
     // What your blood gave you, and what your upbringing added. Set before
     // anything else happens and never chosen.
@@ -25921,7 +25944,7 @@ const { limitFor } = __mod_engine_economy_js;
 const { render } = __mod_engine_text_js;
 const { adjust, findNpc, currentYear, addNpc } = __mod_engine_state_js;
 const { addFact } = __mod_engine_memory_js;
-const { combatPower, weaponAttackBonus, STAT_KEYS, STAT_LABELS } = __mod_engine_stats_js;
+const { combatPower, weaponAttackBonus, looksScore, STAT_KEYS, STAT_LABELS } = __mod_engine_stats_js;
 const { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild, weddingLine, courtLine, birthLine, describeLineage } = __mod_engine_npc_js;
 const { npcBag } = __mod_engine_inventory_js;
 
@@ -26204,7 +26227,8 @@ const SOCIAL_ACTIONS = [
       && !['parent', 'sibling', 'child', 'spouse', 'lover'].includes(npc.relation)
       && npc.alive,
     run: (state, rng, npc) => {
-      const chance = clamp(0.15 + bondScore(npc) / 140 + state.character.stats.charisma / 260, 0.05, 0.92);
+      const chance = clamp(0.15 + bondScore(npc) / 140 + state.character.stats.charisma / 520
+        + looksScore(state.character) / 520, 0.05, 0.92);
       if (rng.chance(chance)) {
         npc.relation = 'lover';
         chargeSocial(npc, { romance: 45, closeness: 15, trust: 8 });
@@ -27193,7 +27217,7 @@ const { eraName, worldPowerBaseline, TIMELINE } = __mod_data_timeline_js;
 const { generateFullName } = __mod_data_names_js;
 const { BRANCHES, TECH_BY_ID } = __mod_data_techniques_js;
 const { getTransformation, ladderFor } = __mod_data_transformations_js;
-const { STAT_KEYS, STAT_LABELS, combatPower, powerTier } = __mod_engine_stats_js;
+const { STAT_KEYS, STAT_LABELS, combatPower, powerTier, looksScore } = __mod_engine_stats_js;
 const { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } = __mod_engine_npc_js;
 const { npcActions, runNpcAction, canVisitLiving } = __mod_engine_social_js;
 const { scoreReplyLocally, applyReply, impressionLabel } = __mod_engine_dialogue_js;
@@ -28719,7 +28743,7 @@ function panelTraits() {
   body.appendChild(el('div', 'group-label', 'What you were born with'));
   const grid = el('div', 'stat-grid');
   for (const [label, value] of [['Potential', c.potential], ['Battle instinct', c.battleInstinct],
-    ['Intellect', c.iq], ['Luck', c.luck]]) {
+    ['Intellect', c.iq], ['Luck', c.luck], ['Looks', looksScore(c)]]) {
     const box = el('div', 'stat');
     box.appendChild(el('div', 'stat-name', label));
     box.appendChild(el('div', 'stat-val', String(value ?? '—')));

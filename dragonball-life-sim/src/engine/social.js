@@ -11,7 +11,7 @@ import { limitFor } from './economy.js';
 import { render } from './text.js';
 import { adjust, findNpc, currentYear, addNpc } from './state.js';
 import { addFact } from './memory.js';
-import { combatPower, weaponAttackBonus, STAT_KEYS, STAT_LABELS } from './stats.js';
+import { combatPower, weaponAttackBonus, looksScore, STAT_KEYS, STAT_LABELS } from './stats.js';
 import { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild,
   weddingLine, courtLine, birthLine, describeLineage } from './npc.js';
 import { npcBag } from './inventory.js';
@@ -295,7 +295,8 @@ export const SOCIAL_ACTIONS = [
       && !['parent', 'sibling', 'child', 'spouse', 'lover'].includes(npc.relation)
       && npc.alive,
     run: (state, rng, npc) => {
-      const chance = clamp(0.15 + bondScore(npc) / 140 + state.character.stats.charisma / 260, 0.05, 0.92);
+      const chance = clamp(0.15 + bondScore(npc) / 140 + state.character.stats.charisma / 520
+        + looksScore(state.character) / 520, 0.05, 0.92);
       if (rng.chance(chance)) {
         npc.relation = 'lover';
         chargeSocial(npc, { romance: 45, closeness: 15, trust: 8 });

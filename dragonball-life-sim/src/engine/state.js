@@ -101,6 +101,7 @@ export function createGame(creation, seedInput) {
     battleInstinct: origin.battleInstinct,
     iq: origin.iq,
     luck: origin.luck,
+    looks: origin.looks,
 
     // What your blood gave you, and what your upbringing added. Set before
     // anything else happens and never chosen.

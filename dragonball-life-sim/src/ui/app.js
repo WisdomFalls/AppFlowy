@@ -22,7 +22,7 @@ import { eraName, worldPowerBaseline, TIMELINE } from '../data/timeline.js';
 import { generateFullName } from '../data/names.js';
 import { BRANCHES, TECH_BY_ID } from '../data/techniques.js';
 import { getTransformation, ladderFor } from '../data/transformations.js';
-import { STAT_KEYS, STAT_LABELS, combatPower, powerTier } from '../engine/stats.js';
+import { STAT_KEYS, STAT_LABELS, combatPower, powerTier, looksScore } from '../engine/stats.js';
 import { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } from '../engine/npc.js';
 import { npcActions, runNpcAction, canVisitLiving } from '../engine/social.js';
 import { scoreReplyLocally, applyReply, impressionLabel } from '../engine/dialogue.js';
@@ -1553,7 +1553,7 @@ function panelTraits() {
   body.appendChild(el('div', 'group-label', 'What you were born with'));
   const grid = el('div', 'stat-grid');
   for (const [label, value] of [['Potential', c.potential], ['Battle instinct', c.battleInstinct],
-    ['Intellect', c.iq], ['Luck', c.luck]]) {
+    ['Intellect', c.iq], ['Luck', c.luck], ['Looks', looksScore(c)]]) {
     const box = el('div', 'stat');
     box.appendChild(el('div', 'stat-name', label));
     box.appendChild(el('div', 'stat-val', String(value ?? '—')));
