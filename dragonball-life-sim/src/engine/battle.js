@@ -7,7 +7,7 @@
 
 import { clamp } from './rng.js';
 import { render } from './text.js';
-import { combatPower, powerTier, zenkaiBoost, winChance, healthMaxFor, staminaMaxFor, trainingRate } from './stats.js';
+import { combatPower, powerTier, zenkaiBoost, winChance, healthMaxFor, staminaMaxFor, trainingRate, equippedWeapon } from './stats.js';
 import { masteryMult, masteryDrain, trainMastery } from './mastery.js';
 import { TECH_BY_ID } from '../data/techniques.js';
 import { getTransformation, ladderFor } from '../data/transformations.js';
@@ -1414,6 +1414,51 @@ const SCAR_NAMES = {
   burn_face: 'a burn along the jaw',
 };
 
+// What actually marks you is shaped by what hit you. A blade cuts and takes
+// pieces; a blunt weapon (or bare hands, which are blunt force by nature)
+// breaks what is under the skin without taking anything off; a blast burns
+// and cauterises rather than cutting. Both the permanent injury table and
+// the lighter scar pool below read off the same three buckets.
+const SCARS_BY_TYPE = {
+  blade: ['scar_cheek', 'scar_brow', 'scar_chest', 'scar_arm', 'scar_eye'],
+  ranged: ['burn_arm', 'burn_face'],
+  blunt: ['scar_brow', 'scar_chest'],
+};
+const MAIM_BY_TYPE = {
+  blade: {
+    severe: ['lost_arm', 'lost_hand', 'lost_eye', 'missing_fingers'],
+    moderate: ['lost_eye', 'missing_fingers', 'lost_hand'],
+  },
+  blunt: {
+    severe: ['broken_back', 'lost_leg', 'shattered_knee'],
+    moderate: ['shattered_knee', 'broken_back'],
+  },
+  ranged: {
+    severe: ['ruined_lungs', 'lost_eye', 'burned_badly'],
+    moderate: ['ruined_lungs', 'burned_badly'],
+  },
+};
+
+/** What kind of hurt the fight in front of you actually deals - read off
+ * whoever you are up against, since maim()/markBody() only ever mark the
+ * player, and it is always the opponent who put them in this state. */
+function foeAttackType(state, battle) {
+  const npcId = (battle.them.ref && battle.them.ref.npcId) || (battle.foeRef && battle.foeRef.npcId) || null;
+  const npc = npcId ? state.npcs[npcId] : null;
+  const weapon = npc ? equippedWeapon(npc) : null;
+  if (weapon && weapon.item.weaponType) {
+    // whip/gauntlet/thrown are their own thing in the shop, but for what a
+    // hit actually does to a body they read as blade (whip/thrown cut and
+    // pierce), blunt (gauntlet) or blade respectively.
+    const map = { blade: 'blade', ranged: 'ranged', blunt: 'blunt', whip: 'blade', thrown: 'blade', gauntlet: 'blunt' };
+    return map[weapon.item.weaponType] || 'blunt';
+  }
+  // No weapon: somebody who actually knows techniques is throwing ki, which
+  // burns rather than cuts or breaks. Somebody with none is fighting with
+  // their hands, which is blunt force whichever way you look at it.
+  return (battle.them.techniques || []).length > 0 ? 'ranged' : 'blunt';
+}
+
 function markBody(state, rng, battle) {
   const c = state.character;
   const nearDeath = battle.me.hp <= 12 && battle.outcome !== 'fled';
@@ -1454,9 +1499,8 @@ function markBody(state, rng, battle) {
     const base = battle.outcome === 'lost' ? 0.2 : 0.07;
     const chance = clamp((base + theirSkill * 0.02 + Math.max(0, Math.log10(Math.max(1, gap))) * 0.05) / durability, 0.02, 0.6);
     if (rng.chance(chance)) {
-      const table = gap > 6
-        ? ['lost_arm', 'lost_leg', 'lost_eye', 'lost_hand', 'broken_back']
-        : ['lost_eye', 'lost_hand', 'ruined_lungs'];
+      const type = foeAttackType(state, battle);
+      const table = (gap > 6 ? MAIM_BY_TYPE[type].severe : MAIM_BY_TYPE[type].moderate).slice();
       if (c.tail && rng.chance(0.3)) table.unshift('lost_tail');
       const line = maim(state, rng, rng.pick(table), from);
       if (line) return line;
@@ -1470,15 +1514,21 @@ function markBody(state, rng, battle) {
   // both long and brutal carries a lot.
   const scarChance = clamp(0.16 + grind * 0.4 + fatigue * 0.22 + hurtFrac * 0.18 + (nearDeath ? 0.22 : 0), 0.05, 0.78);
   if (rng.chance(scarChance)) {
-    const open = SCAR_MARKS.filter((m) => !have.has(m));
+    const type = foeAttackType(state, battle);
+    let open = (SCARS_BY_TYPE[type] || SCAR_MARKS).filter((m) => !have.has(m));
+    if (!open.length) open = SCAR_MARKS.filter((m) => !have.has(m));
     if (!open.length) return null;
     const mark = rng.pick(open);
     c.scars.push({ year, mark, from, text: `Carries ${SCAR_NAMES[mark] || 'a scar'}, from ${from}.` });
-    return rng.pick([
-      `It heals badly. You will carry ${from} on your skin for the rest of your life.`,
-      `The cut does not close properly. A scar, then, and a story to go with it.`,
-      `Something in that fight is going to show for good.`,
-    ]);
+    const lines = {
+      blade: [`The cut does not close properly. A scar, then, and a story to go with it.`,
+        `It heals badly. You will carry ${from} on your skin for the rest of your life.`],
+      ranged: [`It cauterises as it happens and scars over wrong. Ki does that.`,
+        `The burn never quite fades. You will carry ${from} on your skin for the rest of your life.`],
+      blunt: [`Something in that fight is going to show for good, even without a mark to point at.`,
+        `It heals, mostly. Not all the way, and not where you cannot feel it.`],
+    };
+    return rng.pick(lines[type] || lines.blade);
   }
   return null;
 }

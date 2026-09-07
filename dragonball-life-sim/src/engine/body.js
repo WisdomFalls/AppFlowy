@@ -48,6 +48,25 @@ export const INJURIES = {
     desc: 'Something burned out of you that does not grow back. You tire early now.',
     stats: { durability: -8, discipline: -2 }, powerMult: 0.9,
   },
+  // Blunt force does not take a limb - it breaks what is under the skin and
+  // leaves the limb attached and wrong. Blade injuries above already read as
+  // a cutting effect (lost the piece cleanly); this is the same severity
+  // read a different way.
+  shattered_knee: {
+    id: 'shattered_knee', name: 'a knee that never set right', mark: null,
+    desc: 'Something in there is still in pieces. You favour it without meaning to.',
+    stats: { speed: -9, strength: -3 }, powerMult: 0.9,
+  },
+  missing_fingers: {
+    id: 'missing_fingers', name: 'a hand missing fingers', mark: 'scar_arm', side: true,
+    desc: 'Not the whole hand. Enough of it that grip is a conscious act now.',
+    stats: { technique: -5 }, powerMult: 0.96,
+  },
+  burned_badly: {
+    id: 'burned_badly', name: 'burn scarring across half your body', mark: 'burn_face',
+    desc: 'Ki does not cut. It cooks. The skin healed over, eventually, in a way that does not match the rest of you.',
+    stats: { charisma: -4, durability: -4 }, powerMult: 0.93,
+  },
 };
 
 export const PROSTHETICS = {
