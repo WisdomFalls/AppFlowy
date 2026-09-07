@@ -231,6 +231,12 @@ export const CANON = [
     teaches: [],
     personality: 'A small giggling child who has erased eleven universes for a reason he did not explain.',
     quirk: 'Wants a friend. Everyone is too terrified to be one.' },
+  { id: 'grand_priest', name: 'The Grand Priest', race: 'angel', years: [1, null], home: 'grand_zeno',
+    tags: ['divine', 'mentor', 'angel', 'untouchable'], temperament: 'serene',
+    power: { 780: 5e19 },
+    teaches: ['god_ki', 'ultra_instinct_art', 'ki_control_mastery', 'hakai'],
+    personality: 'Second only to the Omni-Kings themselves, father to every angel serving every God of Destruction, and unfailingly courteous about it.',
+    quirk: 'Refers to the end of a universe the way other people mention the weather.' },
 
   // ------------------------------------------------------------------ Saiyans
   { id: 'bardock', name: 'Bardock', race: 'saiyan', years: [700, 737], home: 'planet_vegeta',

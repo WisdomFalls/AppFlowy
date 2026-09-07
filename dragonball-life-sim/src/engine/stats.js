@@ -72,6 +72,11 @@ export function trainingRate(character, opts = {}) {
   if (hasPerk(character, 'arrogance') && intensity < 1.2) rate *= 0.6;
   if (hasPerk(character, 'innatePower') && intensity >= 1.2) rate *= 1.8;
   if (hasPerk(character, 'fastLearner')) rate *= 1.15;
+  // An angel's own standard for correction is not a mortal one - training
+  // under the Grand Priest (or an angel already training under him) keeps
+  // paying out at that standard for the rest of a life, not just the year
+  // it was granted in.
+  if (character.flags?.angel_training) rate *= 1.3;
   if (character.vitals.health < 40) rate *= 0.6;
   if (character.vitals.happiness < 25) rate *= 0.8;
 

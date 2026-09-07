@@ -3891,6 +3891,11 @@ function trainingRate(character, opts = {}) {
   if (hasPerk(character, 'arrogance') && intensity < 1.2) rate *= 0.6;
   if (hasPerk(character, 'innatePower') && intensity >= 1.2) rate *= 1.8;
   if (hasPerk(character, 'fastLearner')) rate *= 1.15;
+  // An angel's own standard for correction is not a mortal one - training
+  // under the Grand Priest (or an angel already training under him) keeps
+  // paying out at that standard for the rest of a life, not just the year
+  // it was granted in.
+  if (character.flags?.angel_training) rate *= 1.3;
   if (character.vitals.health < 40) rate *= 0.6;
   if (character.vitals.happiness < 25) rate *= 0.8;
 
@@ -6426,6 +6431,12 @@ const CANON = [
     teaches: [],
     personality: 'A small giggling child who has erased eleven universes for a reason he did not explain.',
     quirk: 'Wants a friend. Everyone is too terrified to be one.' },
+  { id: 'grand_priest', name: 'The Grand Priest', race: 'angel', years: [1, null], home: 'grand_zeno',
+    tags: ['divine', 'mentor', 'angel', 'untouchable'], temperament: 'serene',
+    power: { 780: 5e19 },
+    teaches: ['god_ki', 'ultra_instinct_art', 'ki_control_mastery', 'hakai'],
+    personality: 'Second only to the Omni-Kings themselves, father to every angel serving every God of Destruction, and unfailingly courteous about it.',
+    quirk: 'Refers to the end of a universe the way other people mention the weather.' },
 
   // ------------------------------------------------------------------ Saiyans
   { id: 'bardock', name: 'Bardock', race: 'saiyan', years: [700, 737], home: 'planet_vegeta',
@@ -19759,6 +19770,65 @@ registerEvents([
         return { text: `{He eats it without much comment|"Adequate"|Not bad, but not memorable}. {You have not been erased, which is something|It is not the reaction you were hoping for|Try again some other year, with something better}.`, changes };
       } }]);
     },
+  },
+
+  // The one being in existence who outranks every god you could already be
+  // training under, and the only path to becoming an angel that does not
+  // run through simply being born one. Reusing flags.angel_training rather
+  // than inventing a parallel flag: Whis already sets it on his own "ask
+  // them to train you"/feed-him branches in divine_notice above, and it was
+  // never actually read anywhere until now.
+  {
+    id: 'grand_priest_notice', tags: ['world', 'cosmic', 'divine'], weight: 5,
+    when: (ctx) => ctx.year >= 779 && !ctx.character.flags.angel_training
+      && combatPower(ctx.character) > worldPowerBaseline(ctx.year) * 1.5
+      && ctx.character.mentors.some((m) => (canonAvailable(ctx.year, (c) => c.id === m)[0] || {}).tags?.includes('divine')),
+    slots: () => ({}),
+    title: 'The Grand Priest Is Watching',
+    text: `No warning, no pressure change, nothing to feel coming. He is simply there when you turn around, exactly as composed as everyone says.
+      Second only to the Omni-Kings. Father to every angel serving every God of Destruction. He has, apparently, been watching you train for some time.`,
+    choices: () => [
+      { id: 'accept', label: 'Accept, if he is offering', effect: (c2) => {
+        const npc = meetCanon(c2, 'grand_priest', 'mentor');
+        c2.character.mentors.push('grand_priest');
+        c2.character.flags.angel_training = true;
+        relate(c2, npc, { closeness: 15, respect: 30 });
+        const t = trainYear(c2, { intensity: 1.7, mentorMult: 3, placeMult: 2 });
+        const changes = apply(c2, { happiness: 22, stats: { kiControl: 10, discipline: 8, technique: 6 } });
+        fact(c2, 'Taken on as an angel in training by the Grand Priest himself.',
+          { type: 'divine', weight: 10, subject: npc.id, tags: ['divine', 'mentor', 'angel'] });
+        return { text: `{"Very well," he says, as if you had asked him to pass the salt|There is no ceremony to it - one moment you are a student, the next you simply are one|He does not explain the terms. He never does}. `
+          + `{Training under him is not like training under anyone else - there is no anger in it, no theatre, only correction, applied precisely and without end|`
+          + `You stop counting the ways you are wrong within the first hour|Whatever you thought discipline meant, it did not mean this}. ${powerLine(t.gained)}`,
+        changes };
+      } },
+      { id: 'decline', label: 'This is not for you', effect: (c2) => {
+        const npc = meetCanon(c2, 'grand_priest', 'acquaintance');
+        relate(c2, npc, { respect: 12 });
+        const changes = apply(c2, { happiness: 4, karma: 2 });
+        fact(c2, 'Turned down the Grand Priest, of all people.', { type: 'divine', weight: 7, subject: npc.id, tags: ['divine'] });
+        return { text: `{"As you wish," and he means it - there is no judgement in it at all|He seems, if anything, faintly pleased that you thought about it first|"Most do not ask themselves that question. You should keep doing that."} `
+          + `{He is gone the way he arrived - between one blink and the next|`
+          + `You are fairly sure the conversation happened, afterwards|Nobody else saw any of it}.`,
+        changes };
+      } },
+      { id: 'defy', label: 'Ignore him and keep training', danger: true, effect: (c2) => {
+        const npc = meetCanon(c2, 'grand_priest', 'acquaintance');
+        // There is no gap formula that makes this survivable on its own
+        // merits - it survives entirely on his own restraint, which the text
+        // says plainly rather than dressing up as a fair fight.
+        if (odds(c2, 0.9)) {
+          relate(c2, npc, { respect: 8 });
+          const changes = apply(c2, { happiness: -6 });
+          return { text: `{Nothing happens. He watches you finish the set and leaves without another word|`
+            + `"Interesting," he says, and that is the entire consequence of it|He does not appear to have taken any offence, which is somehow worse}.`,
+          changes };
+        }
+        fact(c2, 'Erased for being rude to the Grand Priest.', { type: 'death', weight: 10, subject: npc.id, tags: ['divine', 'death'] });
+        die(c2.state, 'Erased by the Grand Priest, politely');
+        return { text: `{He does not raise his voice|There is no gesture to see, only the result of one|"That was unwise," he says, to nobody, since there is nobody left to say it to}.`, changes: [] };
+      } },
+    ],
   },
 
   {
