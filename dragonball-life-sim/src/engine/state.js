@@ -155,6 +155,9 @@ export function createGame(creation, seedInput) {
     trainingFocus: null,
     yearsInAfterlife: 0,
     institution: null,
+    faction: null,
+    factionRank: 0,
+    factionStanding: 0,
   };
   // Traits, before the derived numbers, because several of them move those.
   character.traits2 = inheritTraits(rng, creation.parents || [], creation.raceId)

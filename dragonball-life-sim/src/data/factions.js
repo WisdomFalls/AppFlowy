@@ -124,6 +124,15 @@ export const FACTIONS = [
       { name: 'an arrest detail', power: 3, note: 'They have read your file and brought enough people.' },
       { name: 'an elite marshal', power: 11, note: 'Sent when the file is bad enough.' },
     ],
+    // The organisation Jaco and Merus both actually answer to - a real
+    // rank ladder, not just "member". Stations sit on worlds important
+    // enough to warrant one; a Patroller is posted to whichever is nearest
+    // when they sign on, and can request a transfer once they have rank
+    // enough for anyone to bother approving it.
+    ranks: ['Cadet', 'Patrol Officer', 'Senior Officer', 'Investigator', 'Marshal', 'Chief Marshal'],
+    // All Universe 7 - the Patrol has no jurisdiction to post anyone
+    // anywhere else, same rule everything else cross-universe follows.
+    stations: ['earth', 'namek', 'yardrat', 'frieza_79', 'kryllos'],
   },
   {
     id: 'crane_school',

@@ -8,7 +8,7 @@ import { registerEvents } from '../generator.js';
 import { apply, fact, relate, stranger, offerBattle, squadOf, trainYear, powerLine, moveTo } from './helpers.js';
 import { combatPower, powerTier } from '../stats.js';
 import { FACTIONS, factionsPresent, factionIntent, getFaction } from '../../data/factions.js';
-import { getPlace } from '../../data/places.js';
+import { getPlace, PLACES } from '../../data/places.js';
 import { generateFullName } from '../../data/names.js';
 import { spreadWord, DEED_SCALE } from '../settlement.js';
 import { currencyFor, credit, formatMoney } from '../../data/currency.js';
@@ -16,6 +16,7 @@ import { worldPowerBaseline } from '../../data/timeline.js';
 import { numberish } from '../text.js';
 import { clamp } from '../rng.js';
 import { startTrial } from '../trials.js';
+import { livingNpcs } from '../state.js';
 
 // Pick which squad a faction sends. A faction with no history with you picks
 // freely; one that has lost to you before stops sending its rookies - each
@@ -26,6 +27,34 @@ function pickSquad(rng, faction, grudge) {
   const bySize = [...faction.squads].sort((a, b) => a.power - b.power);
   const floor = Math.min(bySize.length - 1, grudge);
   return bySize[rng.int(floor, bySize.length - 1)];
+}
+
+// What "take an assignment" actually is, shaped by what the organisation is
+// for. A lawful faction sends you after somebody; a hostile one sends you to
+// take something. Difficulty and pay both scale off rank separately from this.
+const MISSION_BRIEFS = {
+  lawful: [
+    { label: 'Patrol', order: 'Walk the sector. Report anything that should not be there.' },
+    { label: 'Escort', order: 'Get them from here to there in one piece. That is the whole job.' },
+    { label: 'Arrest', order: 'There is a warrant. Bring them in breathing, if you can manage it.' },
+    { label: 'Investigate', order: 'Something does not add up out there. Go find out what.' },
+  ],
+  hostile: [
+    { label: 'Collection', order: 'Whatever they owe, get it back. However you have to.' },
+    { label: 'Enforcement', order: 'Somebody needs reminding who is in charge out there.' },
+    { label: 'Raid', order: 'Hit them before they hit us. You know the drill.' },
+  ],
+  other: [
+    { label: 'Errand', order: 'It is not glamorous, but it needs doing and you are here.' },
+    { label: 'Recovery', order: 'Something of ours is out there. Bring it back.' },
+  ],
+};
+function missionBrief(rng, faction) {
+  const bucket = !faction ? MISSION_BRIEFS.other
+    : faction.stance === 'lawful' ? MISSION_BRIEFS.lawful
+      : faction.stance === 'hostile' ? MISSION_BRIEFS.hostile : MISSION_BRIEFS.other;
+  const pick = rng.pick(bucket);
+  return { label: pick.label, order: pick.order, blurb: `${pick.label}. ${pick.order}` };
 }
 
 function pickForce(ctx) {
@@ -158,23 +187,86 @@ registerEvents([
       }
 
       if (s.intent === 'colleague') {
+        const rankIdx = clamp(ctx.character.factionRank || 0, 0, (faction && faction.ranks ? faction.ranks.length - 1 : 0));
+        const rankName = faction && faction.ranks ? faction.ranks[rankIdx] : null;
+
         list.push({
-          id: 'checkin', label: 'Check in with them', hint: 'You already work here.',
+          id: 'mission', label: rankName ? `Take an assignment (${rankName})` : 'Take an assignment', hint: s.goal,
           effect: (c2, sl) => {
-            const cur = currencyFor(getPlace(c2.character.placeId).planet);
-            credit(c2.character, cur.id, Math.round(sl.power * 0.3) || 500);
-            const t = trainYear(c2, { intensity: 1.1, placeMult: 1.1, mentorMult: 1.2 });
-            return {
-              text: `{You fall in with the rest of them|Same colours, same work|Nobody has to explain the routine to you anymore}. `
-                + `${sl.officer} passes on an assignment and a share of the take. ${powerLine(t.gained)}`,
-              changes: apply(c2, { happiness: 5 }),
-            };
+            const f = getFaction(sl.factionId);
+            const rank2 = clamp(c2.character.factionRank || 0, 0, (f && f.ranks ? f.ranks.length - 1 : 0));
+            const brief = missionBrief(c2.rng, f);
+            const trial = startTrial(c2.state, c2.rng, {
+              kind: 'push',
+              difficulty: clamp(2 + rank2, 1, 5),
+              purpose: 'mission',
+              label: brief.label,
+              blurb: brief.blurb,
+              payload: { factionId: sl.factionId, factionName: sl.factionName, basePay: 1800 + rank2 * 900 },
+            });
+            return { text: `${sl.officer}: "${brief.order}"`, trial };
           },
         });
+
+        list.push({
+          id: 'report', label: 'Report to your superior', hint: 'See where you stand.',
+          effect: (c2, sl) => {
+            const f = getFaction(sl.factionId);
+            const standing = c2.character.factionStanding || 0;
+            const rank2 = clamp(c2.character.factionRank || 0, 0, (f && f.ranks ? f.ranks.length - 1 : 0));
+            const changes = apply(c2, { happiness: 3 });
+            const lines = [c2.rng.pick([
+              `${sl.officer} looks over your file without much comment.`,
+              `${sl.officer} has five minutes and spends them on you.`,
+              `You catch ${sl.officer} between assignments.`,
+            ])];
+            // A colleague, some of the time - the same station has other
+            // people in it, and you do not always work alone.
+            const known = livingNpcs(c2.state).filter((n) => n.factionId === sl.factionId);
+            if (f && f.recruits && known.length < 4 && c2.rng.chance(0.4)) {
+              const colleague = stranger(c2, { minAge: 18, maxAge: 55 });
+              colleague.relation = 'colleague';
+              colleague.factionId = sl.factionId;
+              colleague.closeness = c2.rng.int(15, 35);
+              fact(c2, `Met ${colleague.name}, also with ${sl.factionName}.`, { type: 'faction', weight: 4, subject: colleague.id, tags: ['faction', 'colleague'] });
+              lines.push(`${colleague.name} is posted here too, and introduces themselves before ${sl.officer.split(' ')[0]} gets the chance.`);
+            }
+            if (f && f.ranks) {
+              lines.push(`${rankName || f.ranks[0]}. Standing: ${Math.round(standing)}/100${rank2 < f.ranks.length - 1 ? ` toward ${f.ranks[rank2 + 1]}` : ' - there is nowhere higher to go here'}.`);
+            }
+            return { text: lines.join(' '), changes };
+          },
+        });
+
+        if (faction && faction.stations && faction.stations.length > 1 && rankIdx >= 1) {
+          list.push({
+            id: 'transfer', label: 'Request a transfer', hint: 'A different station, a different world.',
+            effect: (c2, sl) => {
+              const f = getFaction(sl.factionId);
+              const here = getPlace(c2.character.placeId).planet;
+              const options = f.stations.filter((p) => p !== here);
+              if (!options.length) return { text: 'There is nowhere else to send you.', changes: [] };
+              const dest = c2.rng.pick(options);
+              const destPlace = PLACES.find((p) => p.planet === dest);
+              if (!destPlace) return { text: 'There is nowhere on record to send you.', changes: [] };
+              moveTo(c2, destPlace.id);
+              const changes = apply(c2, { happiness: 2 });
+              fact(c2, `Transferred to a ${sl.factionName} posting on ${dest.replace(/_/g, ' ')}.`, { type: 'faction', weight: 5, tags: ['faction'] });
+              return {
+                text: `{The paperwork clears faster than you expected|Somebody higher up signs off without asking why|"Granted." That is the whole conversation}. `
+                  + `New station, new faces, same colours.`,
+                changes,
+              };
+            },
+          });
+        }
+
         list.push({
           id: 'leave', label: `Cut ties with ${s.factionName}`, danger: true,
           effect: (c2, sl) => {
             c2.character.faction = null;
+            c2.character.factionRank = 0;
+            c2.character.factionStanding = 0;
             fact(c2, `Cut ties with ${sl.factionName}.`, { type: 'faction', weight: 6, tags: ['faction'] });
             return {
               text: `{You hand back the colours|You do not explain yourself and they do not ask|That is the end of that}.`,

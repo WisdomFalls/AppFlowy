@@ -1592,8 +1592,13 @@ function panelWorlds() {
     for (const f of forces) {
       const row = el('div', 'row' + (c.faction === f.id ? ' owned' : ''));
       const main = el('div', 'row-main');
-      main.appendChild(el('div', 'row-title', f.name + (c.faction === f.id ? ' - yours' : '')));
-      main.appendChild(el('div', 'row-note', `${f.emblem} ${f.goal}`));
+      const mine = c.faction === f.id;
+      const rankName = mine && f.ranks ? f.ranks[Math.min(c.factionRank || 0, f.ranks.length - 1)] : null;
+      main.appendChild(el('div', 'row-title', f.name + (mine ? ` - ${rankName || 'yours'}` : '')));
+      main.appendChild(el('div', 'row-note',
+        mine && rankName
+          ? `Standing ${Math.round(c.factionStanding || 0)}/100. ${f.emblem} ${f.goal}`
+          : `${f.emblem} ${f.goal}`));
       row.appendChild(main);
       const swatch = el('span', 'emblem');
       swatch.style.background = `linear-gradient(135deg, ${f.colours[0]} 50%, ${f.colours[1]} 50%)`;

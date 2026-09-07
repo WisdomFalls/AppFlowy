@@ -172,6 +172,27 @@ export function resolveTrial(state, rng, trial, score) {
       adjust(state, { happiness: -6 });
       lines.push(`Not this time. {"Come back when you are actually ready."|They do not even finish watching.|"No."}`);
     }
+  } else if (trial.purpose === 'mission') {
+    const threshold = 0.38 + trial.difficulty * 0.05;
+    const faction = getFaction(trial.payload.factionId);
+    const rankIdx = clamp(c.factionRank || 0, 0, (faction && faction.ranks ? faction.ranks.length - 1 : 0));
+    if (score >= threshold) {
+      const cur = currencyFor(getPlace(c.placeId).planet);
+      const pay = Math.round((trial.payload.basePay || 1800) * result.mult);
+      credit(c, cur.id, pay);
+      c.factionStanding = clamp((c.factionStanding || 0) + Math.round(7 * result.mult), 0, 100);
+      adjust(state, { happiness: 4, fame: 1 });
+      lines.push(`Assignment closed. Paid.`);
+      if (faction && faction.ranks && c.factionStanding >= 80 && rankIdx < faction.ranks.length - 1) {
+        c.factionRank = rankIdx + 1;
+        c.factionStanding = 15;
+        lines.push(`Promoted: ${faction.ranks[c.factionRank]}.`);
+      }
+    } else {
+      c.factionStanding = clamp((c.factionStanding || 0) - 8, 0, 100);
+      adjust(state, { health: -Math.round(4 + trial.difficulty * 2), happiness: -4 });
+      lines.push('The assignment goes sideways. You come back with less than you left with.');
+    }
   } else if (trial.purpose === 'cooking') {
     // A regular-life skill, not a combat one: it climbs slowly no matter the
     // grade, but a clean run climbs it faster than a sloppy one.
