@@ -124,6 +124,19 @@ const PHYSICAL = [
   { id: 'grapple', name: 'Grapple and throw', base: 14, stamina: 15, speedWeight: 0.8, hit: 0.74, stagger: 0.5 },
 ];
 
+// A jab does not have to just be fast - it can be aimed. Trading raw
+// accuracy for exactly where it lands is how Frieza's finger blasts or
+// Moro's absorbing touch actually work in the show: not a bigger hit, a
+// smarter one. What the strike actually does to the body still runs
+// through the same blade/blunt/ranged bucket as everything else (see
+// playerAttackType below), a blade just makes the piece it exploits count
+// for more.
+const AIMED_STRIKES = [
+  { id: 'aim_head', name: 'Aim for the head', location: 'head', base: 10, stamina: 9, speedWeight: 1.1, hit: 0.58 },
+  { id: 'aim_joint', name: 'Aim for a joint', location: 'joint', base: 10, stamina: 9, speedWeight: 1.0, hit: 0.64 },
+  { id: 'aim_vitals', name: 'Aim for the throat', location: 'vitals', base: 15, stamina: 12, speedWeight: 0.9, hit: 0.5, crit: 0.12 },
+];
+
 function sideTemplate(name, power, opts = {}) {
   return {
     name,
@@ -348,6 +361,27 @@ export function battleActions(state, battle) {
       kind: 'physical',
       label: move.name,
       hint: `${cost ? cost + ' stamina' : 'free'} - ${move.base} base`,
+      disabled: me.stamina < cost,
+      reason: me.stamina < cost ? 'Not enough stamina' : null,
+    });
+  }
+
+  // Aimed strikes: less likely to land than just swinging, but where they
+  // land matters. Always on the table - you do not need a weapon to aim for
+  // an eye - a blade equipped through equippedWeapon() just makes what
+  // happens at that spot count for more.
+  const AIM_HINTS = {
+    head: 'Low odds. Blinds them for a moment if it lands.',
+    joint: 'Aimed at the knee or the working arm. Staggers them if it lands.',
+    vitals: 'The riskiest of the three. Hits hard when it lands.',
+  };
+  for (const move of AIMED_STRIKES) {
+    const cost = me.infiniteStamina ? 0 : move.stamina;
+    out.push({
+      id: 'phys:' + move.id,
+      kind: 'physical',
+      label: move.name,
+      hint: `${cost ? cost + ' stamina' : 'free'} - ${AIM_HINTS[move.location]}`,
       disabled: me.stamina < cost,
       reason: me.stamina < cost ? 'Not enough stamina' : null,
     });
@@ -847,12 +881,37 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
       + `{You are wide open now|That cost you the position|You have given them the inside}.`, {}, rng));
     freeSwing = true;
   } else if (actionId.startsWith('phys:')) {
-    const move = PHYSICAL.find((m) => m.id === actionId.slice(5));
+    const moveId = actionId.slice(5);
+    const move = PHYSICAL.find((m) => m.id === moveId);
+    const aim = AIMED_STRIKES.find((m) => m.id === moveId);
     if (move) {
       const cost = me.infiniteStamina ? 0 : move.stamina;
       me.stamina = Math.max(0, me.stamina - cost);
       const res = strike(me, them, battle, rng, move);
       lines.push(describeStrike(res, 'You', them.name, move.name, rng, true));
+    } else if (aim) {
+      const cost = me.infiniteStamina ? 0 : aim.stamina;
+      me.stamina = Math.max(0, me.stamina - cost);
+      const type = playerAttackType(c);
+      const res = strike(me, them, battle, rng, { ...aim, pierce: type === 'blade' });
+      lines.push(describeStrike(res, 'You', them.name, aim.name, rng, true));
+      if (!res.miss && !res.lockedOut) {
+        if (aim.location === 'head') {
+          them.blinded = Math.max(them.blinded, 2);
+          lines.push(type === 'blade'
+            ? `The point finds an eye. ${them.name} is not seeing out of that side for a while.`
+            : `It catches ${them.name} right across the eyes. They cannot see anything right now.`);
+        } else if (aim.location === 'joint') {
+          them.staggered = Math.max(them.staggered, 2);
+          lines.push(type === 'blade'
+            ? `The edge finds the joint and ${them.name}'s leg does not hold weight properly anymore.`
+            : `Something in ${them.name}'s knee gives. They are not standing right after that.`);
+        } else if (aim.location === 'vitals') {
+          lines.push(type === 'blade'
+            ? `The blade goes in at the throat and comes back out. ${them.name} is fighting hurt now, in the way that matters.`
+            : `You catch ${them.name} square in the throat. That is going to slow everything they do for the rest of this.`);
+        }
+      }
     }
   } else if (actionId.startsWith('tech:')) {
     const tech = TECH_BY_ID[actionId.slice(5)];
@@ -1438,6 +1497,18 @@ const MAIM_BY_TYPE = {
     moderate: ['ruined_lungs', 'burned_badly'],
   },
 };
+
+/** The same read as foeAttackType, but for what the player is actually
+ * hitting with. A bladed weapon cuts, a blunt one (or nothing at all,
+ * which is a fist) breaks, a technique burns. */
+function playerAttackType(character) {
+  const weapon = equippedWeapon(character);
+  if (weapon && weapon.item.weaponType) {
+    const map = { blade: 'blade', ranged: 'ranged', blunt: 'blunt', whip: 'blade', thrown: 'blade', gauntlet: 'blunt' };
+    return map[weapon.item.weaponType] || 'blunt';
+  }
+  return 'blunt';
+}
 
 /** What kind of hurt the fight in front of you actually deals - read off
  * whoever you are up against, since maim()/markBody() only ever mark the
