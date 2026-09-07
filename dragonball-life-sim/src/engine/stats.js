@@ -130,7 +130,12 @@ export function weaponAttackBonus(character) {
   const base = (wielded.item.passive && wielded.item.passive.attack) || 0;
   const wear = clamp((wielded.entry.condition ?? 100) / 100, 0.15, 1);
   const styleMult = character.fightingStyle === 'martial_arts' ? 0.35 : 1;
-  return base * wear * styleMult;
+  // A weapon somebody actually built for you, rather than one you picked
+  // up off a shelf, carries how good the maker was - a god's work runs
+  // above the item's own listed number, an amateur's own attempt below it.
+  // Untouched (shop-bought, looted) items default to exactly 1: no change.
+  const quality = wielded.entry.qualityMult ?? 1;
+  return base * wear * styleMult * quality;
 }
 
 /**

@@ -14,6 +14,8 @@ import { getTechnique } from '../../data/techniques.js';
 import { currencyFor, formatMoney, canAfford, debit, priceIn } from '../../data/currency.js';
 import { maturity } from '../../data/races.js';
 import { getCanon } from '../../data/canon.js';
+import { ITEMS, getItem } from '../../data/items.js';
+import { addItem, findEntry } from '../inventory.js';
 import { numberish } from '../text.js';
 import { clamp } from '../rng.js';
 import { startTrial } from '../trials.js';
@@ -274,6 +276,123 @@ registerEvents([
           changes: [] };
         },
       });
+      return list;
+    },
+  },
+  // Not the shop's stock - something made for you specifically. The type is
+  // rolled rather than picked, which still lands on "any type" across
+  // repeated encounters; what actually changes is who makes it, and that is
+  // where the quality (weaponAttackBonus's new qualityMult, in stats.js)
+  // comes from. Wear and breakage need nothing new here - damageGear()
+  // already treats any worn item the same regardless of how it was
+  // acquired, which is exactly the "just like clothing and armour" the
+  // request asked for.
+  {
+    id: 'weapon_commission', tags: ['world', 'opportunity', 'gear'], weight: 14,
+    minBioAge: 14,
+    when: (ctx) => !ctx.character.inAfterlife,
+    slots: (ctx) => {
+      // Unique relics (the Z-Sword, the like) are singular artifacts with
+      // their own history - not something a smith, or even a god, simply
+      // produces on request.
+      const pool = ITEMS.filter((i) => i.cat === 'weapon' && !(i.passive && i.passive.unique));
+      const chosen = ctx.rng.pick(pool);
+      const known = Object.values(ctx.state.npcs).filter((n) => n.alive && (n.closeness || 0) > 30);
+      const smiths = known.filter((n) => (n.stats && (n.stats.technique >= 70 || n.stats.intellect >= 70)));
+      const divine = known.filter((n) => n.canonId && (getCanon(n.canonId)?.tags || []).includes('divine') && (n.closeness || 0) > 50);
+      const pickedSmith = smiths.length ? ctx.rng.pick(smiths) : null;
+      const pickedDivine = divine.length ? ctx.rng.pick(divine) : null;
+      return {
+        itemId: chosen.id, itemName: chosen.name, itemDesc: chosen.desc,
+        smithName: pickedSmith?.name, smithId: pickedSmith?.id,
+        godName: pickedDivine?.name, godId: pickedDivine?.id,
+        mine: (ctx.character.iq || 100) >= 110 || (ctx.character.flags.weaponTrainingYears || 0) >= 1,
+      };
+    },
+    title: 'Something Worth Carrying',
+    text: (ctx, s) => `You have been thinking about a ${s.itemName.toLowerCase()} lately - not buying one off a shelf, having one made. ${s.itemDesc}
+      {There is a version of this that is actually yours|The shop-bought ones are all the same weapon wearing different names|Whoever makes it decides more than the design does}.`,
+    choices: (ctx, s) => {
+      const list = [];
+      const cur = currencyFor(getPlace(ctx.character.placeId).planet);
+      const item = getItem(s.itemId);
+      const baseCost = priceIn(Math.max(2000, item.cost || 20000), cur.id);
+      // addItem() is a no-op if this exact weapon id is already in the bag
+      // (non-consumables are unique per id) - reads as re-forging the one
+      // you have rather than a wasted commission, which is the more honest
+      // framing anyway.
+      const give = (c2, entry, qualityMult, karma) => {
+        entry.condition = 100;
+        entry.qualityMult = qualityMult;
+        entry.worn = true;
+        if (karma) c2.character.karma = clamp((c2.character.karma || 0) + karma, -100, 100);
+      };
+      if (s.mine) {
+        const cost = Math.round(baseCost * 0.5);
+        list.push({
+          id: 'self', label: `Make it yourself - ${formatMoney(cost, cur.id)} in materials`,
+          effect: (c2, sl) => {
+            if (!canAfford(c2.character, cur.id, cost)) return { text: `${formatMoney(cost, cur.id)} in materials, and you are short.`, changes: [] };
+            debit(c2.character, cur.id, cost);
+            addItem(c2.character, sl.itemId, { condition: 100 });
+            give(c2, findEntry(c2.character, sl.itemId), 0.9);
+            const changes = apply(c2, { happiness: 14, stats: { technique: 3 } });
+            fact(c2, `Built ${sl.itemName} with their own hands.`, { type: 'item', weight: 4, tags: ['asset', 'weapon'] });
+            return { text: `{It is not perfect - you can see where your own hand slipped|The first one you actually finish, after two that did not survive testing|You get it right on the third attempt and stop there before you ruin it}. `
+              + `${sl.itemName}, and it is entirely yours.`, changes };
+          },
+        });
+      }
+      if (s.smithName) {
+        const cost = Math.round(baseCost * 1.15);
+        list.push({
+          id: 'hire', label: `Ask ${s.smithName} to make it - ${formatMoney(cost, cur.id)}`,
+          effect: (c2, sl) => {
+            if (!canAfford(c2.character, cur.id, cost)) return { text: `${sl.smithName} quotes ${formatMoney(cost, cur.id)} and does not haggle.`, changes: [] };
+            debit(c2.character, cur.id, cost);
+            addItem(c2.character, sl.itemId, { condition: 100, from: sl.smithName });
+            give(c2, findEntry(c2.character, sl.itemId), 1.1);
+            const npc = sl.smithId ? findNpc(c2.state, sl.smithId) : null;
+            if (npc) relate(c2, npc, { closeness: 6, respect: 6 });
+            const changes = apply(c2, { happiness: 12 });
+            fact(c2, `${sl.smithName} built them ${sl.itemName}.`, { type: 'item', weight: 4, tags: ['asset', 'weapon'] });
+            return { text: `{${sl.smithName} takes measurements you did not know mattered|It comes back better balanced than anything you could have described|${sl.smithName} throws in adjustments you did not ask for and does not charge extra}. `
+              + `${sl.itemName}, properly made.`, changes };
+          },
+        });
+      }
+      if (s.godName) {
+        list.push({
+          id: 'divine', label: `Ask ${s.godName} to make it`, hint: 'No charge. That is not how this works.',
+          effect: (c2, sl) => {
+            addItem(c2.character, sl.itemId, { condition: 100, from: sl.godName });
+            give(c2, findEntry(c2.character, sl.itemId), 1.4, 2);
+            const npc = sl.godId ? findNpc(c2.state, sl.godId) : null;
+            if (npc) relate(c2, npc, { closeness: 4, respect: 8 });
+            const changes = apply(c2, { happiness: 20 });
+            fact(c2, `${sl.godName} made them ${sl.itemName}, the way a god makes something.`,
+              { type: 'item', weight: 7, tags: ['asset', 'weapon', 'divine'] });
+            return { text: `{There is no forge, no fire, no waiting|One moment it does not exist and the next it is simply in your hand|${sl.godName} does not seem to consider this difficult}. `
+              + `${sl.itemName}. It will not need repairing anywhere near as often as it should.`, changes };
+          },
+        });
+      }
+      {
+        const cost = Math.round(baseCost * 0.85);
+        list.push({
+          id: 'buy', label: `Commission it from a smith for hire - ${formatMoney(cost, cur.id)}`,
+          effect: (c2, sl) => {
+            if (!canAfford(c2.character, cur.id, cost)) return { text: `${formatMoney(cost, cur.id)}, and you do not have it on you.`, changes: [] };
+            debit(c2.character, cur.id, cost);
+            addItem(c2.character, sl.itemId, { condition: 100 });
+            give(c2, findEntry(c2.character, sl.itemId), 1.0);
+            const changes = apply(c2, { happiness: 8 });
+            fact(c2, `Had ${sl.itemName} commissioned.`, { type: 'item', weight: 3, tags: ['asset', 'weapon'] });
+            return { text: `A shop that takes commissions, not just stock. ${sl.itemName}, made to order.`, changes };
+          },
+        });
+      }
+      list.push({ id: 'skip', label: 'Not now', effect: () => ({ text: `{Some other year|Not worth it yet|You keep the money}.`, changes: [] }) });
       return list;
     },
   },
