@@ -7,6 +7,7 @@ import { getPlace } from '../data/places.js';
 import { hasPerk } from '../data/races.js';
 import { combatPower } from './stats.js';
 import { livingNpcs } from './state.js';
+import { TRAIT_BY_ID } from '../data/traits.js';
 
 const CUSTOM = {
   blutz_wave: (state) => {
@@ -127,13 +128,25 @@ export function tryUnlockForm(state, rng, formId) {
   }
 
   const powerMargin = form.req.power ? c.power / form.req.power : 1.5;
+  // The dossier already shows "potential" as a number nobody's chances
+  // actually used - a body or bloodline built for this closes a margin
+  // raw discipline alone could not.
+  const potentialBonus = ((c.potential || 50) - 50) / 300;
   const chance = Math.min(0.95, 0.42 + Math.log10(Math.max(1, powerMargin)) * 0.35
-    + (c.stats.discipline - 50) / 250 + (c.vitals.health - 60) / 400);
+    + (c.stats.discipline - 50) / 250 + (c.vitals.health - 60) / 400 + potentialBonus);
 
   if (rng.chance(chance)) {
     c.transformations.push(formId);
     if (formId === 'ssj') c.flags.went_super = true;
-    return { unlocked: true, form, text: `Everything you have goes into one place.` };
+    // A breakthrough that beat the odds - thin margin, long shot, or both -
+    // is not just discipline. Somebody built like this was always going to
+    // get here sooner than most, and the trait that explains it gets named.
+    const talentTrait = ['legendary_blood', 'prodigy_body', 'genius'].find((t) => c.traits.includes(t));
+    const againstTheOdds = chance < 0.55 || powerMargin < 1.15;
+    const text = againstTheOdds && talentTrait
+      ? `${TRAIT_BY_ID[talentTrait].line} Whatever this is, it was always going to find you early.`
+      : 'Everything you have goes into one place.';
+    return { unlocked: true, form, text };
   }
   return { unlocked: false, form, text: `You get right up against it.` };
 }
