@@ -60,6 +60,18 @@ function trainOnce(state, rng, opts = {}) {
   return { gained: granted, capped };
 }
 
+// A legacy is one of these three shapes - what you built outlives whatever
+// you personally go on to do, and grows a reputation of its own separate
+// from yours (see the institution renown tick in lifecycle.js's passiveYear).
+export const INSTITUTION_TYPES = [
+  { id: 'school', label: 'School', verb: 'Founded', name: 'a martial arts school',
+    desc: 'Teach what you know, formally, to whoever is willing to show up and work for it.' },
+  { id: 'squad', label: 'Squad', verb: 'Assembled', name: 'a fighting squad',
+    desc: 'A real unit, not just people who happen to fight near you.' },
+  { id: 'organisation', label: 'Order', verb: 'Built', name: 'an organisation',
+    desc: 'Something bigger than fighting - relief, order, protection, whatever the galaxy is short of where you are.' },
+];
+
 export const ACTIONS = [
   // ------------------------------------------------------------- training
   {
@@ -191,6 +203,31 @@ export const ACTIONS = [
       }
       adjust(s, { health: -10, happiness: -6 });
       return { text: render(`{It pushes back harder than you expected|You lose more ground than you meant to|Not this year}.`, {}, rng) };
+    },
+  },
+
+  {
+    id: 'found_institution', maxPerYear: 1, slots: 3, name: 'Found something lasting', cat: 'legacy', cost: 'A season',
+    desc: 'A school, a squad, an organisation - something that keeps existing whether or not you are the one holding it up.',
+    available: (s) => !s.character.institution && s.character.fame >= 35,
+    options: () => INSTITUTION_TYPES.map((t) => ({ id: t.id, label: `Found ${t.name}`, hint: t.desc })),
+    run: (s, rng, params) => {
+      const typeId = (params && params.option) || 'school';
+      const type = INSTITUTION_TYPES.find((t) => t.id === typeId) || INSTITUTION_TYPES[0];
+      const c = s.character;
+      c.institution = {
+        type: type.id,
+        name: `${c.name}'s ${type.label}`,
+        founded: currentYear(s),
+        members: [],
+        renown: 4,
+      };
+      adjust(s, { happiness: 12, fame: 3 });
+      addFact(s.memory, {
+        type: 'legacy', weight: 9, year: c.age, tags: ['legacy', 'identity'],
+        text: `${type.verb} ${c.institution.name}.`,
+      });
+      return { text: `${c.institution.name}. ${type.desc} It exists now, whatever it becomes.` };
     },
   },
 

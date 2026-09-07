@@ -508,6 +508,26 @@ function passiveYear(state, rng) {
     if (c.flags.ssbYears >= 3 && c.stats.discipline > 60 && c.stats.kiControl > 85) c.flags.ssb_mastery = true;
   }
 
+  // A founded institution keeps building a name of its own, whether or not
+  // you personally do anything about it that year - more so with people
+  // actually in it, and faster the more well-known you already are.
+  if (c.institution) {
+    const inst = c.institution;
+    const before = inst.renown;
+    const growth = 0.6 + inst.members.length * 0.4 + (c.fame / 100) * 1.2;
+    inst.renown = clamp(inst.renown + growth, 0, 100);
+    const crossed = (t) => before < t && inst.renown >= t;
+    if (crossed(30)) {
+      entries.push({ kind: 'legacy', text: `${inst.name} is not just yours to know about any more. People are starting to send their own here.` });
+    } else if (crossed(60)) {
+      entries.push({ kind: 'legacy', text: `${inst.name} has a real reputation now, separate from your own.` });
+    }
+    if (inst.renown >= 90 && !c.flags.worldIcon) {
+      c.flags.worldIcon = true;
+      entries.push({ kind: 'legacy', text: `${inst.name} is a name people know even where you have never been. Whatever else happens to you now, that outlives it.` });
+    }
+  }
+
   return entries;
 }
 

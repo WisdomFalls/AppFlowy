@@ -1663,6 +1663,24 @@ function panelRecords() {
     }
   }
 
+  if (c.institution) {
+    body.appendChild(el('div', 'group-label', 'What you built'));
+    const inst = c.institution;
+    const row = el('div', 'row');
+    const main = el('div', 'row-main');
+    main.appendChild(el('div', 'row-title', inst.name));
+    const memberWord = inst.type === 'school' ? 'students' : 'members';
+    main.appendChild(el('div', 'row-note',
+      `Founded age ${inst.founded - c.birthYear}. ${inst.members.length} ${memberWord}. `
+      + (c.flags.worldIcon ? 'A name known even where you have never been.'
+        : inst.renown >= 60 ? 'A real reputation of its own now.'
+          : inst.renown >= 30 ? 'People are starting to send their own here.'
+            : 'Still mostly just you.')));
+    row.appendChild(main);
+    row.appendChild(el('div', 'row-value', Math.round(inst.renown) + '%'));
+    body.appendChild(row);
+  }
+
   body.appendChild(el('div', 'group-label', 'You'));
   const here = getPlace(c.placeId);
   for (const [title, note, fn] of [

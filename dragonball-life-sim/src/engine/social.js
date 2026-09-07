@@ -138,7 +138,16 @@ export const SOCIAL_ACTIONS = [
       if (npc.relation === 'acquaintance' || npc.relation === 'friend') npc.relation = 'student';
       adjust(state, { stats: { charisma: 2, technique: 1 } });
       note(state, `Trained ${npc.name}.`, { subject: npc.id, tags: ['mentor'], weight: 3 });
-      return { text: `${render(`{They are worse than you expected and then they are not|It takes a season|You are a harsher teacher than you meant to be}.`, {}, rng)} ${npc.name} goes from ${numberish(before)} to ${numberish(npc.power)}.` };
+      const lines = [`${render(`{They are worse than you expected and then they are not|It takes a season|You are a harsher teacher than you meant to be}.`, {}, rng)} ${npc.name} goes from ${numberish(before)} to ${numberish(npc.power)}.`];
+      // Whoever you train while you have something standing is one of its
+      // people now, not just somebody you happened to teach.
+      const inst = state.character.institution;
+      if (inst && !inst.members.includes(npc.id)) {
+        inst.members.push(npc.id);
+        inst.renown = clamp(inst.renown + 3, 0, 100);
+        lines.push(`${npc.name} is one of yours now - part of ${inst.name}.`);
+      }
+      return { text: lines.join(' ') };
     },
   },
   {
