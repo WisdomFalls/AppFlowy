@@ -816,7 +816,12 @@ export function portraitSvg(character, opts = {}) {
       // A darker tip, the way Frieza's tail reads on screen.
       parts.push(`<circle cx="${cx + shoulderWidth - 14}" cy="${chin + 34}" r="${4 * stage.body + 2}" fill="${shade(skin, -0.35)}"/>`);
     } else {
-      parts.push(`<path d="${path}" fill="none" stroke="#7a4a24" stroke-width="${6 * stage.body + 3}" stroke-linecap="round"/>`);
+      // A Saiyan tail is fur, and fur changes with the hair - Super Saiyan
+      // gold does not stop at the hairline. Frost-kin tails already pick up
+      // a transformation's skin colour instead, since that race's tail is
+      // chitin, not fur.
+      const furColour = visuals && visuals.hair ? finalHair : '#7a4a24';
+      parts.push(`<path d="${path}" fill="none" stroke="${furColour}" stroke-width="${6 * stage.body + 3}" stroke-linecap="round"/>`);
     }
   }
 

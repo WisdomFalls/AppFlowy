@@ -220,22 +220,6 @@ function newDraft() {
 
 // -------------------------------------------------------------------- HUD
 
-/** The strongest form they have, used to tint the portrait's aura. */
-function bestOwnedForm(c) {
-  if (!c.transformations || !c.transformations.length) return null;
-  const forms = ladderStatus(GAME).filter((f) => f.owned);
-  if (!forms.length) return null;
-  return forms.sort((a, b) => b.mult - a.mult)[0];
-}
-
-/** Same idea for an NPC - so somebody who has unlocked a form actually
- * looks like it, not just the player. */
-function bestNpcForm(npc) {
-  if (!npc.transformations || !npc.transformations.length) return null;
-  const forms = npc.transformations.map(getTransformation).filter(Boolean);
-  if (!forms.length) return null;
-  return forms.sort((a, b) => b.mult - a.mult)[0];
-}
 
 function renderHud() {
   const s = characterSummary(GAME);
@@ -243,7 +227,10 @@ function renderHud() {
   const portraitBox = $('hud-portrait');
   if (portraitBox) {
     const form = c.activeForm || (c.transformations.length ? { name: '' } : null);
-    portraitBox.innerHTML = portraitSvg(c, { form: bestOwnedForm(c) });
+    // The aura, form-tinted hair and eyes only belong to a form you are
+    // actually holding right now - the everyday portrait is not a record of
+    // your strongest transformation ever reached.
+    portraitBox.innerHTML = portraitSvg(c, {});
   }
   $('hud-name').textContent = c.name;
   $('hud-sub').textContent = `${c.sex === 'female' ? 'Female' : 'Male'} ${s.race} - ${s.place} - Age ${s.year}`
@@ -758,7 +745,7 @@ function panelPeople() {
       const row = el('button', 'row');
       row.type = 'button';
       const face = el('div', 'row-face');
-      face.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1, form: bestNpcForm(npc) });
+      face.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1 });
       row.appendChild(face);
       const main = el('div', 'row-main');
       main.appendChild(el('div', 'row-title', npc.name + (npc.isCanon ? ' \u2605' : '')));
@@ -804,7 +791,7 @@ function panelPerson(npcId) {
     `${relationLabel(npc)} - ${bondLabel(npc)}${romance ? ' - ' + romance : ''}`));
 
   const shot = el('div', 'npc-portrait');
-  shot.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1, form: bestNpcForm(npc) });
+  shot.innerHTML = npcPortrait(npc, { maturityRate: getRace(npc.raceId).maturityRate ?? 1 });
   body.appendChild(shot);
 
   if (npc.personality) {
@@ -1111,7 +1098,7 @@ function panelAppearance() {
   const shot = el('div', 'portrait');
   shot.style.margin = '0 auto 12px';
   shot.style.maxWidth = '160px';
-  shot.innerHTML = portraitSvg(c, { form: bestOwnedForm(c) });
+  shot.innerHTML = portraitSvg(c, {});
   body.appendChild(shot);
 
   body.appendChild(el('p', 'row-note',
@@ -2225,10 +2212,20 @@ function renderBattle() {
   const foeNpc = BATTLE.context && (GAME.npcs[BATTLE.context.npcId] || GAME.npcs['canon_' + BATTLE.context.canonId]);
   const foeFace = $('foe-face');
   if (foeFace) {
+    // The aura and form-tinted hair/eyes reflect whatever they are actually
+    // holding in THIS fight (battle.them.form), not their strongest form
+    // ever unlocked - a foe who hasn't transformed yet should not render
+    // pre-transformed.
+    const foeForm = BATTLE.them.form ? getTransformation(BATTLE.them.form) : null;
     foeFace.innerHTML = foeNpc
-      ? npcPortrait(foeNpc, { maturityRate: getRace(foeNpc.raceId).maturityRate ?? 1, form: bestNpcForm(foeNpc) })
+      ? npcPortrait(foeNpc, { maturityRate: getRace(foeNpc.raceId).maturityRate ?? 1, form: foeForm })
       : '';
     foeFace.hidden = !foeNpc;
+  }
+  const meFace = $('me-face');
+  if (meFace) {
+    const myForm = BATTLE.me.form ? getTransformation(BATTLE.me.form) : null;
+    meFace.innerHTML = portraitSvg(GAME.character, { form: myForm });
   }
   $('foe-name').textContent = st.them.name;
   $('foe-sub').textContent = [st.them.tier, st.them.form, st.them.stance].filter(Boolean).join(' - ');
