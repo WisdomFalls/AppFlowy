@@ -41,6 +41,7 @@ import { injuryList } from '../engine/body.js';
 import { worldManifest } from '../engine/worlds.js';
 import { factionsPresent } from '../data/factions.js';
 import { getPlanet } from '../data/planets.js';
+import { getCareer, dutiesFor } from '../data/jobs.js';
 import { startSurvival, survivalActions, survivalTurn, survivalStatus, resolveTeamWish, RULES } from '../engine/survival.js';
 import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, finishLethalWin, lootDefeatedNpc, killKarmaDelta, moralAlignmentOf, STANCES } from '../engine/battle.js';
 import { costLabel, limitFor, usedThisYear, yearCapacity } from '../engine/economy.js';
@@ -1713,6 +1714,29 @@ function panelRecords() {
             : 'Still mostly just you.')));
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', Math.round(inst.renown) + '%'));
+    body.appendChild(row);
+  }
+
+  if (c.career) {
+    body.appendChild(el('div', 'group-label', 'Your job'));
+    const career = getCareer(c.career.id);
+    const row = el('div', 'row');
+    const main = el('div', 'row-main');
+    const squadName = c.flags.elite_squad ? ' - Elite Squad' : '';
+    main.appendChild(el('div', 'row-title', `${c.career.title}${squadName}`));
+    main.appendChild(el('div', 'row-note', `${career.name}. Performance: ${Math.round(c.career.performance)}%.`));
+    for (const duty of dutiesFor(career, c.career.rung)) {
+      main.appendChild(el('div', 'row-note', `- ${duty}`));
+    }
+    const colleagues = Object.values(GAME.npcs).filter((n) => n.alive
+      && ((n.careerId === c.career.id && n.workplaceId === c.placeId)
+        || (c.flags.elite_squad && n.workplaceId === 'elite_saiyan_squad')));
+    if (colleagues.length) {
+      main.appendChild(el('div', 'row-note', `Colleagues: ${colleagues.map((n) => n.name).join(', ')}.`));
+    } else {
+      main.appendChild(el('div', 'row-note', 'You do not really know anyone else there yet.'));
+    }
+    row.appendChild(main);
     body.appendChild(row);
   }
 

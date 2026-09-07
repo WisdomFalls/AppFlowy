@@ -10,7 +10,7 @@ import { generateHomageName } from '../data/names.js';
 import { getTransformation } from '../data/transformations.js';
 import { grantTrainingPower } from './economy.js';
 import { addFact } from './memory.js';
-import { adjust, currentYear } from './state.js';
+import { adjust, currentYear, addNpc } from './state.js';
 import { combatPower } from './stats.js';
 import { numberish } from './text.js';
 import { getFaction } from '../data/factions.js';
@@ -198,6 +198,35 @@ export function resolveTrial(state, rng, trial, score) {
     } else {
       adjust(state, { happiness: -6 });
       lines.push(`Not this time. {"Come back when you are actually ready."|They do not even finish watching.|"No."}`);
+    }
+  } else if (trial.purpose === 'elite_squad') {
+    // Being ranked Elite gets you noticed. The Squad itself is a separate,
+    // harder thing to actually be let into - this is that second bar.
+    const threshold = 0.5 + trial.difficulty * 0.05;
+    if (score >= threshold) {
+      c.flags.elite_squad = true;
+      const squadmates = [];
+      for (let i = 0; i < 3; i++) {
+        const mate = makeNpc(rng, {
+          year: currentYear(state), placeId: c.placeId, raceId: c.raceId,
+          relation: 'colleague', minAge: Math.max(16, c.age - 8), maxAge: c.age + 10,
+          powerScale: 1.1,
+        });
+        mate.careerId = 'saiyan_rank';
+        mate.workplaceId = 'elite_saiyan_squad';
+        mate.closeness = rng.int(20, 40);
+        addNpc(state, mate);
+        squadmates.push(mate.name);
+      }
+      adjust(state, { happiness: 12, fame: 10 });
+      addFact(state.memory, {
+        type: 'career', text: `Made the Elite Squad, serving alongside ${squadmates.join(', ')}.`,
+        year: c.age, weight: 6, tags: ['career', 'elite_squad'],
+      });
+      lines.push(`They take you in. ${squadmates.join(', ')} - that is who you answer to now, and who answers for you.`);
+    } else {
+      adjust(state, { happiness: -6 });
+      lines.push(`Not good enough. {"Come back stronger."|Nobody explains why. Nobody has to.|You are sent back to the ranks.}`);
     }
   } else if (trial.purpose === 'mission') {
     const threshold = 0.38 + trial.difficulty * 0.05;

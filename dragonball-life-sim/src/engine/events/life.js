@@ -8,6 +8,18 @@ import { ITEMS, getItem, shopStock } from '../../data/items.js';
 import { numberish } from '../text.js';
 import { STAT_LABELS } from '../stats.js';
 
+/** The same workplace has other people in it. Not always, and there is a cap. */
+function meetColleague(ctx, careerId, workplaceId) {
+  const known = ctx.npcs.filter((n) => n.careerId === careerId && n.workplaceId === workplaceId);
+  if (known.length >= 4 || !ctx.rng.chance(0.3)) return null;
+  const mate = stranger(ctx, { minAge: 18, maxAge: 60, relation: 'colleague' });
+  mate.careerId = careerId;
+  mate.workplaceId = workplaceId;
+  mate.closeness = ctx.rng.int(15, 35);
+  fact(ctx, `Met ${mate.name}, working the same job.`, { type: 'career', weight: 2, subject: mate.id, tags: ['career', 'colleague'] });
+  return mate;
+}
+
 registerEvents([
   // ------------------------------------------------------------- childhood
   {
@@ -182,7 +194,12 @@ registerEvents([
         c2.character.career.performance = Math.min(100, c2.character.career.performance + c2.rng.int(6, 18));
         const pay = career.rungs[c2.character.career.rung].pay;
         const changes = apply(c2, { zeni: pay, happiness: -3, stats: { discipline: 2 }, health: -2 });
-        return { text: `You {put in the hours|take the extra shifts|make yourself useful}. Somebody senior {notices|says nothing but notices|writes it down}.`, changes };
+        const mate = meetColleague(c2, career.id, c2.character.placeId);
+        return {
+          text: `You {put in the hours|take the extra shifts|make yourself useful}. Somebody senior {notices|says nothing but notices|writes it down}.`
+            + (mate ? ` ${mate.name} works the same job. You end up talking more than you expected to.` : ''),
+          changes,
+        };
       } },
       { id: 'coast', label: 'Do the minimum, train on your own time', effect: (c2) => {
         const career = getCareer(c2.character.career.id);
@@ -190,7 +207,12 @@ registerEvents([
         const pay = career.rungs[c2.character.career.rung].pay;
         const t = trainYear(c2, { intensity: 0.9 });
         const changes = apply(c2, { zeni: Math.round(pay * 0.9), happiness: 4 });
-        return { text: `The work gets {done|mostly done|done eventually}. Your real year happens {before dawn|after hours|somewhere nobody from work would recognise}. ${powerLine(t.gained)}`, changes };
+        const mate = meetColleague(c2, career.id, c2.character.placeId);
+        return {
+          text: `The work gets {done|mostly done|done eventually}. Your real year happens {before dawn|after hours|somewhere nobody from work would recognise}. ${powerLine(t.gained)}`
+            + (mate ? ` ${mate.name}, from the same job, notices you are only half there.` : ''),
+          changes,
+        };
       } },
       { id: 'quit', label: 'Quit', danger: true, effect: (c2) => {
         const old = c2.character.career.title;

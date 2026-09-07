@@ -14196,6 +14196,33 @@ function getCareer(id) {
   return CAREER_BY_ID[id];
 }
 
+// What the job actually is, day to day - the part "Job: Title" never says.
+const DUTIES_BY_FIELD = {
+  martial: ['Drill and spar to stay sharp yourself.', 'Take on students or challengers as they come.'],
+  science: ['Run the day\'s experiments or repairs.', 'File reports nobody reads until something breaks.'],
+  military: ['Stand your post and keep the rota straight.', 'Answer whatever call actually comes in.'],
+  civilian: ['Keep the regulars fed, fixed, or served.', 'Handle whatever the day actually brings.'],
+  crime: ['Move product, collect debts, keep your head down.', 'Answer to whoever is above you, no questions.'],
+  divine: ['Watch over what you were set to watch over.', 'Keep the routine sacred, even when nothing happens.'],
+  technical: ['Keep the equipment running.', 'Sign off on work that has your name behind it now.'],
+  trade: ['Move the goods, keep the books honest enough.', 'Deal with whoever is buying this week.'],
+  spiritual: ['Tend to what the role actually asks of you.', 'Listen more than you speak.'],
+  law: ['Patrol your assigned ground.', 'Answer to the ones above you without complaint.'],
+  admin: ['Keep the paperwork moving.', 'Decide things nobody wants to be the one deciding.'],
+  fame: ['Be seen. That is most of the job.', 'Show up rehearsed, or looking like you did.'],
+};
+
+/** What a job actually asks of you, day to day, phrased for where you stand on the ladder. */
+function dutiesFor(career, rungIndex) {
+  const base = DUTIES_BY_FIELD[career.field] || ['Do the job, whatever it actually turns out to be that day.'];
+  const seniority = rungIndex >= career.rungs.length - 1
+    ? 'Everyone under you answers to you now, for better or worse.'
+    : rungIndex === 0
+      ? 'You take whatever nobody senior wants.'
+      : 'You have earned enough trust to be given real work.';
+  return [...base, seniority];
+}
+
 function careersFor(character, placeTags, planetId) {
   return CAREERS.filter((c) => {
     // A world can be explicitly ruled out even when its tags would match.
@@ -14214,7 +14241,7 @@ function careersFor(character, placeTags, planetId) {
     return true;
   });
 }
-  return { CAREERS, CAREER_BY_ID, getCareer, careersFor };
+  return { CAREERS, CAREER_BY_ID, getCareer, dutiesFor, careersFor };
 })();
 
 /* ==== engine/events/life.js ==== */
@@ -14227,6 +14254,18 @@ const { CAREERS, getCareer, careersFor } = __mod_data_jobs_js;
 const { ITEMS, getItem, shopStock } = __mod_data_items_js;
 const { numberish } = __mod_engine_text_js;
 const { STAT_LABELS } = __mod_engine_stats_js;
+
+/** The same workplace has other people in it. Not always, and there is a cap. */
+function meetColleague(ctx, careerId, workplaceId) {
+  const known = ctx.npcs.filter((n) => n.careerId === careerId && n.workplaceId === workplaceId);
+  if (known.length >= 4 || !ctx.rng.chance(0.3)) return null;
+  const mate = stranger(ctx, { minAge: 18, maxAge: 60, relation: 'colleague' });
+  mate.careerId = careerId;
+  mate.workplaceId = workplaceId;
+  mate.closeness = ctx.rng.int(15, 35);
+  fact(ctx, `Met ${mate.name}, working the same job.`, { type: 'career', weight: 2, subject: mate.id, tags: ['career', 'colleague'] });
+  return mate;
+}
 
 registerEvents([
   // ------------------------------------------------------------- childhood
@@ -14402,7 +14441,12 @@ registerEvents([
         c2.character.career.performance = Math.min(100, c2.character.career.performance + c2.rng.int(6, 18));
         const pay = career.rungs[c2.character.career.rung].pay;
         const changes = apply(c2, { zeni: pay, happiness: -3, stats: { discipline: 2 }, health: -2 });
-        return { text: `You {put in the hours|take the extra shifts|make yourself useful}. Somebody senior {notices|says nothing but notices|writes it down}.`, changes };
+        const mate = meetColleague(c2, career.id, c2.character.placeId);
+        return {
+          text: `You {put in the hours|take the extra shifts|make yourself useful}. Somebody senior {notices|says nothing but notices|writes it down}.`
+            + (mate ? ` ${mate.name} works the same job. You end up talking more than you expected to.` : ''),
+          changes,
+        };
       } },
       { id: 'coast', label: 'Do the minimum, train on your own time', effect: (c2) => {
         const career = getCareer(c2.character.career.id);
@@ -14410,7 +14454,12 @@ registerEvents([
         const pay = career.rungs[c2.character.career.rung].pay;
         const t = trainYear(c2, { intensity: 0.9 });
         const changes = apply(c2, { zeni: Math.round(pay * 0.9), happiness: 4 });
-        return { text: `The work gets {done|mostly done|done eventually}. Your real year happens {before dawn|after hours|somewhere nobody from work would recognise}. ${powerLine(t.gained)}`, changes };
+        const mate = meetColleague(c2, career.id, c2.character.placeId);
+        return {
+          text: `The work gets {done|mostly done|done eventually}. Your real year happens {before dawn|after hours|somewhere nobody from work would recognise}. ${powerLine(t.gained)}`
+            + (mate ? ` ${mate.name}, from the same job, notices you are only half there.` : ''),
+          changes,
+        };
       } },
       { id: 'quit', label: 'Quit', danger: true, effect: (c2) => {
         const old = c2.character.career.title;
@@ -17953,7 +18002,7 @@ const { generateHomageName } = __mod_data_names_js;
 const { getTransformation } = __mod_data_transformations_js;
 const { grantTrainingPower } = __mod_engine_economy_js;
 const { addFact } = __mod_engine_memory_js;
-const { adjust, currentYear } = __mod_engine_state_js;
+const { adjust, currentYear, addNpc } = __mod_engine_state_js;
 const { combatPower } = __mod_engine_stats_js;
 const { numberish } = __mod_engine_text_js;
 const { getFaction } = __mod_data_factions_js;
@@ -18141,6 +18190,35 @@ function resolveTrial(state, rng, trial, score) {
     } else {
       adjust(state, { happiness: -6 });
       lines.push(`Not this time. {"Come back when you are actually ready."|They do not even finish watching.|"No."}`);
+    }
+  } else if (trial.purpose === 'elite_squad') {
+    // Being ranked Elite gets you noticed. The Squad itself is a separate,
+    // harder thing to actually be let into - this is that second bar.
+    const threshold = 0.5 + trial.difficulty * 0.05;
+    if (score >= threshold) {
+      c.flags.elite_squad = true;
+      const squadmates = [];
+      for (let i = 0; i < 3; i++) {
+        const mate = makeNpc(rng, {
+          year: currentYear(state), placeId: c.placeId, raceId: c.raceId,
+          relation: 'colleague', minAge: Math.max(16, c.age - 8), maxAge: c.age + 10,
+          powerScale: 1.1,
+        });
+        mate.careerId = 'saiyan_rank';
+        mate.workplaceId = 'elite_saiyan_squad';
+        mate.closeness = rng.int(20, 40);
+        addNpc(state, mate);
+        squadmates.push(mate.name);
+      }
+      adjust(state, { happiness: 12, fame: 10 });
+      addFact(state.memory, {
+        type: 'career', text: `Made the Elite Squad, serving alongside ${squadmates.join(', ')}.`,
+        year: c.age, weight: 6, tags: ['career', 'elite_squad'],
+      });
+      lines.push(`They take you in. ${squadmates.join(', ')} - that is who you answer to now, and who answers for you.`);
+    } else {
+      adjust(state, { happiness: -6 });
+      lines.push(`Not good enough. {"Come back stronger."|Nobody explains why. Nobody has to.|You are sent back to the ranks.}`);
     }
   } else if (trial.purpose === 'mission') {
     const threshold = 0.38 + trial.difficulty * 0.05;
@@ -26132,6 +26210,27 @@ const ACTIONS = [
     },
   },
   {
+    id: 'join_elite_squad', maxPerYear: 1, minMaturity: 16, tooYoung: 'Too young to be considered.', slots: 2, name: 'Try for the Elite Squad', cat: 'world', danger: true,
+    desc: 'Being ranked Elite gets you noticed. Getting into the Squad itself is a separate, harder thing.',
+    available: (s) => {
+      const c = s.character;
+      return c.raceId === 'saiyan' && !c.flags.elite_squad
+        && c.career && c.career.id === 'saiyan_rank' && c.career.rung >= 3;
+    },
+    run: (s, rng) => {
+      const difficulty = clamp(3 + (s.character.career.rung - 3), 3, 5);
+      const trial = startTrial(s, rng, {
+        kind: 'push',
+        difficulty,
+        purpose: 'elite_squad',
+        label: 'Elite Squad Vetting',
+        blurb: 'Everyone ranked Elite gets asked eventually. Not everyone gets asked twice.',
+        payload: {},
+      });
+      return { text: 'They put you in front of the Squad and let them decide.', trial };
+    },
+  },
+  {
     id: 'cook_meal', maxPerYear: 4, minMaturity: 4, tooYoung: 'You would burn the kitchen down.', slots: 1, name: 'Cook something', cat: 'world', cost: 'A moment',
     desc: 'Practice in the kitchen. Do it enough and you stop being someone who burns water.',
     available: (s) => !s.character.inAfterlife,
@@ -28612,6 +28711,7 @@ const { injuryList } = __mod_engine_body_js;
 const { worldManifest } = __mod_engine_worlds_js;
 const { factionsPresent } = __mod_data_factions_js;
 const { getPlanet } = __mod_data_planets_js;
+const { getCareer, dutiesFor } = __mod_data_jobs_js;
 const { startSurvival, survivalActions, survivalTurn, survivalStatus, resolveTeamWish, RULES } = __mod_engine_survival_js;
 const { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, finishLethalWin, lootDefeatedNpc, killKarmaDelta, moralAlignmentOf, STANCES } = __mod_engine_battle_js;
 const { costLabel, limitFor, usedThisYear, yearCapacity } = __mod_engine_economy_js;
@@ -30280,6 +30380,29 @@ function panelRecords() {
             : 'Still mostly just you.')));
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', Math.round(inst.renown) + '%'));
+    body.appendChild(row);
+  }
+
+  if (c.career) {
+    body.appendChild(el('div', 'group-label', 'Your job'));
+    const career = getCareer(c.career.id);
+    const row = el('div', 'row');
+    const main = el('div', 'row-main');
+    const squadName = c.flags.elite_squad ? ' - Elite Squad' : '';
+    main.appendChild(el('div', 'row-title', `${c.career.title}${squadName}`));
+    main.appendChild(el('div', 'row-note', `${career.name}. Performance: ${Math.round(c.career.performance)}%.`));
+    for (const duty of dutiesFor(career, c.career.rung)) {
+      main.appendChild(el('div', 'row-note', `- ${duty}`));
+    }
+    const colleagues = Object.values(GAME.npcs).filter((n) => n.alive
+      && ((n.careerId === c.career.id && n.workplaceId === c.placeId)
+        || (c.flags.elite_squad && n.workplaceId === 'elite_saiyan_squad')));
+    if (colleagues.length) {
+      main.appendChild(el('div', 'row-note', `Colleagues: ${colleagues.map((n) => n.name).join(', ')}.`));
+    } else {
+      main.appendChild(el('div', 'row-note', 'You do not really know anyone else there yet.'));
+    }
+    row.appendChild(main);
     body.appendChild(row);
   }
 

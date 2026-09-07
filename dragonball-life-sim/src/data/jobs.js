@@ -378,6 +378,33 @@ export function getCareer(id) {
   return CAREER_BY_ID[id];
 }
 
+// What the job actually is, day to day - the part "Job: Title" never says.
+const DUTIES_BY_FIELD = {
+  martial: ['Drill and spar to stay sharp yourself.', 'Take on students or challengers as they come.'],
+  science: ['Run the day\'s experiments or repairs.', 'File reports nobody reads until something breaks.'],
+  military: ['Stand your post and keep the rota straight.', 'Answer whatever call actually comes in.'],
+  civilian: ['Keep the regulars fed, fixed, or served.', 'Handle whatever the day actually brings.'],
+  crime: ['Move product, collect debts, keep your head down.', 'Answer to whoever is above you, no questions.'],
+  divine: ['Watch over what you were set to watch over.', 'Keep the routine sacred, even when nothing happens.'],
+  technical: ['Keep the equipment running.', 'Sign off on work that has your name behind it now.'],
+  trade: ['Move the goods, keep the books honest enough.', 'Deal with whoever is buying this week.'],
+  spiritual: ['Tend to what the role actually asks of you.', 'Listen more than you speak.'],
+  law: ['Patrol your assigned ground.', 'Answer to the ones above you without complaint.'],
+  admin: ['Keep the paperwork moving.', 'Decide things nobody wants to be the one deciding.'],
+  fame: ['Be seen. That is most of the job.', 'Show up rehearsed, or looking like you did.'],
+};
+
+/** What a job actually asks of you, day to day, phrased for where you stand on the ladder. */
+export function dutiesFor(career, rungIndex) {
+  const base = DUTIES_BY_FIELD[career.field] || ['Do the job, whatever it actually turns out to be that day.'];
+  const seniority = rungIndex >= career.rungs.length - 1
+    ? 'Everyone under you answers to you now, for better or worse.'
+    : rungIndex === 0
+      ? 'You take whatever nobody senior wants.'
+      : 'You have earned enough trust to be given real work.';
+  return [...base, seniority];
+}
+
 export function careersFor(character, placeTags, planetId) {
   return CAREERS.filter((c) => {
     // A world can be explicitly ruled out even when its tags would match.

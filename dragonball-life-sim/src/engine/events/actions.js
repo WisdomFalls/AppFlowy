@@ -782,6 +782,27 @@ export const ACTIONS = [
     },
   },
   {
+    id: 'join_elite_squad', maxPerYear: 1, minMaturity: 16, tooYoung: 'Too young to be considered.', slots: 2, name: 'Try for the Elite Squad', cat: 'world', danger: true,
+    desc: 'Being ranked Elite gets you noticed. Getting into the Squad itself is a separate, harder thing.',
+    available: (s) => {
+      const c = s.character;
+      return c.raceId === 'saiyan' && !c.flags.elite_squad
+        && c.career && c.career.id === 'saiyan_rank' && c.career.rung >= 3;
+    },
+    run: (s, rng) => {
+      const difficulty = clamp(3 + (s.character.career.rung - 3), 3, 5);
+      const trial = startTrial(s, rng, {
+        kind: 'push',
+        difficulty,
+        purpose: 'elite_squad',
+        label: 'Elite Squad Vetting',
+        blurb: 'Everyone ranked Elite gets asked eventually. Not everyone gets asked twice.',
+        payload: {},
+      });
+      return { text: 'They put you in front of the Squad and let them decide.', trial };
+    },
+  },
+  {
     id: 'cook_meal', maxPerYear: 4, minMaturity: 4, tooYoung: 'You would burn the kitchen down.', slots: 1, name: 'Cook something', cat: 'world', cost: 'A moment',
     desc: 'Practice in the kitchen. Do it enough and you stop being someone who burns water.',
     available: (s) => !s.character.inAfterlife,
