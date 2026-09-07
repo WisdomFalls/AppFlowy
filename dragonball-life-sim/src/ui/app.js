@@ -634,7 +634,14 @@ function panelActivities() {
       b.addEventListener('click', () => {
         const options = actionOptions(GAME, action.id);
         if (options && options.length) chooseActionTarget(action, options);
-        else doAction(action.id, {});
+        else if (options) {
+          // An options-driven action found nothing to choose between - that
+          // is a real, explainable outcome (nowhere to travel to, nothing
+          // left to train toward), not the same thing as an action with no
+          // options step at all. Say so, rather than silently running it
+          // with nothing picked and letting it fall back on a generic line.
+          flash(action.emptyHint || `Nothing available for ${action.name.toLowerCase()} right now.`);
+        } else doAction(action.id, {});
       });
       body.appendChild(b);
     }

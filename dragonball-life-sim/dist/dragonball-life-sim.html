@@ -23576,6 +23576,10 @@ const ACTIONS = [
   {
     id: 'travel', minMaturity: 8, tooYoung: 'You are not going anywhere by yourself.', slots: 1, name: 'Travel', cat: 'world',
     desc: 'Somewhere else. Crossing space costs years unless you can skip them.',
+    // Several homeworlds (Sadala among them) are a single place with nowhere
+    // else on them to go - if you also have no ship, technique or affordable
+    // passage off-world, there is genuinely nowhere to travel to right now.
+    emptyHint: 'There is nowhere reachable from here right now - no other ground to cover on this world, and no way off it yet.',
     available: (s) => !s.character.inAfterlife,
     options: (s) => {
       // Grouped by world, because the question is which planet, and only then
@@ -26580,7 +26584,14 @@ function panelActivities() {
       b.addEventListener('click', () => {
         const options = actionOptions(GAME, action.id);
         if (options && options.length) chooseActionTarget(action, options);
-        else doAction(action.id, {});
+        else if (options) {
+          // An options-driven action found nothing to choose between - that
+          // is a real, explainable outcome (nowhere to travel to, nothing
+          // left to train toward), not the same thing as an action with no
+          // options step at all. Say so, rather than silently running it
+          // with nothing picked and letting it fall back on a generic line.
+          flash(action.emptyHint || `Nothing available for ${action.name.toLowerCase()} right now.`);
+        } else doAction(action.id, {});
       });
       body.appendChild(b);
     }

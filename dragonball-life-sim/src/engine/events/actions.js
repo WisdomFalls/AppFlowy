@@ -409,6 +409,10 @@ export const ACTIONS = [
   {
     id: 'travel', minMaturity: 8, tooYoung: 'You are not going anywhere by yourself.', slots: 1, name: 'Travel', cat: 'world',
     desc: 'Somewhere else. Crossing space costs years unless you can skip them.',
+    // Several homeworlds (Sadala among them) are a single place with nowhere
+    // else on them to go - if you also have no ship, technique or affordable
+    // passage off-world, there is genuinely nowhere to travel to right now.
+    emptyHint: 'There is nowhere reachable from here right now - no other ground to cover on this world, and no way off it yet.',
     available: (s) => !s.character.inAfterlife,
     options: (s) => {
       // Grouped by world, because the question is which planet, and only then
