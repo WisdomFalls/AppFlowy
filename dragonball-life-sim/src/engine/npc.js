@@ -7,6 +7,7 @@ import { generateFullName, generateTitle, generateEpithet, generateSignatureName
 import { RACES, getRace, raceHasTail, sexesFor } from '../data/races.js';
 import { getCanon, canonPower, canonAlive } from '../data/canon.js';
 import { getPlace } from '../data/places.js';
+import { getItem } from '../data/items.js';
 import { canonLook, SPECIES_LOOK } from '../data/canonlooks.js';
 import { render } from './text.js';
 
@@ -880,7 +881,7 @@ export function dossier(npc, opts = {}) {
     const value = npc.stats && npc.stats[key];
     rows.push({ label, value: closenessKnown && value != null ? String(value) : unknown });
   }
-  rows.push({ label: 'Wearing', value: k >= 1 && npc.look ? npc.look.clothing : unknown });
+  rows.push({ label: 'Wearing', value: k >= 1 && npc.look ? wearingLine(npc) : unknown });
   rows.push({
     label: 'Looks',
     value: k >= 1 && npc.look ? `${npc.look.hair} hair, ${npc.look.eyes} eyes, ${npc.look.mark}` : unknown,
@@ -932,6 +933,13 @@ export function statReveal(npc, key, k) {
   const shown = Math.max(1, Math.round(value * restraint));
   const revealsTrue = k >= 3 && restraint < 0.98;
   return revealsTrue ? `${shown} (${value})` : String(shown);
+}
+
+/** The generic appearance line, plus whatever from their actual bag they have on. */
+function wearingLine(npc) {
+  const worn = (npc.bag || []).filter((e) => e.worn).map((e) => getItem(e.id)?.name).filter(Boolean);
+  if (!worn.length) return npc.look.clothing;
+  return `${npc.look.clothing}, plus ${worn.join(' and ')}`;
 }
 
 function approximatePower(p) {

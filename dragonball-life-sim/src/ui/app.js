@@ -911,6 +911,12 @@ function panelPerson(npcId) {
     : read.broke ? 'Your scouter did not survive the reading.'
       : `${read.text}${(npc.knowledge || 0) >= 2 ? '' : ''}`;
   if (read.broke) flash('Your scouter climbs, screams and comes apart.', 5000);
+  // Generated before the dossier is built, so "Wearing" can actually
+  // reflect what is in the bag rather than a description disconnected
+  // from it.
+  const rngBag = getRng(GAME);
+  npcBag(rngBag, npc);
+  saveRng(GAME, rngBag);
   const table = el('div', 'dossier');
   // Being canon does not make somebody an open book - Vegeta does not hand
   // you his stats because he is famous. Canon NPCs read through the same
@@ -941,9 +947,6 @@ function panelPerson(npcId) {
   }
 
   // What they are carrying, as far as you have seen. Ask, buy, or take it.
-  const rng0 = getRng(GAME);
-  npcBag(rng0, npc);
-  saveRng(GAME, rng0);
   const theirs = knownItems(npc);
   if (theirs.length) {
     body.appendChild(el('div', 'group-label', 'What they have'));

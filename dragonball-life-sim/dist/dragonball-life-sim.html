@@ -7543,6 +7543,7 @@ const { generateFullName, generateTitle, generateEpithet, generateSignatureName 
 const { RACES, getRace, raceHasTail, sexesFor } = __mod_data_races_js;
 const { getCanon, canonPower, canonAlive } = __mod_data_canon_js;
 const { getPlace } = __mod_data_places_js;
+const { getItem } = __mod_data_items_js;
 const { canonLook, SPECIES_LOOK } = __mod_data_canonlooks_js;
 const { render } = __mod_engine_text_js;
 
@@ -8416,7 +8417,7 @@ function dossier(npc, opts = {}) {
     const value = npc.stats && npc.stats[key];
     rows.push({ label, value: closenessKnown && value != null ? String(value) : unknown });
   }
-  rows.push({ label: 'Wearing', value: k >= 1 && npc.look ? npc.look.clothing : unknown });
+  rows.push({ label: 'Wearing', value: k >= 1 && npc.look ? wearingLine(npc) : unknown });
   rows.push({
     label: 'Looks',
     value: k >= 1 && npc.look ? `${npc.look.hair} hair, ${npc.look.eyes} eyes, ${npc.look.mark}` : unknown,
@@ -8468,6 +8469,13 @@ function statReveal(npc, key, k) {
   const shown = Math.max(1, Math.round(value * restraint));
   const revealsTrue = k >= 3 && restraint < 0.98;
   return revealsTrue ? `${shown} (${value})` : String(shown);
+}
+
+/** The generic appearance line, plus whatever from their actual bag they have on. */
+function wearingLine(npc) {
+  const worn = (npc.bag || []).filter((e) => e.worn).map((e) => getItem(e.id)?.name).filter(Boolean);
+  if (!worn.length) return npc.look.clothing;
+  return `${npc.look.clothing}, plus ${worn.join(' and ')}`;
 }
 
 function approximatePower(p) {
@@ -29718,6 +29726,12 @@ function panelPerson(npcId) {
     : read.broke ? 'Your scouter did not survive the reading.'
       : `${read.text}${(npc.knowledge || 0) >= 2 ? '' : ''}`;
   if (read.broke) flash('Your scouter climbs, screams and comes apart.', 5000);
+  // Generated before the dossier is built, so "Wearing" can actually
+  // reflect what is in the bag rather than a description disconnected
+  // from it.
+  const rngBag = getRng(GAME);
+  npcBag(rngBag, npc);
+  saveRng(GAME, rngBag);
   const table = el('div', 'dossier');
   // Being canon does not make somebody an open book - Vegeta does not hand
   // you his stats because he is famous. Canon NPCs read through the same
@@ -29748,9 +29762,6 @@ function panelPerson(npcId) {
   }
 
   // What they are carrying, as far as you have seen. Ask, buy, or take it.
-  const rng0 = getRng(GAME);
-  npcBag(rng0, npc);
-  saveRng(GAME, rng0);
   const theirs = knownItems(npc);
   if (theirs.length) {
     body.appendChild(el('div', 'group-label', 'What they have'));
