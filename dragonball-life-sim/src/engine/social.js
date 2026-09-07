@@ -26,7 +26,8 @@ function npcFightPower(rng, npc) {
 import { TECH_BY_ID } from '../data/techniques.js';
 import { getRace } from '../data/races.js';
 import { getPlace } from '../data/places.js';
-import { zeni, numberish } from './text.js';
+import { numberish } from './text.js';
+import { localMoney } from './events/helpers.js';
 
 function note(state, text, opts = {}) {
   return addFact(state.memory, {
@@ -105,7 +106,7 @@ export const SOCIAL_ACTIONS = [
       adjust(state, { zeni: -amount });
       npc.zeni = (npc.zeni || 0) + amount;
       chargeSocial(npc, { closeness: rng.int(8, 16), trust: 5, respect: 2 });
-      return { text: `${zeni(amount)}. ${render(`{They do not want to take it|They take it without a word|They pretend it is nothing and keep it forever}.`, {}, rng)}` };
+      return { text: `${localMoney(state, amount)}. ${render(`{They do not want to take it|They take it without a word|They pretend it is nothing and keep it forever}.`, {}, rng)}` };
     },
   },
   {
@@ -311,7 +312,7 @@ export const SOCIAL_ACTIONS = [
       npc.relation = 'enemy';
       adjust(state, { zeni: take, karma: -14, fame: 2 });
       note(state, `Robbed ${npc.name}.`, { type: 'crime', subject: npc.id, tags: ['crime'], weight: 3 });
-      return { text: `${zeni(take)}. ${render(`{They do not fight you for it|They try and it does not go well for them|Nobody helps them}.`, {}, rng)} They will not forget it.` };
+      return { text: `${localMoney(state, take)}. ${render(`{They do not fight you for it|They try and it does not go well for them|Nobody helps them}.`, {}, rng)} They will not forget it.` };
     },
   },
   {

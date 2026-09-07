@@ -9,6 +9,7 @@ import { trainingRate, combatPower, powerTier } from '../stats.js';
 import { createBattle, autoResolve, battleAftermath } from '../battle.js';
 import { getPlace, PLACES } from '../../data/places.js';
 import { zeni, numberish } from '../text.js';
+import { currencyFor, priceIn, formatMoney } from '../../data/currency.js';
 
 /** Apply changes and return a change summary for the log. */
 export function apply(ctx, changes) {
@@ -193,6 +194,20 @@ export function moveTo(ctx, placeId) {
 /** Format a Zeni figure for choice hints. */
 export function money(n) {
   return zeni(n);
+}
+
+/**
+ * The same figure, said the way it would actually be said here. Prices and
+ * payouts are authored in Zeni-equivalent value everywhere in the engine
+ * (character.zeni stays that internal accounting unit - see the comment on
+ * priceIn() in currency.js) but a Sadala-born Saiyan has never held a Zeni
+ * note and should not be told a price in one. This is purely a display
+ * conversion: it changes what a line of narration says, never what
+ * character.zeni actually holds or what a choice is gated on.
+ */
+export function localMoney(ctx, amount) {
+  const cur = currencyFor(getPlace(ctx.character.placeId).planet);
+  return formatMoney(priceIn(amount, cur.id), cur.id);
 }
 
 export function canAfford(ctx, amount) {

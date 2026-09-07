@@ -2,10 +2,10 @@
 
 import { registerEvents, pickNpc, npcSlot, slotNpc } from '../generator.js';
 import { apply, fact, stranger, relate, thread, trainYear, powerLine, money, canAfford,
-  elsewhere, moveTo, odds, scaledFoePower, killNpc, meetCanon, canonHere } from './helpers.js';
+  elsewhere, moveTo, odds, scaledFoePower, killNpc, meetCanon, canonHere, localMoney } from './helpers.js';
 import { CAREERS, getCareer, careersFor } from '../../data/jobs.js';
 import { ITEMS, getItem, shopStock } from '../../data/items.js';
-import { numberish, zeni } from '../text.js';
+import { numberish } from '../text.js';
 import { STAT_LABELS } from '../stats.js';
 
 registerEvents([
@@ -151,7 +151,7 @@ registerEvents([
     text: (ctx, s) => {
       const career = getCareer(s.careerId);
       return `{Somebody|A notice|A friend of a friend|An advertisement} {offers you|points you toward|mentions} work: [careerName], starting as a [rung].
-        ${career.blurb} {The money is ${zeni(s.pay)} a year|It pays ${zeni(s.pay)}|They mention ${zeni(s.pay)}}.`;
+        ${career.blurb} {The money is ${localMoney(ctx, s.pay)} a year|It pays ${localMoney(ctx, s.pay)}|They mention ${localMoney(ctx, s.pay)}}.`;
     },
     choices: (ctx, s) => [
       { id: 'take', label: `Take the job`, effect: (c2, sl) => {
@@ -309,12 +309,12 @@ registerEvents([
       const stock = shopStock(ctx.place.tags).filter((i) => !ctx.character.items.includes(i.id) && i.cost <= ctx.character.zeni * 3);
       if (!stock.length) return null;
       const item = ctx.rng.pick(stock);
-      return { itemId: item.id, itemName: item.name, cost: item.cost, itemDesc: item.desc };
+      return { itemId: item.id, itemName: item.name, cost: item.cost, costText: localMoney(ctx, item.cost), itemDesc: item.desc };
     },
     title: 'For Sale',
-    text: `{A shop|A dealer|A very persistent salesman|A catalogue} has [itemName] going for [cost] Zeni. [itemDesc]`,
+    text: `{A shop|A dealer|A very persistent salesman|A catalogue} has [itemName] going for [costText]. [itemDesc]`,
     choices: (ctx, s) => [
-      { id: 'buy', label: `Buy it (${zeni(s.cost)})`, locked: !canAfford(ctx, s.cost), lockReason: 'You cannot afford it.',
+      { id: 'buy', label: `Buy it (${localMoney(ctx, s.cost)})`, locked: !canAfford(ctx, s.cost), lockReason: 'You cannot afford it.',
         effect: (c2, sl) => {
           if (c2.character.zeni < sl.cost) return { text: 'You count it twice. It is still not enough.' };
           c2.character.zeni -= sl.cost;

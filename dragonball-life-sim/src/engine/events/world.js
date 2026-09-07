@@ -5,7 +5,7 @@
 import { registerEvents, npcSlot } from '../generator.js';
 import { clamp } from '../rng.js';
 import { apply, fact, stranger, relate, thread, trainYear, powerLine, meetCanon, canonHere,
-  odds, killNpc, findNpc, scaledFoePower, moveTo, setWorldFlag, offerBattle } from './helpers.js';
+  odds, killNpc, findNpc, scaledFoePower, moveTo, setWorldFlag, offerBattle, localMoney } from './helpers.js';
 import { fight, narrateFight, describeGap, runTournament, buildField } from '../combat.js';
 import { combatPower, powerTier } from '../stats.js';
 import { TIMELINE, isTournamentYear, worldPowerBaseline, eraName } from '../../data/timeline.js';
@@ -17,7 +17,7 @@ import { die } from '../lifecycle.js';
 import { getPlace, PLACES } from '../../data/places.js';
 import { generateFullName } from '../../data/names.js';
 import { getTechnique, TECHNIQUES } from '../../data/techniques.js';
-import { numberish, zeni, ordinal } from '../text.js';
+import { numberish, ordinal } from '../text.js';
 import { createTournament, autoRunTournament, settle } from '../tournament.js';
 
 
@@ -357,15 +357,15 @@ registerEvents([
         if (c2.character.zeni >= price) {
           claimBalls(c2.state, c2.rng, sl.count);
           const changes = apply(c2, { zeni: -price, karma: 2 });
-          fact(c2, `Bought ${sl.count} Dragon Balls for ${zeni(price)}.`, { type: 'dragonball', weight: 3, tags: ['dragonball'] });
-          return { text: `${zeni(price)}. {It is robbery and you pay it|You do not haggle|They throw in a bag}. ${ballsHeld(c2.state)} of seven.`, changes };
+          fact(c2, `Bought ${sl.count} Dragon Balls for ${localMoney(c2, price)}.`, { type: 'dragonball', weight: 3, tags: ['dragonball'] });
+          return { text: `${localMoney(c2, price)}. {It is robbery and you pay it|You do not haggle|They throw in a bag}. ${ballsHeld(c2.state)} of seven.`, changes };
         }
         if (odds(c2, 0.35 + c2.character.stats.charisma / 250)) {
           claimBalls(c2.state, c2.rng, 1);
           const changes = apply(c2, { karma: 4, happiness: 4 });
-          return { text: `{You have nothing like ${zeni(price)}|You offer something else|You do them a favour instead}. They part with one. ${ballsHeld(c2.state)} of seven.`, changes };
+          return { text: `{You have nothing like ${localMoney(c2, price)}|You offer something else|You do them a favour instead}. They part with one. ${ballsHeld(c2.state)} of seven.`, changes };
         }
-        return { text: `{The price is ${zeni(price)}|You cannot come close|They laugh you out of the building}.`, changes: [] };
+        return { text: `{The price is ${localMoney(c2, price)}|You cannot come close|They laugh you out of the building}.`, changes: [] };
       } },
       { id: 'leave', label: 'Leave it alone', effect: (c2) => ({
         text: `{Somebody always wants a wish|You have seen how that ends|Not your business}.`, changes: apply(c2, { karma: 3 }),
@@ -527,11 +527,11 @@ registerEvents([
       { id: 'buy', label: 'Buy them from somebody less scrupulous', effect: (ctx) => {
         const cost = ctx.rng.int(200000, 900000);
         if (ctx.character.zeni < cost) {
-          return { text: `The price is ${zeni(cost)}. {You do not have it|You are not close|You laugh and leave}.`, changes: [] };
+          return { text: `The price is ${localMoney(ctx, cost)}. {You do not have it|You are not close|You laugh and leave}.`, changes: [] };
         }
         ctx.character.senzu += 1;
         const changes = apply(ctx, { zeni: -cost, karma: -2 });
-        return { text: `${zeni(cost)} for one bean. {It is robbery|You pay it|The seller does not tell you where it came from and you do not ask}.`, changes };
+        return { text: `${localMoney(ctx, cost)} for one bean. {It is robbery|You pay it|The seller does not tell you where it came from and you do not ask}.`, changes };
       } },
     ],
   },

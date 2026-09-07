@@ -3,10 +3,10 @@
 
 import { registerEvents, pickNpc, npcSlot } from '../generator.js';
 import { apply, fact, stranger, relate, thread, bumpThread, trainYear, powerLine,
-  meetCanon, canonHere, odds, killNpc, findNpc, scaledFoePower, moveTo, bondScore } from './helpers.js';
+  meetCanon, canonHere, odds, killNpc, findNpc, scaledFoePower, moveTo, bondScore, localMoney } from './helpers.js';
 import { fight, narrateFight, describeGap } from '../combat.js';
 import { combatPower, powerTier } from '../stats.js';
-import { numberish, zeni } from '../text.js';
+import { numberish } from '../text.js';
 import { generateSignatureName } from '../../data/names.js';
 import { TECH_BY_ID, TECHNIQUES } from '../../data/techniques.js';
 
@@ -103,7 +103,7 @@ registerEvents([
         const cost = ctx.rng.int(60000, 400000);
         if (ctx.character.zeni < cost) {
           const changes = apply(ctx, { health: -10, stats: { strength: -3 } });
-          return { text: `{The surgery costs ${zeni(cost)}|You cannot afford it|You get the estimate and laugh}. You live with it.`, changes };
+          return { text: `{The surgery costs ${localMoney(ctx, cost)}|You cannot afford it|You get the estimate and laugh}. You live with it.`, changes };
         }
         const changes = apply(ctx, { zeni: -cost, health: 25, stats: { durability: 3 }, happiness: 6 });
         return { text: `{Months on your back|A good surgeon and a bad year|It works}. {You come back slower and whole|It holds|You are careful with it now}.`, changes };
@@ -263,7 +263,7 @@ registerEvents([
       { id: 'sell', label: 'Sell it', effect: (c2) => {
         const price = c2.rng.int(80000, 1200000);
         const changes = apply(c2, { zeni: price, karma: -3 });
-        return { text: `{A collector|A school|Somebody who does not give a name} pays ${zeni(price)}. {You do not ask what they want it for|You regret it within a decade|It was only paper}.`, changes };
+        return { text: `{A collector|A school|Somebody who does not give a name} pays ${localMoney(c2, price)}. {You do not ask what they want it for|You regret it within a decade|It was only paper}.`, changes };
       } },
       { id: 'burn', label: 'Destroy it', effect: (c2) => {
         const changes = apply(c2, { karma: 6, happiness: -4, stats: { discipline: 4 } });

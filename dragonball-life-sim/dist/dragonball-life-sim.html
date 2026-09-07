@@ -11567,6 +11567,7 @@ const { trainingRate, combatPower, powerTier } = __mod_engine_stats_js;
 const { createBattle, autoResolve, battleAftermath } = __mod_engine_battle_js;
 const { getPlace, PLACES } = __mod_data_places_js;
 const { zeni, numberish } = __mod_engine_text_js;
+const { currencyFor, priceIn, formatMoney } = __mod_data_currency_js;
 
 /** Apply changes and return a change summary for the log. */
 function apply(ctx, changes) {
@@ -11753,6 +11754,20 @@ function money(n) {
   return zeni(n);
 }
 
+/**
+ * The same figure, said the way it would actually be said here. Prices and
+ * payouts are authored in Zeni-equivalent value everywhere in the engine
+ * (character.zeni stays that internal accounting unit - see the comment on
+ * priceIn() in currency.js) but a Sadala-born Saiyan has never held a Zeni
+ * note and should not be told a price in one. This is purely a display
+ * conversion: it changes what a line of narration says, never what
+ * character.zeni actually holds or what a choice is gated on.
+ */
+function localMoney(ctx, amount) {
+  const cur = currencyFor(getPlace(ctx.character.placeId).planet);
+  return formatMoney(priceIn(amount, cur.id), cur.id);
+}
+
 function canAfford(ctx, amount) {
   return ctx.character.zeni >= amount;
 }
@@ -11863,7 +11878,7 @@ function offerBattle(ctx, foe, opts = {}) {
     battleResult: battle.outcome,
   };
 }
-  return { apply, summarise, fact, stranger, meetCanon, canonHere, canonOnPlanet, relate, killNpc, thread, bumpThread, trainYear, powerLine, elsewhere, moveTo, money, canAfford, hurt, odds, scaledFoePower, tierOf, squadOf, offerBattle, bondScore, findNpc, setFlag, setWorldFlag, numberish, nextNpcId, getCanon, canonPower };
+  return { apply, summarise, fact, stranger, meetCanon, canonHere, canonOnPlanet, relate, killNpc, thread, bumpThread, trainYear, powerLine, elsewhere, moveTo, money, localMoney, canAfford, hurt, odds, scaledFoePower, tierOf, squadOf, offerBattle, bondScore, findNpc, setFlag, setWorldFlag, numberish, nextNpcId, getCanon, canonPower };
 })();
 
 /* ==== engine/events/origins.js ==== */
@@ -13040,10 +13055,10 @@ const __mod_engine_events_life_js = (function () {
 // Everyday life: childhood, school, work, money, health, ageing.
 
 const { registerEvents, pickNpc, npcSlot, slotNpc } = __mod_engine_generator_js;
-const { apply, fact, stranger, relate, thread, trainYear, powerLine, money, canAfford, elsewhere, moveTo, odds, scaledFoePower, killNpc, meetCanon, canonHere } = __mod_engine_events_helpers_js;
+const { apply, fact, stranger, relate, thread, trainYear, powerLine, money, canAfford, elsewhere, moveTo, odds, scaledFoePower, killNpc, meetCanon, canonHere, localMoney } = __mod_engine_events_helpers_js;
 const { CAREERS, getCareer, careersFor } = __mod_data_jobs_js;
 const { ITEMS, getItem, shopStock } = __mod_data_items_js;
-const { numberish, zeni } = __mod_engine_text_js;
+const { numberish } = __mod_engine_text_js;
 const { STAT_LABELS } = __mod_engine_stats_js;
 
 registerEvents([
@@ -13189,7 +13204,7 @@ registerEvents([
     text: (ctx, s) => {
       const career = getCareer(s.careerId);
       return `{Somebody|A notice|A friend of a friend|An advertisement} {offers you|points you toward|mentions} work: [careerName], starting as a [rung].
-        ${career.blurb} {The money is ${zeni(s.pay)} a year|It pays ${zeni(s.pay)}|They mention ${zeni(s.pay)}}.`;
+        ${career.blurb} {The money is ${localMoney(ctx, s.pay)} a year|It pays ${localMoney(ctx, s.pay)}|They mention ${localMoney(ctx, s.pay)}}.`;
     },
     choices: (ctx, s) => [
       { id: 'take', label: `Take the job`, effect: (c2, sl) => {
@@ -13347,12 +13362,12 @@ registerEvents([
       const stock = shopStock(ctx.place.tags).filter((i) => !ctx.character.items.includes(i.id) && i.cost <= ctx.character.zeni * 3);
       if (!stock.length) return null;
       const item = ctx.rng.pick(stock);
-      return { itemId: item.id, itemName: item.name, cost: item.cost, itemDesc: item.desc };
+      return { itemId: item.id, itemName: item.name, cost: item.cost, costText: localMoney(ctx, item.cost), itemDesc: item.desc };
     },
     title: 'For Sale',
-    text: `{A shop|A dealer|A very persistent salesman|A catalogue} has [itemName] going for [cost] Zeni. [itemDesc]`,
+    text: `{A shop|A dealer|A very persistent salesman|A catalogue} has [itemName] going for [costText]. [itemDesc]`,
     choices: (ctx, s) => [
-      { id: 'buy', label: `Buy it (${zeni(s.cost)})`, locked: !canAfford(ctx, s.cost), lockReason: 'You cannot afford it.',
+      { id: 'buy', label: `Buy it (${localMoney(ctx, s.cost)})`, locked: !canAfford(ctx, s.cost), lockReason: 'You cannot afford it.',
         effect: (c2, sl) => {
           if (c2.character.zeni < sl.cost) return { text: 'You count it twice. It is still not enough.' };
           c2.character.zeni -= sl.cost;
@@ -13612,10 +13627,10 @@ const __mod_engine_events_adult_js = (function () {
 // and before anyone calls you old.
 
 const { registerEvents, pickNpc, npcSlot } = __mod_engine_generator_js;
-const { apply, fact, stranger, relate, thread, bumpThread, trainYear, powerLine, meetCanon, canonHere, odds, killNpc, findNpc, scaledFoePower, moveTo, bondScore } = __mod_engine_events_helpers_js;
+const { apply, fact, stranger, relate, thread, bumpThread, trainYear, powerLine, meetCanon, canonHere, odds, killNpc, findNpc, scaledFoePower, moveTo, bondScore, localMoney } = __mod_engine_events_helpers_js;
 const { fight, narrateFight, describeGap } = __mod_engine_combat_js;
 const { combatPower, powerTier } = __mod_engine_stats_js;
-const { numberish, zeni } = __mod_engine_text_js;
+const { numberish } = __mod_engine_text_js;
 const { generateSignatureName } = __mod_data_names_js;
 const { TECH_BY_ID, TECHNIQUES } = __mod_data_techniques_js;
 
@@ -13712,7 +13727,7 @@ registerEvents([
         const cost = ctx.rng.int(60000, 400000);
         if (ctx.character.zeni < cost) {
           const changes = apply(ctx, { health: -10, stats: { strength: -3 } });
-          return { text: `{The surgery costs ${zeni(cost)}|You cannot afford it|You get the estimate and laugh}. You live with it.`, changes };
+          return { text: `{The surgery costs ${localMoney(ctx, cost)}|You cannot afford it|You get the estimate and laugh}. You live with it.`, changes };
         }
         const changes = apply(ctx, { zeni: -cost, health: 25, stats: { durability: 3 }, happiness: 6 });
         return { text: `{Months on your back|A good surgeon and a bad year|It works}. {You come back slower and whole|It holds|You are careful with it now}.`, changes };
@@ -13872,7 +13887,7 @@ registerEvents([
       { id: 'sell', label: 'Sell it', effect: (c2) => {
         const price = c2.rng.int(80000, 1200000);
         const changes = apply(c2, { zeni: price, karma: -3 });
-        return { text: `{A collector|A school|Somebody who does not give a name} pays ${zeni(price)}. {You do not ask what they want it for|You regret it within a decade|It was only paper}.`, changes };
+        return { text: `{A collector|A school|Somebody who does not give a name} pays ${localMoney(c2, price)}. {You do not ask what they want it for|You regret it within a decade|It was only paper}.`, changes };
       } },
       { id: 'burn', label: 'Destroy it', effect: (c2) => {
         const changes = apply(c2, { karma: 6, happiness: -4, stats: { discipline: 4 } });
@@ -18439,7 +18454,7 @@ const __mod_engine_events_world_js = (function () {
 
 const { registerEvents, npcSlot } = __mod_engine_generator_js;
 const { clamp } = __mod_engine_rng_js;
-const { apply, fact, stranger, relate, thread, trainYear, powerLine, meetCanon, canonHere, odds, killNpc, findNpc, scaledFoePower, moveTo, setWorldFlag, offerBattle } = __mod_engine_events_helpers_js;
+const { apply, fact, stranger, relate, thread, trainYear, powerLine, meetCanon, canonHere, odds, killNpc, findNpc, scaledFoePower, moveTo, setWorldFlag, offerBattle, localMoney } = __mod_engine_events_helpers_js;
 const { fight, narrateFight, describeGap, runTournament, buildField } = __mod_engine_combat_js;
 const { combatPower, powerTier } = __mod_engine_stats_js;
 const { TIMELINE, isTournamentYear, worldPowerBaseline, eraName } = __mod_data_timeline_js;
@@ -18451,7 +18466,7 @@ const { die } = __mod_engine_lifecycle_js;
 const { getPlace, PLACES } = __mod_data_places_js;
 const { generateFullName } = __mod_data_names_js;
 const { getTechnique, TECHNIQUES } = __mod_data_techniques_js;
-const { numberish, zeni, ordinal } = __mod_engine_text_js;
+const { numberish, ordinal } = __mod_engine_text_js;
 const { createTournament, autoRunTournament, settle } = __mod_engine_tournament_js;
 
 
@@ -18791,15 +18806,15 @@ registerEvents([
         if (c2.character.zeni >= price) {
           claimBalls(c2.state, c2.rng, sl.count);
           const changes = apply(c2, { zeni: -price, karma: 2 });
-          fact(c2, `Bought ${sl.count} Dragon Balls for ${zeni(price)}.`, { type: 'dragonball', weight: 3, tags: ['dragonball'] });
-          return { text: `${zeni(price)}. {It is robbery and you pay it|You do not haggle|They throw in a bag}. ${ballsHeld(c2.state)} of seven.`, changes };
+          fact(c2, `Bought ${sl.count} Dragon Balls for ${localMoney(c2, price)}.`, { type: 'dragonball', weight: 3, tags: ['dragonball'] });
+          return { text: `${localMoney(c2, price)}. {It is robbery and you pay it|You do not haggle|They throw in a bag}. ${ballsHeld(c2.state)} of seven.`, changes };
         }
         if (odds(c2, 0.35 + c2.character.stats.charisma / 250)) {
           claimBalls(c2.state, c2.rng, 1);
           const changes = apply(c2, { karma: 4, happiness: 4 });
-          return { text: `{You have nothing like ${zeni(price)}|You offer something else|You do them a favour instead}. They part with one. ${ballsHeld(c2.state)} of seven.`, changes };
+          return { text: `{You have nothing like ${localMoney(c2, price)}|You offer something else|You do them a favour instead}. They part with one. ${ballsHeld(c2.state)} of seven.`, changes };
         }
-        return { text: `{The price is ${zeni(price)}|You cannot come close|They laugh you out of the building}.`, changes: [] };
+        return { text: `{The price is ${localMoney(c2, price)}|You cannot come close|They laugh you out of the building}.`, changes: [] };
       } },
       { id: 'leave', label: 'Leave it alone', effect: (c2) => ({
         text: `{Somebody always wants a wish|You have seen how that ends|Not your business}.`, changes: apply(c2, { karma: 3 }),
@@ -18961,11 +18976,11 @@ registerEvents([
       { id: 'buy', label: 'Buy them from somebody less scrupulous', effect: (ctx) => {
         const cost = ctx.rng.int(200000, 900000);
         if (ctx.character.zeni < cost) {
-          return { text: `The price is ${zeni(cost)}. {You do not have it|You are not close|You laugh and leave}.`, changes: [] };
+          return { text: `The price is ${localMoney(ctx, cost)}. {You do not have it|You are not close|You laugh and leave}.`, changes: [] };
         }
         ctx.character.senzu += 1;
         const changes = apply(ctx, { zeni: -cost, karma: -2 });
-        return { text: `${zeni(cost)} for one bean. {It is robbery|You pay it|The seller does not tell you where it came from and you do not ask}.`, changes };
+        return { text: `${localMoney(ctx, cost)} for one bean. {It is robbery|You pay it|The seller does not tell you where it came from and you do not ask}.`, changes };
       } },
     ],
   },
@@ -23386,7 +23401,8 @@ const { createTournament, autoRunTournament, settle } = __mod_engine_tournament_
 const { travelOptions, travelTo, actOnWorld, standingOn } = __mod_engine_worlds_js;
 const { getPlanet, PLANETS, planetExists } = __mod_data_planets_js;
 const { generateFullName, generateSignatureName } = __mod_data_names_js;
-const { zeni, numberish } = __mod_engine_text_js;
+const { numberish } = __mod_engine_text_js;
+const { localMoney } = __mod_engine_events_helpers_js;
 
 function fact(state, text, opts = {}) {
   return addFact(state.memory, {
@@ -23627,7 +23643,7 @@ const ACTIONS = [
     available: (s) => ['android', 'bioandroid', 'tuffle'].includes(s.character.raceId),
     run: (s, rng) => {
       const cost = 200000 * Math.pow(3, s.character.flags.upgrades || 0);
-      if (s.character.zeni < cost) return { text: `You need ${zeni(cost)} in parts. You do not have it.` };
+      if (s.character.zeni < cost) return { text: `You need ${localMoney(s, cost)} in parts. You do not have it.` };
       adjust(s, { zeni: -cost });
       if (rng.chance(0.55 + s.character.stats.intellect / 250)) {
         s.character.flags.upgrades = (s.character.flags.upgrades || 0) + 1;
@@ -23925,7 +23941,7 @@ const ACTIONS = [
     desc: 'Zeni buys gravity chambers.',
     available: (s) => !s.character.career && !s.character.inAfterlife,
     options: (s) => careersFor(s.character, getPlace(s.character.placeId).tags, getPlace(s.character.placeId).planet)
-      .map((c) => ({ id: c.id, label: c.name, hint: `${zeni(c.rungs[0].pay)}/yr - ${c.blurb}` })),
+      .map((c) => ({ id: c.id, label: c.name, hint: `${localMoney(s, c.rungs[0].pay)}/yr - ${c.blurb}` })),
     run: (s, rng, params) => {
       const career = params && params.option ? getCareer(params.option) : null;
       if (!career) return { text: 'Nothing suitable here.' };
@@ -24021,10 +24037,10 @@ const ACTIONS = [
       if (rng.chance(lucky ? 0.55 : 0.42)) {
         const won = Math.round(stake * rng.float(1.2, 3.5));
         adjust(s, { zeni: won, happiness: 8 });
-        return { text: render(`{It goes your way|You should stop and you do not|Three good hands in a row}. You are up ${zeni(won)}.`, {}, rng) };
+        return { text: render(`{It goes your way|You should stop and you do not|Three good hands in a row}. You are up ${localMoney(s, won)}.`, {}, rng) };
       }
       adjust(s, { zeni: -stake, happiness: -8 });
-      return { text: render(`{It does not go your way|You lose it all in under an hour|The dealer is apologetic}. ${zeni(stake)} gone.`, {}, rng) };
+      return { text: render(`{It does not go your way|You lose it all in under an hour|The dealer is apologetic}. ${localMoney(s, stake)} gone.`, {}, rng) };
     },
   },
   {
@@ -24036,7 +24052,7 @@ const ACTIONS = [
       if (rng.chance(0.68 + s.character.stats.speed / 400)) {
         adjust(s, { zeni: take, karma: -10, happiness: 3 });
         fact(s, 'Took something that was not theirs and got away with it.', { type: 'crime', weight: 2, tags: ['crime'] });
-        return { text: render(`{Nobody sees you|You are gone before the alarm|It is embarrassingly easy}. ${zeni(take)}.`, {}, rng) };
+        return { text: render(`{Nobody sees you|You are gone before the alarm|It is embarrassingly easy}. ${localMoney(s, take)}.`, {}, rng) };
       }
       s.character.flags.wanted = true;
       adjust(s, { karma: -12, fame: 3, health: -8, zeni: -Math.min(s.character.zeni, 20000) });
@@ -24097,14 +24113,14 @@ const ACTIONS = [
     options: (s) => {
       const c = s.character;
       const tiers = [
-        { id: 'local', label: 'A local card', hint: '50,000 Zeni. Whoever hears about it.', cost: 50000, spread: 4, canon: false },
-        { id: 'open', label: 'An open invitational', hint: '400,000 Zeni. Word gets around.', cost: 400000, spread: 12, canon: true },
-        { id: 'callout', label: 'Call out the strongest alive', hint: '2,000,000 Zeni. You are asking for it.', cost: 2000000, spread: 45, canon: true },
+        { id: 'local', label: 'A local card', hint: `${localMoney(s, 50000)}. Whoever hears about it.`, cost: 50000, spread: 4, canon: false },
+        { id: 'open', label: 'An open invitational', hint: `${localMoney(s, 400000)}. Word gets around.`, cost: 400000, spread: 12, canon: true },
+        { id: 'callout', label: 'Call out the strongest alive', hint: `${localMoney(s, 2000000)}. You are asking for it.`, cost: 2000000, spread: 45, canon: true },
       ];
       return tiers.map((t) => ({
         ...t,
         disabled: c.zeni < t.cost || (t.canon && c.fame < (t.id === 'callout' ? 45 : 12)),
-        hint: c.zeni < t.cost ? `You cannot cover the ${zeni(t.cost)} purse.`
+        hint: c.zeni < t.cost ? `You cannot cover the ${localMoney(s, t.cost)} purse.`
           : (t.canon && c.fame < (t.id === 'callout' ? 45 : 12))
             ? 'Nobody worth fighting has heard of you yet.'
             : t.hint,
@@ -25071,7 +25087,8 @@ function npcFightPower(rng, npc) {
 const { TECH_BY_ID } = __mod_data_techniques_js;
 const { getRace } = __mod_data_races_js;
 const { getPlace } = __mod_data_places_js;
-const { zeni, numberish } = __mod_engine_text_js;
+const { numberish } = __mod_engine_text_js;
+const { localMoney } = __mod_engine_events_helpers_js;
 
 function note(state, text, opts = {}) {
   return addFact(state.memory, {
@@ -25150,7 +25167,7 @@ const SOCIAL_ACTIONS = [
       adjust(state, { zeni: -amount });
       npc.zeni = (npc.zeni || 0) + amount;
       chargeSocial(npc, { closeness: rng.int(8, 16), trust: 5, respect: 2 });
-      return { text: `${zeni(amount)}. ${render(`{They do not want to take it|They take it without a word|They pretend it is nothing and keep it forever}.`, {}, rng)}` };
+      return { text: `${localMoney(state, amount)}. ${render(`{They do not want to take it|They take it without a word|They pretend it is nothing and keep it forever}.`, {}, rng)}` };
     },
   },
   {
@@ -25356,7 +25373,7 @@ const SOCIAL_ACTIONS = [
       npc.relation = 'enemy';
       adjust(state, { zeni: take, karma: -14, fame: 2 });
       note(state, `Robbed ${npc.name}.`, { type: 'crime', subject: npc.id, tags: ['crime'], weight: 3 });
-      return { text: `${zeni(take)}. ${render(`{They do not fight you for it|They try and it does not go well for them|Nobody helps them}.`, {}, rng)} They will not forget it.` };
+      return { text: `${localMoney(state, take)}. ${render(`{They do not fight you for it|They try and it does not go well for them|Nobody helps them}.`, {}, rng)} They will not forget it.` };
     },
   },
   {

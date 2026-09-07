@@ -30,7 +30,8 @@ import { createTournament, autoRunTournament, settle } from '../tournament.js';
 import { travelOptions, travelTo, actOnWorld, standingOn } from '../worlds.js';
 import { getPlanet, PLANETS, planetExists } from '../../data/planets.js';
 import { generateFullName, generateSignatureName } from '../../data/names.js';
-import { zeni, numberish } from '../text.js';
+import { numberish } from '../text.js';
+import { localMoney } from './helpers.js';
 
 function fact(state, text, opts = {}) {
   return addFact(state.memory, {
@@ -271,7 +272,7 @@ export const ACTIONS = [
     available: (s) => ['android', 'bioandroid', 'tuffle'].includes(s.character.raceId),
     run: (s, rng) => {
       const cost = 200000 * Math.pow(3, s.character.flags.upgrades || 0);
-      if (s.character.zeni < cost) return { text: `You need ${zeni(cost)} in parts. You do not have it.` };
+      if (s.character.zeni < cost) return { text: `You need ${localMoney(s, cost)} in parts. You do not have it.` };
       adjust(s, { zeni: -cost });
       if (rng.chance(0.55 + s.character.stats.intellect / 250)) {
         s.character.flags.upgrades = (s.character.flags.upgrades || 0) + 1;
@@ -569,7 +570,7 @@ export const ACTIONS = [
     desc: 'Zeni buys gravity chambers.',
     available: (s) => !s.character.career && !s.character.inAfterlife,
     options: (s) => careersFor(s.character, getPlace(s.character.placeId).tags, getPlace(s.character.placeId).planet)
-      .map((c) => ({ id: c.id, label: c.name, hint: `${zeni(c.rungs[0].pay)}/yr - ${c.blurb}` })),
+      .map((c) => ({ id: c.id, label: c.name, hint: `${localMoney(s, c.rungs[0].pay)}/yr - ${c.blurb}` })),
     run: (s, rng, params) => {
       const career = params && params.option ? getCareer(params.option) : null;
       if (!career) return { text: 'Nothing suitable here.' };
@@ -665,10 +666,10 @@ export const ACTIONS = [
       if (rng.chance(lucky ? 0.55 : 0.42)) {
         const won = Math.round(stake * rng.float(1.2, 3.5));
         adjust(s, { zeni: won, happiness: 8 });
-        return { text: render(`{It goes your way|You should stop and you do not|Three good hands in a row}. You are up ${zeni(won)}.`, {}, rng) };
+        return { text: render(`{It goes your way|You should stop and you do not|Three good hands in a row}. You are up ${localMoney(s, won)}.`, {}, rng) };
       }
       adjust(s, { zeni: -stake, happiness: -8 });
-      return { text: render(`{It does not go your way|You lose it all in under an hour|The dealer is apologetic}. ${zeni(stake)} gone.`, {}, rng) };
+      return { text: render(`{It does not go your way|You lose it all in under an hour|The dealer is apologetic}. ${localMoney(s, stake)} gone.`, {}, rng) };
     },
   },
   {
@@ -680,7 +681,7 @@ export const ACTIONS = [
       if (rng.chance(0.68 + s.character.stats.speed / 400)) {
         adjust(s, { zeni: take, karma: -10, happiness: 3 });
         fact(s, 'Took something that was not theirs and got away with it.', { type: 'crime', weight: 2, tags: ['crime'] });
-        return { text: render(`{Nobody sees you|You are gone before the alarm|It is embarrassingly easy}. ${zeni(take)}.`, {}, rng) };
+        return { text: render(`{Nobody sees you|You are gone before the alarm|It is embarrassingly easy}. ${localMoney(s, take)}.`, {}, rng) };
       }
       s.character.flags.wanted = true;
       adjust(s, { karma: -12, fame: 3, health: -8, zeni: -Math.min(s.character.zeni, 20000) });
@@ -741,14 +742,14 @@ export const ACTIONS = [
     options: (s) => {
       const c = s.character;
       const tiers = [
-        { id: 'local', label: 'A local card', hint: '50,000 Zeni. Whoever hears about it.', cost: 50000, spread: 4, canon: false },
-        { id: 'open', label: 'An open invitational', hint: '400,000 Zeni. Word gets around.', cost: 400000, spread: 12, canon: true },
-        { id: 'callout', label: 'Call out the strongest alive', hint: '2,000,000 Zeni. You are asking for it.', cost: 2000000, spread: 45, canon: true },
+        { id: 'local', label: 'A local card', hint: `${localMoney(s, 50000)}. Whoever hears about it.`, cost: 50000, spread: 4, canon: false },
+        { id: 'open', label: 'An open invitational', hint: `${localMoney(s, 400000)}. Word gets around.`, cost: 400000, spread: 12, canon: true },
+        { id: 'callout', label: 'Call out the strongest alive', hint: `${localMoney(s, 2000000)}. You are asking for it.`, cost: 2000000, spread: 45, canon: true },
       ];
       return tiers.map((t) => ({
         ...t,
         disabled: c.zeni < t.cost || (t.canon && c.fame < (t.id === 'callout' ? 45 : 12)),
-        hint: c.zeni < t.cost ? `You cannot cover the ${zeni(t.cost)} purse.`
+        hint: c.zeni < t.cost ? `You cannot cover the ${localMoney(s, t.cost)} purse.`
           : (t.canon && c.fame < (t.id === 'callout' ? 45 : 12))
             ? 'Nobody worth fighting has heard of you yet.'
             : t.hint,
