@@ -22,7 +22,7 @@ import { getRace, hasPerk } from '../../data/races.js';
 import { prostheticOptions, fittersFor, fitProsthetic } from '../body.js';
 import { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel,
   limitFor, usedThisYear, trainingRoomLeft } from '../economy.js';
-import { makeNpc, bondScore, relationLabel } from '../npc.js';
+import { makeNpc, bondScore, relationLabel, RELATIONS } from '../npc.js';
 import { canonAvailable, canonPower, canonPlace, canonUniverse } from '../../data/canon.js';
 import { ballsHeld, startHunt, ballsAreInert, summonReady } from '../dragonballs.js';
 import { startTrial, STAT_TRIALS, TRIAL_KINDS, getMastery, masteryEffect, inventForm } from '../trials.js';
@@ -32,6 +32,11 @@ import { getPlanet, PLANETS, planetExists } from '../../data/planets.js';
 import { generateFullName, generateSignatureName } from '../../data/names.js';
 import { numberish } from '../text.js';
 import { localMoney } from './helpers.js';
+
+/** Living blood-or-marriage family who are not standing where you are. */
+function familyElsewhere(state) {
+  return livingNpcs(state).filter((n) => RELATIONS[n.relation]?.family && n.placeId !== state.character.placeId);
+}
 
 function fact(state, text, opts = {}) {
   return addFact(state.memory, {
@@ -576,6 +581,49 @@ export const ACTIONS = [
           + (trip.years > 0 ? ` The crossing takes ${trip.years} year${trip.years === 1 ? '' : 's'}.` : ' You are simply there.'),
         skipYears: trip.years,
       };
+    },
+  },
+  {
+    id: 'relocate_family', minMaturity: 12, slots: 2, name: 'Ask them to move with you', cat: 'family', cost: 'A season',
+    desc: 'Somebody who matters to you is somewhere else. Ask them to come to where you are - a planet, or a universe, if it comes to that.',
+    available: (s) => familyElsewhere(s).length > 0,
+    options: (s) => familyElsewhere(s).map((npc) => ({
+      id: npc.id, label: `${npc.name} (${relationLabel(npc)})`, hint: `Currently at ${getPlace(npc.placeId).name}, ${getPlanet(getPlace(npc.placeId).planet).name}.`,
+    })),
+    run: (s, rng, params) => {
+      const npc = (params && params.option && findNpc(s, params.option)) || familyElsewhere(s)[0];
+      if (!npc) return { text: 'There is nobody left to ask.' };
+      const c = s.character;
+      const here = getPlace(c.placeId);
+      const there = getPlace(npc.placeId);
+      const crossUniverse = (getPlanet(here.planet).universe || 7) !== (getPlanet(there.planet).universe || 7);
+      const crossPlanet = !crossUniverse && here.planet !== there.planet;
+      // Charisma is the actual ask; closeness is how much they already
+      // trust your judgement about it. How far you are asking them to leave
+      // behind pulls the other way - a universe is not a planet, and a
+      // planet is not a street over.
+      const resistance = crossUniverse ? 0.42 : crossPlanet ? 0.2 : 0.05;
+      const tags = npc.tags || [];
+      const chance = clamp(0.22 + c.stats.charisma / 180 + npc.closeness / 150
+        + (tags.includes('loyal') ? 0.1 : 0) + (tags.includes('protective') ? 0.06 : 0)
+        - (tags.includes('ambitious') ? 0.12 : 0) - (tags.includes('vain') ? 0.05 : 0)
+        - resistance, 0.04, 0.94);
+      if (rng.chance(chance)) {
+        npc.placeId = c.placeId;
+        npc.homePlaceId = c.placeId;
+        npc.closeness = clamp(npc.closeness + 10, 0, 100);
+        npc.trust = clamp((npc.trust ?? 30) + 8, 0, 100);
+        adjust(s, { happiness: 10 });
+        addFact(s.memory, {
+          type: 'family', weight: 6, year: c.age, subject: npc.id, tags: ['family'],
+          text: `Convinced ${npc.name} to relocate to ${here.name}.`,
+        });
+        return { text: render(`{They pack up without much argument, in the end|"It took you long enough to ask"|It is a harder goodbye for them than they let on}. ${npc.name} is on ${here.name} now.`, {}, rng) };
+      }
+      npc.tension = clamp((npc.tension || 0) + 6, 0, 100);
+      const why = crossUniverse ? 'a whole universe away from everything they know'
+        : crossPlanet ? 'not a small thing to ask of somebody' : 'still their own decision to make';
+      return { text: render(`{"Not yet." They mean it|They are not ready, and say so|It is}. That is ${why}.`, {}, rng) };
     },
   },
   {
