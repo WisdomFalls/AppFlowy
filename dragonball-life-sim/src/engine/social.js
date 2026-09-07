@@ -133,7 +133,17 @@ export const SOCIAL_ACTIONS = [
       npc.power = Math.round(npc.power * 1.15);
       chargeSocial(npc, { respect: 22, closeness: 12, trust: 10 });
       note(state, `Taught ${npc.name} the ${TECH_BY_ID[id].name}.`, { subject: npc.id, tags: ['mentor'], weight: 4 });
-      return { text: `The ${TECH_BY_ID[id].name}. ${render(`{It takes them months|They pick it up faster than you did, which stings|You have to break the movement down four times}.`, {}, rng)} Now two people in the universe can do it.` };
+      const tech = TECH_BY_ID[id];
+      // A forbidden technique (Kaio-ken, the Evil Containment Wave, and the
+      // like) is genuinely rare enough that teaching it to somebody doubles
+      // how many people alive can do it. Kamehameha and ki blasts are not -
+      // half the cast already has them, and claiming otherwise is exactly
+      // the kind of overreach that reads as wrong given how many people in
+      // this setting are demonstrably fast, strong, or skilled already.
+      const closing = tech.branch === 'forbidden'
+        ? `{Not many people alive can still do that.|That is not a common thing to know how to do.|Whoever taught you that did not teach many people.}`
+        : `{One more person who has it now.|Word of that will get around.|It will not stay just yours for long, taught that easily.}`;
+      return { text: `The ${tech.name}. ${render(`{It takes them months|They pick it up faster than you did, which stings|You have to break the movement down four times}.`, {}, rng)} ${render(closing, {}, rng)}` };
     },
   },
   {
