@@ -21,7 +21,7 @@ import { portraitSvg, defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, 
 import { eraName, worldPowerBaseline } from '../data/timeline.js';
 import { generateFullName } from '../data/names.js';
 import { BRANCHES, TECH_BY_ID } from '../data/techniques.js';
-import { getTransformation } from '../data/transformations.js';
+import { getTransformation, ladderFor } from '../data/transformations.js';
 import { STAT_KEYS, STAT_LABELS, combatPower, powerTier } from '../engine/stats.js';
 import { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } from '../engine/npc.js';
 import { npcActions, runNpcAction, canVisitLiving } from '../engine/social.js';
@@ -142,6 +142,57 @@ function swatchRow(container, list, selectedId, onPick) {
 
 function labelled(container, text) {
   container.appendChild(el('span', 'field-label', text));
+}
+
+/**
+ * A form's threshold in plain words, independent of any particular life -
+ * the same shape as missingRequirements() (progression.js) but without a
+ * live character to compare against, since this is a reference table, not
+ * a status readout. Kept in the UI layer rather than duplicated into the
+ * engine: it only ever formats data that already lives on the form.
+ */
+function describeReq(req) {
+  const parts = [];
+  if (req.power) parts.push(`power level ${numberish(req.power)}`);
+  if (req.parent) {
+    const p = getTransformation(req.parent);
+    parts.push(`already holding ${p ? p.name : req.parent}`);
+  }
+  for (const [k, v] of Object.entries(req.stat || {})) parts.push(`${STAT_LABELS[k] || k} ${v}+`);
+  for (const f of req.flags || []) parts.push(f.replace(/_/g, ' '));
+  if (req.anyFlag) parts.push(`a moment that would trigger it (${req.anyFlag.map((f) => f.replace(/_/g, ' ')).join(', ')})`);
+  for (const t of req.traits || []) parts.push(t === 'tail' ? 'a tail' : t.replace(/_/g, ' '));
+  for (const m of req.mentors || []) parts.push(`training under ${m.replace(/_/g, ' ')}`);
+  for (const t of req.techniques || []) parts.push(t.replace(/_/g, ' '));
+  if (req.age) parts.push(`age ${req.age}+`);
+  if (req.custom) parts.push(req.custom.replace(/_/g, ' '));
+  return parts.length ? parts.join(', ') : 'a starting form - nothing to reach for';
+}
+
+/** Every species' transformation ladder, thresholds and all - a canonical
+ * table, not a status readout on any one life, so it lives off the title
+ * screen and needs no character loaded to open. */
+function openFormReference() {
+  const { body } = sheetShell('Transformation Ladders', 'Every species, every threshold known');
+  for (const race of CREATABLE_RACES) {
+    const ladder = ladderFor(race.id);
+    if (!ladder.length) continue;
+    body.appendChild(el('div', 'group-label', race.name));
+    for (const form of ladder) {
+      const row = el('div', 'row');
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', form.name));
+      main.appendChild(el('div', 'row-note', describeReq(form.req || {})));
+      row.appendChild(main);
+      row.appendChild(el('div', 'row-value', 'x' + numberish(form.mult)));
+      body.appendChild(row);
+    }
+  }
+  const back = el('button', 'ghost-btn', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', closeSheet);
+  body.appendChild(back);
+  openSheet('panel');
 }
 
 /**
@@ -2743,6 +2794,12 @@ function renderTitle() {
       row.appendChild(acts);
       savesBox.appendChild(row);
     }
+  }
+
+  const formRefBtn = $('btn-form-reference');
+  if (formRefBtn && !formRefBtn.dataset.wired) {
+    formRefBtn.dataset.wired = '1';
+    formRefBtn.addEventListener('click', openFormReference);
   }
 
   const ambienceRow = $('opt-ambience');
