@@ -167,7 +167,12 @@ export function makeNpc(rng, opts = {}) {
     zeni: Math.round(Math.pow(10, rng.float(3, 6.4))),
     homePlaceId: opts.placeId || 'east_city',
     kin: {
-      parents: rng.chance(0.55) ? [generateFullName(rng, raceId), generateFullName(rng, raceId)] : [],
+      // Somebody who is themselves a parent (the player's own mother or
+      // father) always gets named forebears - a coin-flip chance of "nobody
+      // they name" read as a real family tree quietly stopping one
+      // generation up, every time it landed wrong.
+      parents: (opts.relation === 'parent' || rng.chance(0.55))
+        ? [generateFullName(rng, raceId), generateFullName(rng, raceId)] : [],
       lost: rng.chance(0.4) ? generateFullName(rng, raceId) : null,
     },
     hasDragonBall: false,
