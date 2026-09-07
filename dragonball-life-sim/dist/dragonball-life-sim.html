@@ -24753,6 +24753,9 @@ const { maturity, getRace } = __mod_data_races_js;
 const { getCanon } = __mod_data_canon_js;
 const { getPlace } = __mod_data_places_js;
 const { eraName } = __mod_data_timeline_js;
+const { powerTier } = __mod_engine_stats_js;
+const { TECH_BY_ID } = __mod_data_techniques_js;
+const { getTransformation } = __mod_data_transformations_js;
 
 /**
  * Topics. `when` decides whether a topic is open at all; `weight` decides how
@@ -24836,6 +24839,26 @@ const TOPICS = [
     ],
     effect: { closeness: 14, trust: 12, knowledge: 1 },
     lore: 'self',
+  },
+  {
+    id: 'ask_warrior_history', name: 'Ask how they got this strong', minAge: 12, weight: 7,
+    relations: ['parent', 'sibling', 'mentor', 'rival', 'friend', 'spouse', 'student', 'acquaintance'],
+    lines: [
+      '{You ask what it actually took|You want the real version, not the short one|You ask how they got here}. '
+      + '[who] {does not enjoy telling it|tells it plainly, which is worse|makes it sound easier than it was}. [warriorLine]',
+    ],
+    effect: { closeness: 10, respect: 14, knowledge: 1 },
+    lore: 'warrior',
+  },
+  {
+    id: 'ask_romance_history', name: 'Ask who came before you', minAge: 16, weight: 5,
+    relations: ['spouse', 'lover', 'parent', 'friend', 'mentor'],
+    lines: [
+      '{You ask who they loved before this|It is not a fair question and you ask it anyway|You want to know what came before you}. '
+      + '[who] {is quiet for a moment first|answers without flinching|tells you more than you expected}. [romanceLine]',
+    ],
+    effect: { closeness: 10, trust: 10, tension: 2 },
+    lore: 'romance',
   },
   {
     id: 'argue', name: 'Have it out', minAge: 12, weight: 6,
@@ -24929,8 +24952,24 @@ const TOPICS = [
   },
 ];
 
+const GROWTH_FOCUS_LINES = {
+  power: 'I have spent my whole life chasing being stronger. I could not tell you what I would actually do if I got there.',
+  technique: 'It was never about strength for me. Anyone can hit hard. Doing it right is the actual work.',
+  family: 'Everything I have done, I did with somebody else in mind. That is not a complaint.',
+  money: 'I have been poor and I have been comfortable, and comfortable is better, whatever anyone tells you.',
+  peace: 'I have had enough of all of it. I just want the quiet parts to last longer than they do.',
+};
+
+const ROMANCE_TEMPLATES = [
+  'There was somebody before you. It ended {badly|quietly|the way these things end}, and I do not talk about it often.',
+  'I was married once, a long time ago. {They died|We grew apart|It did not survive the life I chose}, and I do not regret marrying them even now.',
+  'There was somebody I loved and never told. By the time I was ready to, it was too late to matter.',
+  'I have loved exactly once before this, and it taught me everything I got right the second time.',
+  'There were a few, before. None of them stayed, and I have made my peace with what that says about me.',
+];
+
 /** Filled in from the world, so a topic says something true. */
-function loreFor(state, npc, kind) {
+function loreFor(state, npc, kind, rng) {
   const c = state.character;
   const year = c.birthYear + c.age;
   const race = getRace(c.raceId);
@@ -24968,10 +25007,40 @@ function loreFor(state, npc, kind) {
     const canon = npc.canonId ? getCanon(npc.canonId) : null;
     if (canon && canon.personality) return `"${canon.personality}"`;
     const bits = [];
+    if (npc.kin && npc.kin.parents && npc.kin.parents.length) {
+      bits.push(`"${npc.kin.parents[0]}${npc.kin.parents[1] ? ` and ${npc.kin.parents[1]}` : ''} raised me. I did not appreciate it at the time."`);
+    }
     if (npc.kin && npc.kin.lost) bits.push(`They mention ${npc.kin.lost} once and do not go back to it.`);
     if (npc.goal) bits.push(`What they want, it turns out, is ${npc.goal}.`);
     if (npc.wall) bits.push('They admit they have been stuck on the same thing for years.');
+    if (npc.metHow && npc.metHow !== 'chance') bits.push(`How you actually met, in their telling: ${npc.metHow}.`);
+    bits.push(`"${GROWTH_FOCUS_LINES[npc.growthFocus] || 'I am still working out what any of it was for.'}"`);
     return bits.join(' ') || 'It turns out you had them completely wrong about one thing.';
+  }
+
+  if (kind === 'warrior') {
+    const canon = npc.canonId ? getCanon(npc.canonId) : null;
+    const tier = powerTier(npc.power || 1);
+    const strong = !['Civilian', 'Trained', 'Martial Artist'].includes(tier);
+    const forms = (npc.transformations || []).map((id) => getTransformation(id)?.name).filter(Boolean);
+    const techs = (npc.techniques || []).map((id) => TECH_BY_ID[id]?.name).filter(Boolean);
+    const bits = [];
+    if (canon && canon.quirk) bits.push(`"${canon.quirk}"`);
+    bits.push(strong
+      ? `"I have been strong enough to frighten people for longer than you have known me. It did not happen by accident."`
+      : `"I never had much of a gift for it, and I made my peace with that a long time ago. What I have, I earned the slow way."`);
+    if (forms.length) bits.push(`"${forms[forms.length - 1]} did not come easy. Nothing that actually changes you does."`);
+    if (techs.length) bits.push(`"The ${techs[0]} took me years, and I still would not call myself a master of it."`);
+    if ((npc.sparRestraint ?? 1) < 0.6) bits.push('"I do not show most people what I actually have. You have earned more of it than most."');
+    return bits.join(' ');
+  }
+
+  if (kind === 'romance') {
+    const canon = npc.canonId ? getCanon(npc.canonId) : null;
+    if (canon && ['spouse', 'lover'].includes(npc.relation)) {
+      return '"There was never anyone else, not really. Whatever came before you was practice for this."';
+    }
+    return `"${render(rng.pick(ROMANCE_TEMPLATES), {}, rng)}"`;
   }
 
   if (kind === 'world') {
@@ -25017,9 +25086,11 @@ function converse(state, rng, npc, topicId) {
     who: npc.name,
     lost: dead.length ? rng.pick(dead).name : 'them',
     child: kids.length ? rng.pick(kids).name : 'the child',
-    loreLine: topic.lore ? loreFor(state, npc, topic.lore) : '',
-    selfLine: topic.lore === 'self' ? loreFor(state, npc, 'self') : '',
-    worldLine: topic.lore === 'world' ? loreFor(state, npc, 'world') : '',
+    loreLine: topic.lore ? loreFor(state, npc, topic.lore, rng) : '',
+    selfLine: topic.lore === 'self' ? loreFor(state, npc, 'self', rng) : '',
+    worldLine: topic.lore === 'world' ? loreFor(state, npc, 'world', rng) : '',
+    warriorLine: topic.lore === 'warrior' ? loreFor(state, npc, 'warrior', rng) : '',
+    romanceLine: topic.lore === 'romance' ? loreFor(state, npc, 'romance', rng) : '',
   };
   const text = render(rng.pick(topic.lines), view, rng);
   npc.lastSeen = c.birthYear + c.age;
