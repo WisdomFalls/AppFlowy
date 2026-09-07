@@ -150,20 +150,14 @@ export const TRANSFORMATIONS = [
   },
 
   // -------------------------------------------------------------- Earthling
-  {
-    id: 'kaioken', name: 'Kaio-ken', ladder: ['earthling', 'saiyan', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'kryllian'], tier: 3,
-    mult: 3, drain: 6, control: 0, strain: 9,
-    req: { techniques: ['kaioken'] },
-    hint: 'Train under King Kai in the Other World, or find someone he taught.',
-    desc: 'A crimson aura and a body being asked to do more than it can.',
-  },
-  {
-    id: 'kaioken_x10', name: 'Kaio-ken x10', ladder: ['earthling', 'saiyan', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'kryllian'], tier: 6,
-    mult: 10, drain: 18, control: -10, strain: 25,
-    req: { parent: 'kaioken', stat: { durability: 70, discipline: 65 } },
-    hint: 'Survive the Kaio-ken often enough that your body stops tearing.',
-    desc: 'Ten times over. Every use costs you something you do not get back.',
-  },
+  // Kaio-ken used to also exist as its own transformation here, on top of
+  // the technique of the same name in techniques.js - two separate things
+  // named the same, one of which (the form) locked you out of whatever else
+  // you were transformed into. The technique already does the actual job -
+  // a power multiplier you trigger as a battle move, at a real health cost,
+  // regardless of what form you're currently holding - so that's the one
+  // Kaio-ken now. ssb_kaioken below is a real, distinct ability (mastering
+  // Blue and Kaio-ken together into something stable), not a duplicate.
   {
     id: 'potential_unleashed', name: 'Potential Unleashed', ladder: ['earthling', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'shinjin', 'kryllian'], tier: 8,
     mult: 45, drain: 0.5, control: 25, strain: 0,

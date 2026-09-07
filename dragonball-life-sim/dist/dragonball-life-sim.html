@@ -2777,20 +2777,14 @@ const TRANSFORMATIONS = [
   },
 
   // -------------------------------------------------------------- Earthling
-  {
-    id: 'kaioken', name: 'Kaio-ken', ladder: ['earthling', 'saiyan', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'kryllian'], tier: 3,
-    mult: 3, drain: 6, control: 0, strain: 9,
-    req: { techniques: ['kaioken'] },
-    hint: 'Train under King Kai in the Other World, or find someone he taught.',
-    desc: 'A crimson aura and a body being asked to do more than it can.',
-  },
-  {
-    id: 'kaioken_x10', name: 'Kaio-ken x10', ladder: ['earthling', 'saiyan', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'kryllian'], tier: 6,
-    mult: 10, drain: 18, control: -10, strain: 25,
-    req: { parent: 'kaioken', stat: { durability: 70, discipline: 65 } },
-    hint: 'Survive the Kaio-ken often enough that your body stops tearing.',
-    desc: 'Ten times over. Every use costs you something you do not get back.',
-  },
+  // Kaio-ken used to also exist as its own transformation here, on top of
+  // the technique of the same name in techniques.js - two separate things
+  // named the same, one of which (the form) locked you out of whatever else
+  // you were transformed into. The technique already does the actual job -
+  // a power multiplier you trigger as a battle move, at a real health cost,
+  // regardless of what form you're currently holding - so that's the one
+  // Kaio-ken now. ssb_kaioken below is a real, distinct ability (mastering
+  // Blue and Kaio-ken together into something stable), not a duplicate.
   {
     id: 'potential_unleashed', name: 'Potential Unleashed', ladder: ['earthling', 'halfsaiyan', 'namekian', 'cerealian', 'yardratian', 'tuffle', 'shinjin', 'kryllian'], tier: 8,
     mult: 45, drain: 0.5, control: 25, strain: 0,
@@ -5038,8 +5032,6 @@ const FORM_VISUALS = {
   ui_perfected: { hair: '#dee1e9', eyes: '#e8edf5', aura: '#e8edf5', lift: 'mild' },
   ui_mastered: { hair: '#e4e7ee', eyes: '#eef2f8', aura: '#eef2f8', lift: 'mild' },
   legendary_ss: { hair: '#8ee85a', eyes: '#c8ffb0', aura: '#8bffb0', lift: 'extreme' },
-  kaioken: { aura: '#ff4d4d' },
-  kaioken_x10: { aura: '#ff2b2b' },
   destroyer_aura: { eyes: '#c98cff', aura: '#a13cff' },
   // Frost Demon: forms change skin, not hair - most of the line is hairless.
   fd_second: { skin: '#b8c4d6' },
@@ -7406,7 +7398,11 @@ function makeCanonNpc(rng, canonId, year, relation = 'acquaintance') {
     birthYear: c.years[0],
     alive: canonAlive(c, year),
     deadSince: null,
-    causeOfDeath: null,
+    // A death nobody wrote a cause for reads as suspicious rather than
+    // simply undocumented - Bardock and Gine died when Frieza destroyed
+    // Planet Vegeta, not to an unnamed killer, and the game should say so.
+    causeOfDeath: !canonAlive(c, year) && c.years[1] === 737 && c.home === 'planet_vegeta'
+      ? "Killed when Frieza destroyed Planet Vegeta" : null,
     title: null,
     epithet: null,
     stats: {},

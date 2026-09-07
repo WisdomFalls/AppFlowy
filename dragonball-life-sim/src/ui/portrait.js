@@ -661,8 +661,6 @@ const FORM_VISUALS = {
   ui_perfected: { hair: '#dee1e9', eyes: '#e8edf5', aura: '#e8edf5', lift: 'mild' },
   ui_mastered: { hair: '#e4e7ee', eyes: '#eef2f8', aura: '#eef2f8', lift: 'mild' },
   legendary_ss: { hair: '#8ee85a', eyes: '#c8ffb0', aura: '#8bffb0', lift: 'extreme' },
-  kaioken: { aura: '#ff4d4d' },
-  kaioken_x10: { aura: '#ff2b2b' },
   destroyer_aura: { eyes: '#c98cff', aura: '#a13cff' },
   // Frost Demon: forms change skin, not hair - most of the line is hairless.
   fd_second: { skin: '#b8c4d6' },

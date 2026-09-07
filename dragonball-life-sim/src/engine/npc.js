@@ -218,7 +218,11 @@ export function makeCanonNpc(rng, canonId, year, relation = 'acquaintance') {
     birthYear: c.years[0],
     alive: canonAlive(c, year),
     deadSince: null,
-    causeOfDeath: null,
+    // A death nobody wrote a cause for reads as suspicious rather than
+    // simply undocumented - Bardock and Gine died when Frieza destroyed
+    // Planet Vegeta, not to an unnamed killer, and the game should say so.
+    causeOfDeath: !canonAlive(c, year) && c.years[1] === 737 && c.home === 'planet_vegeta'
+      ? "Killed when Frieza destroyed Planet Vegeta" : null,
     title: null,
     epithet: null,
     stats: {},
