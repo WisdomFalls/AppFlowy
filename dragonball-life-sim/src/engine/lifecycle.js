@@ -20,6 +20,7 @@ import { rollMarketYear } from './market.js';
 import { resolveTrial } from './trials.js';
 import { getItem } from '../data/items.js';
 import { checkEarnedTraits, traitEffect } from '../data/traits.js';
+import { processReputationQueue } from './settlement.js';
 
 const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
 
@@ -482,6 +483,17 @@ function passiveYear(state, rng) {
   adjust(state, { happiness: moodDrift });
 
   c.vitals.kiMax = kiMaxFor(c);
+
+  // Word that left on its own schedule finally shows up.
+  const wordArrived = processReputationQueue(state);
+  if (wordArrived) {
+    entries.push({
+      kind: 'reputation',
+      text: wordArrived.crossed
+        ? `Word of something you did a while ago keeps spreading. You are ${wordArrived.crossed.text}`
+        : `Word of something you did a while ago is still making its way outward.`,
+    });
+  }
 
   // Hard training accrues toward forms that ask for it.
   if (c.flags.trainedHardThisYear) {

@@ -1371,7 +1371,9 @@ export function battleAftermath(state, rng, battle, opts = {}) {
         : theirs > 1e5 ? DEED_SCALE.tournament : DEED_SCALE.street;
     const word = spreadWord(state, { scale });
     if (word.gained > 100000) {
-      lines.push(`Word of this reaches about ${numberish(word.gained)} people who were not there.`);
+      lines.push(word.pending > 0
+        ? `Word of this starts moving - it will reach about ${numberish(word.gained)} people who were not there, but not all at once.`
+        : `Word of this reaches about ${numberish(word.gained)} people who were not there.`);
     }
     c.fame = clamp(c.fame + (opts.fameGain ?? 4), 0, 100);
   } else if (outcome === 'lost' && battle.stakes === 'lethal' && rng.chance(0.55)) {

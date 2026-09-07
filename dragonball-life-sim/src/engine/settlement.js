@@ -340,17 +340,57 @@ export function reputationLabel(reach, karma) {
  * Something happened and people heard about it. `scale` is roughly how many
  * people could have witnessed or been told, and power decides how far the
  * story travels beyond that.
+ *
+ * Reach that size does not arrive the same afternoon. A street-level deed
+ * is already known to everyone who could plausibly hear of it, so it lands
+ * in full immediately - but anything bigger has to physically travel
+ * between people, then worlds, then systems, and that takes years. Only a
+ * quarter of a big deed's eventual reach is yours the moment it happens;
+ * the rest is queued and arrives later, a year at a time, through
+ * processReputationQueue().
  */
 export function spreadWord(state, opts = {}) {
   const c = state.character;
   const power = Math.max(1, c.power || 1);
   const reachFromPower = Math.pow(Math.log10(power) + 1, 4.2) * 40;
   const gained = Math.round((opts.scale || 1) * reachFromPower * (opts.multiplier || 1));
-  c.reputation = Math.max(0, (c.reputation || 0) + gained);
+
+  const delayYears = clamp(Math.round(Math.log10(Math.max(1, opts.scale || 1)) - 0.5), 0, 6);
+  const immediateFrac = delayYears > 0 ? 0.25 : 1;
+  const immediate = Math.round(gained * immediateFrac);
+  const pending = gained - immediate;
+
+  c.reputation = Math.max(0, (c.reputation || 0) + immediate);
+  if (pending > 0) {
+    state.reputationQueue = state.reputationQueue || [];
+    state.reputationQueue.push({ amount: pending, arrivesAge: c.age + delayYears });
+  }
   if (opts.karma) c.karma = clamp(c.karma + opts.karma, -100, 100);
-  // Fame stays as the 0-100 local figure everything else already reads.
+  // Fame stays as the 0-100 local figure everything else already reads -
+  // whoever was actually there knows immediately, delay or not.
   c.fame = clamp(c.fame + Math.min(12, Math.round(Math.log10(Math.max(10, gained)) * 1.6)), 0, 100);
-  return { gained, total: c.reputation, label: reputationLabel(c.reputation, c.karma) };
+  return {
+    gained, immediate, pending, arrivesAge: pending > 0 ? c.age + delayYears : c.age,
+    total: c.reputation, label: reputationLabel(c.reputation, c.karma),
+  };
+}
+
+/**
+ * Word that was already on its way finally lands. Called once a year so
+ * a deed's full galactic reach shows up gradually, the way canon's own
+ * "word travels" beats always implied it should.
+ */
+export function processReputationQueue(state) {
+  const c = state.character;
+  state.reputationQueue = state.reputationQueue || [];
+  const arrived = state.reputationQueue.filter((e) => e.arrivesAge <= c.age);
+  if (!arrived.length) return null;
+  state.reputationQueue = state.reputationQueue.filter((e) => e.arrivesAge > c.age);
+  const before = reputationLabel(c.reputation, c.karma);
+  const total = arrived.reduce((n, e) => n + e.amount, 0);
+  c.reputation = Math.max(0, (c.reputation || 0) + total);
+  const after = reputationLabel(c.reputation, c.karma);
+  return { total, crossed: after.reach !== before.reach ? after : null };
 }
 
 /** Scales for the things that generate a reputation, so callers stay honest. */
