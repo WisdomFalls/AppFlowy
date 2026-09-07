@@ -119,6 +119,8 @@ export function makeNpc(rng, opts = {}) {
   // Grown adults have had time to train.
   power *= Math.pow(1.09, clamp(age - 12, 0, 40)) * rng.float(0.5, 2.2);
 
+  const npcTags = rng.sample(PERSONALITY_TAGS, rng.int(2, 3));
+
   const npc = {
     id: opts.id || nextNpcId(),
     name: opts.name || generateFullName(rng, raceId),
@@ -141,7 +143,8 @@ export function makeNpc(rng, opts = {}) {
     romance: opts.romance ?? 0,
     trust: opts.trust ?? rng.int(15, 45),
     knowledge: opts.knowledge ?? 0,
-    tags: rng.sample(PERSONALITY_TAGS, rng.int(2, 3)),
+    tags: npcTags,
+    sparRestraint: restraintFor(rng, npcTags),
     goal: rng.pick(GOALS),
     look: null,
     placeId: opts.placeId || 'east_city',
@@ -204,6 +207,32 @@ function pickRaceFor(rng, opts) {
   return rng.weighted(RACES.filter((r) => !r.hidden).map((r) => r.id), (id) => weights[id] ?? 1);
 }
 
+// How much of their real stats somebody actually shows in an ordinary spar,
+// before you have earned the fight where they stop pulling punches. Open,
+// blunt, reckless people fight close to full; secretive, vain, or cold ones
+// keep something back until they have a reason not to.
+const GUARDED_TAGS = ['devious', 'cold', 'vain', 'grim', 'patient', 'superstitious'];
+const OPEN_TAGS = ['honest', 'reckless', 'brave', 'blunt', 'curious'];
+function restraintFor(rng, tags = []) {
+  let base = 0.82;
+  for (const t of tags) {
+    if (GUARDED_TAGS.includes(t)) base -= 0.09;
+    if (OPEN_TAGS.includes(t)) base += 0.08;
+  }
+  return clamp(base + rng.float(-0.06, 0.06), 0.55, 1);
+}
+
+/** A real stat spread for a canon character, on the same 1-99 scale everyone
+ * else uses - canon.js only carries power, not the shape it is made of. */
+function canonStats(rng, raceId) {
+  const race = getRace(raceId);
+  const base = {};
+  for (const [k, v] of Object.entries(race.base)) {
+    base[k] = clamp(Math.round(rng.gauss(v, 10, 8, 99)), 1, 99);
+  }
+  return base;
+}
+
 /** Wrap a canon character as an NPC in the player's life. */
 export function makeCanonNpc(rng, canonId, year, relation = 'acquaintance') {
   const c = getCanon(canonId);
@@ -230,7 +259,8 @@ export function makeCanonNpc(rng, canonId, year, relation = 'acquaintance') {
       ? "Killed when Frieza destroyed Planet Vegeta" : null,
     title: null,
     epithet: null,
-    stats: {},
+    stats: canonStats(rng, c.race),
+    sparRestraint: restraintFor(rng, [c.temperament]),
     power: Math.round(canonPower(c, year)),
     relation,
     closeness: 25,
@@ -729,6 +759,20 @@ export function dossier(npc, opts = {}) {
       : (k >= 2 ? Math.round(npc.power).toLocaleString('en-US')
         : k >= 1 ? approximatePower(npc.power) : unknown),
   });
+  // Combat stats: gauged by actually fighting them (spar or otherwise), not
+  // by knowing them socially. Below knowledge 2 ("seen them fight properly")
+  // this is a flat unknown row per stat, same as everything else here.
+  for (const [key, label] of COMBAT_STATS) {
+    rows.push({ label, value: statReveal(npc, key) ?? unknown });
+  }
+  // Social stats read the other way: talking to somebody on good terms tells
+  // you how disciplined, sharp, or charming they are - a spar tells you
+  // nothing about that.
+  const closenessKnown = (npc.closeness || 0) >= 45 || (npc.trust || 0) >= 45;
+  for (const [key, label] of SOCIAL_STATS) {
+    const value = npc.stats && npc.stats[key];
+    rows.push({ label, value: closenessKnown && value != null ? String(value) : unknown });
+  }
   rows.push({ label: 'Wearing', value: k >= 1 && npc.look ? npc.look.clothing : unknown });
   rows.push({
     label: 'Looks',
@@ -755,6 +799,29 @@ export function dossier(npc, opts = {}) {
   });
   rows.push({ label: 'Dragon Ball', value: k >= 4 ? (npc.hasDragonBall ? 'Has one' : 'No') : unknown });
   return rows;
+}
+
+const COMBAT_STATS = [
+  ['strength', 'Strength'], ['speed', 'Speed'], ['technique', 'Technique'],
+  ['kiControl', 'Ki Control'], ['durability', 'Durability'],
+];
+const SOCIAL_STATS = [['discipline', 'Discipline'], ['intellect', 'Intellect'], ['charisma', 'Charisma']];
+
+/**
+ * What actually fighting them tells you about one stat: what they put on
+ * display, scaled down by however much of themselves they were holding back
+ * in an ordinary spar - and, once you know them well enough to know what
+ * they are hiding (knowledge 3, "you know what they are hiding"), their real
+ * number alongside it. Someone who was not holding anything back just shows
+ * one number; there is nothing to bracket.
+ */
+export function statReveal(npc, key) {
+  const value = npc.stats && npc.stats[key];
+  if (value == null || (npc.knowledge || 0) < 2) return null;
+  const restraint = npc.sparRestraint ?? 1;
+  const shown = Math.max(1, Math.round(value * restraint));
+  const revealsTrue = (npc.knowledge || 0) >= 3 && restraint < 0.98;
+  return revealsTrue ? `${shown} (${value})` : String(shown);
 }
 
 function approximatePower(p) {

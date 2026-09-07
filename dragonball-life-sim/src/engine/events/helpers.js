@@ -278,6 +278,15 @@ export function squadOf(ctx, foe, count, opts = {}) {
 }
 
 export function offerBattle(ctx, foe, opts = {}) {
+  // A spar against somebody with an actual NPC record is only as honest as
+  // they are - they show what npc.sparRestraint says they show, same as the
+  // dedicated Spar action does. A generated one-off opponent (Hell, most
+  // duels) has no record to read and just fights at what it was given.
+  if ((opts.stakes || 'serious') === 'spar' && foe.restraint === undefined) {
+    const npcId = opts.npcId || foe.npcId;
+    const npc = npcId ? ctx.state.npcs[npcId] : null;
+    if (npc) foe.restraint = npc.sparRestraint ?? 1;
+  }
   const spec = {
     foe,
     foes: opts.foes || null,

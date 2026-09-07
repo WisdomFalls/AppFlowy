@@ -397,6 +397,7 @@ export const SOCIAL_ACTIONS = [
         foe: {
           name: npc.name, power: npcFightPower(rng, npc), npcId: npc.id, raceId: npc.raceId,
           techniques: npc.techniques || [], forms: npc.transformations || [],
+          restraint: npc.sparRestraint ?? 1,
         },
         stakes: 'spar', reason: 'spar',
         context: { reason: 'spar', npcId: npc.id },

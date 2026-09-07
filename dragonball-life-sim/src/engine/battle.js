@@ -137,6 +137,10 @@ function sideTemplate(name, power, opts = {}) {
     // What they say when things happen. Filled in by the caller.
     voice: opts.voice || null,
     mastery: opts.mastery || null,
+    // What fraction of themselves an NPC opponent is actually showing - a
+    // casual spar partner rarely swings at full strength. Always 1 for a
+    // serious or lethal fight; only sparring foes carry anything less.
+    restraint: opts.restraint ?? 1,
     // Somebody in the fight who is not you and not the enemy in front of you.
     down: false,
     // Got clean away. Different from being downed - alive, out of the fight,
@@ -176,6 +180,7 @@ export function createBattle(state, rng, opts = {}) {
     voice: spec.voice || null,
     techniques: spec.techniques || [],
     forms: spec.forms || [],
+    restraint: opts.stakes === 'spar' ? (spec.restraint ?? 1) : 1,
     raceId: spec.raceId || 'other',
     infiniteStamina: spec.raceId === 'android',
     regenerates: ['namekian', 'majin', 'bioandroid'].includes(spec.raceId),
@@ -247,8 +252,9 @@ function effectivePower(side, battle) {
   const mult = form ? form.mult * (side.mastery ? masteryMult({ formMastery: side.mastery }, form.id) : 1) : 1;
   const condition = clamp(0.45 + (side.hp / side.hpMax) * 0.55, 0.45, 1);
   const kiFactor = clamp(0.6 + (side.ki / Math.max(1, side.kiMax)) * 0.4, 0.6, 1);
-  // Whatever you are keeping in reserve does not land on them.
-  const held = battle && side === battle.me ? (battle.restraint ?? 1) : 1;
+  // Whatever you are keeping in reserve does not land on them - and an NPC
+  // sparring you at less than everything they have is doing the same thing.
+  const held = battle && side === battle.me ? (battle.restraint ?? 1) : (side.restraint ?? 1);
   const crowd = side.crowdPenalty ?? 1;
   return Math.max(1, side.basePower * mult * condition * kiFactor * held * crowd);
 }
