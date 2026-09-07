@@ -4915,6 +4915,11 @@ function groomingLevel(character) {
   if (v.happiness !== undefined && v.happiness < 30) messy += 1;
   if (f.brink_of_death || f.homeless || f.wretched || f.collateral || f.starved) messy += 1;
   if (f.fury || f.humiliated) messy += 1;
+  // Taking the time to actually clean up does not undo a bad year, but it
+  // visibly helps - the circumstance flags above are permanent history
+  // (brink_of_death and fury in particular gate real story beats), so
+  // self-care can only cut into how rough that history reads, not erase it.
+  if (f.groomedAtAge === character.age) messy = Math.max(0, messy - 2);
   return Math.min(3, messy);
 }
 
@@ -23427,6 +23432,19 @@ const ACTIONS = [
       s.character.senzu -= 1;
       adjust(s, { health: 100, ki: 999, happiness: 4 });
       return { text: render(`{One bean|You chew it|It tastes of almost nothing}. {Everything closes|You are whole|Ten days of food and no more wounds}.`, {}, rng) };
+    },
+  },
+  {
+    id: 'self_care', maxPerYear: 6, slots: 0, name: 'Clean yourself up', cat: 'mind', cost: 'A moment',
+    desc: 'Wash, mend what you can, look like a person again. Does not undo the year - just how it shows.',
+    available: () => true,
+    run: (s, rng) => {
+      s.character.flags.groomedAtAge = s.character.age;
+      adjust(s, { happiness: 6 });
+      return { text: render(`{You actually wash, for once|You get the worst of it off you and mend what tore|`
+        + `You take the time to look presentable, which is its own kind of effort}. `
+        + `{It does not fix anything, but it helps|Small thing. It still helps|`
+        + `Nobody has to know how the year has gone, looking at you}.`, {}, rng) };
     },
   },
 

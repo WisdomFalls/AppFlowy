@@ -123,6 +123,19 @@ export const ACTIONS = [
       return { text: render(`{One bean|You chew it|It tastes of almost nothing}. {Everything closes|You are whole|Ten days of food and no more wounds}.`, {}, rng) };
     },
   },
+  {
+    id: 'self_care', maxPerYear: 6, slots: 0, name: 'Clean yourself up', cat: 'mind', cost: 'A moment',
+    desc: 'Wash, mend what you can, look like a person again. Does not undo the year - just how it shows.',
+    available: () => true,
+    run: (s, rng) => {
+      s.character.flags.groomedAtAge = s.character.age;
+      adjust(s, { happiness: 6 });
+      return { text: render(`{You actually wash, for once|You get the worst of it off you and mend what tore|`
+        + `You take the time to look presentable, which is its own kind of effort}. `
+        + `{It does not fix anything, but it helps|Small thing. It still helps|`
+        + `Nobody has to know how the year has gone, looking at you}.`, {}, rng) };
+    },
+  },
 
   // ------------------------------------------------------------ progression
   {

@@ -531,6 +531,11 @@ function groomingLevel(character) {
   if (v.happiness !== undefined && v.happiness < 30) messy += 1;
   if (f.brink_of_death || f.homeless || f.wretched || f.collateral || f.starved) messy += 1;
   if (f.fury || f.humiliated) messy += 1;
+  // Taking the time to actually clean up does not undo a bad year, but it
+  // visibly helps - the circumstance flags above are permanent history
+  // (brink_of_death and fury in particular gate real story beats), so
+  // self-care can only cut into how rough that history reads, not erase it.
+  if (f.groomedAtAge === character.age) messy = Math.max(0, messy - 2);
   return Math.min(3, messy);
 }
 
