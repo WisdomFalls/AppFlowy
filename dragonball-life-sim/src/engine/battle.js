@@ -1121,6 +1121,20 @@ export function battleAftermath(state, rng, battle, opts = {}) {
 
   // Whoever you fought, and why, decides what the fight changed.
   const ctxInfo = battle.context || {};
+
+  // A faction that keeps losing to you does not keep sending the same
+  // lone officer - it sends more people, and better ones, the next time.
+  // Actually getting you (a loss, or being taken in) is what resets that:
+  // as far as they are concerned, the problem is handled.
+  if (ctxInfo.factionId) {
+    c.flags.factionGrudge = c.flags.factionGrudge || {};
+    if (outcome === 'won') {
+      c.flags.factionGrudge[ctxInfo.factionId] = (c.flags.factionGrudge[ctxInfo.factionId] || 0) + 1;
+    } else if (outcome === 'lost') {
+      c.flags.factionGrudge[ctxInfo.factionId] = 0;
+    }
+  }
+
   const npc = ctxInfo.npcId ? state.npcs[ctxInfo.npcId] : (ctxInfo.canonId ? state.npcs['canon_' + ctxInfo.canonId] : null);
   if (npc) {
     npc.respect = clamp((npc.respect || 0) + (outcome === 'won' ? 16 : 22), 0, 100);

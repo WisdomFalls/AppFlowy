@@ -17,12 +17,24 @@ import { numberish } from '../text.js';
 import { clamp } from '../rng.js';
 import { startTrial } from '../trials.js';
 
+// Pick which squad a faction sends. A faction with no history with you picks
+// freely; one that has lost to you before stops sending its rookies - each
+// loss rules out another rung from the bottom, until only the strongest
+// squad it has is left to send.
+function pickSquad(rng, faction, grudge) {
+  if (!grudge) return rng.pick(faction.squads);
+  const bySize = [...faction.squads].sort((a, b) => a.power - b.power);
+  const floor = Math.min(bySize.length - 1, grudge);
+  return bySize[rng.int(floor, bySize.length - 1)];
+}
+
 function pickForce(ctx) {
   const here = getPlace(ctx.character.placeId);
   const options = factionsPresent(ctx.year, here.planet, ctx.character.universe || 7);
   if (!options.length) return null;
   const faction = ctx.rng.pick(options);
-  const squad = ctx.rng.pick(faction.squads);
+  const grudge = (ctx.character.flags.factionGrudge || {})[faction.id] || 0;
+  const squad = pickSquad(ctx.rng, faction, grudge);
   // A martial arts school on Earth does not scale with the galactic power
   // curve. Only the forces that operate at that level do.
   const galactic = Math.max(50, worldPowerBaseline(ctx.year));
@@ -30,11 +42,13 @@ function pickForce(ctx) {
   return {
     faction,
     squad,
+    grudge,
     // Your own people do not size you up as a stranger every time they turn
     // up - that used to happen regardless of membership, which read as never
     // actually having joined.
     intent: ctx.character.faction === faction.id ? 'colleague' : factionIntent(faction, ctx.character),
-    power: Math.round(baseline * squad.power * ctx.rng.float(0.6, 1.6)),
+    // Escalating gets them more people too, not just a stronger squad type.
+    power: Math.round(baseline * squad.power * ctx.rng.float(0.6, 1.6) * (1 + Math.min(grudge, 5) * 0.12)),
     arrival: faction.scope === 'planet'
       ? ctx.rng.pick(['They walk in', 'A truck stops at the edge of town', 'They are simply there one morning',
         'Somebody knocks', 'They come up the road on foot'])
@@ -75,17 +89,20 @@ registerEvents([
         officer: found.officer,
         arrival: found.arrival,
         goal: found.faction.goal,
+        grudge: found.grudge,
         // How many of them there actually are. A child does not get
-        // surrounded by five; a known fighter does.
-        bodies: found.squad.elite ? 5
+        // surrounded by five; a known fighter does - and losing to you
+        // before means they stop sending one at a time.
+        bodies: Math.min(8, (found.squad.elite ? 5
           : (ctx.bioAge ?? 20) < 14 ? 1
-            : ctx.rng.pick([1, 1, 2, 3, 3, 4]),
+            : ctx.rng.pick([1, 1, 2, 3, 3, 4])) + Math.min(found.grudge, 3)),
       };
     },
     title: (ctx, s) => `${s.squad.charAt(0).toUpperCase()}${s.squad.slice(1)}`,
     text: (ctx, s) => `[arrival].
       [factionName]. [emblem] [squadNote]
-      ${INTENT_TEXT[s.intent] || INTENT_TEXT.passing} {[tier], as far as you can tell|They are [tier]|You put them at [tier]}.`,
+      ${INTENT_TEXT[s.intent] || INTENT_TEXT.passing} {[tier], as far as you can tell|They are [tier]|You put them at [tier]}.
+      ${s.grudge > 0 ? `{They have not sent this many after you before|Last time was not enough, apparently|Somebody upstairs stopped underestimating you}.` : ''}`,
     choices: (ctx, s) => {
       const list = [];
       const faction = getFaction(s.factionId);
@@ -172,6 +189,9 @@ registerEvents([
           id: 'surrender', label: 'Go with them',
           effect: (c2, sl) => {
             c2.character.flags.arrested = true;
+            // They got you. Whatever squad they had to build up to do it,
+            // the problem is handled as far as they're concerned.
+            if (c2.character.flags.factionGrudge) c2.character.flags.factionGrudge[sl.factionId] = 0;
             const years = c2.rng.int(1, 4);
             moveTo(c2, 'galactic_prison');
             c2.character.age += years;
