@@ -7,7 +7,7 @@
 
 import { clamp } from './rng.js';
 import { render } from './text.js';
-import { combatPower, powerTier, zenkaiBoost, winChance, healthMaxFor, staminaMaxFor } from './stats.js';
+import { combatPower, powerTier, zenkaiBoost, winChance, healthMaxFor, staminaMaxFor, trainingRate } from './stats.js';
 import { masteryMult, masteryDrain, trainMastery } from './mastery.js';
 import { TECH_BY_ID } from '../data/techniques.js';
 import { getTransformation, ladderFor } from '../data/transformations.js';
@@ -1175,6 +1175,19 @@ export function battleAftermath(state, rng, battle, opts = {}) {
     }
   }
 
+  // A spar is controlled, but it is still real training, for whoever is in
+  // it - not just the relationship bump it used to be. Rounds actually
+  // fought decide how much: a mismatch that ends in one exchange teaches
+  // less than a real back-and-forth does, win or lose either way.
+  if (battle.stakes === 'spar') {
+    const effort = clamp(0.08 + (battle.round - 1) * 0.045, 0.08, 0.4);
+    const myRate = trainingRate(c, { intensity: effort });
+    const myGain = Math.max(1, Math.round(c.power * myRate));
+    c.power += myGain;
+    c.peakPower = Math.max(c.peakPower || 0, c.power);
+    lines.push(`The spar itself teaches you something. Power level up ${numberish(myGain)}.`);
+  }
+
   const npc = ctxInfo.npcId ? state.npcs[ctxInfo.npcId] : (ctxInfo.canonId ? state.npcs['canon_' + ctxInfo.canonId] : null);
   if (npc) {
     npc.respect = clamp((npc.respect || 0) + (outcome === 'won' ? 16 : 22), 0, 100);
@@ -1186,6 +1199,14 @@ export function battleAftermath(state, rng, battle, opts = {}) {
     if (ctxInfo.reason === 'spar') {
       npc.closeness = clamp(npc.closeness + 8, 0, 100);
       npc.trust = clamp((npc.trust ?? 30) + 5, 0, 100);
+      // A spar is controlled, but it is still real training for whoever is
+      // capable of growing from it - both of you push each other, not just
+      // whoever wins. Every race trains at its own rate (trainingRate already
+      // knows that); a spar just trains lighter than a dedicated session.
+      const npcLike = { raceId: npc.raceId, stats: npc.stats, power: npc.power,
+        age: npc.age, extraPerks: npc.extraPerks, vitals: { health: 100, happiness: 65 } };
+      const npcRate = trainingRate(npcLike, { intensity: 0.4 });
+      npc.power += Math.max(1, Math.round(npc.power * npcRate));
     }
     if (outcome === 'won' && ctxInfo.reason !== 'spar') {
       // Beating somebody is the start of a relationship in this setting, not
