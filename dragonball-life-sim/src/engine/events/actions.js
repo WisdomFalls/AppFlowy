@@ -4,7 +4,7 @@
 import { clamp } from '../rng.js';
 import { render } from '../text.js';
 import { adjust, findNpc, livingNpcs, currentYear, addNpc } from '../state.js';
-import { addFact } from '../memory.js';
+import { addFact, openThread } from '../memory.js';
 import { trainingRate, combatPower, powerTier, kiMaxFor, STAT_LABELS } from '../stats.js';
 import { fight, narrateFight, describeGap } from '../combat.js';
 import { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique, techniquePurity, techniqueDisplayName } from '../../data/techniques.js';
@@ -13,10 +13,10 @@ import { unlockableForms, tryUnlockForm, nearbyForms } from '../progression.js';
 import { getPlace, PLACES } from '../../data/places.js';
 import { getItem, ITEMS } from '../../data/items.js';
 import { liveShopStock, demandFor, isImportedHere, tradeRelationships } from '../market.js';
-import { buyItem, valueHere, hasItem } from '../inventory.js';
+import { buyItem, valueHere, hasItem, addItem } from '../inventory.js';
 import { topicsFor, converse } from '../conversation.js';
 import { homeOptions, settleHome, homeOf, starshipOption, buildStarship, shipOf,
-  shipRoomOptions, addShipRoom, inviteAboard, sellStarship } from '../settlement.js';
+  shipRoomOptions, addShipRoom, inviteAboard, sellStarship, spreadWord, DEED_SCALE } from '../settlement.js';
 import { currencyFor, formatMoney, balance, priceIn, canAfford, debit } from '../../data/currency.js';
 import { CAREERS, getCareer, careersFor } from '../../data/jobs.js';
 import { getRace, hasPerk } from '../../data/races.js';
@@ -583,6 +583,76 @@ export const ACTIONS = [
   },
 
   // ------------------------------------------------------------------ world
+  {
+    id: 'explore_region', maxPerYear: 4, minMaturity: 6, tooYoung: 'Too young to go off alone.', slots: 1, name: 'Explore the region', cat: 'world', cost: 'A moment',
+    desc: 'Whatever is actually out past the edge of town - fauna, wrecks, and people who do not belong here either.',
+    available: (s) => !s.character.inAfterlife,
+    run: (s, rng) => {
+      const c = s.character;
+      const roll = rng.next();
+
+      if (roll < 0.28) {
+        adjust(s, { happiness: 2 });
+        return { text: render('{Quiet out there today|Nothing worth the trip|You walk it and come back with nothing to show for it}.', {}, rng) };
+      }
+
+      if (roll < 0.52) {
+        const critter = rng.pick(['something with too many legs', 'a pack of scavengers', 'a territorial local predator',
+          'something that should not be that fast', 'whatever that was - it is gone now']);
+        const { gained } = trainOnce(s, rng, { intensity: 0.8, slice: 0.25 });
+        const dmg = rng.chance(0.3) ? rng.int(3, 14) : 0;
+        adjust(s, { health: -dmg, happiness: 3 });
+        return {
+          text: `You run into ${critter} out there and it goes about how you would expect.${dmg ? ' Not entirely unscathed.' : ' Barely a scratch.'}`,
+          gained,
+        };
+      }
+
+      if (roll < 0.76) {
+        const power = Math.max(1, Math.round(combatPower(c) * rng.float(0.5, 1.6)));
+        const npc = makeNpc(rng, { year: currentYear(s), placeId: c.placeId, minAge: 18, maxAge: 65 });
+        npc.power = power;
+        npc.relation = 'enemy';
+        addNpc(s, npc);
+        return {
+          text: `Somebody out here does not belong to this place any more than you do. ${npc.name} does not introduce themself first.`,
+          battle: {
+            foe: { name: npc.name, power: npc.power, npcId: npc.id, raceId: npc.raceId, techniques: npc.techniques || [] },
+            reason: 'rogue', stakes: 'serious',
+          },
+        };
+      }
+
+      // A wreck, a pod, a crate - something that fell here from somewhere
+      // else. Not everything abandoned is actually unclaimed.
+      if (rng.chance(0.35)) {
+        return { text: render('{You find the wreck, or what is left of one|A crater, and not much in it|Somebody already stripped this one}. Whatever was worth taking is long gone.', {}, rng) };
+      }
+      const find = rng.pick(['an attack pod, half-buried and long cold', 'a stripped-down courier ship',
+        'a supply crate that fell further than it was meant to', 'a scout pod, its pilot nowhere in sight']);
+      const pool = ITEMS.filter((i) => i.cost > 0 && i.cost < 400000);
+      const item = rng.pick(pool);
+      const lines = [`You find ${find}.`];
+      if (item) {
+        addItem(c, item.id, { condition: rng.int(40, 95), from: 'found in the wreck' });
+        lines.push(`${item.name}, still worth having. It is yours now.`);
+        if (rng.chance(0.3)) {
+          c.karma = clamp(c.karma - 3, -100, 100);
+          spreadWord(s, { scale: DEED_SCALE.street, karma: -4 });
+          const owner = makeNpc(rng, { year: currentYear(s), placeId: c.placeId, relation: 'enemy', tension: 60, minAge: 18, maxAge: 60 });
+          addNpc(s, owner);
+          openThread(s.memory, {
+            kind: 'vendetta', subject: owner.id, year: c.age,
+            title: `${owner.name} wants what you took back`, maxStage: 3, heat: 55,
+          });
+          lines.push(`It was not actually abandoned. ${owner.name} catalogued this one, and finds out who took it.`);
+        }
+      } else {
+        lines.push('Nothing worth carrying out.');
+      }
+      return { text: lines.join(' ') };
+    },
+  },
   {
     id: 'hunt_dragonball', maxPerYear: 3, minMaturity: 9, tooYoung: 'You cannot cross a continent on your own yet.', slots: 2, name: 'Search for a Dragon Ball', cat: 'world',
     desc: 'One search, one minigame - a radar reads the whole world and reports what it finds before narrowing down a signal square by square.',
