@@ -15,6 +15,7 @@ import { currencyFor, credit, formatMoney } from '../../data/currency.js';
 import { worldPowerBaseline } from '../../data/timeline.js';
 import { numberish } from '../text.js';
 import { clamp } from '../rng.js';
+import { startTrial } from '../trials.js';
 
 function pickForce(ctx) {
   const here = getPlace(ctx.character.placeId);
@@ -29,7 +30,10 @@ function pickForce(ctx) {
   return {
     faction,
     squad,
-    intent: factionIntent(faction, ctx.character),
+    // Your own people do not size you up as a stranger every time they turn
+    // up - that used to happen regardless of membership, which read as never
+    // actually having joined.
+    intent: ctx.character.faction === faction.id ? 'colleague' : factionIntent(faction, ctx.character),
     power: Math.round(baseline * squad.power * ctx.rng.float(0.6, 1.6)),
     arrival: faction.scope === 'planet'
       ? ctx.rng.pick(['They walk in', 'A truck stops at the edge of town', 'They are simply there one morning',
@@ -48,6 +52,7 @@ const INTENT_TEXT = {
   test: `{They want to see what you are|It is a challenge, dressed up|Somebody wants to know if the rumours hold}.`,
   wary: `{They are watching you|Nobody says anything|They give you a wide berth and keep giving it}.`,
   passing: `{They are here for something else entirely|It has nothing to do with you|You happen to be standing there}.`,
+  colleague: `{Your own people|Colleagues, not strangers|Somebody you already answer to}.`,
 };
 
 registerEvents([
@@ -85,7 +90,7 @@ registerEvents([
       const list = [];
       const faction = getFaction(s.factionId);
 
-      list.push({
+      if (s.intent !== 'colleague') list.push({
         id: 'fight', label: 'Meet them', danger: true,
         hint: 'All of them, if it comes to it.',
         effect: (c2, sl) => {
@@ -111,22 +116,53 @@ registerEvents([
         },
       });
 
-      if (s.intent === 'recruit' || (faction && faction.recruits && s.intent === 'passing')) {
+      if (!ctx.character.faction && (ctx.bioAge ?? 20) >= 12
+        && (s.intent === 'recruit' || (faction && faction.recruits && s.intent === 'passing'))) {
         list.push({
           id: 'join', label: `Sign on with ${s.factionName}`,
           hint: s.goal,
           effect: (c2, sl) => {
-            c2.character.faction = sl.factionId;
+            // They ask, they do not just hand it over - a real trial, not a
+            // formality, and a nine-year-old failing it is exactly the point.
+            const trial = startTrial(c2.state, c2.rng, {
+              kind: 'sequence',
+              difficulty: clamp(2 + Math.round(Math.abs((getFaction(sl.factionId) || {}).alignment || 0) / 35), 1, 5),
+              purpose: 'recruitment',
+              label: `Joining ${sl.factionName}`,
+              blurb: 'They are not taking your word for it.',
+              payload: { factionId: sl.factionId, factionName: sl.factionName },
+            });
+            return {
+              text: `${sl.officer} looks you over. {"Prove it."|"Everybody says they can fight."|"Show me, then."}`,
+              trial,
+            };
+          },
+        });
+      }
+
+      if (s.intent === 'colleague') {
+        list.push({
+          id: 'checkin', label: 'Check in with them', hint: 'You already work here.',
+          effect: (c2, sl) => {
             const cur = currencyFor(getPlace(c2.character.placeId).planet);
-            credit(c2.character, cur.id, 2000);
-            const f = getFaction(sl.factionId);
-            fact(c2, `Signed on with ${sl.factionName}.`, { type: 'faction', weight: 8, tags: ['faction'] });
-            const t = trainYear(c2, { intensity: 1.5, placeMult: 1.3 });
-            return { text: `{They take your name and give you a number|`
-              + `Somebody hands you the colours and does not explain them|You are in by the afternoon}. `
-              + `{The work is exactly what it looks like|Nobody asks you what you think about any of it|`
-              + `You are fed, paid and pointed at things}. ${powerLine(t.gained)}`,
-            changes: apply(c2, { karma: f ? Math.round(f.alignment / 8) : 0, fame: 6 }) };
+            credit(c2.character, cur.id, Math.round(sl.power * 0.3) || 500);
+            const t = trainYear(c2, { intensity: 1.1, placeMult: 1.1, mentorMult: 1.2 });
+            return {
+              text: `{You fall in with the rest of them|Same colours, same work|Nobody has to explain the routine to you anymore}. `
+                + `${sl.officer} passes on an assignment and a share of the take. ${powerLine(t.gained)}`,
+              changes: apply(c2, { happiness: 5 }),
+            };
+          },
+        });
+        list.push({
+          id: 'leave', label: `Cut ties with ${s.factionName}`, danger: true,
+          effect: (c2, sl) => {
+            c2.character.faction = null;
+            fact(c2, `Cut ties with ${sl.factionName}.`, { type: 'faction', weight: 6, tags: ['faction'] });
+            return {
+              text: `{You hand back the colours|You do not explain yourself and they do not ask|That is the end of that}.`,
+              changes: apply(c2, { happiness: -4, karma: 2 }),
+            };
           },
         });
       }

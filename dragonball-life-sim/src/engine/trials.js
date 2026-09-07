@@ -12,6 +12,9 @@ import { addFact } from './memory.js';
 import { adjust } from './state.js';
 import { combatPower } from './stats.js';
 import { numberish } from './text.js';
+import { getFaction } from '../data/factions.js';
+import { getPlace } from '../data/places.js';
+import { currencyFor, credit } from '../data/currency.js';
 
 export const TRIAL_KINDS = {
   timing: {
@@ -155,6 +158,20 @@ export function resolveTrial(state, rng, trial, score) {
     adjust(state, { health: -8, stats: { discipline: 2 } });
     lines.push(`${form.name}: mastery ${total}%.`);
     if (total >= 100) lines.push('It costs you nothing to hold now. It is simply how you stand.');
+  } else if (trial.purpose === 'recruitment') {
+    const threshold = 0.4 + trial.difficulty * 0.05;
+    const faction = getFaction(trial.payload.factionId);
+    if (score >= threshold) {
+      c.faction = trial.payload.factionId;
+      const cur = currencyFor(getPlace(c.placeId).planet);
+      credit(c, cur.id, 2000);
+      addFact(state.memory, { type: 'faction', text: `Signed on with ${trial.payload.factionName}.`, year: c.age, weight: 8, tags: ['faction'] });
+      adjust(state, { karma: faction ? Math.round(faction.alignment / 8) : 0, fame: 6 });
+      lines.push(`They take your name and give you a number. You are in.`);
+    } else {
+      adjust(state, { happiness: -6 });
+      lines.push(`Not this time. {"Come back when you are actually ready."|They do not even finish watching.|"No."}`);
+    }
   } else if (trial.purpose === 'cooking') {
     // A regular-life skill, not a combat one: it climbs slowly no matter the
     // grade, but a clean run climbs it faster than a sloppy one.
