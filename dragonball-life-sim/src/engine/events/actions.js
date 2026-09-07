@@ -19,6 +19,7 @@ import { homeOptions, settleHome, homeOf } from '../settlement.js';
 import { currencyFor, formatMoney, balance, priceIn, canAfford, debit } from '../../data/currency.js';
 import { CAREERS, getCareer, careersFor } from '../../data/jobs.js';
 import { getRace, hasPerk } from '../../data/races.js';
+import { prostheticOptions, fittersFor, fitProsthetic } from '../body.js';
 import { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel,
   limitFor, usedThisYear, trainingRoomLeft } from '../economy.js';
 import { makeNpc, bondScore, relationLabel } from '../npc.js';
@@ -121,6 +122,38 @@ export const ACTIONS = [
       s.character.senzu -= 1;
       adjust(s, { health: 100, ki: 999, happiness: 4 });
       return { text: render(`{One bean|You chew it|It tastes of almost nothing}. {Everything closes|You are whole|Ten days of food and no more wounds}.`, {}, rng) };
+    },
+  },
+  {
+    id: 'seek_treatment', minMaturity: 8, slots: 1, name: 'Get fitted for what you are missing', cat: 'body', cost: 'A season',
+    desc: 'Stop waiting for a chance meeting. Go find somebody who does this work.',
+    available: (s) => !s.character.inAfterlife && prostheticOptions(s.character).length > 0
+      && fittersFor(currentYear(s), getPlace(s.character.placeId).planet).length > 0,
+    options: (s) => {
+      const opt = prostheticOptions(s.character)[0];
+      const fitters = fittersFor(currentYear(s), getPlace(s.character.placeId).planet).sort((a, b) => b.quality - a.quality);
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      return fitters.map((f) => ({
+        id: f.id,
+        label: `${f.name} - ${opt.spec.name}`,
+        hint: `${f.blurb} ${f.cost ? formatMoney(priceIn(f.cost, cur.id), cur.id) : 'No charge.'}`,
+      }));
+    },
+    run: (s, rng, params) => {
+      const opt = prostheticOptions(s.character)[0];
+      if (!opt) return { text: 'There is nothing left to fit.' };
+      const fitters = fittersFor(currentYear(s), getPlace(s.character.placeId).planet).sort((a, b) => b.quality - a.quality);
+      const fitter = (params && params.option && fitters.find((f) => f.id === params.option)) || fitters[0];
+      if (!fitter) return { text: 'Nobody here does this kind of work.' };
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      const price = priceIn(fitter.cost, cur.id);
+      if (price && !canAfford(s.character, cur.id, price)) {
+        return { text: 'You cannot cover it, and they are not doing it on credit.' };
+      }
+      if (price) debit(s.character, cur.id, price);
+      const res = fitProsthetic(s, opt.entry.id, fitter.quality);
+      adjust(s, { happiness: 12, karma: fitter.karma || 0 });
+      return { text: `${res.text} ${render('{The first week is the worst part|Learning it takes a season and you have the season|You spend a month reaching for things and missing}.', {}, rng)}` };
     },
   },
   {

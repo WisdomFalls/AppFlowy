@@ -1236,6 +1236,18 @@ export function battleAftermath(state, rng, battle, opts = {}) {
 }
 
 const SCAR_MARKS = ['scar_cheek', 'scar_brow', 'scar_chest', 'scar_arm', 'scar_eye', 'burn_arm', 'burn_face'];
+// Matches the names portrait.js's MARK_PRESETS gives these same mark ids -
+// "A scar from Vegeta" named nothing about where it actually was, on a body
+// that otherwise draws every one of these in a specific, different spot.
+const SCAR_NAMES = {
+  scar_cheek: 'a scar across the cheek',
+  scar_brow: 'a split eyebrow',
+  scar_chest: 'a scar across the chest',
+  scar_arm: 'an old cut down the arm',
+  scar_eye: 'a scar through one eye',
+  burn_arm: 'burn scars up the forearms',
+  burn_face: 'a burn along the jaw',
+};
 
 function markBody(state, rng, battle) {
   const c = state.character;
@@ -1279,7 +1291,7 @@ function markBody(state, rng, battle) {
     const open = SCAR_MARKS.filter((m) => !have.has(m));
     if (!open.length) return null;
     const mark = rng.pick(open);
-    c.scars.push({ year, mark, from, text: `A scar from ${from}.` });
+    c.scars.push({ year, mark, from, text: `Carries ${SCAR_NAMES[mark] || 'a scar'}, from ${from}.` });
     return rng.pick([
       `It heals badly. You will carry ${from} on your skin for the rest of your life.`,
       `The cut does not close properly. A scar, then, and a story to go with it.`,
