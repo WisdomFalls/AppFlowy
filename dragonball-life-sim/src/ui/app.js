@@ -29,7 +29,7 @@ import { scoreReplyLocally, applyReply, impressionLabel } from '../engine/dialog
 import { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } from '../engine/ai.js';
 import { numberish, zeni } from '../engine/text.js';
 import { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere,
-  repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot, lootFromDefeated } from '../engine/inventory.js';
+  repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot } from '../engine/inventory.js';
 import { currencyFor, balance, formatMoney, exchange, CURRENCIES } from '../data/currency.js';
 import { getItem } from '../data/items.js';
 import { TRAITS, getTrait, TRAIT_KINDS } from '../data/traits.js';
@@ -42,7 +42,7 @@ import { worldManifest } from '../engine/worlds.js';
 import { factionsPresent } from '../data/factions.js';
 import { getPlanet } from '../data/planets.js';
 import { startSurvival, survivalActions, survivalTurn, survivalStatus, resolveTeamWish, RULES } from '../engine/survival.js';
-import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, STANCES } from '../engine/battle.js';
+import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, finishLethalWin, STANCES } from '../engine/battle.js';
 import { costLabel, limitFor, usedThisYear, yearCapacity } from '../engine/economy.js';
 import { ballsHeld, ballManifest, pingSquare, GRID } from '../engine/dragonballs.js';
 import { resolveTrial, getMastery } from '../engine/trials.js';
@@ -2302,7 +2302,11 @@ function battleTurn(actionId) {
 
 function endBattle() {
   const rng = getRng(GAME);
-  const after = battleAftermath(GAME, rng, BATTLE, {});
+  // A lethal win is a decision (spare or finish them) before it is a fact -
+  // defer the actual killing to whichever choice the player makes below,
+  // rather than aftermath quietly deciding it before they get to choose.
+  const deferKillDecision = BATTLE.outcome === 'won' && BATTLE.stakes !== 'spar' && !BATTLE.noKilling;
+  const after = battleAftermath(GAME, rng, BATTLE, { deferKillDecision });
   saveRng(GAME, rng);
   if (after.lines.length) pushBattleLines(after.lines, 'big');
 
@@ -2348,20 +2352,11 @@ function endBattle() {
     kill.type = 'button';
     kill.appendChild(el('span', 'bact-label', 'Finish them'));
     kill.addEventListener('click', () => {
-      const ref = BATTLE.context || {};
-      const npc = ref.npcId ? GAME.npcs[ref.npcId] : (ref.canonId ? GAME.npcs['canon_' + ref.canonId] : null);
-      const lines = ['You finish it. Nobody argues with the result.'];
-      if (npc) {
-        npc.alive = false;
-        npc.causeOfDeath = 'You killed them';
-        const rng = getRng(GAME);
-        const loot = lootFromDefeated(rng, npc, GAME.character);
-        saveRng(GAME, rng);
-        if (loot) lines.push(loot);
-      }
+      const rng = getRng(GAME);
+      const lines = ['You finish it. Nobody argues with the result.', ...finishLethalWin(GAME, rng, BATTLE)];
+      saveRng(GAME, rng);
       BATTLE.killed = true;
       GAME.character.karma = Math.max(-100, GAME.character.karma - 22);
-      GAME.stats.kills += 1;
       pushBattleLines(lines, 'big');
       kill.remove();
       const s2 = document.querySelector('.bact:not(.wide):not(.kill)');

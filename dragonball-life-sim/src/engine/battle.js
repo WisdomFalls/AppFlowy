@@ -983,6 +983,55 @@ export function describeMatchup(battle) {
 
 
 /**
+ * Actually kill whoever was downed in a lethal win: recorded to Hell's
+ * roster, marked dead on their NPC record if they have one, looted. Called
+ * either automatically (a headless fight has nobody to ask) or from the
+ * "Finish them" choice once the player has actually chosen it - never
+ * implicitly just because the fight ended, or "Let them live" would be a lie.
+ */
+export function finishLethalWin(state, rng, battle) {
+  const c = state.character;
+  const lines = [];
+  const year = c.birthYear + c.age;
+  for (const foe of (battle.squad || [battle.them])) {
+    if (foe.hp > 0) continue;
+    state.stats.kills += 1;
+    state.world.ended = state.world.ended || [];
+    // Whether they were ever going to be more than they were. Most people
+    // are not - Hell does not manufacture potential, it just gives whoever
+    // already had some nothing else to do with the time. Stronger opponents
+    // were more likely to have room left to grow in the first place.
+    const potential = rng.chance(clamp(0.16 + Math.log10(Math.max(10, foe.basePower || 1)) * 0.07, 0.1, 0.68));
+    state.world.ended.push({
+      name: foe.name,
+      power: Math.round(foe.basePower || 1),
+      year,
+      canonId: (foe.ref && foe.ref.canonId) || battle.foeRef.canonId || null,
+      npcId: (foe.ref && foe.ref.npcId) || battle.foeRef.npcId || null,
+      raceId: foe.raceId || 'other',
+      how: battle.reason || 'a fight',
+      potential,
+      // How fast they use it, once they start. Rolled once, so the same
+      // person is not a slow burn one visit and a prodigy the next.
+      pace: rng.float(0.7, 1.6),
+    });
+    const npc = ((foe.ref && foe.ref.npcId) && state.npcs[foe.ref.npcId])
+      || (battle.foeRef.npcId && state.npcs[battle.foeRef.npcId]);
+    if (npc && npc.alive) {
+      npc.alive = false;
+      npc.mourned = true;
+      npc.deadSince = year;
+      npc.causeOfDeath = 'killed by you';
+      npc.killedByPlayer = true;
+      const loot = lootFromDefeated(rng, npc, c);
+      if (loot) lines.push(loot);
+    }
+  }
+  if (state.world.ended.length > 40) state.world.ended = state.world.ended.slice(-40);
+  return lines;
+}
+
+/**
  * What the world does about a finished fight. Applied once, whether the fight
  * was played turn by turn or resolved headlessly.
  */
@@ -1050,46 +1099,14 @@ export function battleAftermath(state, rng, battle, opts = {}) {
     return { lines, text: lines.join(' '), death: `Killed by ${battle.them.name}` };
   }
 
-  // Somebody you finished is somebody who is now somewhere. Every kill is
-  // recorded with what they were worth at the time, because Hell is a place in
-  // this setting and they do not stop training when they get there.
-  if (outcome === 'won' && battle.stakes === 'lethal') {
-    const year = c.birthYear + c.age;
-    for (const foe of (battle.squad || [battle.them])) {
-      if (foe.hp > 0) continue;
-      state.stats.kills += 1;
-      state.world.ended = state.world.ended || [];
-      // Whether they were ever going to be more than they were. Most people
-      // are not - Hell does not manufacture potential, it just gives whoever
-      // already had some nothing else to do with the time. Stronger opponents
-      // were more likely to have room left to grow in the first place.
-      const potential = rng.chance(clamp(0.16 + Math.log10(Math.max(10, foe.basePower || 1)) * 0.07, 0.1, 0.68));
-      state.world.ended.push({
-        name: foe.name,
-        power: Math.round(foe.basePower || 1),
-        year,
-        canonId: (foe.ref && foe.ref.canonId) || battle.foeRef.canonId || null,
-        npcId: (foe.ref && foe.ref.npcId) || battle.foeRef.npcId || null,
-        raceId: foe.raceId || 'other',
-        how: battle.reason || 'a fight',
-        potential,
-        // How fast they use it, once they start. Rolled once, so the same
-        // person is not a slow burn one visit and a prodigy the next.
-        pace: rng.float(0.7, 1.6),
-      });
-      const npc = ((foe.ref && foe.ref.npcId) && state.npcs[foe.ref.npcId])
-        || (battle.foeRef.npcId && state.npcs[battle.foeRef.npcId]);
-      if (npc && npc.alive) {
-        npc.alive = false;
-        npc.mourned = true;
-        npc.deadSince = year;
-        npc.causeOfDeath = 'killed by you';
-        npc.killedByPlayer = true;
-        const loot = lootFromDefeated(rng, npc, c);
-        if (loot) lines.push(loot);
-      }
-    }
-    if (state.world.ended.length > 40) state.world.ended = state.world.ended.slice(-40);
+  // Somebody you finished is somebody who is now somewhere - but only once it
+  // is actually decided. A lethal win is a decision point (spare or finish
+  // them), so unless the caller says the decision was already made (or there
+  // is no decision to make - an auto-resolved background fight), this does
+  // not touch anyone's life yet. finishLethalWin() below is what the "Finish
+  // them" choice calls once the player has actually chosen it.
+  if (outcome === 'won' && battle.stakes === 'lethal' && !opts.deferKillDecision) {
+    lines.push(...finishLethalWin(state, rng, battle));
   }
 
   // Whoever you fought, and why, decides what the fight changed.
