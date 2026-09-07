@@ -4773,17 +4773,19 @@ function hairPath(style, headTop, cx, headR, headH) {
       return domePath(sk, 2.5, 2, 6);
     case 'middle_part': {
       // A clean centre part swept to both sides - Trunks, not a forward
-      // widow's peak like 'flame'. The dip at the very centre sits above
-      // the dome's own hairline so the part actually reads as a part
-      // instead of just a straight fringe.
+      // widow's peak like 'flame'. Every anchor stays at or above brow+3 -
+      // this used to reach down to sk.temple-4 at the outer corners (barely
+      // a pixel above the eyebrow line) and brow+7 at the inner dip, which
+      // read as hair crowding straight into the eyebrows rather than a part
+      // sitting above them.
       const L = sk.left - 1;
       const R = sk.right + 1;
       return `M${sk.cx} ${sk.brow - 4}
-        Q${L} ${sk.top} ${L} ${sk.temple - 4}
-        L${L + 9} ${sk.brow + 7}
+        Q${L} ${sk.top} ${L} ${sk.brow + 2}
+        L${L + 9} ${sk.brow + 3}
         Q${sk.cx - 5} ${sk.brow - 1} ${sk.cx} ${sk.brow - 5}
-        Q${sk.cx + 5} ${sk.brow - 1} ${R - 9} ${sk.brow + 7}
-        L${R} ${sk.temple - 4}
+        Q${sk.cx + 5} ${sk.brow - 1} ${R - 9} ${sk.brow + 3}
+        L${R} ${sk.brow + 2}
         Q${R} ${sk.top} ${sk.cx} ${sk.brow - 4} Z`;
     }
     default:
