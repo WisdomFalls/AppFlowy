@@ -222,6 +222,22 @@ export function buildStarship(state, rng, engineerName) {
   };
 }
 
+/** Taking somebody else's, rather than paying for your own - no debit, and
+ * it arrives already fitted with a couple of the rooms a home like that
+ * would actually have had. */
+export function claimStarship(state, rng, opts = {}) {
+  const c = state.character;
+  const place = getPlace(c.placeId);
+  const already = SHIP_ROOMS.filter(() => rng.chance(0.4)).map((r) => r.id);
+  c.home = {
+    kind: 'starship', name: opts.name || 'The ship', placeId: c.placeId, planet: place.planet,
+    comfort: 10 + already.reduce((n, id) => n + (SHIP_ROOM_BY_ID[id]?.comfort || 0), 0),
+    train: already.some((id) => SHIP_ROOM_BY_ID[id]?.train) ? Math.max(...already.map((id) => SHIP_ROOM_BY_ID[id]?.train || 1)) : 1,
+    since: c.birthYear + c.age, stolen: true, rooms: already, occupants: [],
+  };
+  return c.home;
+}
+
 /** Adding, and re-adding (an upgrade pass) a room aboard the ship. */
 export function shipRoomOptions(state) {
   const ship = shipOf(state);

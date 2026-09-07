@@ -10033,6 +10033,22 @@ function buildStarship(state, rng, engineerName) {
   };
 }
 
+/** Taking somebody else's, rather than paying for your own - no debit, and
+ * it arrives already fitted with a couple of the rooms a home like that
+ * would actually have had. */
+function claimStarship(state, rng, opts = {}) {
+  const c = state.character;
+  const place = getPlace(c.placeId);
+  const already = SHIP_ROOMS.filter(() => rng.chance(0.4)).map((r) => r.id);
+  c.home = {
+    kind: 'starship', name: opts.name || 'The ship', placeId: c.placeId, planet: place.planet,
+    comfort: 10 + already.reduce((n, id) => n + (SHIP_ROOM_BY_ID[id]?.comfort || 0), 0),
+    train: already.some((id) => SHIP_ROOM_BY_ID[id]?.train) ? Math.max(...already.map((id) => SHIP_ROOM_BY_ID[id]?.train || 1)) : 1,
+    since: c.birthYear + c.age, stolen: true, rooms: already, occupants: [],
+  };
+  return c.home;
+}
+
 /** Adding, and re-adding (an upgrade pass) a room aboard the ship. */
 function shipRoomOptions(state) {
   const ship = shipOf(state);
@@ -10159,7 +10175,7 @@ const DEED_SCALE = {
   god_beaten: 9000,
   universe: 40000,
 };
-  return { HOME_KINDS, homeOf, homeOptions, settleHome, homeBonus, SHIP_ROOMS, SHIP_ROOM_BY_ID, shipOf, starshipOption, buildStarship, shipRoomOptions, addShipRoom, inviteAboard, sellStarship, reputationOf, reputationLabel, spreadWord, DEED_SCALE };
+  return { HOME_KINDS, homeOf, homeOptions, settleHome, homeBonus, SHIP_ROOMS, SHIP_ROOM_BY_ID, shipOf, starshipOption, buildStarship, claimStarship, shipRoomOptions, addShipRoom, inviteAboard, sellStarship, reputationOf, reputationLabel, spreadWord, DEED_SCALE };
 })();
 
 /* ==== engine/body.js ==== */
@@ -19485,6 +19501,9 @@ const { fight, narrateFight, describeGap, runTournament, buildField } = __mod_en
 const { combatPower, powerTier } = __mod_engine_stats_js;
 const { TIMELINE, isTournamentYear, worldPowerBaseline, eraName } = __mod_data_timeline_js;
 const { canonAvailable, canonUniverse } = __mod_data_canon_js;
+const { factionsPresent } = __mod_data_factions_js;
+const { claimStarship, shipOf } = __mod_engine_settlement_js;
+const { currencyFor, credit, formatMoney } = __mod_data_currency_js;
 const { startSurvival, survivalActions, survivalTurn, RULES } = __mod_engine_survival_js;
 const { ensureBallSet, ballsHeld, ballsOn, ballManifest, scatterAfterWish, ballsAreInert } = __mod_engine_dragonballs_js;
 const { getItem } = __mod_data_items_js;
@@ -20051,6 +20070,87 @@ registerEvents([
         die(c2.state, 'Erased by the Grand Priest, politely');
         return { text: `{He does not raise his voice|There is no gesture to see, only the result of one|"That was unwise," he says, to nobody, since there is nobody left to say it to}.`, changes: [] };
       } },
+    ],
+  },
+
+  // Something big enough to travel through space does not sit unguarded -
+  // whoever it belongs to sends people, and how that goes depends on what
+  // kind of person that turns out to be. Modelled as one resolved choice
+  // rather than a full interactive fight: the stakes (their reputation,
+  // whether you keep the thing, whether you come back at all) are exactly
+  // what the user asked for, without needing the battle system to carry a
+  // second, parallel notion of "who owns this and what happens after".
+  {
+    id: 'steal_starship', tags: ['world', 'opportunity', 'danger'], weight: 6,
+    minBioAge: 16,
+    when: (ctx) => !ctx.character.inAfterlife
+      && combatPower(ctx.character) > worldPowerBaseline(ctx.year) * 0.15,
+    slots: (ctx) => {
+      const wanted = ctx.rng.chance(0.3);
+      const here = getPlace(ctx.character.placeId);
+      const factions = factionsPresent(ctx.year, here.planet, ctx.character.universe || 7).filter((f) => f.recruits);
+      const ownerFaction = factions.length && ctx.rng.chance(0.35) ? ctx.rng.pick(factions) : null;
+      const ownerPower = Math.round(worldPowerBaseline(ctx.year) * ctx.rng.float(0.25, 1.5));
+      const ownerName = generateFullName(ctx.rng, ctx.rng.pick(['other', 'earthling', 'frostdemon', 'saiyan', 'namekian']));
+      return { wanted, ownerFactionId: ownerFaction?.id, ownerFactionName: ownerFaction?.name, ownerName, ownerPower };
+    },
+    title: 'A Structure That Should Not Be There',
+    text: (ctx, s) => `Something the size of a building, and it flies. ${s.ownerFactionName
+      ? `The markings on the hull say ${s.ownerFactionName}.`
+      : `No markings. Somebody rich enough not to need any.`}
+      {Whoever this belongs to did not leave it unguarded|There will be people aboard, and they will not be reasonable about this|A thing like this does not sit here by accident}.`,
+    choices: (ctx, s) => [
+      { id: 'raid', label: 'Try to take it', danger: true, effect: (c2, sl) => {
+        const gap = combatPower(c2.character) / Math.max(1, sl.ownerPower);
+        const winChance = clamp(0.15 + gap * 0.42, 0.05, 0.92);
+        if (odds(c2, winChance)) {
+          const keeps = odds(c2, 0.35) && !shipOf(c2.state);
+          if (keeps) {
+            claimStarship(c2.state, c2.rng, { name: sl.ownerFactionName ? `The ${sl.ownerFactionName} vessel` : null });
+            const changes = apply(c2, { happiness: 24, fame: 6, karma: sl.wanted ? 8 : -6 });
+            fact(c2, `Took a space-traveling home from ${sl.ownerFactionName || sl.ownerName}.`,
+              { type: 'property', weight: 9, tags: ['home', 'ship'] });
+            return { text: `{Whoever was left standing does not argue|The ones who could still walk do not come back for it|It ends with the ship, and nobody left to dispute whose it is now}. `
+              + `${sl.wanted ? `Word gets around that it was theirs to begin with, which does you no harm at all.` : `Nobody with a badge asks you about it, which is not the same as nobody noticing.`} `
+              + `It is yours now.`, changes };
+          }
+          const cur = currencyFor(getPlace(c2.character.placeId).planet);
+          const reward = Math.round(sl.ownerPower > 0 ? clamp(sl.ownerPower / 40, 5000, 4e7) : 20000);
+          credit(c2.character, cur.id, reward);
+          const inPatrol = c2.character.faction === 'galactic_patrol';
+          if (inPatrol) {
+            c2.character.factionStanding = clamp((c2.character.factionStanding || 0) + 12, 0, 100);
+          }
+          const changes = apply(c2, {
+            happiness: inPatrol ? 14 : 10, fame: sl.wanted ? 14 : 4, karma: sl.wanted ? 10 : -4,
+          });
+          fact(c2, `Handed ${sl.ownerFactionName || sl.ownerName}'s ship over to the Galactic Patrol${sl.wanted ? ', wanted, and worth more for it' : ''}.`,
+            { type: 'faction', weight: 8, tags: ['faction', 'home'] });
+          return { text: `{The Patrol takes one look at the manifest and confirms it was worth having|`
+            + `Whoever this was, somebody was already looking for them|It goes into evidence, minus what they decide to pay you for it}. `
+            + `${formatMoney(reward, cur.id)}${inPatrol ? `, and it does your standing no harm at all` : ' and a name people recognise'}. `
+            + `They keep the ship. Apparently it is more use to an investigation than it would be to you.`,
+          changes };
+        }
+        if (sl.wanted && odds(c2, 0.6)) {
+          fact(c2, `Killed trying to take ${sl.ownerName}'s ship.`, { type: 'death', weight: 9, tags: ['death'] });
+          die(c2.state, `Killed by ${sl.ownerName}'s people`);
+          return { text: `{They do not call anyone first|There is no warning shot|Whoever they are, they have done this before}. `
+            + `It is over before you understand how outmatched you were, and they take back whatever you were carrying besides.`, changes: [] };
+        }
+        const inPatrol = c2.character.faction === 'galactic_patrol';
+        const changes = apply(c2, {
+          happiness: -16, karma: -10,
+          zeni: -Math.round(Math.max(0, c2.character.zeni || 0) * 0.15),
+          ...(inPatrol ? { fame: -8 } : {}),
+        });
+        if (inPatrol) c2.character.factionStanding = clamp((c2.character.factionStanding || 0) - 20, 0, 100);
+        fact(c2, `Beaten off ${sl.ownerName}'s ship and handed to the Galactic Patrol.`, { type: 'crime', weight: 7, tags: ['crime'] });
+        return { text: `{They do not kill you - that is apparently somebody else's job|"Let the Patrol deal with it," and they mean it as an insult|You are processed, lectured, and released, which is worse than it sounds}. `
+          + `${inPatrol ? 'Explaining this to your own superiors is its own punishment.' : 'It goes on a record somewhere, attached to your name.'}`,
+        changes };
+      } },
+      { id: 'walk', label: 'Leave it alone', effect: () => ({ text: `{Not worth it|You keep walking|Whatever is aboard, it is not worth what it would cost}.`, changes: [] }) },
     ],
   },
 
