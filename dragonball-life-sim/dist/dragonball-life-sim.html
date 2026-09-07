@@ -23979,12 +23979,22 @@ const ACTIONS = [
     afterlife: true,
     options: (s) => {
       const here = getPlace(s.character.placeId);
+      const planet = getPlanet(here.planet);
+      const planetName = planet ? planet.name : here.name;
+      // Some worlds only have the one place on them (Sadala among them).
+      // "The strongest thing on Planet Sadala" and "the strongest fighter on
+      // this world" used to both be offered there as if they meant different
+      // things - same planet-wide claim twice, under two labels, one of them
+      // dressed up as local when there is no smaller area to be local to.
+      const singlePlaceWorld = PLACES.filter((p) => p.planet === here.planet).length <= 1;
       const canSpace = s.character.items.includes('spaceship') || s.character.items.includes('attack_ball')
         || s.character.techniques.includes('instant_transmission');
-      const list = [
-        { id: 'local', label: `The strongest thing on ${here.name}`, hint: 'Whatever this place has. Usually survivable.' },
-        { id: 'planet', label: 'The strongest fighter on this world', hint: 'A real name, a real reputation.' },
-      ];
+      const list = singlePlaceWorld
+        ? [{ id: 'planet', label: `The strongest fighter on ${planetName}`, hint: 'A real name, a real reputation.' }]
+        : [
+          { id: 'local', label: `The strongest thing on ${here.name}`, hint: 'Whatever this place has. Usually survivable.' },
+          { id: 'planet', label: `The strongest fighter on ${planetName}`, hint: 'A real name, a real reputation.' },
+        ];
       if (canSpace) {
         list.push({ id: 'sector', label: 'The strongest in this sector', hint: 'Word travels. So do they.' });
         list.push({ id: 'universe', label: 'The strongest in the universe', hint: 'You will almost certainly lose.' });
