@@ -187,6 +187,36 @@ export const ACTIONS = [
         + `Nobody has to know how the year has gone, looking at you}.`, {}, rng) };
     },
   },
+  {
+    id: 'reminisce', maxPerYear: 4, slots: 0, name: 'Look through old photos', cat: 'mind', cost: 'A moment',
+    desc: 'Whatever you kept. Not everyone in them is still around, or still what they were.',
+    available: (s) => (s.character.photos || []).length > 0,
+    options: (s) => (s.character.photos || []).slice().reverse().map((p, i) => ({
+      id: p.id, label: `${p.npcName}, age ${p.year - s.character.birthYear}`, hint: p.caption,
+    })),
+    run: (s, rng, params) => {
+      const c = s.character;
+      const photos = c.photos || [];
+      const photo = (params && params.option && photos.find((p) => p.id === params.option)) || photos[photos.length - 1];
+      if (!photo) return { text: 'There is nothing to look at.' };
+      const npc = findNpc(s, photo.npcId);
+      let line;
+      if (!npc) {
+        line = `${photo.npcName}. ${photo.caption} It has been long enough that even the memory is going soft at the edges.`;
+        adjust(s, { happiness: 1 });
+      } else if (!npc.alive) {
+        line = `${npc.name}. ${photo.caption} You still have this, even now.`;
+        adjust(s, { happiness: 2 });
+      } else if (npc.relation !== photo.relation) {
+        line = `${npc.name}. ${photo.caption} You were not what you are to each other now, when this was taken.`;
+        adjust(s, { happiness: 1 });
+      } else {
+        line = `${npc.name}. ${photo.caption}`;
+        adjust(s, { happiness: 5 });
+      }
+      return { text: line };
+    },
+  },
 
   {
     id: 'resist_mark', maxPerYear: 2, slots: 2, name: 'Fight the mark for control', cat: 'mind', cost: 'A season',

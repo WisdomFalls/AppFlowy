@@ -116,6 +116,29 @@ export const SOCIAL_ACTIONS = [
     },
   },
   {
+    id: 'take_photo', name: 'Keep a photo of this', tone: 'warm', slots: 0, maxPerYear: 2,
+    desc: 'A moment worth having something to hold on to later.',
+    available: (state, npc) => bondScore(npc) >= 40,
+    run: (state, rng, npc) => {
+      const c = state.character;
+      c.photos = c.photos || [];
+      const caption = rng.pick([
+        'Nothing special was happening. That is sort of the point.',
+        'You almost did not stop for it.',
+        'Somebody insisted, for once.',
+        'You do not remember what you were laughing about, only that you were.',
+        'An ordinary day, kept anyway.',
+      ]);
+      c.photos.push({
+        id: 'photo_' + (c.photos.length + 1), year: c.age, npcId: npc.id, npcName: npc.name,
+        relation: npc.relation, caption,
+      });
+      chargeSocial(npc, { closeness: 4 });
+      adjust(state, { happiness: 4 });
+      return { text: `${caption} You keep it.` };
+    },
+  },
+  {
     id: 'gift', name: 'Give them something', tone: 'warm', slots: 0, maxPerYear: 2,
     desc: 'Money, gear, or something they mentioned once.',
     available: (state) => state.character.zeni > 5000,

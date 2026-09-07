@@ -158,6 +158,7 @@ export function createGame(creation, seedInput) {
     faction: null,
     factionRank: 0,
     factionStanding: 0,
+    photos: [],
   };
   // Traits, before the derived numbers, because several of them move those.
   character.traits2 = inheritTraits(rng, creation.parents || [], creation.raceId)

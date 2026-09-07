@@ -1686,6 +1686,17 @@ function panelRecords() {
     body.appendChild(row);
   }
 
+  if (c.photos && c.photos.length) {
+    body.appendChild(el('div', 'group-label', 'What you kept'));
+    for (const p of c.photos.slice().reverse().slice(0, 10)) {
+      const npc = GAME.npcs[p.npcId];
+      const memo = el('div', 'memo');
+      const status = npc && !npc.alive ? ' (gone now)' : !npc ? '' : '';
+      memo.innerHTML = `<b>AGE ${p.year - c.birthYear}</b> ${p.npcName}${status} - ${p.caption.replace(/[<>]/g, '')}`;
+      body.appendChild(memo);
+    }
+  }
+
   body.appendChild(el('div', 'group-label', 'You'));
   const here = getPlace(c.placeId);
   for (const [title, note, fn] of [
