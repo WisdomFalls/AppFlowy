@@ -23,7 +23,7 @@ function npcFightPower(rng, npc) {
   npcBag(rng, npc);
   return Math.round(npc.power * (1 + weaponAttackBonus(npc) / 260));
 }
-import { TECH_BY_ID } from '../data/techniques.js';
+import { TECH_BY_ID, techniquePurity, setTechniquePurity } from '../data/techniques.js';
 import { getRace } from '../data/races.js';
 import { getPlace } from '../data/places.js';
 import { numberish } from './text.js';
@@ -262,6 +262,15 @@ export const SOCIAL_ACTIONS = [
         learned = rng.pick(teachable);
         state.character.techniques.push(learned);
         state.stats.techniquesLearned += 1;
+        const learnedTech = TECH_BY_ID[learned];
+        // Learning it straight from someone who was actually first taught it
+        // (a canon character in the technique's own teachers list) is the
+        // genuine article. Anyone else - even a mentor - is passing on their
+        // own, already once-removed version, and it shows.
+        if (learnedTech.teachers && learnedTech.teachers.length && !learnedTech.teachers.includes('any_master')
+          && !(npc.canonId && learnedTech.teachers.includes(npc.canonId))) {
+          setTechniquePurity(state.character, learned, techniquePurity(npc, learned) - rng.float(0.05, 0.2));
+        }
       }
       adjust(state, { health: -10 });
       return { text: `${npc.name} agrees. ${learned ? `You come away with the ${TECH_BY_ID[learned].name}.` : render(`{It is brutal|You are worse than they expected|You improve}.`, {}, rng)} Power level ${numberish(before)} to ${numberish(state.character.power)}.` };

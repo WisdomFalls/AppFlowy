@@ -7,7 +7,7 @@ import { adjust, findNpc, livingNpcs, currentYear, addNpc } from '../state.js';
 import { addFact } from '../memory.js';
 import { trainingRate, combatPower, powerTier, kiMaxFor, STAT_LABELS } from '../stats.js';
 import { fight, narrateFight, describeGap } from '../combat.js';
-import { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique } from '../../data/techniques.js';
+import { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique, techniquePurity, techniqueDisplayName } from '../../data/techniques.js';
 import { getTransformation } from '../../data/transformations.js';
 import { unlockableForms, tryUnlockForm, nearbyForms } from '../progression.js';
 import { getPlace, PLACES } from '../../data/places.js';
@@ -308,6 +308,34 @@ export const ACTIONS = [
         payload: { techId: tech.id },
       });
       return { text: tech.desc, trial };
+    },
+  },
+  {
+    id: 'refine_technique', maxPerYear: 2, minMaturity: 10, slots: 2, name: 'Refine a technique', cat: 'power',
+    desc: 'Not as pure as when you first learned it, once removed from whoever actually taught it first. Make it yours instead.',
+    available: (s) => (s.character.techniques || []).some((id) => techniquePurity(s.character, id) < 0.95
+      && !(s.character.techniqueNames && s.character.techniqueNames[id])),
+    options: (s) => (s.character.techniques || [])
+      .filter((id) => techniquePurity(s.character, id) < 0.95 && !(s.character.techniqueNames && s.character.techniqueNames[id]))
+      .map((id) => {
+        const t = getTechnique(id);
+        return { id, label: t.name, hint: `${Math.round(techniquePurity(s.character, id) * 100)}% of the original` };
+      }),
+    run: (s, rng, params) => {
+      const pool = (s.character.techniques || []).filter((id) => techniquePurity(s.character, id) < 0.95
+        && !(s.character.techniqueNames && s.character.techniqueNames[id]));
+      const techId = (params && params.option && pool.includes(params.option)) ? params.option : pool[0];
+      if (!techId) return { text: 'Nothing here needs refining.' };
+      const tech = getTechnique(techId);
+      const trial = startTrial(s, rng, {
+        kind: 'sequence',
+        difficulty: clamp(Math.ceil(tech.tier / 2), 1, 5),
+        purpose: 'refine_technique',
+        label: `Refining the ${tech.name}`,
+        blurb: tech.desc,
+        payload: { techId },
+      });
+      return { text: `${tech.name}, but not quite - whoever taught you was already once removed from wherever it started. There is a twist in there that is only yours.`, trial };
     },
   },
   {

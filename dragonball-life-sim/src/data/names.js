@@ -152,3 +152,16 @@ export function generateSignatureName(rng) {
   if (shape === 1) return `${rng.pick(SIG_A)} ${rng.pick(SIG_C)}`;
   return `${rng.pick(SIG_B)}-${rng.pick(SIG_B)} ${rng.pick(SIG_C)}`;
 }
+
+// A diluted technique refined into your own version, still recognisably
+// the original rather than something wholly invented - "Perta Kamehameha",
+// not a fresh SIG_A/B/C name that erases where it came from.
+const HOMAGE_PREFIX = ['Perta', 'Vero', 'Aeka', 'Rensu', 'Kaido', 'Solyn', 'Zeth', 'Miro',
+  'Dresk', 'Nyra', 'Corvai', 'Ishtan'];
+
+export function generateHomageName(rng, baseName) {
+  const shape = rng.int(0, 2);
+  if (shape === 0) return `${rng.pick(HOMAGE_PREFIX)} ${baseName}`;
+  if (shape === 1) return `${rng.pick(SIG_A)} ${baseName}`;
+  return `${baseName}, Refined`;
+}

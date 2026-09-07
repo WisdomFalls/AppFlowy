@@ -20,7 +20,7 @@ import { portraitSvg, defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, 
   npcPortrait, lifeStage } from './portrait.js';
 import { eraName, worldPowerBaseline, TIMELINE } from '../data/timeline.js';
 import { generateFullName } from '../data/names.js';
-import { BRANCHES, TECH_BY_ID } from '../data/techniques.js';
+import { BRANCHES, TECH_BY_ID, techniquePurity, techniqueDisplayName } from '../data/techniques.js';
 import { getTransformation, ladderFor } from '../data/transformations.js';
 import { STAT_KEYS, STAT_LABELS, combatPower, powerTier, looksScore } from '../engine/stats.js';
 import { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } from '../engine/npc.js';
@@ -1224,10 +1224,40 @@ function panelPower() {
     const row = el('div', 'row');
     const main = el('div', 'row-main');
     main.appendChild(el('div', 'row-title', BRANCHES[branch].name));
-    main.appendChild(el('div', 'row-note', list.map((t) => t.name).join(', ')));
+    main.appendChild(el('div', 'row-note', list.map((t) => techniqueDisplayName(c, t.id)).join(', ')));
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', String(list.length)));
     body.appendChild(row);
+  }
+
+  const diluted = c.techniques.filter((id) => techniquePurity(c, id) < 1);
+  if (diluted.length) {
+    body.appendChild(el('div', 'group-label', 'Not quite as taught'));
+    for (const id of diluted) {
+      const tech = TECH_BY_ID[id];
+      if (!tech) continue;
+      const named = c.techniqueNames && c.techniqueNames[id];
+      const row = el('div', 'row' + (named ? ' owned' : ''));
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', techniqueDisplayName(c, id)));
+      main.appendChild(el('div', 'row-note', named
+        ? `Refined from the ${tech.name}. ${Math.round(techniquePurity(c, id) * 100)}% of the original.`
+        : `Learned secondhand. ${Math.round(techniquePurity(c, id) * 100)}% of what a direct teacher would have given you.`));
+      row.appendChild(main);
+      row.appendChild(el('div', 'row-value', Math.round(techniquePurity(c, id) * 100) + '%'));
+      if (named) {
+        const rename = el('button', 'mini', 'Rename');
+        rename.type = 'button';
+        rename.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openRenamePanel(`Rename ${techniqueDisplayName(c, id)}`, techniqueDisplayName(c, id), (name) => {
+            c.techniqueNames[id] = name;
+          });
+        });
+        row.appendChild(rename);
+      }
+      body.appendChild(row);
+    }
   }
   if (c.signature) {
     body.appendChild(el('div', 'group-label', 'Signature technique'));

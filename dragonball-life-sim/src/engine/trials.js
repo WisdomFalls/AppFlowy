@@ -5,7 +5,8 @@
 import { clamp } from './rng.js';
 import { masteryMult, masteryDrain, masteryLabel } from './mastery.js';
 import { traitEffect } from '../data/traits.js';
-import { getTechnique, TECH_BY_ID } from '../data/techniques.js';
+import { getTechnique, TECH_BY_ID, setTechniquePurity, techniquePurity } from '../data/techniques.js';
+import { generateHomageName } from '../data/names.js';
 import { getTransformation } from '../data/transformations.js';
 import { grantTrainingPower } from './economy.js';
 import { addFact } from './memory.js';
@@ -131,6 +132,13 @@ export function resolveTrial(state, rng, trial, score) {
       if (!c.techniques.includes(tech.id)) {
         c.techniques.push(tech.id);
         state.stats.techniquesLearned += 1;
+        // Lore-gated techniques only reach this path once a qualifying
+        // mentor has unlocked them (see availableTechniques()) - drilled out
+        // alone from there, it is a real but once-removed version of what
+        // the mentor actually does.
+        if (tech.teachers && tech.teachers.length && !tech.teachers.includes('any_master')) {
+          setTechniquePurity(c, tech.id, 0.9);
+        }
       }
       adjust(state, { stats: { technique: 2, kiControl: 1 }, happiness: 10 });
       addFact(state.memory, { type: 'technique', text: `Learned the ${tech.name}.`, year: c.age, weight: 3, tags: ['technique'] });
@@ -138,6 +146,24 @@ export function resolveTrial(state, rng, trial, score) {
     } else {
       adjust(state, { health: -5, happiness: -3, stats: { discipline: 1 } });
       lines.push(`${tech.name} stays out of reach. You know what went wrong, which is something.`);
+    }
+  } else if (trial.purpose === 'refine_technique') {
+    const tech = getTechnique(trial.payload.techId);
+    const before = techniquePurity(c, tech.id);
+    const threshold = 0.38 + trial.difficulty * 0.05;
+    if (score >= threshold) {
+      const after = clamp(before + 0.1 + result.mult * 0.1, before, 0.97);
+      setTechniquePurity(c, tech.id, after);
+      c.techniqueNames = c.techniqueNames || {};
+      const name = generateHomageName(rng, tech.name);
+      c.techniqueNames[tech.id] = name;
+      adjust(state, { stats: { technique: 3, discipline: 2 }, happiness: 8 });
+      addFact(state.memory, { type: 'technique', text: `Refined the ${tech.name} into something of their own: the ${name}.`,
+        year: c.age, weight: 5, tags: ['technique', 'identity'] });
+      lines.push(`Not the ${tech.name} anymore, not really. The ${name}, ${Math.round(after * 100)}% of what a mentor-taught version would be, and entirely yours.`);
+    } else {
+      adjust(state, { happiness: -3, stats: { discipline: 1 } });
+      lines.push(`It stays stubbornly itself. You have not found the twist yet.`);
     }
   } else if (trial.purpose === 'form') {
     const form = getTransformation(trial.payload.formId);

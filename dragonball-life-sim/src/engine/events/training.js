@@ -4,7 +4,8 @@
 import { registerEvents, pickNpc, npcSlot } from '../generator.js';
 import { apply, fact, stranger, relate, thread, trainYear, powerLine, meetCanon, canonHere,
   odds, moveTo, findNpc, canonPower, getCanon } from './helpers.js';
-import { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique, BRANCHES } from '../../data/techniques.js';
+import { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique, BRANCHES,
+  techniquePurity, setTechniquePurity, techniqueDisplayName } from '../../data/techniques.js';
 import { TRANSFORMATIONS, ladderFor, getTransformation } from '../../data/transformations.js';
 import { generateSignatureName } from '../../data/names.js';
 import { numberish } from '../text.js';
@@ -189,6 +190,9 @@ registerEvents([
         if (odds(c2, chance)) {
           c.techniques.push(tech.id);
           c2.state.stats.techniquesLearned++;
+          if (tech.teachers && tech.teachers.length && !tech.teachers.includes('any_master')) {
+            setTechniquePurity(c, tech.id, 0.9);
+          }
           fact(c2, `Learned the ${tech.name}.`, { type: 'technique', weight: 3, tags: ['technique'] });
           const changes = apply(c2, { stats: { technique: 3, kiControl: 2 }, happiness: 10, health: -5 });
           return { text: `{It takes months|It takes the whole year|It takes longer than it should}. Then, once, cleanly, it works. Then it works again. ${tech.name}, learned.`, changes };

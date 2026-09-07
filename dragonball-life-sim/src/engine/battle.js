@@ -9,7 +9,7 @@ import { clamp } from './rng.js';
 import { render } from './text.js';
 import { combatPower, powerTier, zenkaiBoost, winChance, healthMaxFor, staminaMaxFor, trainingRate, equippedWeapon } from './stats.js';
 import { masteryMult, masteryDrain, trainMastery } from './mastery.js';
-import { TECH_BY_ID } from '../data/techniques.js';
+import { TECH_BY_ID, techniquePurity, techniqueDisplayName } from '../data/techniques.js';
 import { getTransformation, ladderFor } from '../data/transformations.js';
 import { getPlace } from '../data/places.js';
 import { getRace, hasPerk } from '../data/races.js';
@@ -396,7 +396,7 @@ export function battleActions(state, battle) {
     out.push({
       id: 'tech:' + id,
       kind: 'ki',
-      label: tech.name,
+      label: techniqueDisplayName(c, id),
       hint: [
         e.atk ? `${e.atk} power` : null,
         cost ? `${cost} ki` : 'no ki',
@@ -917,36 +917,41 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
     const tech = TECH_BY_ID[actionId.slice(5)];
     if (tech) {
       const e = tech.effect;
+      const name = techniqueDisplayName(c, tech.id);
+      // A once-removed version is not just a worse number on the character
+      // sheet - it is a weaker technique the moment it actually gets thrown,
+      // the same way techniquePower() already discounts it there.
+      const purity = techniquePurity(c, tech.id);
       me.ki = Math.max(0, me.ki - (e.kiCost || 0));
       if (e.heal || e.regen) {
-        const amount = e.heal || Math.round(me.hpMax * e.regen);
+        const amount = Math.round((e.heal || Math.round(me.hpMax * e.regen)) * purity);
         me.hp = clamp(me.hp + amount, 0, me.hpMax);
         lines.push(e.regen
           ? `Torn tissue closes over in seconds. (+${amount})`
           : `You put your own energy back into yourself. (+${amount})`);
       } else if (e.blind) {
         them.blinded = 2;
-        lines.push(`${tech.name}. ${them.name} cannot see a thing for a moment.`);
+        lines.push(`${name}. ${them.name} cannot see a thing for a moment.`);
       } else if (e.escape) {
         lines.push(`You lock onto a signature somewhere else and are simply gone.`);
         return { lines, over: true, outcome: finish(state, battle, rng, 'fled').outcome };
       } else if (e.drain || e.absorb) {
         // Absorption takes their energy rather than trading blows for it.
-        const stolen = Math.round(Math.min(them.ki, 18 + (e.drain || 0.3) * 40));
+        const stolen = Math.round(Math.min(them.ki, 18 + (e.drain || 0.3) * 40) * purity);
         them.ki = Math.max(0, them.ki - stolen);
         me.ki = clamp(me.ki + stolen, 0, me.kiMax);
         const res = strike(me, them, battle, rng, { base: 6, hit: 0.9 });
-        lines.push(`You take ${stolen} ki straight out of them. ${describeStrike(res, 'You', them.name, tech.name, rng, true)}`);
+        lines.push(`You take ${stolen} ki straight out of them. ${describeStrike(res, 'You', them.name, name, rng, true)}`);
       } else if (e.multiplier) {
-        me.basePower = Math.round(me.basePower * e.multiplier);
+        me.basePower = Math.round(me.basePower * (1 + (e.multiplier - 1) * purity));
         me.hp = Math.max(1, me.hp - (e.healthCost || 8));
-        lines.push(`${tech.name}. Everything multiplies, and your body starts paying for it.`);
+        lines.push(`${name}. Everything multiplies, and your body starts paying for it.`);
       } else {
         if (e.healthCost) me.hp = Math.max(1, me.hp - e.healthCost);
         const res = strike(me, them, battle, rng, {
-          base: e.atk || 8, hit: 0.82, pierce: (e.pierce || 0) > 0.5, crit: e.crit || 0, blast: true,
+          base: (e.atk || 8) * purity, hit: 0.82, pierce: (e.pierce || 0) > 0.5, crit: e.crit || 0, blast: true,
         });
-        lines.push(describeStrike(res, 'You', them.name, tech.name, rng, true));
+        lines.push(describeStrike(res, 'You', them.name, name, rng, true));
         if (e.healthCost) lines.push('It costs you as much as it costs them.');
       }
     }

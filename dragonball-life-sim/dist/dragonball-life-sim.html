@@ -3312,13 +3312,55 @@ function getTechnique(id) {
   return TECH_BY_ID[id];
 }
 
-/** Techniques a character could plausibly start learning right now. */
+/**
+ * Techniques a character could plausibly start learning right now, on their
+ * own - by drilling alone or wherever the generic "study a technique" path
+ * reaches. A technique with a specific teachers list and no 'any_master'
+ * entry is lore-gated: Instant Transmission does not turn up in a training
+ * montage unless a Yardratian (or Goku, who learned it from one) has
+ * actually shown you something first, tracked here as character.mentors
+ * already carrying that teacher's canon id. Techniques with an empty
+ * teachers list are not taught at all - they are what a race's own body
+ * can just do (regeneration, absorption) - and stay open to anyone eligible
+ * by race.
+ */
 function availableTechniques(character) {
   return TECHNIQUES.filter((t) => {
     if (character.techniques.includes(t.id)) return false;
     if (t.races && !t.races.includes(character.raceId)) return false;
+    if (t.teachers && t.teachers.length && !t.teachers.includes('any_master')
+      && !t.teachers.some((id) => (character.mentors || []).includes(id))) return false;
     return t.prereq.every((p) => character.techniques.includes(p));
   });
+}
+
+/**
+ * How close a known technique still is to how it was first taught. Missing
+ * an entry means full purity - either it came straight from a listed
+ * teacher (a canon mentor training scene, which always has), or it predates
+ * this system. The two paths that actually dilute a technique - drilling it
+ * alone once a mentor has shown you the fundamentals, or learning it from
+ * an ordinary person rather than the source - are the only ones that ever
+ * write a value below 1 here.
+ */
+function techniquePurity(character, id) {
+  const v = character.techniquePurity && character.techniquePurity[id];
+  return v == null ? 1 : v;
+}
+
+function setTechniquePurity(character, id, value) {
+  character.techniquePurity = character.techniquePurity || {};
+  character.techniquePurity[id] = Math.max(0.3, Math.min(1, value));
+}
+
+/** A homage name for a diluted technique, refined and given the player's
+ * own twist rather than the original's - "Perta Kamehameha", not
+ * "Kamehameha" again. */
+function techniqueDisplayName(character, id) {
+  const t = getTechnique(id);
+  if (!t) return null;
+  const custom = character.techniqueNames && character.techniqueNames[id];
+  return custom || t.name;
 }
 
 function techniquePower(character) {
@@ -3326,13 +3368,14 @@ function techniquePower(character) {
   for (const id of character.techniques) {
     const t = TECH_BY_ID[id];
     if (!t) continue;
-    atk += t.effect.atk || 0;
-    def += t.effect.def || 0;
-    speed += t.effect.speed || 0;
+    const purity = techniquePurity(character, id);
+    atk += (t.effect.atk || 0) * purity;
+    def += (t.effect.def || 0) * purity;
+    speed += (t.effect.speed || 0) * purity;
   }
   return { atk, def, speed };
 }
-  return { BRANCHES, TECHNIQUES, TECH_BY_ID, getTechnique, availableTechniques, techniquePower };
+  return { BRANCHES, TECHNIQUES, TECH_BY_ID, getTechnique, availableTechniques, techniquePurity, setTechniquePurity, techniqueDisplayName, techniquePower };
 })();
 
 /* ==== data/items.js ==== */
@@ -4464,7 +4507,20 @@ function generateSignatureName(rng) {
   if (shape === 1) return `${rng.pick(SIG_A)} ${rng.pick(SIG_C)}`;
   return `${rng.pick(SIG_B)}-${rng.pick(SIG_B)} ${rng.pick(SIG_C)}`;
 }
-  return { generateName, generateFullName, EPITHETS, TITLES, generateTitle, generateEpithet, generateSignatureName };
+
+// A diluted technique refined into your own version, still recognisably
+// the original rather than something wholly invented - "Perta Kamehameha",
+// not a fresh SIG_A/B/C name that erases where it came from.
+const HOMAGE_PREFIX = ['Perta', 'Vero', 'Aeka', 'Rensu', 'Kaido', 'Solyn', 'Zeth', 'Miro',
+  'Dresk', 'Nyra', 'Corvai', 'Ishtan'];
+
+function generateHomageName(rng, baseName) {
+  const shape = rng.int(0, 2);
+  if (shape === 0) return `${rng.pick(HOMAGE_PREFIX)} ${baseName}`;
+  if (shape === 1) return `${rng.pick(SIG_A)} ${baseName}`;
+  return `${baseName}, Refined`;
+}
+  return { generateName, generateFullName, EPITHETS, TITLES, generateTitle, generateEpithet, generateSignatureName, generateHomageName };
 })();
 
 /* ==== ui/portrait.js ==== */
@@ -10582,7 +10638,7 @@ const { clamp } = __mod_engine_rng_js;
 const { render } = __mod_engine_text_js;
 const { combatPower, powerTier, zenkaiBoost, winChance, healthMaxFor, staminaMaxFor, trainingRate, equippedWeapon } = __mod_engine_stats_js;
 const { masteryMult, masteryDrain, trainMastery } = __mod_engine_mastery_js;
-const { TECH_BY_ID } = __mod_data_techniques_js;
+const { TECH_BY_ID, techniquePurity, techniqueDisplayName } = __mod_data_techniques_js;
 const { getTransformation, ladderFor } = __mod_data_transformations_js;
 const { getPlace } = __mod_data_places_js;
 const { getRace, hasPerk } = __mod_data_races_js;
@@ -10969,7 +11025,7 @@ function battleActions(state, battle) {
     out.push({
       id: 'tech:' + id,
       kind: 'ki',
-      label: tech.name,
+      label: techniqueDisplayName(c, id),
       hint: [
         e.atk ? `${e.atk} power` : null,
         cost ? `${cost} ki` : 'no ki',
@@ -11490,36 +11546,41 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
     const tech = TECH_BY_ID[actionId.slice(5)];
     if (tech) {
       const e = tech.effect;
+      const name = techniqueDisplayName(c, tech.id);
+      // A once-removed version is not just a worse number on the character
+      // sheet - it is a weaker technique the moment it actually gets thrown,
+      // the same way techniquePower() already discounts it there.
+      const purity = techniquePurity(c, tech.id);
       me.ki = Math.max(0, me.ki - (e.kiCost || 0));
       if (e.heal || e.regen) {
-        const amount = e.heal || Math.round(me.hpMax * e.regen);
+        const amount = Math.round((e.heal || Math.round(me.hpMax * e.regen)) * purity);
         me.hp = clamp(me.hp + amount, 0, me.hpMax);
         lines.push(e.regen
           ? `Torn tissue closes over in seconds. (+${amount})`
           : `You put your own energy back into yourself. (+${amount})`);
       } else if (e.blind) {
         them.blinded = 2;
-        lines.push(`${tech.name}. ${them.name} cannot see a thing for a moment.`);
+        lines.push(`${name}. ${them.name} cannot see a thing for a moment.`);
       } else if (e.escape) {
         lines.push(`You lock onto a signature somewhere else and are simply gone.`);
         return { lines, over: true, outcome: finish(state, battle, rng, 'fled').outcome };
       } else if (e.drain || e.absorb) {
         // Absorption takes their energy rather than trading blows for it.
-        const stolen = Math.round(Math.min(them.ki, 18 + (e.drain || 0.3) * 40));
+        const stolen = Math.round(Math.min(them.ki, 18 + (e.drain || 0.3) * 40) * purity);
         them.ki = Math.max(0, them.ki - stolen);
         me.ki = clamp(me.ki + stolen, 0, me.kiMax);
         const res = strike(me, them, battle, rng, { base: 6, hit: 0.9 });
-        lines.push(`You take ${stolen} ki straight out of them. ${describeStrike(res, 'You', them.name, tech.name, rng, true)}`);
+        lines.push(`You take ${stolen} ki straight out of them. ${describeStrike(res, 'You', them.name, name, rng, true)}`);
       } else if (e.multiplier) {
-        me.basePower = Math.round(me.basePower * e.multiplier);
+        me.basePower = Math.round(me.basePower * (1 + (e.multiplier - 1) * purity));
         me.hp = Math.max(1, me.hp - (e.healthCost || 8));
-        lines.push(`${tech.name}. Everything multiplies, and your body starts paying for it.`);
+        lines.push(`${name}. Everything multiplies, and your body starts paying for it.`);
       } else {
         if (e.healthCost) me.hp = Math.max(1, me.hp - e.healthCost);
         const res = strike(me, them, battle, rng, {
-          base: e.atk || 8, hit: 0.82, pierce: (e.pierce || 0) > 0.5, crit: e.crit || 0, blast: true,
+          base: (e.atk || 8) * purity, hit: 0.82, pierce: (e.pierce || 0) > 0.5, crit: e.crit || 0, blast: true,
         });
-        lines.push(describeStrike(res, 'You', them.name, tech.name, rng, true));
+        lines.push(describeStrike(res, 'You', them.name, name, rng, true));
         if (e.healthCost) lines.push('It costs you as much as it costs them.');
       }
     }
@@ -14885,7 +14946,7 @@ const __mod_engine_events_training_js = (function () {
 
 const { registerEvents, pickNpc, npcSlot } = __mod_engine_generator_js;
 const { apply, fact, stranger, relate, thread, trainYear, powerLine, meetCanon, canonHere, odds, moveTo, findNpc, canonPower, getCanon } = __mod_engine_events_helpers_js;
-const { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique, BRANCHES } = __mod_data_techniques_js;
+const { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique, BRANCHES, techniquePurity, setTechniquePurity, techniqueDisplayName } = __mod_data_techniques_js;
 const { TRANSFORMATIONS, ladderFor, getTransformation } = __mod_data_transformations_js;
 const { generateSignatureName } = __mod_data_names_js;
 const { numberish } = __mod_engine_text_js;
@@ -15070,6 +15131,9 @@ registerEvents([
         if (odds(c2, chance)) {
           c.techniques.push(tech.id);
           c2.state.stats.techniquesLearned++;
+          if (tech.teachers && tech.teachers.length && !tech.teachers.includes('any_master')) {
+            setTechniquePurity(c, tech.id, 0.9);
+          }
           fact(c2, `Learned the ${tech.name}.`, { type: 'technique', weight: 3, tags: ['technique'] });
           const changes = apply(c2, { stats: { technique: 3, kiControl: 2 }, happiness: 10, health: -5 });
           return { text: `{It takes months|It takes the whole year|It takes longer than it should}. Then, once, cleanly, it works. Then it works again. ${tech.name}, learned.`, changes };
@@ -17441,7 +17505,8 @@ const __mod_engine_trials_js = (function () {
 const { clamp } = __mod_engine_rng_js;
 const { masteryMult, masteryDrain, masteryLabel } = __mod_engine_mastery_js;
 const { traitEffect } = __mod_data_traits_js;
-const { getTechnique, TECH_BY_ID } = __mod_data_techniques_js;
+const { getTechnique, TECH_BY_ID, setTechniquePurity, techniquePurity } = __mod_data_techniques_js;
+const { generateHomageName } = __mod_data_names_js;
 const { getTransformation } = __mod_data_transformations_js;
 const { grantTrainingPower } = __mod_engine_economy_js;
 const { addFact } = __mod_engine_memory_js;
@@ -17567,6 +17632,13 @@ function resolveTrial(state, rng, trial, score) {
       if (!c.techniques.includes(tech.id)) {
         c.techniques.push(tech.id);
         state.stats.techniquesLearned += 1;
+        // Lore-gated techniques only reach this path once a qualifying
+        // mentor has unlocked them (see availableTechniques()) - drilled out
+        // alone from there, it is a real but once-removed version of what
+        // the mentor actually does.
+        if (tech.teachers && tech.teachers.length && !tech.teachers.includes('any_master')) {
+          setTechniquePurity(c, tech.id, 0.9);
+        }
       }
       adjust(state, { stats: { technique: 2, kiControl: 1 }, happiness: 10 });
       addFact(state.memory, { type: 'technique', text: `Learned the ${tech.name}.`, year: c.age, weight: 3, tags: ['technique'] });
@@ -17574,6 +17646,24 @@ function resolveTrial(state, rng, trial, score) {
     } else {
       adjust(state, { health: -5, happiness: -3, stats: { discipline: 1 } });
       lines.push(`${tech.name} stays out of reach. You know what went wrong, which is something.`);
+    }
+  } else if (trial.purpose === 'refine_technique') {
+    const tech = getTechnique(trial.payload.techId);
+    const before = techniquePurity(c, tech.id);
+    const threshold = 0.38 + trial.difficulty * 0.05;
+    if (score >= threshold) {
+      const after = clamp(before + 0.1 + result.mult * 0.1, before, 0.97);
+      setTechniquePurity(c, tech.id, after);
+      c.techniqueNames = c.techniqueNames || {};
+      const name = generateHomageName(rng, tech.name);
+      c.techniqueNames[tech.id] = name;
+      adjust(state, { stats: { technique: 3, discipline: 2 }, happiness: 8 });
+      addFact(state.memory, { type: 'technique', text: `Refined the ${tech.name} into something of their own: the ${name}.`,
+        year: c.age, weight: 5, tags: ['technique', 'identity'] });
+      lines.push(`Not the ${tech.name} anymore, not really. The ${name}, ${Math.round(after * 100)}% of what a mentor-taught version would be, and entirely yours.`);
+    } else {
+      adjust(state, { happiness: -3, stats: { discipline: 1 } });
+      lines.push(`It stays stubbornly itself. You have not found the twist yet.`);
     }
   } else if (trial.purpose === 'form') {
     const form = getTransformation(trial.payload.formId);
@@ -24439,7 +24529,7 @@ const { adjust, findNpc, livingNpcs, currentYear, addNpc } = __mod_engine_state_
 const { addFact } = __mod_engine_memory_js;
 const { trainingRate, combatPower, powerTier, kiMaxFor, STAT_LABELS } = __mod_engine_stats_js;
 const { fight, narrateFight, describeGap } = __mod_engine_combat_js;
-const { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique } = __mod_data_techniques_js;
+const { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique, techniquePurity, techniqueDisplayName } = __mod_data_techniques_js;
 const { getTransformation } = __mod_data_transformations_js;
 const { unlockableForms, tryUnlockForm, nearbyForms } = __mod_engine_progression_js;
 const { getPlace, PLACES } = __mod_data_places_js;
@@ -24739,6 +24829,34 @@ const ACTIONS = [
         payload: { techId: tech.id },
       });
       return { text: tech.desc, trial };
+    },
+  },
+  {
+    id: 'refine_technique', maxPerYear: 2, minMaturity: 10, slots: 2, name: 'Refine a technique', cat: 'power',
+    desc: 'Not as pure as when you first learned it, once removed from whoever actually taught it first. Make it yours instead.',
+    available: (s) => (s.character.techniques || []).some((id) => techniquePurity(s.character, id) < 0.95
+      && !(s.character.techniqueNames && s.character.techniqueNames[id])),
+    options: (s) => (s.character.techniques || [])
+      .filter((id) => techniquePurity(s.character, id) < 0.95 && !(s.character.techniqueNames && s.character.techniqueNames[id]))
+      .map((id) => {
+        const t = getTechnique(id);
+        return { id, label: t.name, hint: `${Math.round(techniquePurity(s.character, id) * 100)}% of the original` };
+      }),
+    run: (s, rng, params) => {
+      const pool = (s.character.techniques || []).filter((id) => techniquePurity(s.character, id) < 0.95
+        && !(s.character.techniqueNames && s.character.techniqueNames[id]));
+      const techId = (params && params.option && pool.includes(params.option)) ? params.option : pool[0];
+      if (!techId) return { text: 'Nothing here needs refining.' };
+      const tech = getTechnique(techId);
+      const trial = startTrial(s, rng, {
+        kind: 'sequence',
+        difficulty: clamp(Math.ceil(tech.tier / 2), 1, 5),
+        purpose: 'refine_technique',
+        label: `Refining the ${tech.name}`,
+        blurb: tech.desc,
+        payload: { techId },
+      });
+      return { text: `${tech.name}, but not quite - whoever taught you was already once removed from wherever it started. There is a twist in there that is only yours.`, trial };
     },
   },
   {
@@ -26267,7 +26385,7 @@ function npcFightPower(rng, npc) {
   npcBag(rng, npc);
   return Math.round(npc.power * (1 + weaponAttackBonus(npc) / 260));
 }
-const { TECH_BY_ID } = __mod_data_techniques_js;
+const { TECH_BY_ID, techniquePurity, setTechniquePurity } = __mod_data_techniques_js;
 const { getRace } = __mod_data_races_js;
 const { getPlace } = __mod_data_places_js;
 const { numberish } = __mod_engine_text_js;
@@ -26506,6 +26624,15 @@ const SOCIAL_ACTIONS = [
         learned = rng.pick(teachable);
         state.character.techniques.push(learned);
         state.stats.techniquesLearned += 1;
+        const learnedTech = TECH_BY_ID[learned];
+        // Learning it straight from someone who was actually first taught it
+        // (a canon character in the technique's own teachers list) is the
+        // genuine article. Anyone else - even a mentor - is passing on their
+        // own, already once-removed version, and it shows.
+        if (learnedTech.teachers && learnedTech.teachers.length && !learnedTech.teachers.includes('any_master')
+          && !(npc.canonId && learnedTech.teachers.includes(npc.canonId))) {
+          setTechniquePurity(state.character, learned, techniquePurity(npc, learned) - rng.float(0.05, 0.2));
+        }
       }
       adjust(state, { health: -10 });
       return { text: `${npc.name} agrees. ${learned ? `You come away with the ${TECH_BY_ID[learned].name}.` : render(`{It is brutal|You are worse than they expected|You improve}.`, {}, rng)} Power level ${numberish(before)} to ${numberish(state.character.power)}.` };
@@ -27527,7 +27654,7 @@ const { APPEARANCE } = __mod_engine_state_js;
 const { portraitSvg, defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, EYE_COLOURS, SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES: STANCE_LIST, MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks, npcPortrait, lifeStage } = __mod_ui_portrait_js;
 const { eraName, worldPowerBaseline, TIMELINE } = __mod_data_timeline_js;
 const { generateFullName } = __mod_data_names_js;
-const { BRANCHES, TECH_BY_ID } = __mod_data_techniques_js;
+const { BRANCHES, TECH_BY_ID, techniquePurity, techniqueDisplayName } = __mod_data_techniques_js;
 const { getTransformation, ladderFor } = __mod_data_transformations_js;
 const { STAT_KEYS, STAT_LABELS, combatPower, powerTier, looksScore } = __mod_engine_stats_js;
 const { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } = __mod_engine_npc_js;
@@ -28726,10 +28853,40 @@ function panelPower() {
     const row = el('div', 'row');
     const main = el('div', 'row-main');
     main.appendChild(el('div', 'row-title', BRANCHES[branch].name));
-    main.appendChild(el('div', 'row-note', list.map((t) => t.name).join(', ')));
+    main.appendChild(el('div', 'row-note', list.map((t) => techniqueDisplayName(c, t.id)).join(', ')));
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', String(list.length)));
     body.appendChild(row);
+  }
+
+  const diluted = c.techniques.filter((id) => techniquePurity(c, id) < 1);
+  if (diluted.length) {
+    body.appendChild(el('div', 'group-label', 'Not quite as taught'));
+    for (const id of diluted) {
+      const tech = TECH_BY_ID[id];
+      if (!tech) continue;
+      const named = c.techniqueNames && c.techniqueNames[id];
+      const row = el('div', 'row' + (named ? ' owned' : ''));
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', techniqueDisplayName(c, id)));
+      main.appendChild(el('div', 'row-note', named
+        ? `Refined from the ${tech.name}. ${Math.round(techniquePurity(c, id) * 100)}% of the original.`
+        : `Learned secondhand. ${Math.round(techniquePurity(c, id) * 100)}% of what a direct teacher would have given you.`));
+      row.appendChild(main);
+      row.appendChild(el('div', 'row-value', Math.round(techniquePurity(c, id) * 100) + '%'));
+      if (named) {
+        const rename = el('button', 'mini', 'Rename');
+        rename.type = 'button';
+        rename.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openRenamePanel(`Rename ${techniqueDisplayName(c, id)}`, techniqueDisplayName(c, id), (name) => {
+            c.techniqueNames[id] = name;
+          });
+        });
+        row.appendChild(rename);
+      }
+      body.appendChild(row);
+    }
   }
   if (c.signature) {
     body.appendChild(el('div', 'group-label', 'Signature technique'));

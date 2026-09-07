@@ -192,13 +192,55 @@ export function getTechnique(id) {
   return TECH_BY_ID[id];
 }
 
-/** Techniques a character could plausibly start learning right now. */
+/**
+ * Techniques a character could plausibly start learning right now, on their
+ * own - by drilling alone or wherever the generic "study a technique" path
+ * reaches. A technique with a specific teachers list and no 'any_master'
+ * entry is lore-gated: Instant Transmission does not turn up in a training
+ * montage unless a Yardratian (or Goku, who learned it from one) has
+ * actually shown you something first, tracked here as character.mentors
+ * already carrying that teacher's canon id. Techniques with an empty
+ * teachers list are not taught at all - they are what a race's own body
+ * can just do (regeneration, absorption) - and stay open to anyone eligible
+ * by race.
+ */
 export function availableTechniques(character) {
   return TECHNIQUES.filter((t) => {
     if (character.techniques.includes(t.id)) return false;
     if (t.races && !t.races.includes(character.raceId)) return false;
+    if (t.teachers && t.teachers.length && !t.teachers.includes('any_master')
+      && !t.teachers.some((id) => (character.mentors || []).includes(id))) return false;
     return t.prereq.every((p) => character.techniques.includes(p));
   });
+}
+
+/**
+ * How close a known technique still is to how it was first taught. Missing
+ * an entry means full purity - either it came straight from a listed
+ * teacher (a canon mentor training scene, which always has), or it predates
+ * this system. The two paths that actually dilute a technique - drilling it
+ * alone once a mentor has shown you the fundamentals, or learning it from
+ * an ordinary person rather than the source - are the only ones that ever
+ * write a value below 1 here.
+ */
+export function techniquePurity(character, id) {
+  const v = character.techniquePurity && character.techniquePurity[id];
+  return v == null ? 1 : v;
+}
+
+export function setTechniquePurity(character, id, value) {
+  character.techniquePurity = character.techniquePurity || {};
+  character.techniquePurity[id] = Math.max(0.3, Math.min(1, value));
+}
+
+/** A homage name for a diluted technique, refined and given the player's
+ * own twist rather than the original's - "Perta Kamehameha", not
+ * "Kamehameha" again. */
+export function techniqueDisplayName(character, id) {
+  const t = getTechnique(id);
+  if (!t) return null;
+  const custom = character.techniqueNames && character.techniqueNames[id];
+  return custom || t.name;
 }
 
 export function techniquePower(character) {
@@ -206,9 +248,10 @@ export function techniquePower(character) {
   for (const id of character.techniques) {
     const t = TECH_BY_ID[id];
     if (!t) continue;
-    atk += t.effect.atk || 0;
-    def += t.effect.def || 0;
-    speed += t.effect.speed || 0;
+    const purity = techniquePurity(character, id);
+    atk += (t.effect.atk || 0) * purity;
+    def += (t.effect.def || 0) * purity;
+    speed += (t.effect.speed || 0) * purity;
   }
   return { atk, def, speed };
 }
