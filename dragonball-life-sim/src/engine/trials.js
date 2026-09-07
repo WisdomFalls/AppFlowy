@@ -220,12 +220,16 @@ export function inventForm(state, rng, baseFormId, name) {
   if (!base) return null;
   const c = state.character;
   c.customForms = c.customForms || [];
+  // Building something nobody taught you is exactly what intellect is for -
+  // a sharper mind gets a genuinely stronger, more efficient technique out
+  // of the same starting form, not just a luckier roll.
+  const intellectBonus = clamp(((c.stats.intellect || 50) - 50) / 300, -0.08, 0.25);
   const invented = {
     id: 'custom_' + (c.customForms.length + 1),
     name: name || `${c.name}'s Form`,
     baseId: baseFormId,
-    mult: Math.round(base.mult * rng.float(1.3, 2.2) * 10) / 10,
-    drain: Math.max(1, Math.round(base.drain * 0.85)),
+    mult: Math.round(base.mult * rng.float(1.3, 2.2) * (1 + intellectBonus) * 10) / 10,
+    drain: Math.max(1, Math.round(base.drain * 0.85 * (1 - intellectBonus * 0.4))),
     desc: 'Nobody else has this. You built it out of something that already existed and something that did not.',
     year: state.character.birthYear + c.age,
     taught: [],

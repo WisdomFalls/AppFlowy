@@ -83,8 +83,11 @@ export function ceilingDamping(state) {
   const p = ceilingPressure(state);
   if (p < 0.7) return 1;
   // Not a wall: gains thin out fast and never quite stop, so a stubborn
-  // fighter can still inch forward while they look for the door.
-  return clamp(1 - Math.pow((p - 0.7) / 0.34, 2.2), 0.12, 1);
+  // fighter can still inch forward while they look for the door. A sharp
+  // mind finds more of that room than a dull one does - not a different
+  // door, just a slightly wider gap under the one that is there.
+  const intellectEase = clamp(((state.character.stats.intellect || 50) - 50) / 480, -0.04, 0.1);
+  return clamp(1 - Math.pow((p - 0.7) / 0.34, 2.2) + intellectEase, 0.12, 1);
 }
 
 /** What is actually stopping you, in words, or null if nothing is. */
