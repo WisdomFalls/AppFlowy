@@ -18,9 +18,103 @@ export function worldRecord(state, planetId) {
   return state.world.planets[planetId];
 }
 
+// ------------------------------------------------------------ area purging
+//
+// A planet is not one button. It is however many named places PLACES.js
+// actually lists for it, and "purge the planet" is what it looks like once
+// every one of those has been gone through in turn - not a single click
+// that erases a population the game never otherwise tracked as living
+// anywhere in particular.
+
+function placeRecord(state, placeId) {
+  state.world.places = state.world.places || {};
+  if (!state.world.places[placeId]) state.world.places[placeId] = { purged: false };
+  return state.world.places[placeId];
+}
+
+/** Every named area on a planet, and whether it has already been emptied. */
+export function planetAreas(state, planetId) {
+  return PLACES.filter((p) => p.planet === planetId)
+    .map((p) => ({ id: p.id, name: p.name, purged: !!placeRecord(state, p.id).purged }));
+}
+
+/** A planet only actually reads as gone once nothing named on it is left. */
+export function planetFullyPurged(state, planetId) {
+  const areas = PLACES.filter((p) => p.planet === planetId);
+  return areas.length > 0 && areas.every((p) => placeRecord(state, p.id).purged);
+}
+
+/**
+ * Purge wherever the character is actually standing, not the whole world in
+ * one motion. Whoever is registered as living at that specific place - your
+ * own family included, if that is where they happen to be - dies for it,
+ * by name, and the cost scales with who they turned out to be rather than
+ * a flat karma number nobody has to look at.
+ */
+export function purgeArea(state, rng, placeId) {
+  const c = state.character;
+  const place = getPlace(placeId);
+  const planet = getPlanet(place.planet);
+  const rec = placeRecord(state, placeId);
+  if (rec.purged) {
+    return { lines: [`There is nothing left at ${place.name} to purge.`], text: `There is nothing left at ${place.name} to purge.`, killed: [], lovedOnes: [] };
+  }
+  rec.purged = true;
+
+  const LOVED = ['spouse', 'child', 'parent', 'sibling', 'lover', 'bestfriend'];
+  const here = Object.values(state.npcs || {}).filter((n) => n.alive && n.placeId === placeId);
+  const killed = [];
+  const lovedOnes = [];
+  for (const npc of here) {
+    npc.alive = false;
+    npc.deadSince = c.birthYear + c.age;
+    npc.causeOfDeath = `Purged with ${place.name}, by ${c.name}`;
+    killed.push(npc);
+    if (LOVED.includes(npc.relation)) lovedOnes.push(npc);
+  }
+
+  addFact(state.memory, {
+    type: 'world', year: c.age, weight: lovedOnes.length ? 10 : 9, tags: ['world', 'purge'],
+    text: `Purged ${place.name} on ${planet.name}.${killed.length ? ` ${killed.length} ${killed.length === 1 ? 'person' : 'people'} died there.` : ' Nobody was there to die.'}`,
+  });
+  for (const npc of lovedOnes) {
+    addFact(state.memory, {
+      type: 'death', year: c.age, weight: 10, subject: npc.id, tags: ['loss', 'purge'],
+      text: `${npc.name} died when you purged ${place.name}. You knew they were there.`,
+    });
+  }
+
+  const happinessHit = -(6 + lovedOnes.length * 20);
+  const karmaHit = -(18 + lovedOnes.length * 15);
+  adjust(state, { happiness: happinessHit, karma: karmaHit, fame: 6 });
+  spreadWord(state, { scale: killed.length ? DEED_SCALE.city : DEED_SCALE.street, karma: -20 });
+
+  const lines = [`${place.name} is quiet now.${killed.length ? ' It was not, this morning.' : ' There was not much here to begin with.'}`];
+  if (lovedOnes.length) {
+    lines.push(`${lovedOnes.map((n) => n.name).join(', ')} ${lovedOnes.length === 1 ? 'was' : 'were'} there. You knew that before you started.`);
+  }
+
+  const fullyGone = planetFullyPurged(state, place.planet);
+  if (fullyGone) {
+    const record = worldRecord(state, place.planet);
+    record.purged = true;
+    record.ruled = false;
+    c.flags.purged_a_world = true;
+    lines.push(`${planet.name} is empty now. All of it.`);
+  }
+
+  const response = worldResponse(state, rng, place.planet, 'purge');
+  if (response) lines.push(response.text);
+
+  return { lines, text: lines.join(' '), killed, lovedOnes, fullyGone, response };
+}
+
 export function standingOn(state, planetId) {
   const r = worldRecord(state, planetId);
   if (r.purged) return 'Erased';
+  const areas = planetAreas(state, planetId);
+  const purgedCount = areas.filter((a) => a.purged).length;
+  if (purgedCount > 0) return `${purgedCount}/${areas.length} areas emptied`;
   if (r.ruled) return 'Ruled by you';
   if (r.fear > 60) return 'Terrified of you';
   if (r.love > 60) return 'Loyal to you';
@@ -107,17 +201,28 @@ export function travelTo(state, rng, placeId, methodId) {
 const PLANET_ACTS = {
   protect: { influence: 18, love: 22, fear: -6, karma: 14, fame: 8 },
   rule: { influence: 30, love: -6, fear: 26, karma: -12, fame: 14 },
-  purge: { influence: 40, love: -60, fear: 60, karma: -45, fame: 25 },
   recruit: { influence: 14, love: 10, fear: 4, karma: -2, fame: 4 },
   hide: { influence: -6, love: 0, fear: -6, karma: 0, fame: -2 },
 };
 
-/** Do something to a world, and let the world answer. */
-export function actOnWorld(state, rng, planetId, act) {
+/**
+ * Do something to a world, and let the world answer. Purge is handled
+ * entirely by purgeArea() (called with wherever the character is actually
+ * standing) - it acts one named place at a time, kills whoever is actually
+ * registered as living there, and only marks the whole planet purged once
+ * every place on it has gone through that. Every other act here still
+ * reads as planet-wide, which is honest: protecting, ruling or recruiting
+ * a world was never claiming to have physically covered every street on
+ * it the way emptying one does.
+ */
+export function actOnWorld(state, rng, planetId, act, placeId) {
+  if (act === 'purge') {
+    return purgeArea(state, rng, placeId || state.character.placeId);
+  }
   // Whatever you do to a world, the rest of the universe hears about it.
-  const scale = { rule: DEED_SCALE.world_ruled, purge: DEED_SCALE.world_destroyed,
+  const scale = { rule: DEED_SCALE.world_ruled,
     protect: DEED_SCALE.world_saved, recruit: DEED_SCALE.city }[act] || DEED_SCALE.city;
-  const karma = { rule: -10, purge: -45, protect: 20, recruit: -2 }[act] || 0;
+  const karma = { rule: -10, protect: 20, recruit: -2 }[act] || 0;
   spreadWord(state, { scale, karma });
   const planet = getPlanet(planetId);
   const record = worldRecord(state, planetId);
@@ -127,15 +232,11 @@ export function actOnWorld(state, rng, planetId, act) {
   record.love = clamp(record.love + effect.love, 0, 100);
   record.fear = clamp(record.fear + effect.fear, 0, 100);
   if (act === 'rule') record.ruled = true;
-  if (act === 'purge') { record.purged = true; record.ruled = false; }
 
   adjust(state, { karma: effect.karma, fame: effect.fame });
 
   const lines = [];
-  if (act === 'purge') {
-    lines.push(`${planet.name} is quiet now. ${planet.population === 'none' ? '' : 'It was not, this morning.'}`);
-    state.character.flags.purged_a_world = true;
-  } else if (act === 'rule') {
+  if (act === 'rule') {
     lines.push(`${planet.name} answers to you. Whatever the law was here, you are the law now.`);
   } else if (act === 'protect') {
     lines.push(`They know who kept them alive. That travels further than you expect.`);
@@ -147,8 +248,8 @@ export function actOnWorld(state, rng, planetId, act) {
   if (response) lines.push(response.text);
 
   addFact(state.memory, {
-    type: 'world', year: state.character.age, weight: act === 'purge' ? 9 : 5, tags: ['world'],
-    text: `${{ purge: 'Purged', rule: 'Took control of', protect: 'Defended', recruit: 'Recruited from', hide: 'Kept their head down on' }[act]} ${planet.name}.`,
+    type: 'world', year: state.character.age, weight: 5, tags: ['world'],
+    text: `${{ rule: 'Took control of', protect: 'Defended', recruit: 'Recruited from', hide: 'Kept their head down on' }[act]} ${planet.name}.`,
   });
 
   return { lines, text: lines.join(' '), response };
@@ -198,13 +299,15 @@ export function worldManifest(state) {
     .filter((p) => planetExists(p.id, year) || worldRecord(state, p.id).visits > 0)
     .map((p) => {
     const r = worldRecord(state, p.id);
+    const areas = planetAreas(state, p.id);
     return {
       id: p.id, name: p.name, standing: standingOn(state, p.id),
       influence: Math.round(r.influence), visits: r.visits,
       inhabitants: p.inhabitants, law: p.law, alignment: p.alignment,
       strength: p.strength, flora: p.flora,
       here: getPlace(state.character.placeId).planet === p.id,
-      gone: !planetExists(p.id, year),
+      gone: !planetExists(p.id, year) || r.purged,
+      areas,
     };
   });
 }

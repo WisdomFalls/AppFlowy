@@ -28,7 +28,7 @@ import { canonAvailable, canonPower, canonPlace, canonUniverse } from '../../dat
 import { ballsHeld, startHunt, ballsAreInert, summonReady } from '../dragonballs.js';
 import { startTrial, STAT_TRIALS, TRIAL_KINDS, getMastery, masteryEffect, inventForm } from '../trials.js';
 import { createTournament, autoRunTournament, settle } from '../tournament.js';
-import { travelOptions, travelTo, actOnWorld, standingOn } from '../worlds.js';
+import { travelOptions, travelTo, actOnWorld, standingOn, planetAreas } from '../worlds.js';
 import { getPlanet, PLANETS, planetExists } from '../../data/planets.js';
 import { generateFullName, generateSignatureName } from '../../data/names.js';
 import { numberish } from '../text.js';
@@ -690,19 +690,31 @@ export const ACTIONS = [
     desc: 'Defend it, take it, empty it, or recruit from it.',
     available: (s) => !s.character.inAfterlife,
     options: (s) => {
-      const planet = getPlanet(getPlace(s.character.placeId).planet);
+      const here = getPlace(s.character.placeId);
+      const planet = getPlanet(here.planet);
       const strong = combatPower(s.character) > 1e6;
+      const areas = planetAreas(s, here.planet);
+      const purgedHere = areas.find((a) => a.id === here.id)?.purged;
+      const purgedCount = areas.filter((a) => a.purged).length;
       return [
         { id: 'protect', label: `Protect ${planet.name}`, hint: 'Stand between it and whatever is coming.' },
         { id: 'recruit', label: 'Recruit from here', hint: 'Leave with people who chose to follow you.' },
         { id: 'rule', label: `Take ${planet.name}`, hint: strong ? 'Make yourself the law here.' : 'You are not strong enough to hold it.', disabled: !strong },
-        { id: 'purge', label: `Purge ${planet.name}`, hint: strong ? 'Empty it. There is no version of this you come back from.' : 'You are not strong enough.', disabled: !strong },
+        {
+          id: 'purge', label: `Purge ${here.name}`,
+          hint: purgedHere ? 'Already empty. There is nothing left here.'
+            : !strong ? 'You are not strong enough.'
+              : areas.length > 1
+                ? `Empty this one area. ${purgedCount}/${areas.length} of ${planet.name} gone so far. No version of this you come back from.`
+                : 'Empty it. There is no version of this you come back from.',
+          disabled: !strong || purgedHere,
+        },
       ];
     },
     run: (s, rng, params) => {
       const act = (params && params.option) || 'protect';
       const planetId = getPlace(s.character.placeId).planet;
-      const result = actOnWorld(s, rng, planetId, act);
+      const result = actOnWorld(s, rng, planetId, act, s.character.placeId);
       if (result.response && result.response.foe) {
         return {
           text: result.text,
