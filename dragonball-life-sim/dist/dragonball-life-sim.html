@@ -7857,6 +7857,56 @@ function driftAppearance(rng, npc, year) {
   return news;
 }
 
+// Nobody's personality is fixed for a whole lifetime - circumstances wear
+// people into something else, same direction every time a given trait moves:
+// a sudden jump in power with nobody around to answer to hardens somebody
+// the same way real isolation does; being genuinely cherished softens them.
+// Keyed both ways so a hardened trait can later soften back, if life goes
+// the other direction for a while.
+const HARDEN_PAIRS = { kind: 'cold', generous: 'greedy', honest: 'devious',
+  protective: 'ambitious', gentle: 'blunt', loyal: 'vengeful' };
+const SOFTEN_PAIRS = Object.fromEntries(Object.entries(HARDEN_PAIRS).map(([a, b]) => [b, a]));
+
+/**
+ * A trait swap, not a mood swing - this is what "people change, no one
+ * stays the same" means for the tags that drive everything else about who
+ * an NPC is (restraintFor, opennessScore, how they read in the dossier).
+ * Power outstripping everyone around you with nobody close enough to keep
+ * you honest is exactly "they deem them lower than them" starting to take
+ * hold; being genuinely close to somebody pulls the other way.
+ */
+function driftPersonality(rng, npc, opts = {}) {
+  if (npc.age < 16 || !npc.tags || !npc.tags.length) return null;
+  const isolated = (npc.closeness || 0) < 20 && (npc.tension || 0) > 60;
+  const cherished = (npc.closeness || 0) > 70 && (npc.trust ?? 30) > 60;
+  let direction = null;
+  if ((opts.justBrokeWall || isolated) && rng.chance(opts.justBrokeWall ? 0.12 : 0.05)) direction = 'harden';
+  else if (cherished && rng.chance(0.05)) direction = 'soften';
+  if (!direction) return null;
+  const pairs = direction === 'harden' ? HARDEN_PAIRS : SOFTEN_PAIRS;
+  const candidates = npc.tags.filter((t) => pairs[t]);
+  if (!candidates.length) return null;
+  const from = rng.pick(candidates);
+  const to = pairs[from];
+  npc.tags = npc.tags.map((t) => (t === from ? to : t));
+  // Whether they hold back in a spar is downstream of who they are, same as
+  // it was the day they were rolled - a real personality shift nudges it the
+  // same direction, not a full reroll.
+  if (npc.sparRestraint != null) {
+    npc.sparRestraint = clamp(npc.sparRestraint + (direction === 'harden' ? -0.05 : 0.05), 0.55, 1);
+  }
+  return direction === 'harden'
+    ? rng.pick([
+      `Something in ${npc.name} has cooled, and does not explain itself.`,
+      `${npc.name} looks at people differently now - like most of them are beneath bothering with.`,
+      `${npc.name} has grown harder to reach than they used to be.`,
+    ])
+    : rng.pick([
+      `${npc.name} has softened, somewhere along the way.`,
+      `${npc.name} is easier to be around than they used to be.`,
+    ]);
+}
+
 /** A fight leaves something behind on them too. */
 function scarNpc(rng, npc, from) {
   const a = npc.appearance;
@@ -7889,6 +7939,7 @@ function progressNpc(rng, npc, year, opts = {}) {
   }
 
   const focus = npc.growthFocus || 'power';
+  let justBrokeWall = false;
 
   if (focus === 'power' || focus === 'technique') {
     if (npc.wall) {
@@ -7898,6 +7949,7 @@ function progressNpc(rng, npc, year, opts = {}) {
         npc.wall = null;
         npc.power = Math.round(npc.power * rng.float(1.7, 3.1));
         news = `${npc.name} has broken through whatever they were stuck on. They are not the same fighter.`;
+        justBrokeWall = true;
       } else {
         npc.power = Math.round(npc.power * rng.float(0.99, 1.02));
       }
@@ -7951,6 +8003,9 @@ function progressNpc(rng, npc, year, opts = {}) {
   }
   const lookNews = driftAppearance(rng, npc, year);
   if (lookNews && !news) news = lookNews;
+  // Who they are underneath, not just how they look or what they can do.
+  const personalityNews = driftPersonality(rng, npc, { justBrokeWall });
+  if (personalityNews) news = news ? `${news} ${personalityNews}` : personalityNews;
   if (rng.chance(0.04)) npc.hasDragonBall = true;
 
   return news;
@@ -8196,7 +8251,7 @@ function learnAbout(npc, amount = 1) {
   npc.knowledge = Math.min(4, (npc.knowledge || 0) + amount);
   return npc.knowledge;
 }
-  return { RELATIONS, resetNpcCounter, nextNpcId, makeAppearance, makeNpc, effectiveKnowledge, makeCanonNpc, makeFamily, lineageLabel, describeLineage, makeChild, driftAppearance, scarNpc, progressNpc, relationshipTick, spouseFlavor, weddingLine, courtLine, birthLine, dossier, statReveal, describeNpc, relationLabel, bondScore, bondLabel, romanceLabel, KNOWLEDGE_LEVELS, knowledgeLabel, learnAbout };
+  return { RELATIONS, resetNpcCounter, nextNpcId, makeAppearance, makeNpc, effectiveKnowledge, makeCanonNpc, makeFamily, lineageLabel, describeLineage, makeChild, driftAppearance, driftPersonality, scarNpc, progressNpc, relationshipTick, spouseFlavor, weddingLine, courtLine, birthLine, dossier, statReveal, describeNpc, relationLabel, bondScore, bondLabel, romanceLabel, KNOWLEDGE_LEVELS, knowledgeLabel, learnAbout };
 })();
 
 /* ==== engine/state.js ==== */
