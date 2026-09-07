@@ -9,12 +9,13 @@ import { getTechnique, TECH_BY_ID } from '../data/techniques.js';
 import { getTransformation } from '../data/transformations.js';
 import { grantTrainingPower } from './economy.js';
 import { addFact } from './memory.js';
-import { adjust } from './state.js';
+import { adjust, currentYear } from './state.js';
 import { combatPower } from './stats.js';
 import { numberish } from './text.js';
 import { getFaction } from '../data/factions.js';
 import { getPlace } from '../data/places.js';
-import { currencyFor, credit } from '../data/currency.js';
+import { currencyFor, credit, formatMoney } from '../data/currency.js';
+import { makeNpc } from './npc.js';
 
 export const TRIAL_KINDS = {
   timing: {
@@ -178,11 +179,40 @@ export function resolveTrial(state, rng, trial, score) {
     const rankIdx = clamp(c.factionRank || 0, 0, (faction && faction.ranks ? faction.ranks.length - 1 : 0));
     if (score >= threshold) {
       const cur = currencyFor(getPlace(c.placeId).planet);
-      const pay = Math.round((trial.payload.basePay || 1800) * result.mult);
-      credit(c, cur.id, pay);
-      c.factionStanding = clamp((c.factionStanding || 0) + Math.round(7 * result.mult), 0, 100);
-      adjust(state, { happiness: 4, fame: 1 });
-      lines.push(`Assignment closed. Paid.`);
+      let pay = Math.round((trial.payload.basePay || 1800) * result.mult);
+      // An arrest warrant closes differently to every other assignment: there
+      // is somebody at the end of it, and bringing them in alive is the whole
+      // job. They get built like any other stranger you might meet - a real
+      // race, stats, a title, an epithet - and then go on the record as
+      // somebody you actually caught, not a line of flavour text.
+      if (trial.payload.arrest) {
+        const fugitive = makeNpc(rng, {
+          placeId: c.placeId, year: currentYear(state), minAge: 18, maxAge: 60,
+          powerScale: rng.float(0.6, 1.8),
+        });
+        pay = Math.round(pay * 1.6);
+        credit(c, cur.id, pay);
+        c.captures = c.captures || [];
+        c.captures.push({
+          id: 'capture_' + (c.captures.length + 1), year: c.age,
+          name: fugitive.name, raceId: fugitive.raceId, power: fugitive.power,
+          title: fugitive.title, epithet: fugitive.epithet,
+          factionId: trial.payload.factionId, factionName: trial.payload.factionName, reward: pay,
+        });
+        c.factionStanding = clamp((c.factionStanding || 0) + Math.round(10 * result.mult), 0, 100);
+        adjust(state, { happiness: 6, fame: 3, karma: 3 });
+        addFact(state.memory, {
+          type: 'faction', text: `Brought in ${fugitive.name}${fugitive.epithet ? `, ${fugitive.epithet}` : ''}, for ${trial.payload.factionName}.`,
+          year: c.age, weight: 5, tags: ['faction', 'arrest'],
+        });
+        lines.push(`${fugitive.name}${fugitive.epithet ? ` - ${fugitive.epithet} -` : ''} does not come quietly, but comes. `
+          + `Processed, jailed, and off the count. ${formatMoney(pay, cur.id)} for it.`);
+      } else {
+        credit(c, cur.id, pay);
+        c.factionStanding = clamp((c.factionStanding || 0) + Math.round(7 * result.mult), 0, 100);
+        adjust(state, { happiness: 4, fame: 1 });
+        lines.push(`Assignment closed. Paid.`);
+      }
       if (faction && faction.ranks && c.factionStanding >= 80 && rankIdx < faction.ranks.length - 1) {
         c.factionRank = rankIdx + 1;
         c.factionStanding = 15;
@@ -191,7 +221,9 @@ export function resolveTrial(state, rng, trial, score) {
     } else {
       c.factionStanding = clamp((c.factionStanding || 0) - 8, 0, 100);
       adjust(state, { health: -Math.round(4 + trial.difficulty * 2), happiness: -4 });
-      lines.push('The assignment goes sideways. You come back with less than you left with.');
+      lines.push(trial.payload.arrest
+        ? 'They get away, and word of that gets around before you do.'
+        : 'The assignment goes sideways. You come back with less than you left with.');
     }
   } else if (trial.purpose === 'cooking') {
     // A regular-life skill, not a combat one: it climbs slowly no matter the

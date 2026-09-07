@@ -1697,6 +1697,17 @@ function panelRecords() {
     }
   }
 
+  if (c.captures && c.captures.length) {
+    body.appendChild(el('div', 'group-label', 'Who you brought in'));
+    for (const cap of c.captures.slice().reverse().slice(0, 10)) {
+      const memo = el('div', 'memo');
+      const race = getRace(cap.raceId);
+      memo.innerHTML = `<b>AGE ${cap.year}</b> ${cap.name}${cap.epithet ? `, ${cap.epithet}` : ''} `
+        + `(${race ? race.short : cap.raceId}) - jailed for ${cap.factionName}, ${formatMoney(cap.reward, currencyFor(getPlace(c.placeId).planet).id)}.`;
+      body.appendChild(memo);
+    }
+  }
+
   body.appendChild(el('div', 'group-label', 'You'));
   const here = getPlace(c.placeId);
   for (const [title, note, fn] of [

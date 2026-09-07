@@ -202,7 +202,10 @@ registerEvents([
               purpose: 'mission',
               label: brief.label,
               blurb: brief.blurb,
-              payload: { factionId: sl.factionId, factionName: sl.factionName, basePay: 1800 + rank2 * 900 },
+              payload: {
+              factionId: sl.factionId, factionName: sl.factionName, basePay: 1800 + rank2 * 900,
+              arrest: brief.label === 'Arrest',
+            },
             });
             return { text: `${sl.officer}: "${brief.order}"`, trial };
           },
