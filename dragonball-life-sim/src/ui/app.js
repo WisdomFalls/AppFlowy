@@ -2499,7 +2499,7 @@ function endBattle() {
   // A lethal win is a decision (spare or finish them) before it is a fact -
   // defer the actual killing to whichever choice the player makes below,
   // rather than aftermath quietly deciding it before they get to choose.
-  const deferKillDecision = BATTLE.outcome === 'won' && BATTLE.stakes !== 'spar' && !BATTLE.noKilling;
+  const deferKillDecision = BATTLE.outcome === 'won' && BATTLE.stakes !== 'spar' && !BATTLE.noKilling && !BATTLE.foeFled;
   const after = battleAftermath(GAME, rng, BATTLE, { deferKillDecision });
   saveRng(GAME, rng);
   if (after.lines.length) pushBattleLines(after.lines, 'big');
@@ -2510,6 +2510,7 @@ function endBattle() {
 
   const outcomeLine = BATTLE.byRingOut
     ? (BATTLE.outcome === 'won' ? 'Ring-out. You win.' : 'Ring-out. You lose.')
+    : BATTLE.foeFled ? `${BATTLE.them.name} got away.`
     : {
     won: 'You win.', lost: 'You lose.', fled: 'You got out.',
     yielded: 'You yielded and they let it stand.', draw: 'Neither of you could finish it.',
@@ -2528,8 +2529,10 @@ function endBattle() {
     pushBattleLines(['The officials are between you before you have finished the thought.'], 'big');
   }
 
-  // Beating somebody is a decision point, not just a result.
-  if (BATTLE.outcome === 'won' && BATTLE.stakes !== 'spar' && !BATTLE.noKilling) {
+  // Beating somebody is a decision point, not just a result - but only when
+  // there is somebody left in front of you to decide about. A foe who got
+  // clean away leaves nothing to spare or finish.
+  if (BATTLE.outcome === 'won' && BATTLE.stakes !== 'spar' && !BATTLE.noKilling && !BATTLE.foeFled) {
     // Sparing something genuinely evil is a bigger act of mercy than
     // sparing a nobody; killing something with a real claim to being good
     // costs a lot more than killing a nobody does. Same alignment reading
@@ -2574,7 +2577,7 @@ function endBattle() {
 }
 
 function closeBattle(after) {
-  const summary = {
+  const summary = BATTLE.foeFled ? `${BATTLE.them.name} broke off and got away from you.` : {
     won: `You beat ${BATTLE.them.name}.`,
     lost: `${BATTLE.them.name} beat you.`,
     fled: `You broke off from ${BATTLE.them.name}.`,

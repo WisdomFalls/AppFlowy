@@ -139,6 +139,9 @@ function sideTemplate(name, power, opts = {}) {
     mastery: opts.mastery || null,
     // Somebody in the fight who is not you and not the enemy in front of you.
     down: false,
+    // Got clean away. Different from being downed - alive, out of the fight,
+    // and not something standingFoes() should keep counting against you.
+    fledAway: false,
   };
 }
 
@@ -220,6 +223,11 @@ export function createBattle(state, rng, opts = {}) {
     relocated: false,
     zenkai: 0,
     fled: false,
+    // Whether the foe currently in front of you has broken off (mid-decision
+    // to run) and whether one actually got away clean - those are different
+    // things, and only the second one means the fight is really over.
+    foeFleeing: false,
+    foeFled: false,
     surrendered: false,
     protecting: !!opts.protecting,
     // How much of yourself you are using. Holding back keeps a fight going,
@@ -265,9 +273,9 @@ function stanceOf(side) {
   return STANCES[side.stance] || STANCES.neutral;
 }
 
-/** Everybody on the other side still standing. */
+/** Everybody on the other side still standing - and still actually here. */
 export function standingFoes(battle) {
-  return (battle.squad || [battle.them]).filter((f) => f.hp > 0);
+  return (battle.squad || [battle.them]).filter((f) => f.hp > 0 && !f.fledAway);
 }
 
 /** Pick a new focus when the one you were looking at goes down. */
@@ -297,6 +305,19 @@ export function battleActions(state, battle) {
   const c = state.character;
   const me = battle.me;
   const out = [];
+
+  // They just broke off the fight. There is nothing to swing at - the only
+  // real decision left is whether to go after them.
+  if (battle.foeFleeing) {
+    return [
+      {
+        id: 'chase', kind: 'move', label: 'Chase them down',
+        hint: speedGap(me, battle.them) >= 1
+          ? 'You are fast enough to close this.' : 'They have the edge on speed. This is a gamble.',
+      },
+      { id: 'let_go', kind: 'move', label: 'Let them go', hint: 'Whatever this was, it is over.' },
+    ];
+  }
 
   for (const move of PHYSICAL) {
     const cost = me.infiniteStamina ? 0 : move.stamina;
@@ -589,6 +610,43 @@ function foeTurn(state, battle, rng, actor) {
     }
   }
 
+  // Desperate and outmatched: this is where somebody decides whether running
+  // is even on the table. Race and temperament answer that before speed does -
+  // a Saiyan (Universe 7's proud, hostile conquerors) or a cruel/proud fighter
+  // would rather go down swinging; someone frightened, professional, or simply
+  // perceptive (high instinct) reads a lost cause for what it is and takes it.
+  let lastResort = false;
+  const desperate = actor === battle.them && !battle.foeFleeing && losing &&
+    (hurt < 0.22 || (them.ki < them.kiMax * 0.15 && them.stamina < them.staminaMax * 0.15));
+  if (desperate) {
+    let willFlee = 0.5;
+    if (them.raceId === 'saiyan') willFlee -= 0.42;
+    if (them.voice === 'proud' || them.voice === 'cruel') willFlee -= 0.2;
+    if (them.voice === 'frightened') willFlee += 0.3;
+    if (them.voice === 'professional') willFlee += 0.12;
+    willFlee += ((them.instinct ?? 50) - 50) / 200;
+    willFlee = clamp(willFlee, 0.03, 0.92);
+
+    if (rng.chance(willFlee)) {
+      const speedEdge = speedGap(them, me);
+      const chance = clamp(0.25 + (speedEdge - 1) * 0.4
+        - Math.log10(Math.max(1, ratioOf(me, them, battle))) * 0.15, 0.05, 0.95);
+      if (rng.chance(chance)) {
+        battle.foeFleeing = true;
+        lines.push(rng.pick([
+          `${them.name} breaks off. This is not a fight they can win, and they know it.`,
+          `${them.name} throws up a screen of light and is gone from where they stood.`,
+          `${them.name} decides, all at once, that this is over. They run.`,
+        ]));
+        return lines;
+      }
+      lines.push(`${them.name} tries to break off and cannot find the room.`);
+      them.stance = 'aggressive';
+      return lines;
+    }
+    lastResort = true;
+  }
+
   if (hurt < 0.35 && rng.chance(0.35)) {
     them.stance = 'defensive';
   } else if (losing && rng.chance(0.4)) {
@@ -598,6 +656,18 @@ function foeTurn(state, battle, rng, actor) {
   const kiMoves = them.techniques
     .map((id) => TECH_BY_ID[id])
     .filter((t) => t && t.effect && t.effect.atk > 0 && (t.effect.kiCost || 0) <= them.ki);
+
+  if (lastResort && kiMoves.length) {
+    const tech = kiMoves.slice().sort((a, b) => (b.effect.atk || 0) - (a.effect.atk || 0))[0];
+    them.ki -= tech.effect.kiCost || 0;
+    const res = strike(them, me, battle, rng, {
+      base: tech.effect.atk * 1.2, hit: 0.7, pierce: tech.effect.pierce > 0.5, blast: true,
+    });
+    lines.push(`${them.name} is not holding anything back. This is everything they have left.`);
+    lines.push(describeStrike(res, them.name, 'you', tech.name, rng, false));
+    return lines;
+  }
+
   if (kiMoves.length && rng.chance(0.4)) {
     const tech = rng.pick(kiMoves);
     them.ki -= tech.effect.kiCost || 0;
@@ -841,6 +911,39 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
     }
     lines.push('You turn to run and they are already in front of you.');
     them.stance = 'aggressive';
+  } else if (actionId === 'chase') {
+    const speedEdge = speedGap(me, them) + ((c.battleInstinct ?? 50) - 50) / 200;
+    const chance = clamp(0.3 + (speedEdge - 1) * 0.45, 0.05, 0.95);
+    if (rng.chance(chance)) {
+      battle.foeFleeing = false;
+      lines.push(rng.pick([
+        'You close the gap before they clear it. They are still here.',
+        'You catch up to them mid-stride and the fight is not over after all.',
+      ]));
+      const res = strike(me, them, battle, rng, { base: 22, hit: 0.95, stagger: 0.4 });
+      lines.push(describeStrike(res, 'You', them.name, 'a caught-them-cold strike', rng, true));
+      skipFoe = true;
+    } else {
+      lines.push(`${them.name} is faster, or simply luckier, and is gone.`);
+      battle.foeFleeing = false;
+      them.fledAway = true;
+      const next = refocus(battle);
+      if (!next) {
+        battle.foeFled = true;
+        return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
+      }
+      lines.push(`That leaves ${standingFoes(battle).length}. ${next.name} is still here.`);
+    }
+  } else if (actionId === 'let_go') {
+    battle.foeFleeing = false;
+    them.fledAway = true;
+    lines.push(`${them.name} is gone. You let it be.`);
+    const next = refocus(battle);
+    if (!next) {
+      battle.foeFled = true;
+      return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
+    }
+    lines.push(`That leaves ${standingFoes(battle).length}. ${next.name} is still here.`);
   } else if (actionId === 'surrender') {
     battle.surrendered = true;
     const merciful = rng.chance(0.55 + (c.karma > 30 ? 0.2 : 0) - (battle.stakes === 'lethal' ? 0.35 : 0));
