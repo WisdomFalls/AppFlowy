@@ -18,7 +18,7 @@ import { portraitSvg, defaultAppearance, HAIR_STYLES, HAIR_COLOURS, EYE_SHAPES, 
   SKIN_TONES, FACE_SHAPES, OUTFITS, STANCES as STANCE_LIST,
   MARK_PRESETS, ACCESSORY_PRESETS, wornAccessories, allMarks,
   npcPortrait, lifeStage } from './portrait.js';
-import { eraName, worldPowerBaseline } from '../data/timeline.js';
+import { eraName, worldPowerBaseline, TIMELINE } from '../data/timeline.js';
 import { generateFullName } from '../data/names.js';
 import { BRANCHES, TECH_BY_ID } from '../data/techniques.js';
 import { getTransformation, ladderFor } from '../data/transformations.js';
@@ -294,6 +294,22 @@ function newDraft() {
 // -------------------------------------------------------------------- HUD
 
 
+/**
+ * The next canon beat still ahead of this life, whatever world it lands
+ * on. finishYear() (lifecycle.js) fires these the instant the year comes
+ * up regardless of where the player happens to be standing - nothing ever
+ * told them one was coming, so there was no way to travel for it on
+ * purpose instead of just reading about it having happened somewhere else.
+ */
+function nextTimelineEvent(state) {
+  const year = currentYear(state);
+  const upcoming = TIMELINE.filter((t) => t.year >= year
+    && !state.world.resolved.includes(t.id)
+    && !(t.cancelIf && state.world.flags[t.cancelIf]));
+  upcoming.sort((a, b) => a.year - b.year);
+  return upcoming[0] || null;
+}
+
 function renderHud() {
   const s = characterSummary(GAME);
   const c = GAME.character;
@@ -347,6 +363,16 @@ function renderHud() {
   if (balls) add('Dragon Balls', balls + '/7', 'gold');
   if (c.transformations.length) add('Forms', c.transformations.length, 'gold');
   if (GAME.legacy) add('Generation', GAME.legacy.generation);
+  if (!c.inAfterlife) {
+    const next = nextTimelineEvent(GAME);
+    if (next) {
+      const yearsAway = next.year - s.year;
+      const herePlanet = getPlace(c.placeId).planet;
+      const planetName = getPlanet(next.planet) ? getPlanet(next.planet).name : next.planet;
+      const label = herePlanet === next.planet ? next.name : `${next.name} → ${planetName}`;
+      add(label, yearsAway <= 0 ? 'Now' : `${yearsAway}y`, 'gold');
+    }
+  }
 
   // Coming back from the dead has to change the button under your thumb.
   const ageBtn = $('btn-age');
