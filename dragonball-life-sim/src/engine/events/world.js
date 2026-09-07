@@ -79,19 +79,36 @@ function claimBalls(state, rng, count) {
 registerEvents([
   {
     id: 'timeline_event', noFatigue: true, tags: ['world', 'threat', 'cosmic'], weight: 400,
-    when: (ctx) => TIMELINE.some((t) => t.year === ctx.year
-      && !ctx.state.world.resolved.includes(t.id)
-      && !(t.cancelIf && ctx.state.world.flags[t.cancelIf])),
+    // Every entry on this timeline is Universe 7's own history. A Universe 6
+    // Saiyan on Sadala has no way to even hear that Raditz landed on Earth in
+    // a universe that is not theirs, let alone decide whether to go - so this
+    // does not fire for them at all unless the event is genuinely
+    // cross-universe (scope: 'multiverse': the Tournament of Power, the
+    // Tournament of Destroyers).
+    when: (ctx) => {
+      const myUniverse = ctx.character.universe || 7;
+      return TIMELINE.some((t) => t.year === ctx.year
+        && !ctx.state.world.resolved.includes(t.id)
+        && !(t.cancelIf && ctx.state.world.flags[t.cancelIf])
+        && (myUniverse === 7 || t.scope === 'multiverse'));
+    },
     slots: (ctx) => {
+      const myUniverse = ctx.character.universe || 7;
       const ev = ctx.forceEvId
         ? TIMELINE.find((t) => t.id === ctx.forceEvId)
         : TIMELINE.find((t) => t.year === ctx.year
           && !ctx.state.world.resolved.includes(t.id)
-          && !(t.cancelIf && ctx.state.world.flags[t.cancelIf]));
+          && !(t.cancelIf && ctx.state.world.flags[t.cancelIf])
+          && (myUniverse === 7 || t.scope === 'multiverse'));
       if (!ev) return null;
       const here = getPlace(ctx.character.placeId);
-      const canGetThere = ev.planet === here.planet || ev.scope === 'multiverse' || ev.planet === 'void'
-        || ctx.character.items.includes('spaceship') || ctx.character.techniques.includes('instant_transmission');
+      // A spaceship does not cross universes - ordinary travel tech only
+      // matters for a character already in Universe 7. Everyone else's only
+      // way in is a genuinely cross-universe event, gated below by actually
+      // being invited rather than by reachability at all.
+      const canGetThere = ev.scope === 'multiverse'
+        || (myUniverse === 7 && (ev.planet === here.planet || ev.planet === 'void'
+          || ctx.character.items.includes('spaceship') || ctx.character.techniques.includes('instant_transmission')));
       // Getting to the Null Realm is not a travel problem. It only takes
       // fighters somebody already picked, so being there at all needs
       // somebody from that roster to actually bring you - being fast enough

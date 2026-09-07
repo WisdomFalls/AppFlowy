@@ -47,9 +47,12 @@ export const TIMELINE = [
   { id: 'golden_frieza', foe: 'Golden Frieza', year: 779, name: 'The Emperor Returns', planet: 'earth', threat: 4e11,
     blurb: 'Frieza is alive, gold, and has spent four months doing the one thing he never bothered with.',
     scope: 'planet', tags: ['frieza'], cancelIf: 'frieza_erased' },
+  // Genuinely cross-universe, unlike everything else on this spine (which is
+  // Universe 7's own history) - scope 'multiverse' is what lets a Universe 6
+  // fighter reach it at all, same mechanism as the Tournament of Power below.
   { id: 'u6_tournament', foe: 'Hit', year: 779, name: 'Tournament of Destroyers', planet: 'void', threat: 3e11,
     blurb: 'Two universes bet their pride on five fighters each in a ring between worlds.',
-    scope: 'event', tags: ['tournament', 'divine'] },
+    scope: 'multiverse', tags: ['tournament', 'divine'] },
   { id: 'tournament_of_power', foe: 'Jiren', year: 780, name: 'The Tournament of Power', planet: 'void', threat: 6e13,
     blurb: 'Eight universes, eighty fighters, forty-eight minutes, and the losers stop existing.',
     scope: 'multiverse', tags: ['tournament', 'divine', 'apocalypse'] },
