@@ -46,6 +46,15 @@ const TUFFLE_TAILS = ['chi', 'iyack', 'y', 'ex', 'tan', 'us', 'cuit', 'ymer', 'i
 const KRYLL_ROOTS = ['Kr', 'Xar', 'Vrik', 'Chit', 'Skel', 'Thrax', 'Klik', 'Zrat', 'Kess', 'Vrax'];
 const KRYLL_TAILS = ['ik', 'ax', 'oss', 'eth', 'ux', 'iss', 'ok', 'ith', 'ass', 'ex'];
 
+const METAMORAN_ROOTS = ['Bol', 'Gyu', 'Piri', 'Mopo', 'Zaru', 'Kib', 'Toro', 'Pun'];
+const METAMORAN_TAILS = ['ta', 'mel', 'ki', 'ro', 'sha', 'ppa', 'na', 'du'];
+
+const VEZRIN_ROOTS = ['Sil', 'Ael', 'Quor', 'Vess', 'Nyth', 'Il', 'Cael', 'Or'];
+const VEZRIN_TAILS = ['iel', 'ash', 'une', 'ir', 'wen', 'oth', 'ys', 'aine'];
+
+const DRIFTKIN_ROOTS = ['Rook', 'Cask', 'Vane', 'Lock', 'Rey', 'Marn', 'Sol', 'Tack'];
+const DRIFTKIN_TAILS = ['e', 'well', 'ric', 'ho', 'set', 'ley', 'or', 'wick'];
+
 const ANDROID_PREFIX = ['Android', 'Unit', 'Model', 'Prototype', 'Series', 'Specimen'];
 const ANDROID_SUFFIX = ['DX', 'MK', 'RR', 'ZX', 'HV', 'NX'];
 
@@ -66,6 +75,9 @@ const NAME_TABLES = {
   half_frostkin: [FROST_ROOTS.concat(EARTH_ROOTS), FROST_TAILS.concat(EARTH_TAILS)],
   half_android: [EARTH_ROOTS, EARTH_TAILS],
   kryllian: [KRYLL_ROOTS, KRYLL_TAILS],
+  metamoran: [METAMORAN_ROOTS, METAMORAN_TAILS],
+  vezrin: [VEZRIN_ROOTS, VEZRIN_TAILS],
+  driftkin: [DRIFTKIN_ROOTS, DRIFTKIN_TAILS],
   other: [EARTH_ROOTS, EARTH_TAILS],
 };
 

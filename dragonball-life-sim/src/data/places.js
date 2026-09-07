@@ -29,6 +29,8 @@ export const PLACES = [
   { id: 'yardrat', name: 'Planet Yardrat', planet: 'yardrat', danger: 2, training: 2.1, tags: ['spirit', 'teachers', 'quiet'], desc: 'Small people, enormous techniques, and an unshakeable calm about all of it.' },
   { id: 'cereal', name: 'Planet Cereal', planet: 'cereal', danger: 3, training: 1.4, tags: ['ruins', 'dragonballs', 'farm', 'conquered'], desc: 'Ruins, dust, longgrain in the fields nobody has taken yet, and a dragon nobody outside the system has heard of.' },
   { id: 'kryllos', name: 'Kryllos', planet: 'kryllos', danger: 4, training: 1.6, tags: ['wild', 'hivekind', 'civilised'], desc: 'Red dust and hive-mounds to the horizon. Every Kryllian you meet already knows you are here.' },
+  { id: 'metamor', name: 'Planet Metamor', planet: 'metamor', danger: 1, training: 1.3, tags: ['peaceful', 'farm', 'teachers'], desc: 'Terraced farmland and a training ground shaped like two facing footprints, worn smooth by centuries of the same dance.' },
+  { id: 'vezra', name: 'Vezra', planet: 'vezra', danger: 1, training: 1.5, tags: ['spirit', 'quiet', 'teachers'], desc: 'Crystal forests that hum faintly in the wind. Nobody here has ever successfully lied to anyone else.' },
   { id: 'verdana', name: 'The Verdana Concourse', planet: 'verdana', danger: 2, training: 1.1, tags: ['urban', 'civilised', 'jobs', 'tournament'], desc: 'A trade city grown into a jungle canopy. A dozen species, one currency board, and no questions asked.' },
   { id: 'coldrift', name: 'Coldrift Mining Colony', planet: 'coldrift', danger: 5, training: 1.7, tags: ['imperial', 'jobs', 'highgrav', 'cold'], desc: 'Ice, crystal dust, and a quota that does not care how many shifts you have already worked.' },
   { id: 'kai_planet', name: "King Kai's Planet", planet: 'otherworld', danger: 2, training: 3.5, tags: ['divine', 'otherworld', 'highgrav', 'mentor'], desc: 'Ten times gravity on a rock the size of a football pitch, with a monkey and a cricket.' },
@@ -49,6 +51,7 @@ export const PLACES = [
   { id: 'universe11', name: 'Nikoji', planet: 'u11_world', danger: 7, training: 2.2, tags: ['u11', 'lawful', 'civilised'], desc: 'Universe 11. Everybody here is on duty, and the training is done in formation.' },
   { id: 'universe10', name: 'Bell', planet: 'u10_world', danger: 5, training: 2.0, tags: ['u10', 'devout', 'civilised'], desc: 'Universe 10. Strength as worship, and a god in the stands taking notes.' },
   { id: 'tournament_u6', name: 'World of Void Arena', planet: 'void', danger: 6, training: 1.0, tags: ['tournament', 'u6'], desc: 'A neutral ring between universes, with gods in the stands.' },
+  { id: 'driftkin_fleet', name: 'The Driftkin Fleet', planet: 'void', danger: 3, training: 1.4, tags: ['wild', 'nomadic', 'ships'], desc: 'A few hundred linked hulls, none of them younger than a century, going wherever the last vote decided.' },
 ];
 
 export const PLACE_BY_ID = Object.fromEntries(PLACES.map((p) => [p.id, p]));
