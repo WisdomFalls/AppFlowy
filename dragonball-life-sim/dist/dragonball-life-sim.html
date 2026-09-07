@@ -2000,7 +2000,20 @@ const RACE_BY_ID = Object.fromEntries(RACES.map((r) => [r.id, r]));
 // only the races a life can actually begin as; makeChild() still routes to
 // every hybrid here the moment the right pairing happens in play. hidden
 // races (a tamed animal's data shape, not a species) never belong here either.
-const CREATABLE_RACES = RACES.filter((r) => !r.hybrid && !r.hidden);
+//
+// Past that, fresh character creation is deliberately capped to a fixed
+// core roster: Saiyan, Human, Frost Demon (Frostkin), Namekian, Majin,
+// Android, Bio-Android. Every other full race in RACES.js - Shinjin,
+// Tuffle, Yardratian, Cerealian, Kryllian, and anything added after this
+// line - exists for NPCs, canon casts, and the universe's population only,
+// never as something to start a life as. beginLegacy() (taking over an
+// heir's life) is not creation and is not filtered by this: a half-Saiyan,
+// quarter-Android, quarter-Majin grandchild is playable the moment you
+// inherit their life, whatever race that turns out to be.
+const CORE_PLAYABLE_RACE_IDS = new Set([
+  'saiyan', 'earthling', 'frostdemon', 'namekian', 'majin', 'android', 'bioandroid',
+]);
+const CREATABLE_RACES = RACES.filter((r) => !r.hybrid && !r.hidden && CORE_PLAYABLE_RACE_IDS.has(r.id));
 
 function getRace(id) {
   return RACE_BY_ID[id] || RACE_BY_ID.earthling;
