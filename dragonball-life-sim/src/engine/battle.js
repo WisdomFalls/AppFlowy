@@ -181,6 +181,7 @@ export function createBattle(state, rng, opts = {}) {
     techniques: spec.techniques || [],
     forms: spec.forms || [],
     restraint: opts.stakes === 'spar' ? (spec.restraint ?? 1) : 1,
+    mastery: spec.mastery || null,
     raceId: spec.raceId || 'other',
     infiniteStamina: spec.raceId === 'android',
     regenerates: ['namekian', 'majin', 'bioandroid'].includes(spec.raceId),
@@ -583,9 +584,14 @@ function foeTurn(state, battle, rng, actor) {
   const lines = [];
   const hurt = them.hp / them.hpMax;
   const losing = ratioOf(them, me, battle) < 0.8;
+  // Some people do not wait until they are losing to transform - a proud or
+  // cheerful fighter in a spar (nothing on the line) is often just glad of
+  // the excuse to show somebody what they can do.
+  const showingOff = actor === battle.them && battle.stakes === 'spar' && battle.round <= 3
+    && ['proud', 'cheerful'].includes(them.voice) && rng.chance(0.3);
 
-  // Escalate: transform when hurt or outmatched.
-  if (them.forms.length && !them.form && (hurt < 0.6 || losing) && rng.chance(0.55)) {
+  // Escalate: transform when hurt, outmatched, or just showing off.
+  if (them.forms.length && !them.form && (hurt < 0.6 || losing || showingOff) && rng.chance(0.55)) {
     const form = them.forms
       .map((id) => getTransformation(id))
       .filter(Boolean)
@@ -593,7 +599,9 @@ function foeTurn(state, battle, rng, actor) {
     if (form && them.ki > form.drain * 3) {
       them.form = form.id;
       them.formName = form.name;
-      lines.push(`${them.name} transforms. ${form.desc}`);
+      lines.push(showingOff && !losing && hurt >= 0.6
+        ? `${them.name} grins and transforms, entirely unprompted. ${form.desc}`
+        : `${them.name} transforms. ${form.desc}`);
       return lines;
     }
   }
@@ -984,6 +992,13 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
     // looking at. This is what makes being surrounded actually dangerous.
     for (const foe of standingFoes(battle)) {
       lines.push(...foeTurn(state, battle, rng, foe));
+      // Time spent in a form works on them too - tracked per foe so a
+      // spar partner who is keen on maintaining a form gets more efficient
+      // with it the same way you do.
+      if (foe.form) {
+        foe.formHeldRounds = foe.formHeldRounds || {};
+        foe.formHeldRounds[foe.form] = (foe.formHeldRounds[foe.form] || 0) + 1;
+      }
       if (battle.over) return { lines, over: true, outcome: battle.outcome };
       if (me.hp <= 0) break;
     }
@@ -1215,6 +1230,20 @@ export function battleAftermath(state, rng, battle, opts = {}) {
     if (gain >= 3) {
       const form = getTransformation(formId);
       lines.push(`${form ? form.name : 'The form'} sits better on you than it did this morning.`);
+    }
+  }
+
+  // The same wearing-in works on whoever you fought, if they are a real NPC
+  // and not a one-off generated opponent - somebody keen on maintaining a
+  // form gets more efficient with it whether or not they are the one you are
+  // playing.
+  for (const foe of (battle.squad || [battle.them])) {
+    if (!foe.formHeldRounds) continue;
+    const npcId = (foe.ref && foe.ref.npcId) || null;
+    const npc = npcId ? state.npcs[npcId] : null;
+    if (!npc) continue;
+    for (const [formId, rounds] of Object.entries(foe.formHeldRounds)) {
+      trainMastery(npc, formId, Math.min(9, rounds * 0.5));
     }
   }
 

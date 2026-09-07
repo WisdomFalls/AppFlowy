@@ -425,7 +425,7 @@ export const SOCIAL_ACTIONS = [
       battle: {
         foe: {
           name: npc.name, power: npcFightPower(rng, npc), npcId: npc.id, raceId: npc.raceId,
-          techniques: npc.techniques || [], forms: npc.transformations || [],
+          techniques: npc.techniques || [], forms: npc.transformations || [], mastery: npc.formMastery || {},
         },
         stakes: 'lethal', reason: 'duel',
         context: { reason: 'duel', npcId: npc.id },
@@ -444,7 +444,7 @@ export const SOCIAL_ACTIONS = [
         foe: {
           name: npc.name, power: npcFightPower(rng, npc), npcId: npc.id, raceId: npc.raceId,
           techniques: npc.techniques || [], forms: npc.transformations || [],
-          restraint: npc.sparRestraint ?? 1,
+          restraint: npc.sparRestraint ?? 1, mastery: npc.formMastery || {},
         },
         stakes: 'spar', reason: 'spar',
         context: { reason: 'spar', npcId: npc.id },
