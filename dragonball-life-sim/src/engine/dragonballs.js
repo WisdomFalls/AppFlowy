@@ -105,22 +105,40 @@ export function surveyPlanet(state, rng, planet) {
   };
 }
 
-/** Begin a search on the world you are standing on. */
+/**
+ * Begin a search on the world you are standing on. This is the whole
+ * minigame in one action - what the radar can tell you before committing
+ * (how many signals this world actually has) used to be a separate "Sweep"
+ * action a player had to run first; there is no reason searching for one
+ * shouldn't also report what a sweep would have.
+ */
 export function startHunt(state, rng, planet) {
   ensureBallSet(state, rng);
   const candidates = ballsOn(state, planet);
   const hasRadar = state.character.items.includes('dragon_radar');
   const scouter = state.character.items.includes('scouter');
 
+  // A radar reads the whole world at once - every signal on it gets marked
+  // located, not just the one you end up chasing this trip.
+  if (hasRadar) {
+    for (const ball of state.world.ballSet.balls) {
+      if (!ball.found && ball.planet === planet) ball.surveyed = true;
+    }
+  }
+
   const pings = (hasRadar ? 6 : 3)
     + (scouter ? 1 : 0)
     + Math.floor((state.character.stats.intellect || 40) / 40);
 
   if (!candidates.length) {
-    return { empty: true, planet, pings: 0, pingsLeft: 0, revealed: [], message: 'There is nothing on this world to find.' };
+    const message = hasRadar
+      ? 'The radar is flat across the whole world. Nothing here.'
+      : 'Nobody here has heard of anything like it. There is nothing on this world to find.';
+    return { empty: true, planet, pings: 0, pingsLeft: 0, revealed: [], message };
   }
 
   const target = rng.pick(candidates);
+  const countLine = candidates.length === 1 ? 'One signal on this world.' : `${candidates.length} signals on this world.`;
   return {
     empty: false,
     planet,
@@ -135,7 +153,7 @@ export function startHunt(state, rng, planet) {
     found: false,
     over: false,
     message: hasRadar
-      ? `The radar has a fix on ${target.region}. Narrow it down.`
+      ? `${countLine} The radar has a fix on ${target.region}. Narrow it down.`
       : `Somebody swears there is one in ${target.region}. You have no radar, so this is mostly walking.`,
   };
 }

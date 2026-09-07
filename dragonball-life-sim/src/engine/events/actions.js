@@ -24,7 +24,7 @@ import { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel,
   limitFor, usedThisYear, trainingRoomLeft } from '../economy.js';
 import { makeNpc, bondScore, relationLabel } from '../npc.js';
 import { canonAvailable, canonPower, canonPlace, canonUniverse } from '../../data/canon.js';
-import { ensureBallSet, ballsHeld, startHunt, surveyPlanet, ballsAreInert, summonReady } from '../dragonballs.js';
+import { ballsHeld, startHunt, ballsAreInert, summonReady } from '../dragonballs.js';
 import { startTrial, STAT_TRIALS, TRIAL_KINDS, getMastery, masteryEffect, inventForm } from '../trials.js';
 import { createTournament, autoRunTournament, settle } from '../tournament.js';
 import { travelOptions, travelTo, actOnWorld, standingOn } from '../worlds.js';
@@ -426,23 +426,8 @@ export const ACTIONS = [
 
   // ------------------------------------------------------------------ world
   {
-    id: 'survey_world', maxPerYear: 3, minMaturity: 7, tooYoung: 'You would not know what you were looking at.', slots: 0, name: 'Sweep for Dragon Balls', cat: 'world',
-    desc: 'Check whether this world has anything worth searching for.',
-    available: (s) => !s.character.inAfterlife && !ballsAreInert(s),
-    run: (s, rng) => {
-      ensureBallSet(s, rng);
-      const planet = getPlace(s.character.placeId).planet;
-      const survey = surveyPlanet(s, rng, planet);
-      // Sweeping also confirms which of your marked balls are on this world.
-      for (const ball of s.world.ballSet.balls) {
-        if (!ball.found && ball.planet === planet && s.character.items.includes('dragon_radar')) ball.surveyed = true;
-      }
-      return { text: survey.hint };
-    },
-  },
-  {
     id: 'hunt_dragonball', maxPerYear: 3, minMaturity: 9, tooYoung: 'You cannot cross a continent on your own yet.', slots: 2, name: 'Search for a Dragon Ball', cat: 'world',
-    desc: 'Narrow down a signal square by square. A radar makes this survivable.',
+    desc: 'One search, one minigame - a radar reads the whole world and reports what it finds before narrowing down a signal square by square.',
     available: (s) => ballsHeld(s) < 7 && !s.character.inAfterlife && !ballsAreInert(s),
     run: (s, rng) => {
       const planet = getPlace(s.character.placeId).planet;
