@@ -167,7 +167,7 @@ registerEvents([
       {Your family says absolutely not|Nobody notices for weeks|You do not ask permission}.`,
     choices: (ctx, s) => [
       { id: 'keep', label: 'Keep it', effect: (c2, sl) => {
-        const pet = stranger(c2, { relation: 'pet', closeness: 80, respect: 20, minAge: 0, maxAge: 4, name: sl.beast.split(' ').slice(-1)[0] });
+        const pet = stranger(c2, { relation: 'pet', raceId: 'beast', closeness: 80, respect: 20, minAge: 0, maxAge: 4, name: sl.beast.split(' ').slice(-1)[0] });
         pet.name = c2.rng.pick(['Bee', 'Rusk', 'Pip', 'Grum', 'Nimbus', 'Radish', 'Tuffet', 'Onion', 'Blip']);
         pet.title = 'Companion';
         pet.power = c2.rng.int(1, 40);

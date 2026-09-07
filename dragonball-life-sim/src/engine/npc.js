@@ -201,7 +201,7 @@ function pickRaceFor(rng, opts) {
     cerealian: 1.5,
     kryllian: tags.includes('hivekind') ? 70 : 0.5,
   };
-  return rng.weighted(RACES.map((r) => r.id), (id) => weights[id] ?? 1);
+  return rng.weighted(RACES.filter((r) => !r.hidden).map((r) => r.id), (id) => weights[id] ?? 1);
 }
 
 /** Wrap a canon character as an NPC in the player's life. */

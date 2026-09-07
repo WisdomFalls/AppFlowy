@@ -360,6 +360,33 @@ export const RACES = [
     startingTechniques: [],
     notes: 'The hive knows what you know. Most Kryllians find that a comfort. You may not.',
   },
+  // Not a species a life can begin as or grow into - a data shape for
+  // whatever followed you home as a child (child_animal, childhood.js).
+  // Before this existed, a tamed animal had no race of its own and fell
+  // through to makeNpc()'s normal weighted pick over every playable
+  // species, which is how a wolf that followed you home could quietly
+  // become a Saiyan. hidden keeps it out of both character creation and
+  // the pool ordinary NPCs are drawn from.
+  {
+    id: 'beast', name: 'Animal', short: 'Animal', hidden: true,
+    sexes: ['male', 'female'],
+    blurb: 'Whatever followed you home. Not a fighter, not a person, still yours.',
+    homeworlds: [],
+    base: { strength: 45, speed: 55, technique: 5, kiControl: 5, durability: 45, intellect: 10, charisma: 30, discipline: 20 },
+    growth: { power: 1.0, technique: 0.2, kiControl: 0.2, discipline: 0.3 },
+    startPower: [1, 5],
+    lifespan: [8, 20],
+    agingRate: 1.4,
+    maturityRate: 2.0,
+    appetite: 1.2,
+    perks: [],
+    transformLadder: 'beast',
+    naming: 'other',
+    tags: ['animal'],
+    hairColours: ['brown', 'black', 'white', 'grey', 'orange'],
+    startingTechniques: [],
+    notes: 'Loyal, occasionally enormous, never going to hold a conversation.',
+  },
 ];
 
 export const RACE_BY_ID = Object.fromEntries(RACES.map((r) => [r.id, r]));
@@ -367,8 +394,9 @@ export const RACE_BY_ID = Object.fromEntries(RACES.map((r) => [r.id, r]));
 // Half-breeds are what happens when two species meet, not a starting point -
 // nobody is born a Half-Saiyan by choosing it on a menu. Creation offers
 // only the races a life can actually begin as; makeChild() still routes to
-// every hybrid here the moment the right pairing happens in play.
-export const CREATABLE_RACES = RACES.filter((r) => !r.hybrid);
+// every hybrid here the moment the right pairing happens in play. hidden
+// races (a tamed animal's data shape, not a species) never belong here either.
+export const CREATABLE_RACES = RACES.filter((r) => !r.hybrid && !r.hidden);
 
 export function getRace(id) {
   return RACE_BY_ID[id] || RACE_BY_ID.earthling;
