@@ -10396,6 +10396,8 @@ const VOICE = {
     losing: ['"I am not finished."', '"You have not won anything yet."', 'They will not go down and will not say why.'],
     insulted: ['"Do not do that." Their voice has changed. "Do not hold back on me."', '"I know what you are doing. Stop it."'],
     beaten: ['"...Fine. You were better."', 'They laugh, which is somehow worse.'],
+    fleeing: ['"This is not a retreat." It plainly is.', 'They will not say the word, but they are already gone.'],
+    caught: ['"...Fine. Again, then."', 'They stop running like it never happened.'],
   },
   cheerful: {
     form: ['"Whoa! What is that one?"', '"That is amazing. Can you teach me?"', 'They are grinning at it.'],
@@ -10404,6 +10406,8 @@ const VOICE = {
     losing: ['"I am not done yet!"', '"Just getting warmed up."'],
     insulted: ['"You are going easy on me. Do not do that, it is boring."'],
     beaten: ['"That was great. Let us do it again some time."'],
+    fleeing: ['"Okay, nope, bye!"', '"Rain check!" They are already three streets away.'],
+    caught: ['"Oh, come ON."', '"Worth a try!" They do not sound sorry.'],
   },
   cruel: {
     form: ['"How quaint."', '"Do you think that changes anything?"', 'They look bored.'],
@@ -10412,6 +10416,8 @@ const VOICE = {
     losing: ['"This is not possible."', '"You are nothing. You are NOTHING."'],
     insulted: ['"Restraint? From you?" They are furious.'],
     beaten: ['"This is not over. It is never over."'],
+    fleeing: ['"You have not earned the right to chase me." They go anyway.', '"Remember this the next time you think you have won something."'],
+    caught: ['"Get OFF —" It does not help them.', 'They come up swinging, which tells you everything.'],
   },
   professional: {
     form: ['They note it and adjust.', '"Interesting. Not enough."'],
@@ -10420,6 +10426,8 @@ const VOICE = {
     losing: ['They stop talking entirely.'],
     insulted: ['"Fight properly or do not fight."'],
     beaten: ['"Noted." They mean it.'],
+    fleeing: ['"This engagement is no longer favourable." They are gone before they finish the sentence.', 'No parting line. Just the decision, already made.'],
+    caught: ['"Acceptable." They reset their stance and nothing else.', 'They do not waste breath on it.'],
   },
   frightened: {
     form: ['"What ARE you?"', 'They take a step back and do not know they did.'],
@@ -10428,6 +10436,8 @@ const VOICE = {
     losing: ['"Wait — wait, listen —"'],
     insulted: ['"Why are you playing with me?"'],
     beaten: ['They are already apologising.'],
+    fleeing: ['"I am sorry, I am so sorry —" They are not looking where they are going.', 'No line at all. Just gone.'],
+    caught: ['"Please —" It comes out too fast to be a real word.', 'Whatever fight was left in them was already spent on running.'],
   },
 };
 
@@ -10448,6 +10458,11 @@ const REPLIES = [
   { id: 'respect', label: 'Give them their due', text: '"You are better than they said."', effect: { theirRage: -10, myFocus: 4 } },
   { id: 'warn', label: 'Warn them off', text: '"Walk away. I am asking once."', effect: { theirRage: -6, surrender: 0.12 } },
   { id: 'silent', label: 'Say nothing', text: '', effect: { myFocus: 6 } },
+  // Sparring words, not fighting words - only means anything against
+  // somebody who was actually holding back, and only lands as a request
+  // between people who are not trying to kill each other.
+  { id: 'demand_full', label: 'Tell them to stop holding back', text: '"All of it. Right now."',
+    effect: { theirRage: 8, dropRestraint: true } },
 ];
 
 const STANCES = {
@@ -11008,7 +11023,7 @@ function foeTurn(state, battle, rng, actor) {
         - Math.log10(Math.max(1, ratioOf(me, them, battle))) * 0.15, 0.05, 0.95);
       if (rng.chance(chance)) {
         battle.foeFleeing = true;
-        lines.push(rng.pick([
+        lines.push(voiceLine(battle, rng, 'fleeing') || rng.pick([
           `${them.name} breaks off. This is not a fight they can win, and they know it.`,
           `${them.name} throws up a screen of light and is gone from where they stood.`,
           `${them.name} decides, all at once, that this is over. They run.`,
@@ -11145,6 +11160,15 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
       if (e.surrender && them.hp / them.hpMax < 0.4 && rng.chance(e.surrender * 3)) {
         lines.push(`${them.name} stops. "...All right. All right."`);
         return { lines, over: true, outcome: finish(state, battle, rng, 'won').outcome };
+      }
+      // Only means anything against somebody who was actually pulling
+      // punches, and only in a fight where "stop holding back" is a request
+      // rather than something they were already forced past.
+      if (e.dropRestraint && battle.stakes === 'spar' && (them.restraint ?? 1) < 1) {
+        them.restraint = 1;
+        lines.push(voiceLine(battle, rng, 'insulted') || `${them.name} does not argue. Whatever they were keeping back, they stop.`);
+      } else if (e.dropRestraint) {
+        lines.push(`${them.name} was not holding anything back to begin with.`);
       }
     }
   } else if (actionId.startsWith('restraint:')) {
@@ -11295,6 +11319,8 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
         'You close the gap before they clear it. They are still here.',
         'You catch up to them mid-stride and the fight is not over after all.',
       ]));
+      const said = voiceLine(battle, rng, 'caught');
+      if (said) lines.push(said);
       const res = strike(me, them, battle, rng, { base: 22, hit: 0.95, stagger: 0.4 });
       lines.push(describeStrike(res, 'You', them.name, 'a caught-them-cold strike', rng, true));
       skipFoe = true;
