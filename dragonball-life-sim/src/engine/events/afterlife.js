@@ -15,7 +15,7 @@ import { generateFullName } from '../../data/names.js';
 import { numberish } from '../text.js';
 import { createTournament, autoRunTournament, settle } from '../tournament.js';
 import { TIMELINE } from '../../data/timeline.js';
-import { livingNpcs } from '../state.js';
+import { livingNpcs, currentYear } from '../state.js';
 
 function canonAliveNow(ctx, c) {
   return canonAlive(c, ctx.year);
@@ -536,7 +536,7 @@ registerEvents([
  * hit - fast and dramatic for some, slow and barely noticeable for others,
  * both compounding with how long they have actually been down here.
  */
-function hellPower(record, year) {
+export function hellPower(record, year) {
   const years = Math.max(0, year - record.year);
   const escalation = ESCALATIONS[record.canonId];
   if (escalation) {
@@ -572,6 +572,28 @@ const ESCALATIONS = {
 
 function endedList(ctx) {
   return (ctx.state.world.ended || []).filter((e) => e.name);
+}
+
+/** The Hell record for somebody you killed, if there is one. */
+export function findEndedRecord(state, npc) {
+  if (!npc) return null;
+  return (state.world.ended || []).find((e) =>
+    (npc.id && e.npcId === npc.id) || (npc.canonId && e.canonId === npc.canonId));
+}
+
+/**
+ * What a dead NPC's power actually is right now, not what it was the
+ * instant they died. Their dossier used to just show npc.power forever -
+ * frozen at whatever it read on the day you killed them - even though
+ * they_are_here has them training in Hell and escalating that whole time.
+ * Falls back to the frozen figure for anyone with no Hell record (died of
+ * something other than you), since there is nothing tracking their afterlife.
+ */
+export function deadPowerNow(state, npc) {
+  if (!npc || npc.alive) return npc ? npc.power : 0;
+  const rec = findEndedRecord(state, npc);
+  if (!rec) return npc.power;
+  return hellPower(rec, currentYear(state));
 }
 
 registerEvents([

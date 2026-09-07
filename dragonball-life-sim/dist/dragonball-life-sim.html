@@ -21936,7 +21936,7 @@ const { generateFullName } = __mod_data_names_js;
 const { numberish } = __mod_engine_text_js;
 const { createTournament, autoRunTournament, settle } = __mod_engine_tournament_js;
 const { TIMELINE } = __mod_data_timeline_js;
-const { livingNpcs } = __mod_engine_state_js;
+const { livingNpcs, currentYear } = __mod_engine_state_js;
 
 function canonAliveNow(ctx, c) {
   return canonAlive(c, ctx.year);
@@ -22495,6 +22495,28 @@ function endedList(ctx) {
   return (ctx.state.world.ended || []).filter((e) => e.name);
 }
 
+/** The Hell record for somebody you killed, if there is one. */
+function findEndedRecord(state, npc) {
+  if (!npc) return null;
+  return (state.world.ended || []).find((e) =>
+    (npc.id && e.npcId === npc.id) || (npc.canonId && e.canonId === npc.canonId));
+}
+
+/**
+ * What a dead NPC's power actually is right now, not what it was the
+ * instant they died. Their dossier used to just show npc.power forever -
+ * frozen at whatever it read on the day you killed them - even though
+ * they_are_here has them training in Hell and escalating that whole time.
+ * Falls back to the frozen figure for anyone with no Hell record (died of
+ * something other than you), since there is nothing tracking their afterlife.
+ */
+function deadPowerNow(state, npc) {
+  if (!npc || npc.alive) return npc ? npc.power : 0;
+  const rec = findEndedRecord(state, npc);
+  if (!rec) return npc.power;
+  return hellPower(rec, currentYear(state));
+}
+
 registerEvents([
   {
     id: 'they_are_here', tags: ['afterlife', 'villain', 'consequence'], weight: 46,
@@ -22758,6 +22780,7 @@ function livingWorldReactions(ctx) {
   relate(ctx, spouse, { closeness: 10, trust: 8 });
   return [line];
 }
+  return { hellPower, findEndedRecord, deadPowerNow };
 })();
 
 /* ==== engine/conversation.js ==== */
@@ -26126,6 +26149,7 @@ const { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, ba
 const { costLabel, limitFor, usedThisYear, yearCapacity } = __mod_engine_economy_js;
 const { ballsHeld, ballManifest, pingSquare, GRID } = __mod_engine_dragonballs_js;
 const { resolveTrial, getMastery } = __mod_engine_trials_js;
+const { deadPowerNow } = __mod_engine_events_afterlife_js;
 const { FORMATS, createTournament, roundName, playerMatch, playerOpponent, resolveOtherMatches, recordPlayerResult, matchBattleSpec, bracketSummary, standings, payout, placementLine, describeField, settle } = __mod_engine_tournament_js;
 const { playTrial } = __mod_ui_trialui_js;
 const { setAmbienceEnabled, isAmbienceEnabled, setMood } = __mod_ui_ambience_js;
@@ -26876,8 +26900,12 @@ function panelPerson(npcId) {
 
   body.appendChild(el('div', 'group-label', 'What you know'));
   // Only what you can actually read. Knowing somebody for years tells you they
-  // are dangerous; it does not tell you a figure.
-  const read = readPower(GAME, npc.power);
+  // are dangerous; it does not tell you a figure. A dead NPC you personally
+  // ended is not frozen where you left them either - they_are_here has them
+  // training in Hell the whole time, so their dossier reads the same
+  // escalating number that encounter would actually throw at you.
+  const displayPower = npc.alive ? npc.power : deadPowerNow(GAME, npc);
+  const read = readPower(GAME, displayPower);
   const powerRead = read.known
     ? `${read.text} (${read.how})`
     : read.broke ? 'Your scouter did not survive the reading.'

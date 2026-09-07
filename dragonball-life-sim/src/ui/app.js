@@ -46,6 +46,7 @@ import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, b
 import { costLabel, limitFor, usedThisYear, yearCapacity } from '../engine/economy.js';
 import { ballsHeld, ballManifest, pingSquare, GRID } from '../engine/dragonballs.js';
 import { resolveTrial, getMastery } from '../engine/trials.js';
+import { deadPowerNow } from '../engine/events/afterlife.js';
 import {
   FORMATS, createTournament, roundName, playerMatch, playerOpponent,
   resolveOtherMatches, recordPlayerResult, matchBattleSpec, bracketSummary,
@@ -800,8 +801,12 @@ function panelPerson(npcId) {
 
   body.appendChild(el('div', 'group-label', 'What you know'));
   // Only what you can actually read. Knowing somebody for years tells you they
-  // are dangerous; it does not tell you a figure.
-  const read = readPower(GAME, npc.power);
+  // are dangerous; it does not tell you a figure. A dead NPC you personally
+  // ended is not frozen where you left them either - they_are_here has them
+  // training in Hell the whole time, so their dossier reads the same
+  // escalating number that encounter would actually throw at you.
+  const displayPower = npc.alive ? npc.power : deadPowerNow(GAME, npc);
+  const read = readPower(GAME, displayPower);
   const powerRead = read.known
     ? `${read.text} (${read.how})`
     : read.broke ? 'Your scouter did not survive the reading.'
