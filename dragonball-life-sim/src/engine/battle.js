@@ -18,6 +18,8 @@ import { damageGear, lootFromDefeated } from './inventory.js';
 import { spreadWord, DEED_SCALE } from './settlement.js';
 import { maim } from './body.js';
 import { makeCanonNpc } from './npc.js';
+import { getCanon } from '../data/canon.js';
+import { getFaction } from '../data/factions.js';
 
 /**
  * What people say mid-fight. Nobody in this setting fights silently: they
@@ -982,6 +984,44 @@ export function describeMatchup(battle) {
   return 'This is suicide.';
 }
 
+
+/**
+ * How deserving whoever you just beat was, from -100 (a genuine monster) to
+ * +100 (an innocent, or actively lawful). Killing a Frieza Force grunt and
+ * killing a Galactic Patrol officer used to cost the same flat karma - this
+ * is what lets them not.
+ */
+export function moralAlignmentOf(state, battle) {
+  const ctxInfo = battle.context || {};
+  if (ctxInfo.canonId) {
+    const canon = getCanon(ctxInfo.canonId);
+    if (canon && canon.tags) {
+      if (canon.tags.includes('villain')) return -70;
+      if (canon.tags.includes('hero') || canon.tags.includes('ally') || canon.tags.includes('mentor')) return 60;
+    }
+  }
+  if (ctxInfo.factionId) {
+    const faction = getFaction(ctxInfo.factionId);
+    if (faction) return clamp(faction.alignment, -100, 100);
+  }
+  const npc = ctxInfo.npcId ? state.npcs[ctxInfo.npcId] : null;
+  if (npc && npc.relation === 'rival') return -10;
+  // An ordinary stranger, no case made against them either way - killing
+  // them reads closer to murder than to justice.
+  return 20;
+}
+
+/**
+ * What killing whoever you just beat should cost (or, rarely, earn) in
+ * karma. Scaled off moralAlignmentOf() so ridding the world of something
+ * genuinely evil barely registers - or reads as a mercy - while killing
+ * somebody with a real claim to being good costs a great deal more than
+ * killing a nobody does.
+ */
+export function killKarmaDelta(state, battle) {
+  const alignment = moralAlignmentOf(state, battle);
+  return clamp(Math.round(-22 - alignment * 0.35), -55, 15);
+}
 
 /**
  * Actually kill whoever was downed in a lethal win: recorded to Hell's

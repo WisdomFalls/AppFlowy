@@ -42,7 +42,7 @@ import { worldManifest } from '../engine/worlds.js';
 import { factionsPresent } from '../data/factions.js';
 import { getPlanet } from '../data/planets.js';
 import { startSurvival, survivalActions, survivalTurn, survivalStatus, resolveTeamWish, RULES } from '../engine/survival.js';
-import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, finishLethalWin, STANCES } from '../engine/battle.js';
+import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, finishLethalWin, killKarmaDelta, moralAlignmentOf, STANCES } from '../engine/battle.js';
 import { costLabel, limitFor, usedThisYear, yearCapacity } from '../engine/economy.js';
 import { ballsHeld, ballManifest, pingSquare, GRID } from '../engine/dragonballs.js';
 import { resolveTrial, getMastery } from '../engine/trials.js';
@@ -2359,11 +2359,18 @@ function endBattle() {
 
   // Beating somebody is a decision point, not just a result.
   if (BATTLE.outcome === 'won' && BATTLE.stakes !== 'spar' && !BATTLE.noKilling) {
+    // Sparing something genuinely evil is a bigger act of mercy than
+    // sparing a nobody; killing something with a real claim to being good
+    // costs a lot more than killing a nobody does. Same alignment reading
+    // both buttons pull from, opposite in sign.
+    const alignment = moralAlignmentOf(GAME, BATTLE);
+
     const spare = el('button', 'bact');
     spare.type = 'button';
     spare.appendChild(el('span', 'bact-label', 'Let them live'));
     spare.addEventListener('click', () => {
-      GAME.character.karma = Math.min(100, GAME.character.karma + 8);
+      const spareGain = Math.max(3, Math.min(20, Math.round(8 + alignment * -0.15)));
+      GAME.character.karma = Math.min(100, GAME.character.karma + spareGain);
       pushBattleLines(['You leave them breathing. They will remember that, one way or the other.'], 'big');
       spare.remove();
       const kill = document.querySelector('.bact.kill');
@@ -2376,10 +2383,16 @@ function endBattle() {
     kill.appendChild(el('span', 'bact-label', 'Finish them'));
     kill.addEventListener('click', () => {
       const rng = getRng(GAME);
-      const lines = ['You finish it. Nobody argues with the result.', ...finishLethalWin(GAME, rng, BATTLE)];
+      const karmaDelta = killKarmaDelta(GAME, BATTLE);
+      const lines = [
+        karmaDelta > 0
+          ? 'You finish it. Whatever else that was, it was not a crime.'
+          : 'You finish it. Nobody argues with the result.',
+        ...finishLethalWin(GAME, rng, BATTLE),
+      ];
       saveRng(GAME, rng);
       BATTLE.killed = true;
-      GAME.character.karma = Math.max(-100, GAME.character.karma - 22);
+      GAME.character.karma = Math.max(-100, Math.min(100, GAME.character.karma + karmaDelta));
       pushBattleLines(lines, 'big');
       kill.remove();
       const s2 = document.querySelector('.bact:not(.wide):not(.kill)');

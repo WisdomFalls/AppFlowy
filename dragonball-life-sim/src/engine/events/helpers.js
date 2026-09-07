@@ -279,6 +279,11 @@ export function offerBattle(ctx, foe, opts = {}) {
       npcId: opts.npcId || foe.npcId || null,
       canonId: opts.canonId || foe.canonId || null,
       timelineId: opts.timelineId || null,
+      // A caller-supplied context (factionId, and anything else a future
+      // caller adds) used to be silently discarded here, rebuilt from
+      // scratch with only the four fields above - which meant
+      // battle.context.factionId never actually existed downstream.
+      ...opts.context,
     },
   };
 
