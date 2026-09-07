@@ -15,7 +15,8 @@ import { getItem, ITEMS } from '../../data/items.js';
 import { liveShopStock, demandFor, isImportedHere, tradeRelationships } from '../market.js';
 import { buyItem, valueHere, hasItem } from '../inventory.js';
 import { topicsFor, converse } from '../conversation.js';
-import { homeOptions, settleHome, homeOf } from '../settlement.js';
+import { homeOptions, settleHome, homeOf, starshipOption, buildStarship, shipOf,
+  shipRoomOptions, addShipRoom, inviteAboard, sellStarship } from '../settlement.js';
 import { currencyFor, formatMoney, balance, priceIn, canAfford, debit } from '../../data/currency.js';
 import { CAREERS, getCareer, careersFor } from '../../data/jobs.js';
 import { getRace, hasPerk } from '../../data/races.js';
@@ -790,19 +791,62 @@ export const ACTIONS = [
     available: (s) => !s.character.inAfterlife,
     options: (s) => homeOptions(s).map((o) => ({
       id: o.id, label: o.label, hint: o.hint, disabled: !!o.disabled,
-    })),
+    })).concat(shipOf(s) ? [] : [(() => {
+      const o = starshipOption(s);
+      return { id: o.id, label: o.label, hint: o.hint, disabled: !!o.disabled };
+    })()]),
     run: (s, rng, params) => {
       const id = params && params.option;
       if (!id) return { text: 'You look at nothing in particular.' };
       // Building something you cannot design needs somebody who can.
       const helper = Object.values(s.npcs).find((n) => n.alive
         && (n.closeness || 0) > 40 && n.stats && n.stats.intellect >= 70);
+      if (id === 'starship') {
+        const engineer = helper || (Object.values(s.npcs).find((n) => n.alive && n.factionId === 'capsule_corp_co'));
+        const res = buildStarship(s, rng, engineer ? engineer.name : 'Capsule Corporation');
+        if (res.ok) {
+          fact(s, 'Commissioned a space-traveling home.', { type: 'property', weight: 9, tags: ['home', 'ship'] });
+          adjust(s, { happiness: 26 });
+          const moved = (res.movedIn || []).map((n) => n.name);
+          return { text: moved.length ? `${res.text} ${moved.join(', ')} move in without being asked.` : res.text };
+        }
+        return { text: res.text };
+      }
       const res = settleHome(s, rng, id, id.startsWith('build:') ? helper : null);
       if (res.ok) {
         fact(s, res.stolen ? `Took a house on ${getPlace(s.character.placeId).name}.`
           : `Settled on ${getPlace(s.character.placeId).name}.`,
         { type: 'property', weight: 7, tags: ['home'] });
         adjust(s, { happiness: res.stolen ? 6 : 18 });
+      }
+      return { text: res.text };
+    },
+  },
+  {
+    id: 'ship_room', maxPerYear: 3, minMaturity: 16, slots: 2, name: 'Work on the ship', cat: 'world',
+    desc: 'Add a room, or make an existing one better.',
+    available: (s) => !!shipOf(s),
+    options: (s) => shipRoomOptions(s).map((o) => ({ id: o.id, label: o.label, hint: o.hint, disabled: o.disabled })),
+    run: (s, rng, params) => {
+      const id = params && params.option;
+      if (!id) return { text: 'Nothing gets built today.' };
+      const res = addShipRoom(s, id);
+      if (res.ok) {
+        adjust(s, { happiness: res.upgraded ? 4 : 10 });
+        fact(s, res.text, { type: 'property', weight: 4, tags: ['home', 'ship'] });
+      }
+      return { text: res.text };
+    },
+  },
+  {
+    id: 'sell_ship', maxPerYear: 1, minMaturity: 16, slots: 1, name: 'Sell the ship', cat: 'world', danger: true,
+    desc: 'It stops being yours. There is no undoing this.',
+    available: (s) => !!shipOf(s),
+    run: (s) => {
+      const res = sellStarship(s);
+      if (res.ok) {
+        adjust(s, { happiness: -14 });
+        fact(s, 'Sold the ship.', { type: 'property', weight: 7, tags: ['home', 'ship'] });
       }
       return { text: res.text };
     },

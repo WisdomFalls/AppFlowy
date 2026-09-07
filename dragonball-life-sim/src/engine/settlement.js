@@ -8,7 +8,7 @@
 import { clamp } from './rng.js';
 import { getPlace, PLACES } from '../data/places.js';
 import { getPlanet, PLANETS } from '../data/planets.js';
-import { currencyFor, priceIn, canAfford, debit, formatMoney, balance } from '../data/currency.js';
+import { currencyFor, priceIn, canAfford, debit, credit, formatMoney, balance } from '../data/currency.js';
 import { numberish } from './text.js';
 
 // ------------------------------------------------------------------ homes
@@ -145,12 +145,145 @@ export function settleHome(state, rng, optionId, helperNpc) {
 export function homeBonus(state) {
   const home = homeOf(state);
   if (!home) return { comfort: 0, train: 1 };
-  const here = getPlace(state.character.placeId).planet === home.planet;
+  // A starship is not "somewhere" in the sense every other home is - the
+  // whole reason it costs what it does is that it does not sit on a planet
+  // waiting for you to come home to it.
+  const here = home.kind === 'starship' || getPlace(state.character.placeId).planet === home.planet;
   return {
     comfort: here ? home.comfort : Math.round(home.comfort * 0.25),
     train: here ? (home.train || 1) : 1,
     here,
   };
+}
+
+// ------------------------------------------------------------- space home
+
+// Rooms are not the whole ship - they are what turns "a hull that can fly"
+// into somewhere people actually want to be aboard. Bought and added one at
+// a time, same as any other renovation.
+export const SHIP_ROOMS = [
+  { id: 'quarters', name: 'Guest quarters', cost: 4000000, comfort: 6,
+    desc: 'Somewhere for the people you bring aboard to actually sleep.' },
+  { id: 'kitchen_dining', name: 'Kitchen and dining hall', cost: 6000000, comfort: 8,
+    desc: 'A place to eat that is not standing over a console.' },
+  { id: 'gravity_room', name: 'Gravity room', cost: 15000000, comfort: 4, train: 1.3,
+    desc: 'Training that does not care what planet you happen to be near.' },
+  { id: 'medbay', name: 'Medical bay', cost: 12000000, comfort: 4, heal: 12,
+    desc: 'Somewhere better than a senzu bean for the injuries that are not that simple.' },
+  { id: 'observatory', name: 'Observatory', cost: 5000000, comfort: 6,
+    desc: 'A window on the actual size of everything out here.' },
+];
+export const SHIP_ROOM_BY_ID = Object.fromEntries(SHIP_ROOMS.map((r) => [r.id, r]));
+
+export function shipOf(state) {
+  const home = state.character.home;
+  return home && home.kind === 'starship' ? home : null;
+}
+
+/** The one-time build: money, materials, and somebody who can actually do
+ * the engineering - a personal genius, or a company that does this for a
+ * living. Distinct from homeOptions()'s build/buy/take because a starship
+ * is never "self-built", however sharp you are. */
+export function starshipOption(state) {
+  const c = state.character;
+  const place = getPlace(c.placeId);
+  const cur = currencyFor(place.planet);
+  const price = priceIn(320000000, cur.id);
+  return {
+    id: 'starship', how: 'starship',
+    label: 'Commission a space-traveling home',
+    hint: `${formatMoney(price, cur.id)} in materials and engineering. It goes where you go.`,
+    price, currency: cur.id,
+    disabled: !!shipOf(state) || !canAfford(c, cur.id, price),
+  };
+}
+
+export function buildStarship(state, rng, engineerName) {
+  const c = state.character;
+  const place = getPlace(c.placeId);
+  const cur = currencyFor(place.planet);
+  const opt = starshipOption(state);
+  if (opt.disabled) {
+    return { ok: false, text: shipOf(state) ? 'You already have one.' : `That costs ${formatMoney(opt.price, cur.id)}. You are not there yet.` };
+  }
+  debit(c, cur.id, opt.price);
+  const family = Object.values(state.npcs || {}).filter((n) => n.alive
+    && ['spouse', 'child', 'parent'].includes(n.relation));
+  c.home = {
+    kind: 'starship', name: 'The ship', placeId: c.placeId, planet: place.planet,
+    comfort: 10, train: 1, since: c.birthYear + c.age, builtBy: engineerName || null,
+    rooms: [], occupants: family.map((n) => n.id),
+  };
+  return {
+    ok: true, built: true, movedIn: family,
+    text: engineerName
+      ? `${engineerName} signs off on it. It is not finished so much as it is finally ready to keep being finished - the hull holds, the drive answers, and everything else is a room you have not built yet.`
+      : 'The drive answers on the first attempt, which nobody involved expected. Everything else is a room you have not built yet.',
+  };
+}
+
+/** Adding, and re-adding (an upgrade pass) a room aboard the ship. */
+export function shipRoomOptions(state) {
+  const ship = shipOf(state);
+  if (!ship) return [];
+  const c = state.character;
+  const cur = currencyFor(getPlace(c.placeId).planet);
+  return SHIP_ROOMS.map((r) => {
+    const price = priceIn(r.cost, cur.id);
+    const have = ship.rooms.includes(r.id);
+    return {
+      id: r.id, room: r, price, currency: cur.id, have,
+      label: have ? `Renovate the ${r.name.toLowerCase()}` : `Add a ${r.name.toLowerCase()}`,
+      hint: `${formatMoney(price, cur.id)}. ${r.desc}`,
+      disabled: !canAfford(c, cur.id, price),
+    };
+  });
+}
+
+export function addShipRoom(state, roomId) {
+  const ship = shipOf(state);
+  const room = SHIP_ROOM_BY_ID[roomId];
+  if (!ship || !room) return { ok: false, text: 'Nothing to build that onto.' };
+  const c = state.character;
+  const cur = currencyFor(getPlace(c.placeId).planet);
+  const price = priceIn(room.cost, cur.id);
+  if (!canAfford(c, cur.id, price)) return { ok: false, text: `That costs ${formatMoney(price, cur.id)}. You do not have it.` };
+  debit(c, cur.id, price);
+  const already = ship.rooms.includes(roomId);
+  if (!already) ship.rooms.push(roomId);
+  ship.comfort += already ? Math.round(room.comfort * 0.4) : room.comfort;
+  if (room.train) ship.train = Math.max(ship.train || 1, room.train);
+  return {
+    ok: true, upgraded: already,
+    text: already
+      ? `The ${room.name.toLowerCase()} gets better, not new - worth having either way.`
+      : `The ${room.name.toLowerCase()}, added. ${room.desc}`,
+  };
+}
+
+/** Invite somebody aboard - family already lives here once it exists;
+ * everyone else has to actually be asked. */
+export function inviteAboard(state, npc) {
+  const ship = shipOf(state);
+  if (!ship) return { ok: false, text: 'There is nowhere to invite them to yet.' };
+  ship.occupants = ship.occupants || [];
+  if (ship.occupants.includes(npc.id)) return { ok: false, text: `${npc.name} already lives here.` };
+  ship.occupants.push(npc.id);
+  return { ok: true, text: `${npc.name} moves aboard.` };
+}
+
+/** Selling it is the end of owning one, not a downgrade - the price back is
+ * a fraction of everything ever put into it, rooms included. */
+export function sellStarship(state) {
+  const ship = shipOf(state);
+  if (!ship) return { ok: false, text: 'There is nothing to sell.' };
+  const c = state.character;
+  const cur = currencyFor(getPlace(c.placeId).planet);
+  const spent = priceIn(320000000, cur.id) + ship.rooms.reduce((n, id) => n + priceIn(SHIP_ROOM_BY_ID[id]?.cost || 0, cur.id), 0);
+  const refund = Math.round(spent * 0.35);
+  credit(c, cur.id, refund);
+  c.home = null;
+  return { ok: true, refund, text: `Scrapped, sold in pieces, or handed to somebody who wanted a project - either way, ${formatMoney(refund, cur.id)} for something that was, for a while, the whole point.` };
 }
 
 // ------------------------------------------------------------ reputation

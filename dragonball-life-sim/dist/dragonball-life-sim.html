@@ -9819,7 +9819,7 @@ const __mod_engine_settlement_js = (function () {
 const { clamp } = __mod_engine_rng_js;
 const { getPlace, PLACES } = __mod_data_places_js;
 const { getPlanet, PLANETS } = __mod_data_planets_js;
-const { currencyFor, priceIn, canAfford, debit, formatMoney, balance } = __mod_data_currency_js;
+const { currencyFor, priceIn, canAfford, debit, credit, formatMoney, balance } = __mod_data_currency_js;
 const { numberish } = __mod_engine_text_js;
 
 // ------------------------------------------------------------------ homes
@@ -9956,12 +9956,145 @@ function settleHome(state, rng, optionId, helperNpc) {
 function homeBonus(state) {
   const home = homeOf(state);
   if (!home) return { comfort: 0, train: 1 };
-  const here = getPlace(state.character.placeId).planet === home.planet;
+  // A starship is not "somewhere" in the sense every other home is - the
+  // whole reason it costs what it does is that it does not sit on a planet
+  // waiting for you to come home to it.
+  const here = home.kind === 'starship' || getPlace(state.character.placeId).planet === home.planet;
   return {
     comfort: here ? home.comfort : Math.round(home.comfort * 0.25),
     train: here ? (home.train || 1) : 1,
     here,
   };
+}
+
+// ------------------------------------------------------------- space home
+
+// Rooms are not the whole ship - they are what turns "a hull that can fly"
+// into somewhere people actually want to be aboard. Bought and added one at
+// a time, same as any other renovation.
+const SHIP_ROOMS = [
+  { id: 'quarters', name: 'Guest quarters', cost: 4000000, comfort: 6,
+    desc: 'Somewhere for the people you bring aboard to actually sleep.' },
+  { id: 'kitchen_dining', name: 'Kitchen and dining hall', cost: 6000000, comfort: 8,
+    desc: 'A place to eat that is not standing over a console.' },
+  { id: 'gravity_room', name: 'Gravity room', cost: 15000000, comfort: 4, train: 1.3,
+    desc: 'Training that does not care what planet you happen to be near.' },
+  { id: 'medbay', name: 'Medical bay', cost: 12000000, comfort: 4, heal: 12,
+    desc: 'Somewhere better than a senzu bean for the injuries that are not that simple.' },
+  { id: 'observatory', name: 'Observatory', cost: 5000000, comfort: 6,
+    desc: 'A window on the actual size of everything out here.' },
+];
+const SHIP_ROOM_BY_ID = Object.fromEntries(SHIP_ROOMS.map((r) => [r.id, r]));
+
+function shipOf(state) {
+  const home = state.character.home;
+  return home && home.kind === 'starship' ? home : null;
+}
+
+/** The one-time build: money, materials, and somebody who can actually do
+ * the engineering - a personal genius, or a company that does this for a
+ * living. Distinct from homeOptions()'s build/buy/take because a starship
+ * is never "self-built", however sharp you are. */
+function starshipOption(state) {
+  const c = state.character;
+  const place = getPlace(c.placeId);
+  const cur = currencyFor(place.planet);
+  const price = priceIn(320000000, cur.id);
+  return {
+    id: 'starship', how: 'starship',
+    label: 'Commission a space-traveling home',
+    hint: `${formatMoney(price, cur.id)} in materials and engineering. It goes where you go.`,
+    price, currency: cur.id,
+    disabled: !!shipOf(state) || !canAfford(c, cur.id, price),
+  };
+}
+
+function buildStarship(state, rng, engineerName) {
+  const c = state.character;
+  const place = getPlace(c.placeId);
+  const cur = currencyFor(place.planet);
+  const opt = starshipOption(state);
+  if (opt.disabled) {
+    return { ok: false, text: shipOf(state) ? 'You already have one.' : `That costs ${formatMoney(opt.price, cur.id)}. You are not there yet.` };
+  }
+  debit(c, cur.id, opt.price);
+  const family = Object.values(state.npcs || {}).filter((n) => n.alive
+    && ['spouse', 'child', 'parent'].includes(n.relation));
+  c.home = {
+    kind: 'starship', name: 'The ship', placeId: c.placeId, planet: place.planet,
+    comfort: 10, train: 1, since: c.birthYear + c.age, builtBy: engineerName || null,
+    rooms: [], occupants: family.map((n) => n.id),
+  };
+  return {
+    ok: true, built: true, movedIn: family,
+    text: engineerName
+      ? `${engineerName} signs off on it. It is not finished so much as it is finally ready to keep being finished - the hull holds, the drive answers, and everything else is a room you have not built yet.`
+      : 'The drive answers on the first attempt, which nobody involved expected. Everything else is a room you have not built yet.',
+  };
+}
+
+/** Adding, and re-adding (an upgrade pass) a room aboard the ship. */
+function shipRoomOptions(state) {
+  const ship = shipOf(state);
+  if (!ship) return [];
+  const c = state.character;
+  const cur = currencyFor(getPlace(c.placeId).planet);
+  return SHIP_ROOMS.map((r) => {
+    const price = priceIn(r.cost, cur.id);
+    const have = ship.rooms.includes(r.id);
+    return {
+      id: r.id, room: r, price, currency: cur.id, have,
+      label: have ? `Renovate the ${r.name.toLowerCase()}` : `Add a ${r.name.toLowerCase()}`,
+      hint: `${formatMoney(price, cur.id)}. ${r.desc}`,
+      disabled: !canAfford(c, cur.id, price),
+    };
+  });
+}
+
+function addShipRoom(state, roomId) {
+  const ship = shipOf(state);
+  const room = SHIP_ROOM_BY_ID[roomId];
+  if (!ship || !room) return { ok: false, text: 'Nothing to build that onto.' };
+  const c = state.character;
+  const cur = currencyFor(getPlace(c.placeId).planet);
+  const price = priceIn(room.cost, cur.id);
+  if (!canAfford(c, cur.id, price)) return { ok: false, text: `That costs ${formatMoney(price, cur.id)}. You do not have it.` };
+  debit(c, cur.id, price);
+  const already = ship.rooms.includes(roomId);
+  if (!already) ship.rooms.push(roomId);
+  ship.comfort += already ? Math.round(room.comfort * 0.4) : room.comfort;
+  if (room.train) ship.train = Math.max(ship.train || 1, room.train);
+  return {
+    ok: true, upgraded: already,
+    text: already
+      ? `The ${room.name.toLowerCase()} gets better, not new - worth having either way.`
+      : `The ${room.name.toLowerCase()}, added. ${room.desc}`,
+  };
+}
+
+/** Invite somebody aboard - family already lives here once it exists;
+ * everyone else has to actually be asked. */
+function inviteAboard(state, npc) {
+  const ship = shipOf(state);
+  if (!ship) return { ok: false, text: 'There is nowhere to invite them to yet.' };
+  ship.occupants = ship.occupants || [];
+  if (ship.occupants.includes(npc.id)) return { ok: false, text: `${npc.name} already lives here.` };
+  ship.occupants.push(npc.id);
+  return { ok: true, text: `${npc.name} moves aboard.` };
+}
+
+/** Selling it is the end of owning one, not a downgrade - the price back is
+ * a fraction of everything ever put into it, rooms included. */
+function sellStarship(state) {
+  const ship = shipOf(state);
+  if (!ship) return { ok: false, text: 'There is nothing to sell.' };
+  const c = state.character;
+  const cur = currencyFor(getPlace(c.placeId).planet);
+  const spent = priceIn(320000000, cur.id) + ship.rooms.reduce((n, id) => n + priceIn(SHIP_ROOM_BY_ID[id]?.cost || 0, cur.id), 0);
+  const refund = Math.round(spent * 0.35);
+  credit(c, cur.id, refund);
+  c.home = null;
+  return { ok: true, refund, text: `Scrapped, sold in pieces, or handed to somebody who wanted a project - either way, ${formatMoney(refund, cur.id)} for something that was, for a while, the whole point.` };
 }
 
 // ------------------------------------------------------------ reputation
@@ -10026,7 +10159,7 @@ const DEED_SCALE = {
   god_beaten: 9000,
   universe: 40000,
 };
-  return { HOME_KINDS, homeOf, homeOptions, settleHome, homeBonus, reputationOf, reputationLabel, spreadWord, DEED_SCALE };
+  return { HOME_KINDS, homeOf, homeOptions, settleHome, homeBonus, SHIP_ROOMS, SHIP_ROOM_BY_ID, shipOf, starshipOption, buildStarship, shipRoomOptions, addShipRoom, inviteAboard, sellStarship, reputationOf, reputationLabel, spreadWord, DEED_SCALE };
 })();
 
 /* ==== engine/body.js ==== */
@@ -24537,7 +24670,7 @@ const { getItem, ITEMS } = __mod_data_items_js;
 const { liveShopStock, demandFor, isImportedHere, tradeRelationships } = __mod_engine_market_js;
 const { buyItem, valueHere, hasItem } = __mod_engine_inventory_js;
 const { topicsFor, converse } = __mod_engine_conversation_js;
-const { homeOptions, settleHome, homeOf } = __mod_engine_settlement_js;
+const { homeOptions, settleHome, homeOf, starshipOption, buildStarship, shipOf, shipRoomOptions, addShipRoom, inviteAboard, sellStarship } = __mod_engine_settlement_js;
 const { currencyFor, formatMoney, balance, priceIn, canAfford, debit } = __mod_data_currency_js;
 const { CAREERS, getCareer, careersFor } = __mod_data_jobs_js;
 const { getRace, hasPerk } = __mod_data_races_js;
@@ -25311,19 +25444,62 @@ const ACTIONS = [
     available: (s) => !s.character.inAfterlife,
     options: (s) => homeOptions(s).map((o) => ({
       id: o.id, label: o.label, hint: o.hint, disabled: !!o.disabled,
-    })),
+    })).concat(shipOf(s) ? [] : [(() => {
+      const o = starshipOption(s);
+      return { id: o.id, label: o.label, hint: o.hint, disabled: !!o.disabled };
+    })()]),
     run: (s, rng, params) => {
       const id = params && params.option;
       if (!id) return { text: 'You look at nothing in particular.' };
       // Building something you cannot design needs somebody who can.
       const helper = Object.values(s.npcs).find((n) => n.alive
         && (n.closeness || 0) > 40 && n.stats && n.stats.intellect >= 70);
+      if (id === 'starship') {
+        const engineer = helper || (Object.values(s.npcs).find((n) => n.alive && n.factionId === 'capsule_corp_co'));
+        const res = buildStarship(s, rng, engineer ? engineer.name : 'Capsule Corporation');
+        if (res.ok) {
+          fact(s, 'Commissioned a space-traveling home.', { type: 'property', weight: 9, tags: ['home', 'ship'] });
+          adjust(s, { happiness: 26 });
+          const moved = (res.movedIn || []).map((n) => n.name);
+          return { text: moved.length ? `${res.text} ${moved.join(', ')} move in without being asked.` : res.text };
+        }
+        return { text: res.text };
+      }
       const res = settleHome(s, rng, id, id.startsWith('build:') ? helper : null);
       if (res.ok) {
         fact(s, res.stolen ? `Took a house on ${getPlace(s.character.placeId).name}.`
           : `Settled on ${getPlace(s.character.placeId).name}.`,
         { type: 'property', weight: 7, tags: ['home'] });
         adjust(s, { happiness: res.stolen ? 6 : 18 });
+      }
+      return { text: res.text };
+    },
+  },
+  {
+    id: 'ship_room', maxPerYear: 3, minMaturity: 16, slots: 2, name: 'Work on the ship', cat: 'world',
+    desc: 'Add a room, or make an existing one better.',
+    available: (s) => !!shipOf(s),
+    options: (s) => shipRoomOptions(s).map((o) => ({ id: o.id, label: o.label, hint: o.hint, disabled: o.disabled })),
+    run: (s, rng, params) => {
+      const id = params && params.option;
+      if (!id) return { text: 'Nothing gets built today.' };
+      const res = addShipRoom(s, id);
+      if (res.ok) {
+        adjust(s, { happiness: res.upgraded ? 4 : 10 });
+        fact(s, res.text, { type: 'property', weight: 4, tags: ['home', 'ship'] });
+      }
+      return { text: res.text };
+    },
+  },
+  {
+    id: 'sell_ship', maxPerYear: 1, minMaturity: 16, slots: 1, name: 'Sell the ship', cat: 'world', danger: true,
+    desc: 'It stops being yours. There is no undoing this.',
+    available: (s) => !!shipOf(s),
+    run: (s) => {
+      const res = sellStarship(s);
+      if (res.ok) {
+        adjust(s, { happiness: -14 });
+        fact(s, 'Sold the ship.', { type: 'property', weight: 7, tags: ['home', 'ship'] });
       }
       return { text: res.text };
     },
@@ -26377,6 +26553,7 @@ const { addFact } = __mod_engine_memory_js;
 const { combatPower, weaponAttackBonus, looksScore, STAT_KEYS, STAT_LABELS } = __mod_engine_stats_js;
 const { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild, weddingLine, courtLine, birthLine, describeLineage } = __mod_engine_npc_js;
 const { npcBag } = __mod_engine_inventory_js;
+const { shipOf, inviteAboard } = __mod_engine_settlement_js;
 
 /** An NPC's power as it actually shows up in a fight - their base, plus
  * whatever a weapon they have out actually does for them. Nobody rolls a
@@ -26498,6 +26675,23 @@ const SOCIAL_ACTIONS = [
       chargeSocial(npc, { closeness: 4 });
       adjust(state, { happiness: 4 });
       return { text: `${caption} You keep it.` };
+    },
+  },
+  {
+    id: 'invite_aboard', name: 'Invite them onto the ship', tone: 'warm', slots: 0, maxPerYear: 3,
+    desc: 'There is room. Not everyone gets asked.',
+    available: (state, npc) => !!shipOf(state) && bondScore(npc) >= 35
+      && !(shipOf(state).occupants || []).includes(npc.id),
+    run: (state, rng, npc) => {
+      const res = inviteAboard(state, npc);
+      if (!res.ok) return { text: res.text };
+      chargeSocial(npc, { closeness: 10, trust: 6 });
+      adjust(state, { happiness: 6 });
+      return { text: `${res.text} ${rng.pick([
+        'One more person the ship actually means something to.',
+        'They do not take long to find a room and make it theirs.',
+        'Nobody makes a thing of it, which is somehow the nicest part.',
+      ])}` };
     },
   },
   {
@@ -27666,7 +27860,7 @@ const { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere, repair
 const { currencyFor, balance, formatMoney, exchange, CURRENCIES } = __mod_data_currency_js;
 const { getItem } = __mod_data_items_js;
 const { TRAITS, getTrait, TRAIT_KINDS } = __mod_data_traits_js;
-const { reputationOf, homeOf, homeBonus } = __mod_engine_settlement_js;
+const { reputationOf, homeOf, homeBonus, shipOf, SHIP_ROOM_BY_ID } = __mod_engine_settlement_js;
 const { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSense } = __mod_engine_perception_js;
 const { getRng, saveRng } = __mod_engine_state_js;
 const { ceilingFor, ceilingBlock, ceilingPressure, masteryLabel } = __mod_engine_mastery_js;
@@ -29365,6 +29559,21 @@ function panelRecords() {
         + `(${race ? race.short : cap.raceId}) - jailed for ${cap.factionName}, ${formatMoney(cap.reward, currencyFor(getPlace(c.placeId).planet).id)}.`;
       body.appendChild(memo);
     }
+  }
+
+  if (shipOf(GAME)) {
+    const ship = shipOf(GAME);
+    body.appendChild(el('div', 'group-label', 'The ship'));
+    const row = el('div', 'row owned');
+    const main = el('div', 'row-main');
+    const rooms = ship.rooms.map((id) => SHIP_ROOM_BY_ID[id]?.name).filter(Boolean);
+    const occupants = (ship.occupants || []).map((id) => (id === 'you' ? null : GAME.npcs[id]?.name)).filter(Boolean);
+    main.appendChild(el('div', 'row-title', ship.name));
+    main.appendChild(el('div', 'row-note',
+      `${rooms.length ? rooms.join(', ') : 'Empty hull, nothing added yet'}.`
+      + (occupants.length ? ` Aboard: ${occupants.join(', ')}.` : '')));
+    row.appendChild(main);
+    body.appendChild(row);
   }
 
   body.appendChild(el('div', 'group-label', 'You'));

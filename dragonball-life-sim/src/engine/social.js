@@ -15,6 +15,7 @@ import { combatPower, weaponAttackBonus, looksScore, STAT_KEYS, STAT_LABELS } fr
 import { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild,
   weddingLine, courtLine, birthLine, describeLineage } from './npc.js';
 import { npcBag } from './inventory.js';
+import { shipOf, inviteAboard } from './settlement.js';
 
 /** An NPC's power as it actually shows up in a fight - their base, plus
  * whatever a weapon they have out actually does for them. Nobody rolls a
@@ -136,6 +137,23 @@ export const SOCIAL_ACTIONS = [
       chargeSocial(npc, { closeness: 4 });
       adjust(state, { happiness: 4 });
       return { text: `${caption} You keep it.` };
+    },
+  },
+  {
+    id: 'invite_aboard', name: 'Invite them onto the ship', tone: 'warm', slots: 0, maxPerYear: 3,
+    desc: 'There is room. Not everyone gets asked.',
+    available: (state, npc) => !!shipOf(state) && bondScore(npc) >= 35
+      && !(shipOf(state).occupants || []).includes(npc.id),
+    run: (state, rng, npc) => {
+      const res = inviteAboard(state, npc);
+      if (!res.ok) return { text: res.text };
+      chargeSocial(npc, { closeness: 10, trust: 6 });
+      adjust(state, { happiness: 6 });
+      return { text: `${res.text} ${rng.pick([
+        'One more person the ship actually means something to.',
+        'They do not take long to find a room and make it theirs.',
+        'Nobody makes a thing of it, which is somehow the nicest part.',
+      ])}` };
     },
   },
   {
