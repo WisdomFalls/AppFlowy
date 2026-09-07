@@ -304,6 +304,19 @@ function changeChips(entry) {
 
 function renderFeed() {
   const feed = $('feed');
+  // #app only sets min-height, so when content overflows it is the whole
+  // page that scrolls, not .feed internally (.feed's own overflow-y:auto
+  // never actually engages). Clearing innerHTML collapses the page's height
+  // for an instant; the browser clamps window scroll to fit the now-tiny
+  // document, and that clamp never gets undone once the content grows back
+  // - which is what reads as "Age Up throws me to the top of my life" if you
+  // were scrolled down through old entries. Preserve both the feed's own
+  // scroll (in case a layout does make it the real scroller) and the page's.
+  const scroller = document.scrollingElement || document.documentElement;
+  const feedNearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+  const pageNearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
+  const priorFeedScrollTop = feed.scrollTop;
+  const priorPageScrollTop = scroller.scrollTop;
   feed.innerHTML = '';
   if (!GAME.log.length) {
     feed.appendChild(el('div', 'feed-empty', 'Press Age Up to start living.'));
@@ -332,7 +345,13 @@ function renderFeed() {
     }
     feed.appendChild(block);
   }
-  feed.scrollTop = feed.scrollHeight;
+  // Deferred a frame so the browser has actually laid out the new content
+  // before scrollHeight is read - reading it synchronously right after the
+  // innerHTML rebuild can under-report the real height mid-layout.
+  requestAnimationFrame(() => {
+    feed.scrollTop = feedNearBottom ? feed.scrollHeight : priorFeedScrollTop;
+    scroller.scrollTop = pageNearBottom ? scroller.scrollHeight : priorPageScrollTop;
+  });
 }
 
 // ------------------------------------------------------------------ sheet
