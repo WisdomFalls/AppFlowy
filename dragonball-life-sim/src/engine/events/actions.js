@@ -22,7 +22,7 @@ import { getRace, hasPerk } from '../../data/races.js';
 import { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel,
   limitFor, usedThisYear, trainingRoomLeft } from '../economy.js';
 import { makeNpc, bondScore, relationLabel } from '../npc.js';
-import { canonAvailable, canonPower, canonPlace } from '../../data/canon.js';
+import { canonAvailable, canonPower, canonPlace, canonUniverse } from '../../data/canon.js';
 import { ensureBallSet, ballsHeld, startHunt, surveyPlanet, ballsAreInert, summonReady } from '../dragonballs.js';
 import { startTrial, STAT_TRIALS, TRIAL_KINDS, getMastery, masteryEffect, inventForm } from '../trials.js';
 import { createTournament, autoRunTournament, settle } from '../tournament.js';
@@ -743,15 +743,20 @@ function findChallenger(state, rng, scope) {
   // A living canon fighter in the right band is always a better opponent than
   // a generated one, so look there first.
   // Somebody in the right power band who is also actually on this world.
-  // "The strongest in this sector" can reach further; the local pool cannot.
+  // "The strongest in this sector" can reach further, and "in the universe"
+  // further still - but neither one reaches into a different universe. That
+  // used to be a bug (a stray "not otherworld" clause matched almost anyone,
+  // anywhere, including other universes' casts) rather than a design choice.
   const herePlanet = getPlace(c.placeId).planet;
+  const myUniverse = c.universe || 7;
   const canonPool = canonAvailable(year, (x) => {
     const p = canonPower(x, year);
     if (p < mine * lo || p > mine * hi) return false;
+    if (canonUniverse(x) !== myUniverse) return false;
     if (scope === 'universe') return true;
     const at = getPlace(canonPlace(x, year));
-    if (!at) return true;
-    if (scope === 'sector') return at.planet === herePlanet || x.tags.includes('divine') || at.planet !== 'otherworld';
+    if (!at) return false;
+    if (scope === 'sector') return at.planet === herePlanet || x.tags.includes('divine');
     return at.planet === herePlanet;
   });
   if (canonPool.length && rng.chance(scope === 'local' ? 0.25 : 0.6)) {

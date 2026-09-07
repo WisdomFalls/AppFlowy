@@ -2,6 +2,9 @@
 // `power` is sparse keyframes of effective combat power by Age (interpolated),
 // and `teaches` wires them into the skill tree as mentors.
 
+import { getPlace } from './places.js';
+import { getPlanet } from './planets.js';
+
 export const CANON = [
   // ------------------------------------------------------------- Earth core
   { id: 'goku', name: 'Son Goku', race: 'saiyan', years: [737, null], home: 'paozu',
@@ -210,6 +213,18 @@ export const CANON = [
     teaches: ['hakai', 'god_ki'],
     personality: 'God of Destruction of Universe 7. Sleeps for decades, wakes hungry, erases planets over food.',
     quirk: 'Whether he destroys you depends entirely on the pudding.' },
+  { id: 'vados', name: 'Vados', race: 'angel', years: [1, null], home: 'champa_world',
+    tags: ['divine', 'mentor', 'angel', 'untouchable', 'u6'], temperament: 'serene',
+    power: { 778: 1e15, 790: 1e15 },
+    teaches: ['god_ki', 'ultra_instinct_art', 'ki_control_mastery', 'hakai'],
+    personality: "Whis's older sister, and the same job for Universe 6 - marginally less patient about it.",
+    quirk: 'Finds Champa exhausting and has never once said so out loud.' },
+  { id: 'champa', name: 'Champa', race: 'other', years: [1, null], home: 'champa_world',
+    tags: ['divine', 'destroyer', 'threat', 'mentor', 'u6'], temperament: 'capricious',
+    power: { 778: 1e14, 790: 1e14 },
+    teaches: ['hakai', 'god_ki'],
+    personality: "God of Destruction of Universe 6, and Beerus's twin brother. Louder about food than Beerus, if that is possible.",
+    quirk: 'Holds a grudge about a wager with Beerus that neither of them will explain.' },
   { id: 'zeno', name: 'Zeno', race: 'other', years: [778, null], home: 'grand_zeno',
     tags: ['divine', 'omniking', 'threat'], temperament: 'childlike',
     power: { 780: 1e20 },
@@ -480,7 +495,21 @@ export function getCanon(id) {
 export function canonPower(char, year) {
   const keys = Object.keys(char.power).map(Number).sort((a, b) => a - b);
   if (!keys.length) return 1;
-  if (year <= keys[0]) return char.power[keys[0]];
+  if (year <= keys[0]) {
+    // Before the first documented keyframe, ramp up from a small childhood
+    // baseline at their actual birth year instead of flatly handing out the
+    // keyframe's power to a newborn - Cabba's first keyframe (8 billion) is
+    // 19 years after he is born, and a flat return read as an 8-billion-
+    // power-level toddler.
+    const birth = char.years[0];
+    const first = keys[0];
+    if (first <= birth) return char.power[first];
+    if (year <= birth) return 5;
+    const t = (year - birth) / (first - birth);
+    const lo = Math.log(5);
+    const hi = Math.log(Math.max(5, char.power[first]));
+    return Math.exp(lo + (hi - lo) * t);
+  }
   if (year >= keys[keys.length - 1]) return char.power[keys[keys.length - 1]];
   for (let i = 0; i < keys.length - 1; i++) {
     if (year >= keys[i] && year <= keys[i + 1]) {
@@ -552,6 +581,23 @@ export const ITINERARY = {
   toppo: [[700, 'universe11']],
   granolah: [[762, 'cereal']],
 };
+
+/**
+ * Which universe a canon character actually belongs to. An explicit `u6`/
+ * `u9`/`u10`/`u11` tag wins (needed for the handful of characters, like Hit
+ * or Jiren, whose `home` is a neutral tournament arena rather than an actual
+ * world - resolving through place would put them in Universe 7 by default,
+ * which is wrong). Everyone else resolves through their home planet, which
+ * covers Sadala-born Universe 6 Saiyans correctly without needing the tag.
+ */
+export function canonUniverse(char) {
+  const c = typeof char === 'string' ? CANON_BY_ID[char] : char;
+  if (!c) return 7;
+  const tag = (c.tags || []).find((t) => /^u\d+$/.test(t));
+  if (tag) return Number(tag.slice(1));
+  const home = getPlace(c.home);
+  return (home && getPlanet(home.planet).universe) || 7;
+}
 
 /** The place id a canon character is standing in, in this Age. */
 export function canonPlace(char, year) {

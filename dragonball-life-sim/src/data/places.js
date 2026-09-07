@@ -34,6 +34,7 @@ export const PLACES = [
   { id: 'kai_planet', name: "King Kai's Planet", planet: 'otherworld', danger: 2, training: 3.5, tags: ['divine', 'otherworld', 'highgrav', 'mentor'], desc: 'Ten times gravity on a rock the size of a football pitch, with a monkey and a cricket.' },
   { id: 'sacred_world', name: 'Sacred World of the Kais', planet: 'otherworld', danger: 3, training: 3.0, tags: ['divine', 'otherworld', 'sacred'], desc: 'Where the Z-Sword is stuck in a rock and the trees are all wrong.' },
   { id: 'beerus_world', name: "Beerus's World", planet: 'otherworld', danger: 8, training: 6.0, tags: ['divine', 'destroyer', 'extreme'], desc: 'A pillar in an empty sky, a sleeping cat, and his impossibly polite attendant.' },
+  { id: 'champa_world', name: "Champa's World", planet: 'otherworld', danger: 8, training: 6.0, tags: ['divine', 'destroyer', 'extreme', 'u6'], desc: "Beerus's world, if it had better restaurants and a more openly hungry god." },
   { id: 'grand_zeno', name: "The King's Palace", planet: 'otherworld', danger: 9, training: 1.0, tags: ['divine', 'omniking'], desc: 'A white nowhere containing a small child who can delete universes.' },
 
   // Other World

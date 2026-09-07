@@ -9,7 +9,7 @@ import { apply, fact, stranger, relate, thread, trainYear, powerLine, meetCanon,
 import { fight, narrateFight, describeGap, runTournament, buildField } from '../combat.js';
 import { combatPower, powerTier } from '../stats.js';
 import { TIMELINE, isTournamentYear, worldPowerBaseline, eraName } from '../../data/timeline.js';
-import { canonAvailable } from '../../data/canon.js';
+import { canonAvailable, canonUniverse } from '../../data/canon.js';
 import { startSurvival, survivalActions, survivalTurn, RULES } from '../survival.js';
 import { ensureBallSet, ballsHeld, ballsOn, ballManifest, scatterAfterWish, ballsAreInert } from '../dragonballs.js';
 import { getItem } from '../../data/items.js';
@@ -400,7 +400,11 @@ registerEvents([
     id: 'divine_notice', tags: ['world', 'cosmic', 'divine'], weight: 14,
     when: (ctx) => combatPower(ctx.character) > worldPowerBaseline(ctx.year) * 0.06 && ctx.year >= 770,
     slots: (ctx) => {
-      const gods = canonAvailable(ctx.year, (c) => c.tags.includes('divine') && !c.tags.includes('omniking'));
+      // Your own universe's gods, not somebody else's - Beerus has no reason
+      // to notice a Universe 6 fighter.
+      const myUniverse = ctx.character.universe || 7;
+      const gods = canonAvailable(ctx.year, (c) => c.tags.includes('divine') && !c.tags.includes('omniking')
+        && canonUniverse(c) === myUniverse);
       const g = gods.length ? ctx.rng.pick(gods) : null;
       if (!g) return null;
       return { godId: g.id, godName: g.name, godPersona: g.personality, godQuirk: g.quirk };

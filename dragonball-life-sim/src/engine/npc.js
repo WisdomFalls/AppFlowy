@@ -210,7 +210,10 @@ export function makeCanonNpc(rng, canonId, year, relation = 'acquaintance') {
     name: c.name,
     raceId: c.race,
     canonId,
-    sex: c.sex || 'unknown',
+    // canon.js itself carries no sex field for anyone - canonlooks.js is the
+    // actual source of truth (it has to be, for the portrait), so read it
+    // from there rather than silently defaulting everyone to 'unknown'.
+    sex: c.sex || look.sex || 'unknown',
     age: Math.max(1, year - c.years[0]),
     birthYear: c.years[0],
     alive: canonAlive(c, year),

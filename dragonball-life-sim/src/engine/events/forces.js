@@ -18,7 +18,7 @@ import { clamp } from '../rng.js';
 
 function pickForce(ctx) {
   const here = getPlace(ctx.character.placeId);
-  const options = factionsPresent(ctx.year, here.planet);
+  const options = factionsPresent(ctx.year, here.planet, ctx.character.universe || 7);
   if (!options.length) return null;
   const faction = ctx.rng.pick(options);
   const squad = ctx.rng.pick(faction.squads);
@@ -54,7 +54,7 @@ registerEvents([
   {
     id: 'force_arrives', tags: ['world', 'faction'], weight: 34,
     minBioAge: 8,
-    when: (ctx) => !ctx.character.inAfterlife && factionsPresent(ctx.year, ctx.place.planet).length > 0,
+    when: (ctx) => !ctx.character.inAfterlife && factionsPresent(ctx.year, ctx.place.planet, ctx.character.universe || 7).length > 0,
     slots: (ctx) => {
       const found = pickForce(ctx);
       if (!found) return null;

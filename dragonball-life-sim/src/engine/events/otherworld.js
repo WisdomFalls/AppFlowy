@@ -10,7 +10,7 @@ import { registerEvents, npcSlot } from '../generator.js';
 import { apply, fact, relate, thread, trainYear, powerLine, stranger, findNpc,
   offerBattle, meetCanon, moveTo, killNpc } from './helpers.js';
 import { combatPower, powerTier } from '../stats.js';
-import { CANON, getCanon, canonPower } from '../../data/canon.js';
+import { CANON, getCanon, canonPower, canonUniverse } from '../../data/canon.js';
 import { ladderFor, getTransformation } from '../../data/transformations.js';
 import { TECHNIQUES, getTechnique } from '../../data/techniques.js';
 import { generateFullName } from '../../data/names.js';
@@ -311,9 +311,15 @@ registerEvents([
   {
     id: 'other_world_canon', noFatigue: true, tags: ['afterlife', 'canon', 'social'], weight: 30,
     requiresAfterlife: true,
-    when: (ctx) => CANON.some((ch) => ch.years[1] !== null && ctx.year > ch.years[1]),
+    // The dead you actually run into down here are from your own universe -
+    // Bardock and Gine dying with the rest of Universe 7's Saiyans has
+    // nothing to do with a Universe 6 character's afterlife.
+    when: (ctx) => CANON.some((ch) => ch.years[1] !== null && ctx.year > ch.years[1]
+      && canonUniverse(ch) === (ctx.character.universe || 7)),
     slots: (ctx) => {
+      const myUniverse = ctx.character.universe || 7;
       const gone = CANON.filter((ch) => ch.years[1] !== null && ctx.year > ch.years[1]
+        && canonUniverse(ch) === myUniverse
         && !ch.tags.some((t) => ['omniking', 'destroyer', 'angel', 'dragon', 'wish'].includes(t)));
       if (!gone.length) return null;
       const ch = ctx.rng.pick(gone);

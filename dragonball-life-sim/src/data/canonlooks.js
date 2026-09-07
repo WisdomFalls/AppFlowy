@@ -152,6 +152,16 @@ export const CANON_LOOKS = {
     hairStyle: 'cropped', hairColour: 'white', outfit: 'kai', buildShape: 'wiry',
     accessories: ['necklace'], marks: [],
   },
+  champa: {
+    sex: 'male', skin: 'purple', face: 'round', eyeShape: 'narrow', eyeColour: 'gold',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'kai', buildShape: 'massive',
+    accessories: ['earrings'], marks: [],
+  },
+  vados: {
+    sex: 'female', skin: 'blue', face: 'long', eyeShape: 'narrow', eyeColour: 'violet',
+    hairStyle: 'long', hairColour: 'white', outfit: 'kai', buildShape: 'wiry',
+    accessories: ['necklace'], marks: [],
+  },
   king_kai: {
     sex: 'male', skin: 'blue', face: 'round', eyeShape: 'round', eyeColour: 'black',
     hairStyle: 'cropped', hairColour: 'black', outfit: 'kai', buildShape: 'small',

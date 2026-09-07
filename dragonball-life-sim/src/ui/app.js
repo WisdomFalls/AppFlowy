@@ -1401,7 +1401,7 @@ function panelWorlds() {
   nowRow.appendChild(nowMain);
   body.appendChild(nowRow);
 
-  const forces = factionsPresent(year, here.planet);
+  const forces = factionsPresent(year, here.planet, c.universe || 7);
   if (forces.length) {
     body.appendChild(el('div', 'group-label', 'Who operates here'));
     for (const f of forces) {

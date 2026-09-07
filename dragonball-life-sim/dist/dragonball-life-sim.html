@@ -2081,6 +2081,7 @@ const PLACES = [
   { id: 'kai_planet', name: "King Kai's Planet", planet: 'otherworld', danger: 2, training: 3.5, tags: ['divine', 'otherworld', 'highgrav', 'mentor'], desc: 'Ten times gravity on a rock the size of a football pitch, with a monkey and a cricket.' },
   { id: 'sacred_world', name: 'Sacred World of the Kais', planet: 'otherworld', danger: 3, training: 3.0, tags: ['divine', 'otherworld', 'sacred'], desc: 'Where the Z-Sword is stuck in a rock and the trees are all wrong.' },
   { id: 'beerus_world', name: "Beerus's World", planet: 'otherworld', danger: 8, training: 6.0, tags: ['divine', 'destroyer', 'extreme'], desc: 'A pillar in an empty sky, a sleeping cat, and his impossibly polite attendant.' },
+  { id: 'champa_world', name: "Champa's World", planet: 'otherworld', danger: 8, training: 6.0, tags: ['divine', 'destroyer', 'extreme', 'u6'], desc: "Beerus's world, if it had better restaurants and a more openly hungry god." },
   { id: 'grand_zeno', name: "The King's Palace", planet: 'otherworld', danger: 9, training: 1.0, tags: ['divine', 'omniking'], desc: 'A white nowhere containing a small child who can delete universes.' },
 
   // Other World
@@ -6096,6 +6097,9 @@ const __mod_data_canon_js = (function () {
 // `power` is sparse keyframes of effective combat power by Age (interpolated),
 // and `teaches` wires them into the skill tree as mentors.
 
+const { getPlace } = __mod_data_places_js;
+const { getPlanet } = __mod_data_planets_js;
+
 const CANON = [
   // ------------------------------------------------------------- Earth core
   { id: 'goku', name: 'Son Goku', race: 'saiyan', years: [737, null], home: 'paozu',
@@ -6304,6 +6308,18 @@ const CANON = [
     teaches: ['hakai', 'god_ki'],
     personality: 'God of Destruction of Universe 7. Sleeps for decades, wakes hungry, erases planets over food.',
     quirk: 'Whether he destroys you depends entirely on the pudding.' },
+  { id: 'vados', name: 'Vados', race: 'angel', years: [1, null], home: 'champa_world',
+    tags: ['divine', 'mentor', 'angel', 'untouchable', 'u6'], temperament: 'serene',
+    power: { 778: 1e15, 790: 1e15 },
+    teaches: ['god_ki', 'ultra_instinct_art', 'ki_control_mastery', 'hakai'],
+    personality: "Whis's older sister, and the same job for Universe 6 - marginally less patient about it.",
+    quirk: 'Finds Champa exhausting and has never once said so out loud.' },
+  { id: 'champa', name: 'Champa', race: 'other', years: [1, null], home: 'champa_world',
+    tags: ['divine', 'destroyer', 'threat', 'mentor', 'u6'], temperament: 'capricious',
+    power: { 778: 1e14, 790: 1e14 },
+    teaches: ['hakai', 'god_ki'],
+    personality: "God of Destruction of Universe 6, and Beerus's twin brother. Louder about food than Beerus, if that is possible.",
+    quirk: 'Holds a grudge about a wager with Beerus that neither of them will explain.' },
   { id: 'zeno', name: 'Zeno', race: 'other', years: [778, null], home: 'grand_zeno',
     tags: ['divine', 'omniking', 'threat'], temperament: 'childlike',
     power: { 780: 1e20 },
@@ -6574,7 +6590,21 @@ function getCanon(id) {
 function canonPower(char, year) {
   const keys = Object.keys(char.power).map(Number).sort((a, b) => a - b);
   if (!keys.length) return 1;
-  if (year <= keys[0]) return char.power[keys[0]];
+  if (year <= keys[0]) {
+    // Before the first documented keyframe, ramp up from a small childhood
+    // baseline at their actual birth year instead of flatly handing out the
+    // keyframe's power to a newborn - Cabba's first keyframe (8 billion) is
+    // 19 years after he is born, and a flat return read as an 8-billion-
+    // power-level toddler.
+    const birth = char.years[0];
+    const first = keys[0];
+    if (first <= birth) return char.power[first];
+    if (year <= birth) return 5;
+    const t = (year - birth) / (first - birth);
+    const lo = Math.log(5);
+    const hi = Math.log(Math.max(5, char.power[first]));
+    return Math.exp(lo + (hi - lo) * t);
+  }
   if (year >= keys[keys.length - 1]) return char.power[keys[keys.length - 1]];
   for (let i = 0; i < keys.length - 1; i++) {
     if (year >= keys[i] && year <= keys[i + 1]) {
@@ -6647,6 +6677,23 @@ const ITINERARY = {
   granolah: [[762, 'cereal']],
 };
 
+/**
+ * Which universe a canon character actually belongs to. An explicit `u6`/
+ * `u9`/`u10`/`u11` tag wins (needed for the handful of characters, like Hit
+ * or Jiren, whose `home` is a neutral tournament arena rather than an actual
+ * world - resolving through place would put them in Universe 7 by default,
+ * which is wrong). Everyone else resolves through their home planet, which
+ * covers Sadala-born Universe 6 Saiyans correctly without needing the tag.
+ */
+function canonUniverse(char) {
+  const c = typeof char === 'string' ? CANON_BY_ID[char] : char;
+  if (!c) return 7;
+  const tag = (c.tags || []).find((t) => /^u\d+$/.test(t));
+  if (tag) return Number(tag.slice(1));
+  const home = getPlace(c.home);
+  return (home && getPlanet(home.planet).universe) || 7;
+}
+
 /** The place id a canon character is standing in, in this Age. */
 function canonPlace(char, year) {
   const c = typeof char === 'string' ? CANON_BY_ID[char] : char;
@@ -6668,7 +6715,7 @@ function canonAvailable(year, filter = () => true) {
 function mentorsAvailable(year) {
   return canonAvailable(year, (c) => c.teaches && c.teaches.length > 0);
 }
-  return { CANON, CANON_BY_ID, getCanon, canonPower, canonAlive, ITINERARY, canonPlace, canonAvailable, mentorsAvailable };
+  return { CANON, CANON_BY_ID, getCanon, canonPower, canonAlive, ITINERARY, canonUniverse, canonPlace, canonAvailable, mentorsAvailable };
 })();
 
 /* ==== data/canonlooks.js ==== */
@@ -6825,6 +6872,16 @@ const CANON_LOOKS = {
   whis: {
     sex: 'male', skin: 'blue', face: 'long', eyeShape: 'narrow', eyeColour: 'violet',
     hairStyle: 'cropped', hairColour: 'white', outfit: 'kai', buildShape: 'wiry',
+    accessories: ['necklace'], marks: [],
+  },
+  champa: {
+    sex: 'male', skin: 'purple', face: 'round', eyeShape: 'narrow', eyeColour: 'gold',
+    hairStyle: 'bald', hairColour: 'black', outfit: 'kai', buildShape: 'massive',
+    accessories: ['earrings'], marks: [],
+  },
+  vados: {
+    sex: 'female', skin: 'blue', face: 'long', eyeShape: 'narrow', eyeColour: 'violet',
+    hairStyle: 'long', hairColour: 'white', outfit: 'kai', buildShape: 'wiry',
     accessories: ['necklace'], marks: [],
   },
   king_kai: {
@@ -7341,7 +7398,10 @@ function makeCanonNpc(rng, canonId, year, relation = 'acquaintance') {
     name: c.name,
     raceId: c.race,
     canonId,
-    sex: c.sex || 'unknown',
+    // canon.js itself carries no sex field for anyone - canonlooks.js is the
+    // actual source of truth (it has to be, for the portrait), so read it
+    // from there rather than silently defaulting everyone to 'unknown'.
+    sex: c.sex || look.sex || 'unknown',
     age: Math.max(1, year - c.years[0]),
     birthYear: c.years[0],
     alive: canonAlive(c, year),
@@ -17952,7 +18012,7 @@ const { apply, fact, stranger, relate, thread, trainYear, powerLine, meetCanon, 
 const { fight, narrateFight, describeGap, runTournament, buildField } = __mod_engine_combat_js;
 const { combatPower, powerTier } = __mod_engine_stats_js;
 const { TIMELINE, isTournamentYear, worldPowerBaseline, eraName } = __mod_data_timeline_js;
-const { canonAvailable } = __mod_data_canon_js;
+const { canonAvailable, canonUniverse } = __mod_data_canon_js;
 const { startSurvival, survivalActions, survivalTurn, RULES } = __mod_engine_survival_js;
 const { ensureBallSet, ballsHeld, ballsOn, ballManifest, scatterAfterWish, ballsAreInert } = __mod_engine_dragonballs_js;
 const { getItem } = __mod_data_items_js;
@@ -18343,7 +18403,11 @@ registerEvents([
     id: 'divine_notice', tags: ['world', 'cosmic', 'divine'], weight: 14,
     when: (ctx) => combatPower(ctx.character) > worldPowerBaseline(ctx.year) * 0.06 && ctx.year >= 770,
     slots: (ctx) => {
-      const gods = canonAvailable(ctx.year, (c) => c.tags.includes('divine') && !c.tags.includes('omniking'));
+      // Your own universe's gods, not somebody else's - Beerus has no reason
+      // to notice a Universe 6 fighter.
+      const myUniverse = ctx.character.universe || 7;
+      const gods = canonAvailable(ctx.year, (c) => c.tags.includes('divine') && !c.tags.includes('omniking')
+        && canonUniverse(c) === myUniverse);
       const g = gods.length ? ctx.rng.pick(gods) : null;
       if (!g) return null;
       return { godId: g.id, godName: g.name, godPersona: g.personality, godQuirk: g.quirk };
@@ -19858,7 +19922,7 @@ const __mod_engine_events_otherworld_js = (function () {
 const { registerEvents, npcSlot } = __mod_engine_generator_js;
 const { apply, fact, relate, thread, trainYear, powerLine, stranger, findNpc, offerBattle, meetCanon, moveTo, killNpc } = __mod_engine_events_helpers_js;
 const { combatPower, powerTier } = __mod_engine_stats_js;
-const { CANON, getCanon, canonPower } = __mod_data_canon_js;
+const { CANON, getCanon, canonPower, canonUniverse } = __mod_data_canon_js;
 const { ladderFor, getTransformation } = __mod_data_transformations_js;
 const { TECHNIQUES, getTechnique } = __mod_data_techniques_js;
 const { generateFullName } = __mod_data_names_js;
@@ -20159,9 +20223,15 @@ registerEvents([
   {
     id: 'other_world_canon', noFatigue: true, tags: ['afterlife', 'canon', 'social'], weight: 30,
     requiresAfterlife: true,
-    when: (ctx) => CANON.some((ch) => ch.years[1] !== null && ctx.year > ch.years[1]),
+    // The dead you actually run into down here are from your own universe -
+    // Bardock and Gine dying with the rest of Universe 7's Saiyans has
+    // nothing to do with a Universe 6 character's afterlife.
+    when: (ctx) => CANON.some((ch) => ch.years[1] !== null && ctx.year > ch.years[1]
+      && canonUniverse(ch) === (ctx.character.universe || 7)),
     slots: (ctx) => {
+      const myUniverse = ctx.character.universe || 7;
       const gone = CANON.filter((ch) => ch.years[1] !== null && ctx.year > ch.years[1]
+        && canonUniverse(ch) === myUniverse
         && !ch.tags.some((t) => ['omniking', 'destroyer', 'angel', 'dragon', 'wish'].includes(t)));
       if (!gone.length) return null;
       const ch = ctx.rng.pick(gone);
@@ -20657,7 +20727,7 @@ const FACTIONS = [
     colours: ['#4b3f6b', '#d8dde6'],
     alignment: -75,
     from: 762, until: 780,
-    scope: 'galaxy',
+    scope: 'galaxy', universe: 7,
     goal: 'Clear worlds, sell worlds, and answer to one person.',
     stance: 'hostile',
     recruits: true,
@@ -20715,7 +20785,7 @@ const FACTIONS = [
     colours: ['#3a4250', '#c9a227'],
     alignment: -50,
     until: 737,
-    scope: 'galaxy',
+    scope: 'galaxy', universe: 7,
     goal: 'Take worlds for the Cold Empire and be paid in rank.',
     stance: 'neutral',
     recruits: true,
@@ -20734,7 +20804,7 @@ const FACTIONS = [
     colours: ['#3a4250', '#a8352f'],
     alignment: -15,
     from: 738,
-    scope: 'galaxy',
+    scope: 'galaxy', universe: 7,
     goal: 'Rebuild a people, by whatever means the register permits.',
     stance: 'depends',
     recruits: true,
@@ -20752,7 +20822,7 @@ const FACTIONS = [
     colours: ['#2f5bb7', '#e8e2d6'],
     alignment: 65,
     from: 740,
-    scope: 'galaxy',
+    scope: 'galaxy', universe: 7,
     goal: 'Keep the worst things in the Galactic Prison and the rest of it quiet.',
     stance: 'lawful',
     recruits: true,
@@ -20841,7 +20911,7 @@ const FACTIONS = [
     colours: ['#4b2a5a', '#a8352f'],
     alignment: -80,
     from: 770,
-    scope: 'galaxy',
+    scope: 'galaxy', universe: 7,
     goal: 'Get back out, and take the rest of it with them.',
     stance: 'hostile',
     recruits: false,
@@ -20859,13 +20929,17 @@ function getFaction(id) {
   return FACTION_BY_ID[id];
 }
 
-/** Factions that exist in this year, and could plausibly be where you are. */
+/**
+ * Factions that exist in this year, and could plausibly be where you are.
+ * A "galaxy" scope means galaxy-wide within one universe, not multiverse-
+ * spanning - the Frieza Force does not have a branch office in Universe 6.
+ */
 function factionsPresent(year, planetId, universe = 7) {
   return FACTIONS.filter((f) => {
     if (f.from && year < f.from) return false;
     if (f.until && year > f.until) return false;
     if (f.scope === 'planet' && f.planet !== planetId) return false;
-    if (f.scope === 'universe' && f.universe !== universe) return false;
+    if (f.universe && f.universe !== universe) return false;
     return true;
   });
 }
@@ -20915,7 +20989,7 @@ const { clamp } = __mod_engine_rng_js;
 
 function pickForce(ctx) {
   const here = getPlace(ctx.character.placeId);
-  const options = factionsPresent(ctx.year, here.planet);
+  const options = factionsPresent(ctx.year, here.planet, ctx.character.universe || 7);
   if (!options.length) return null;
   const faction = ctx.rng.pick(options);
   const squad = ctx.rng.pick(faction.squads);
@@ -20951,7 +21025,7 @@ registerEvents([
   {
     id: 'force_arrives', tags: ['world', 'faction'], weight: 34,
     minBioAge: 8,
-    when: (ctx) => !ctx.character.inAfterlife && factionsPresent(ctx.year, ctx.place.planet).length > 0,
+    when: (ctx) => !ctx.character.inAfterlife && factionsPresent(ctx.year, ctx.place.planet, ctx.character.universe || 7).length > 0,
     slots: (ctx) => {
       const found = pickForce(ctx);
       if (!found) return null;
@@ -23057,7 +23131,7 @@ const { CAREERS, getCareer, careersFor } = __mod_data_jobs_js;
 const { getRace, hasPerk } = __mod_data_races_js;
 const { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel, limitFor, usedThisYear, trainingRoomLeft } = __mod_engine_economy_js;
 const { makeNpc, bondScore, relationLabel } = __mod_engine_npc_js;
-const { canonAvailable, canonPower, canonPlace } = __mod_data_canon_js;
+const { canonAvailable, canonPower, canonPlace, canonUniverse } = __mod_data_canon_js;
 const { ensureBallSet, ballsHeld, startHunt, surveyPlanet, ballsAreInert, summonReady } = __mod_engine_dragonballs_js;
 const { startTrial, STAT_TRIALS, TRIAL_KINDS, getMastery, masteryEffect, inventForm } = __mod_engine_trials_js;
 const { createTournament, autoRunTournament, settle } = __mod_engine_tournament_js;
@@ -23778,15 +23852,20 @@ function findChallenger(state, rng, scope) {
   // A living canon fighter in the right band is always a better opponent than
   // a generated one, so look there first.
   // Somebody in the right power band who is also actually on this world.
-  // "The strongest in this sector" can reach further; the local pool cannot.
+  // "The strongest in this sector" can reach further, and "in the universe"
+  // further still - but neither one reaches into a different universe. That
+  // used to be a bug (a stray "not otherworld" clause matched almost anyone,
+  // anywhere, including other universes' casts) rather than a design choice.
   const herePlanet = getPlace(c.placeId).planet;
+  const myUniverse = c.universe || 7;
   const canonPool = canonAvailable(year, (x) => {
     const p = canonPower(x, year);
     if (p < mine * lo || p > mine * hi) return false;
+    if (canonUniverse(x) !== myUniverse) return false;
     if (scope === 'universe') return true;
     const at = getPlace(canonPlace(x, year));
-    if (!at) return true;
-    if (scope === 'sector') return at.planet === herePlanet || x.tags.includes('divine') || at.planet !== 'otherworld';
+    if (!at) return false;
+    if (scope === 'sector') return at.planet === herePlanet || x.tags.includes('divine');
     return at.planet === herePlanet;
   });
   if (canonPool.length && rng.chance(scope === 'local' ? 0.25 : 0.6)) {
@@ -27210,7 +27289,7 @@ function panelWorlds() {
   nowRow.appendChild(nowMain);
   body.appendChild(nowRow);
 
-  const forces = factionsPresent(year, here.planet);
+  const forces = factionsPresent(year, here.planet, c.universe || 7);
   if (forces.length) {
     body.appendChild(el('div', 'group-label', 'Who operates here'));
     for (const f of forces) {

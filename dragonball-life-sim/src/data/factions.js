@@ -19,7 +19,7 @@ export const FACTIONS = [
     colours: ['#4b3f6b', '#d8dde6'],
     alignment: -75,
     from: 762, until: 780,
-    scope: 'galaxy',
+    scope: 'galaxy', universe: 7,
     goal: 'Clear worlds, sell worlds, and answer to one person.',
     stance: 'hostile',
     recruits: true,
@@ -77,7 +77,7 @@ export const FACTIONS = [
     colours: ['#3a4250', '#c9a227'],
     alignment: -50,
     until: 737,
-    scope: 'galaxy',
+    scope: 'galaxy', universe: 7,
     goal: 'Take worlds for the Cold Empire and be paid in rank.',
     stance: 'neutral',
     recruits: true,
@@ -96,7 +96,7 @@ export const FACTIONS = [
     colours: ['#3a4250', '#a8352f'],
     alignment: -15,
     from: 738,
-    scope: 'galaxy',
+    scope: 'galaxy', universe: 7,
     goal: 'Rebuild a people, by whatever means the register permits.',
     stance: 'depends',
     recruits: true,
@@ -114,7 +114,7 @@ export const FACTIONS = [
     colours: ['#2f5bb7', '#e8e2d6'],
     alignment: 65,
     from: 740,
-    scope: 'galaxy',
+    scope: 'galaxy', universe: 7,
     goal: 'Keep the worst things in the Galactic Prison and the rest of it quiet.',
     stance: 'lawful',
     recruits: true,
@@ -203,7 +203,7 @@ export const FACTIONS = [
     colours: ['#4b2a5a', '#a8352f'],
     alignment: -80,
     from: 770,
-    scope: 'galaxy',
+    scope: 'galaxy', universe: 7,
     goal: 'Get back out, and take the rest of it with them.',
     stance: 'hostile',
     recruits: false,
@@ -221,13 +221,17 @@ export function getFaction(id) {
   return FACTION_BY_ID[id];
 }
 
-/** Factions that exist in this year, and could plausibly be where you are. */
+/**
+ * Factions that exist in this year, and could plausibly be where you are.
+ * A "galaxy" scope means galaxy-wide within one universe, not multiverse-
+ * spanning - the Frieza Force does not have a branch office in Universe 6.
+ */
 export function factionsPresent(year, planetId, universe = 7) {
   return FACTIONS.filter((f) => {
     if (f.from && year < f.from) return false;
     if (f.until && year > f.until) return false;
     if (f.scope === 'planet' && f.planet !== planetId) return false;
-    if (f.scope === 'universe' && f.universe !== universe) return false;
+    if (f.universe && f.universe !== universe) return false;
     return true;
   });
 }
