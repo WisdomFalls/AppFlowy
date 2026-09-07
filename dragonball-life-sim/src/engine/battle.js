@@ -932,6 +932,7 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
       me.hp = me.hpMax;
       me.ki = me.kiMax;
       me.stamina = me.staminaMax;
+      battle.timesHealed = (battle.timesHealed || 0) + 1;
       lines.push('One bean. Everything closes at once.');
     }
   } else if (actionId === 'relocate') {
@@ -1416,7 +1417,20 @@ const SCAR_NAMES = {
 function markBody(state, rng, battle) {
   const c = state.character;
   const nearDeath = battle.me.hp <= 12 && battle.outcome !== 'fled';
-  if (!nearDeath) return null;
+  // A fight is not only as hard as its last exchange. One dragged out over
+  // many rounds, or kept alive on senzu beans and healing, wears on a body
+  // the same way genuine near-death does - "the more fatigued and hurt you
+  // are, and the longer a fight is prolonged... a chance of severely
+  // injuring yourself and possibly leaving a permanent scar."
+  const rounds = battle.round || 1;
+  const fatigue = 1 - clamp((battle.me.stamina || 0) / Math.max(1, battle.me.staminaMax || 1), 0, 1);
+  const hurtFrac = 1 - clamp((battle.me.hp || 0) / Math.max(1, battle.me.hpMax || 1), 0, 1);
+  // A controlled spar going long is not the same thing as a real fight
+  // going long - real accidents still happen, just far less of the time.
+  const sparDamping = battle.stakes === 'spar' ? 0.35 : 1;
+  const grind = (clamp((rounds - 5) / 25, 0, 1) + (battle.timesHealed || 0) * 0.15) * sparDamping;
+  const worthMarking = nearDeath || grind > 0.15 || (fatigue > 0.7 && hurtFrac > 0.4);
+  if (!worthMarking) return null;
   c.scars = c.scars || [];
   const have = new Set(c.scars.map((s) => s.mark));
   const from = battle.them.name;
@@ -1451,7 +1465,11 @@ function markBody(state, rng, battle) {
 
   // Past that, a body that puts itself back together keeps no record.
   if (hasPerk(c, 'regeneration') || c.raceId === 'android') return null;
-  if (rng.chance(0.45)) {
+  // How close a call it actually was, not a flat coin flip: a fight that
+  // barely qualified as worth marking carries little risk, one that was
+  // both long and brutal carries a lot.
+  const scarChance = clamp(0.16 + grind * 0.4 + fatigue * 0.22 + hurtFrac * 0.18 + (nearDeath ? 0.22 : 0), 0.05, 0.78);
+  if (rng.chance(scarChance)) {
     const open = SCAR_MARKS.filter((m) => !have.has(m));
     if (!open.length) return null;
     const mark = rng.pick(open);
