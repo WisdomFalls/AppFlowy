@@ -18476,7 +18476,7 @@ const { rollMarketYear } = __mod_engine_market_js;
 const { resolveTrial } = __mod_engine_trials_js;
 const { getItem } = __mod_data_items_js;
 const { checkEarnedTraits, traitEffect } = __mod_data_traits_js;
-const { processReputationQueue, homeBonus } = __mod_engine_settlement_js;
+const { processReputationQueue, homeBonus, shipOf, SHIP_ROOM_BY_ID } = __mod_engine_settlement_js;
 
 const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
 
@@ -18930,8 +18930,12 @@ function passiveYear(state, rng) {
   }
 
   // Recovery and mood
+  // A medical bay is a real machine, not a room description - it goes
+  // wherever the ship does, which is wherever you go.
+  const ship = shipOf(state);
+  const medbayHeal = ship ? ship.rooms.reduce((n, id) => n + (SHIP_ROOM_BY_ID[id]?.heal || 0), 0) : 0;
   const heal = (c.inAfterlife ? 40 : (24 + c.stats.durability * 0.28 + (hasPerk(c, 'regeneration') ? 30 : 0)))
-    * traitEffect(c, 'healRate');
+    * traitEffect(c, 'healRate') + medbayHeal;
   adjust(state, { health: heal, ki: 999 });
   // A home is worth less to you the moment you are not actually in it -
   // homeBonus() already scales comfort down for a place you have left.
