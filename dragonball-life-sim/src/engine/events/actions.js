@@ -13,10 +13,10 @@ import { unlockableForms, tryUnlockForm, nearbyForms } from '../progression.js';
 import { getPlace, PLACES } from '../../data/places.js';
 import { getItem, ITEMS } from '../../data/items.js';
 import { liveShopStock, demandFor, isImportedHere, tradeRelationships } from '../market.js';
-import { buyItem, valueHere, hasItem, addItem } from '../inventory.js';
+import { buyItem, valueHere, hasItem, addItem, inventoryOf, removeItem } from '../inventory.js';
 import { topicsFor, converse } from '../conversation.js';
 import { homeOptions, settleHome, homeOf, starshipOption, buildStarship, shipOf,
-  shipRoomOptions, addShipRoom, inviteAboard, sellStarship, spreadWord, DEED_SCALE } from '../settlement.js';
+  shipRoomOptions, addShipRoom, inviteAboard, sellStarship, spreadWord, DEED_SCALE, homeBonus } from '../settlement.js';
 import { currencyFor, formatMoney, balance, priceIn, canAfford, debit } from '../../data/currency.js';
 import { CAREERS, getCareer, careersFor } from '../../data/jobs.js';
 import { getRace, hasPerk } from '../../data/races.js';
@@ -39,6 +39,17 @@ function familyElsewhere(state) {
   return livingNpcs(state).filter((n) => RELATIONS[n.relation]?.family && n.placeId !== state.character.placeId);
 }
 
+/** What using this item actually buys, for the option list. */
+function describeItemUse(use) {
+  const bits = [];
+  if (use.healFull) bits.push('full health');
+  else if (use.heal) bits.push(`+${use.heal} health`);
+  if (use.kiFull) bits.push('full ki');
+  if (use.happiness) bits.push(`+${use.happiness} happiness`);
+  if (use.unlockPotential) bits.push('a real risk, for a real chance at more than you have');
+  return bits.join(', ') || 'something';
+}
+
 function fact(state, text, opts = {}) {
   return addFact(state.memory, {
     type: opts.type || 'action', text, year: state.character.age,
@@ -53,11 +64,13 @@ function trainOnce(state, rng, opts = {}) {
     : c.items.includes('gravity_capsule') ? 1.6
       : c.items.includes('heavy_weights') ? 1.4
         : c.items.includes('weighted_clothing') ? 1.25 : 1;
+  // A place of your own is worth something too, when you are actually
+  // standing in it - homeBonus() already resolves to 1 everywhere else.
   const rate = trainingRate(c, {
     state,
     intensity: opts.intensity ?? 1,
     placeMult: place.training,
-    gearMult,
+    gearMult: gearMult * homeBonus(state).train,
     mentorMult: opts.mentorMult ?? 1,
   }) * (opts.slice ?? 0.45);
   // Routed through the yearly ceiling: an hour of clicking cannot outrun a year.
@@ -189,6 +202,41 @@ export const ACTIONS = [
       s.character.senzu -= 1;
       adjust(s, { health: 100, ki: 999, happiness: 4 });
       return { text: render(`{One bean|You chew it|It tastes of almost nothing}. {Everything closes|You are whole|Ten days of food and no more wounds}.`, {}, rng) };
+    },
+  },
+  {
+    id: 'use_item', slots: 0, name: 'Use an item', cat: 'mind', cost: 'A moment',
+    desc: 'Consume or activate something you are actually carrying, instead of just owning it.',
+    available: (s) => inventoryOf(s.character).some((e) => e.item && e.item.use),
+    options: (s) => inventoryOf(s.character).filter((e) => e.item && e.item.use)
+      .map((e) => ({ id: e.id, label: e.name, hint: describeItemUse(e.item.use) })),
+    run: (s, rng, params) => {
+      const itemId = params && params.option;
+      const item = itemId && getItem(itemId);
+      if (!item || !item.use || !hasItem(s.character, itemId)) return { text: 'Nothing to use.' };
+      removeItem(s.character, itemId, 1);
+      const use = item.use;
+      const changes = {};
+      if (use.healFull) changes.health = 999;
+      else if (use.heal) changes.health = use.heal;
+      if (use.kiFull) changes.ki = 999;
+      if (use.happiness) changes.happiness = use.happiness;
+      adjust(s, changes);
+      const lines = [`${item.name}, used.`];
+      if (use.unlockPotential) {
+        if (rng.chance(use.unlockPotential)) {
+          s.character.flags.potential_unlocked = true;
+          s.character.potential = clamp((s.character.potential || 50) + 20, 1, 120);
+          lines.push('Something in you opens up that was not open before.');
+        } else if (use.deathRisk && rng.chance(use.deathRisk)) {
+          adjust(s, { health: -9999 });
+          lines.push('It does not agree with you. Nothing you have been through prepared you for this.');
+          return { text: lines.join(' '), lethal: true };
+        } else {
+          lines.push('Nothing happens. Not everyone who drinks it is ready, and today was not the day.');
+        }
+      }
+      return { text: lines.join(' ') };
     },
   },
   {

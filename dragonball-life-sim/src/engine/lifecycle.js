@@ -20,7 +20,7 @@ import { rollMarketYear } from './market.js';
 import { resolveTrial } from './trials.js';
 import { getItem } from '../data/items.js';
 import { checkEarnedTraits, traitEffect } from '../data/traits.js';
-import { processReputationQueue } from './settlement.js';
+import { processReputationQueue, homeBonus } from './settlement.js';
 
 const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
 
@@ -477,9 +477,12 @@ function passiveYear(state, rng) {
   const heal = (c.inAfterlife ? 40 : (24 + c.stats.durability * 0.28 + (hasPerk(c, 'regeneration') ? 30 : 0)))
     * traitEffect(c, 'healRate');
   adjust(state, { health: heal, ki: 999 });
+  // A home is worth less to you the moment you are not actually in it -
+  // homeBonus() already scales comfort down for a place you have left.
   const moodDrift = rng.float(-4, 4)
     + (livingNpcs(state).filter((n) => n.closeness > 55).length * 0.8)
-    - (c.career && c.career.performance < 30 ? 3 : 0);
+    - (c.career && c.career.performance < 30 ? 3 : 0)
+    + homeBonus(state).comfort * 0.15;
   adjust(state, { happiness: moodDrift });
 
   c.vitals.kiMax = kiMaxFor(c);
