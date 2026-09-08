@@ -253,6 +253,45 @@ export const ACTIONS = [
       return { text: lines.join(' '), trial };
     },
   },
+  {
+    id: 'use_time_chamber', maxPerYear: 1, minMaturity: 5, slots: 3, name: 'Train in the chamber', cat: 'power', cost: 'A season',
+    desc: 'Time moves differently in there. However long you spend, it costs you more than it costs the calendar.',
+    available: (s) => !!(s.character.chamber && s.character.chamber.built) && !s.character.inAfterlife
+      && !!homeOf(s) && homeBonus(s).here,
+    run: (s, rng) => {
+      const chamber = s.character.chamber;
+      const rate = chamber.rate || 2;
+      const aging = chamber.aging || 1.5;
+      // The chamber's own clock runs faster - simulated as several training
+      // passes rather than one big multiplier - but grantTrainingPower's
+      // yearly ceiling still applies underneath it, same as any other
+      // training this year. The room does not let you outrun the cap either.
+      const passes = Math.max(2, Math.round(rate));
+      let gained = 0;
+      let capped = false;
+      for (let i = 0; i < passes; i++) {
+        const t = trainOnce(s, rng, { intensity: 1.3, slice: 0.6 });
+        gained += t.gained;
+        if (t.capped) capped = true;
+      }
+      // Aging is the trade the flavour text always promised and nothing
+      // ever charged for - a harder toll than ordinary training, scaled by
+      // how steep this particular chamber's conversion actually is.
+      const toll = Math.round(8 * aging);
+      const injured = rng.chance(0.1 * aging);
+      const changes = { health: -toll - (injured ? rng.int(6, 16) : 0), happiness: -Math.round(toll * 0.6), stats: { discipline: 3, kiControl: 2 } };
+      adjust(s, changes);
+      fact(s, `Spent a session in the chamber${chamber.by ? `, ${chamber.divine ? 'the one' : 'built by'} ${chamber.by}` : ''}.`,
+        { type: 'training', weight: 3, tags: ['training', 'chamber'] });
+      const lines = [
+        `{The door closes and the world outside stops mattering|You lose track of real time almost immediately|`
+          + `However long you meant to stay, you stay longer}.`,
+      ];
+      if (injured) lines.push('{It does not go cleanly|You push past where you should have stopped|Something in you protests, loudly}.');
+      lines.push(`${numberish(gained)} power${capped ? ', capped - even in there, a year outside is still a year' : ''}.`);
+      return { text: render(lines.join(' '), {}, rng) };
+    },
+  },
   // A real bracket, but a school one - classmates, not champions, and no
   // draw official anywhere checks an age on the door. This is deliberately
   // the one tournament in the game that is NOT gated behind being old enough
