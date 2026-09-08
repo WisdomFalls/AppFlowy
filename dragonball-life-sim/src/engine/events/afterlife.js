@@ -11,7 +11,7 @@ import { fight, narrateFight, describeGap, runTournament, buildField } from '../
 import { combatPower } from '../stats.js';
 import { canonAlive, canonPlace } from '../../data/canon.js';
 import { getPlace } from '../../data/places.js';
-import { generateFullName } from '../../data/names.js';
+import { generateFullName, generateEpithet } from '../../data/names.js';
 import { numberish } from '../text.js';
 import { createTournament, autoRunTournament, settle } from '../tournament.js';
 import { TIMELINE } from '../../data/timeline.js';
@@ -143,6 +143,45 @@ registerEvents([
         const changes = apply(c2, { karma: 6, stats: { discipline: 4 } });
         return { text: `{You walk away|Whatever they are offering, no|They shout after you and you keep going}.`, changes };
       } },
+    ],
+  },
+
+  // Not every dangerous fighter down here made it into anybody's story. Hell
+  // is enormous, and full of people history never got around to - some of
+  // them spent an eternity of training on nothing but themselves.
+  {
+    id: 'hell_legend', tags: ['afterlife', 'legend'], weight: 14,
+    requiresAfterlife: true,
+    when: (ctx) => ctx.character.placeId === 'hell',
+    slots: (ctx) => {
+      const power = Math.max(1, Math.round(combatPower(ctx.character) * ctx.rng.float(2, 6)));
+      const npc = stranger(ctx, { placeId: 'hell', powerTarget: power, minAge: 25, maxAge: 400, relation: 'acquaintance' });
+      npc.alive = false;
+      npc.epithet = generateEpithet(ctx.rng);
+      return { name: npc.name, epithet: npc.epithet, npcId: npc.id, power: npc.power };
+    },
+    title: (ctx, s) => `${s.name} ${s.epithet}`,
+    text: `{Nobody down here knows the name and everybody gives them room anyway|`
+      + `No canon story explains this one - Hell is full of people history never got around to|`
+      + `Whoever they were before, nothing about it made the record}. `
+      + `[name] [epithet]. {The dead give them a wide berth without discussing why|`
+      + `Whatever they did with an eternity of training, it shows|Power with no story attached to it is its own kind of unsettling}.`,
+    choices: (ctx, s) => [
+      { id: 'fight', label: 'Fight them', danger: true, effect: (c2, sl) => offerBattle(c2, {
+        name: `${sl.name} ${sl.epithet}`, power: sl.power, npcId: sl.npcId, raceId: 'other',
+      }, { reason: 'hell', stakes: 'spar', intro: 'Nothing here stays broken. Neither of you holds back.' }) },
+      { id: 'train', label: 'Ask what they know', effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        const t = trainYear(c2, { intensity: 1.7, placeMult: 2.6 });
+        if (npc) relate(c2, npc, { closeness: 10, respect: 12 });
+        fact(c2, `Trained under ${sl.name} ${sl.epithet} in Hell - nobody knows who they actually were.`,
+          { type: 'afterlife', weight: 6, tags: ['legend', 'death'] });
+        return { text: `{They do not explain themselves and you stop asking|Whatever they know, they do not gatekeep it|`
+          + `An eternity of practice has to go somewhere}. ${powerLine(t.gained)}`, changes: apply(c2, { stats: { discipline: 3 } }) };
+      } },
+      { id: 'avoid', label: 'Give them the room everyone else does', effect: () => ({
+        text: `{You have enough problems down here|Some fights are not worth whatever is behind them|You let it go}.`, changes: [],
+      }) },
     ],
   },
 

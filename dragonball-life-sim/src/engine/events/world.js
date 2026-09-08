@@ -19,7 +19,7 @@ import { ensureBallSet, ballsHeld, ballsOn, ballManifest, scatterAfterWish, ball
 import { getItem } from '../../data/items.js';
 import { die } from '../lifecycle.js';
 import { getPlace, PLACES } from '../../data/places.js';
-import { generateFullName } from '../../data/names.js';
+import { generateFullName, generateEpithet } from '../../data/names.js';
 import { getTechnique, TECHNIQUES } from '../../data/techniques.js';
 import { numberish, ordinal } from '../text.js';
 import { createTournament, autoRunTournament, settle } from '../tournament.js';
@@ -81,6 +81,47 @@ function claimBalls(state, rng, count) {
 }
 
 registerEvents([
+  // Nobody claims this planet and nobody claims this fighter either - a real
+  // threat with no faction, no canon story, and no name anybody back home
+  // would recognise. Wild/uninhabited worlds (places.js's 'feral' tag) are
+  // exactly where a life like that goes unnoticed for decades.
+  {
+    id: 'planet_legend', tags: ['world', 'legend', 'opportunity'], weight: 14,
+    minBioAge: 12,
+    when: (ctx) => !ctx.character.inAfterlife && ctx.place.tags.includes('feral'),
+    slots: (ctx) => {
+      const power = Math.max(1, Math.round(combatPower(ctx.character) * ctx.rng.float(2.2, 6)));
+      const npc = stranger(ctx, { placeId: ctx.character.placeId, powerTarget: power, minAge: 30, maxAge: 90, relation: 'acquaintance' });
+      npc.epithet = generateEpithet(ctx.rng);
+      return { name: npc.name, epithet: npc.epithet, npcId: npc.id, power: npc.power };
+    },
+    title: (ctx, s) => `${s.name} ${s.epithet}`,
+    text: `{Nobody out here has heard of you, and you have never heard of them either|`
+      + `Whatever this place is, somebody has clearly been living in it a long time|`
+      + `A name means nothing this far out}. [name] [epithet]. `
+      + `{No faction claims them|Nobody sent them|They belong to nowhere in particular, which is its own kind of unsettling}. `
+      + `{You clock the power before you clock the person|Something about them reads wrong for how quiet this place is|`
+      + `This is not who you expected to find out here}.`,
+    choices: (ctx, s) => [
+      { id: 'fight', label: 'Test them', danger: true, effect: (c2, sl) => offerBattle(c2, {
+        name: `${sl.name} ${sl.epithet}`, power: sl.power, npcId: sl.npcId, raceId: 'other',
+      }, { reason: 'legend', stakes: 'serious', intro: 'Whoever they are, they do not ask what you want first.' }) },
+      { id: 'approach', label: 'Approach carefully', effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        if (!npc) return { text: 'They are already gone by the time you decide.', changes: [] };
+        relate(c2, npc, { closeness: 12, respect: 10 });
+        fact(c2, `Met ${npc.name} ${npc.epithet}, a legend nobody back home has heard of.`, { type: 'social', weight: 6, subject: npc.id, tags: ['legend'] });
+        return { text: `{They let you close enough to talk|You do not draw on each other|Neither of you explains yourself}. `
+          + `{They do not give you the real name, if that was ever it|You get a name and nothing behind it|It is not friendship, but it is not nothing}.`,
+        changes: apply(c2, { happiness: 8 }) };
+      } },
+      { id: 'avoid', label: 'Leave them to it', effect: (c2) => ({
+        text: `{Whatever that was, it is not your business|You do not need to know|Some things are better left where you found them}.`,
+        changes: apply(c2, { happiness: 2 }),
+      }) },
+    ],
+  },
+
   {
     id: 'timeline_event', noFatigue: true, tags: ['world', 'threat', 'cosmic'], weight: 400,
     // Every entry on this timeline is Universe 7's own history. A Universe 6

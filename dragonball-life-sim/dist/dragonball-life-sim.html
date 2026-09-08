@@ -21349,7 +21349,7 @@ const { ensureBallSet, ballsHeld, ballsOn, ballManifest, scatterAfterWish, balls
 const { getItem } = __mod_data_items_js;
 const { die } = __mod_engine_lifecycle_js;
 const { getPlace, PLACES } = __mod_data_places_js;
-const { generateFullName } = __mod_data_names_js;
+const { generateFullName, generateEpithet } = __mod_data_names_js;
 const { getTechnique, TECHNIQUES } = __mod_data_techniques_js;
 const { numberish, ordinal } = __mod_engine_text_js;
 const { createTournament, autoRunTournament, settle } = __mod_engine_tournament_js;
@@ -21411,6 +21411,47 @@ function claimBalls(state, rng, count) {
 }
 
 registerEvents([
+  // Nobody claims this planet and nobody claims this fighter either - a real
+  // threat with no faction, no canon story, and no name anybody back home
+  // would recognise. Wild/uninhabited worlds (places.js's 'feral' tag) are
+  // exactly where a life like that goes unnoticed for decades.
+  {
+    id: 'planet_legend', tags: ['world', 'legend', 'opportunity'], weight: 14,
+    minBioAge: 12,
+    when: (ctx) => !ctx.character.inAfterlife && ctx.place.tags.includes('feral'),
+    slots: (ctx) => {
+      const power = Math.max(1, Math.round(combatPower(ctx.character) * ctx.rng.float(2.2, 6)));
+      const npc = stranger(ctx, { placeId: ctx.character.placeId, powerTarget: power, minAge: 30, maxAge: 90, relation: 'acquaintance' });
+      npc.epithet = generateEpithet(ctx.rng);
+      return { name: npc.name, epithet: npc.epithet, npcId: npc.id, power: npc.power };
+    },
+    title: (ctx, s) => `${s.name} ${s.epithet}`,
+    text: `{Nobody out here has heard of you, and you have never heard of them either|`
+      + `Whatever this place is, somebody has clearly been living in it a long time|`
+      + `A name means nothing this far out}. [name] [epithet]. `
+      + `{No faction claims them|Nobody sent them|They belong to nowhere in particular, which is its own kind of unsettling}. `
+      + `{You clock the power before you clock the person|Something about them reads wrong for how quiet this place is|`
+      + `This is not who you expected to find out here}.`,
+    choices: (ctx, s) => [
+      { id: 'fight', label: 'Test them', danger: true, effect: (c2, sl) => offerBattle(c2, {
+        name: `${sl.name} ${sl.epithet}`, power: sl.power, npcId: sl.npcId, raceId: 'other',
+      }, { reason: 'legend', stakes: 'serious', intro: 'Whoever they are, they do not ask what you want first.' }) },
+      { id: 'approach', label: 'Approach carefully', effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        if (!npc) return { text: 'They are already gone by the time you decide.', changes: [] };
+        relate(c2, npc, { closeness: 12, respect: 10 });
+        fact(c2, `Met ${npc.name} ${npc.epithet}, a legend nobody back home has heard of.`, { type: 'social', weight: 6, subject: npc.id, tags: ['legend'] });
+        return { text: `{They let you close enough to talk|You do not draw on each other|Neither of you explains yourself}. `
+          + `{They do not give you the real name, if that was ever it|You get a name and nothing behind it|It is not friendship, but it is not nothing}.`,
+        changes: apply(c2, { happiness: 8 }) };
+      } },
+      { id: 'avoid', label: 'Leave them to it', effect: (c2) => ({
+        text: `{Whatever that was, it is not your business|You do not need to know|Some things are better left where you found them}.`,
+        changes: apply(c2, { happiness: 2 }),
+      }) },
+    ],
+  },
+
   {
     id: 'timeline_event', noFatigue: true, tags: ['world', 'threat', 'cosmic'], weight: 400,
     // Every entry on this timeline is Universe 7's own history. A Universe 6
@@ -25620,7 +25661,7 @@ const { fight, narrateFight, describeGap, runTournament, buildField } = __mod_en
 const { combatPower } = __mod_engine_stats_js;
 const { canonAlive, canonPlace } = __mod_data_canon_js;
 const { getPlace } = __mod_data_places_js;
-const { generateFullName } = __mod_data_names_js;
+const { generateFullName, generateEpithet } = __mod_data_names_js;
 const { numberish } = __mod_engine_text_js;
 const { createTournament, autoRunTournament, settle } = __mod_engine_tournament_js;
 const { TIMELINE } = __mod_data_timeline_js;
@@ -25752,6 +25793,45 @@ registerEvents([
         const changes = apply(c2, { karma: 6, stats: { discipline: 4 } });
         return { text: `{You walk away|Whatever they are offering, no|They shout after you and you keep going}.`, changes };
       } },
+    ],
+  },
+
+  // Not every dangerous fighter down here made it into anybody's story. Hell
+  // is enormous, and full of people history never got around to - some of
+  // them spent an eternity of training on nothing but themselves.
+  {
+    id: 'hell_legend', tags: ['afterlife', 'legend'], weight: 14,
+    requiresAfterlife: true,
+    when: (ctx) => ctx.character.placeId === 'hell',
+    slots: (ctx) => {
+      const power = Math.max(1, Math.round(combatPower(ctx.character) * ctx.rng.float(2, 6)));
+      const npc = stranger(ctx, { placeId: 'hell', powerTarget: power, minAge: 25, maxAge: 400, relation: 'acquaintance' });
+      npc.alive = false;
+      npc.epithet = generateEpithet(ctx.rng);
+      return { name: npc.name, epithet: npc.epithet, npcId: npc.id, power: npc.power };
+    },
+    title: (ctx, s) => `${s.name} ${s.epithet}`,
+    text: `{Nobody down here knows the name and everybody gives them room anyway|`
+      + `No canon story explains this one - Hell is full of people history never got around to|`
+      + `Whoever they were before, nothing about it made the record}. `
+      + `[name] [epithet]. {The dead give them a wide berth without discussing why|`
+      + `Whatever they did with an eternity of training, it shows|Power with no story attached to it is its own kind of unsettling}.`,
+    choices: (ctx, s) => [
+      { id: 'fight', label: 'Fight them', danger: true, effect: (c2, sl) => offerBattle(c2, {
+        name: `${sl.name} ${sl.epithet}`, power: sl.power, npcId: sl.npcId, raceId: 'other',
+      }, { reason: 'hell', stakes: 'spar', intro: 'Nothing here stays broken. Neither of you holds back.' }) },
+      { id: 'train', label: 'Ask what they know', effect: (c2, sl) => {
+        const npc = findNpc(c2.state, sl.npcId);
+        const t = trainYear(c2, { intensity: 1.7, placeMult: 2.6 });
+        if (npc) relate(c2, npc, { closeness: 10, respect: 12 });
+        fact(c2, `Trained under ${sl.name} ${sl.epithet} in Hell - nobody knows who they actually were.`,
+          { type: 'afterlife', weight: 6, tags: ['legend', 'death'] });
+        return { text: `{They do not explain themselves and you stop asking|Whatever they know, they do not gatekeep it|`
+          + `An eternity of practice has to go somewhere}. ${powerLine(t.gained)}`, changes: apply(c2, { stats: { discipline: 3 } }) };
+      } },
+      { id: 'avoid', label: 'Give them the room everyone else does', effect: () => ({
+        text: `{You have enough problems down here|Some fights are not worth whatever is behind them|You let it go}.`, changes: [],
+      }) },
     ],
   },
 
