@@ -19,7 +19,13 @@ export function hasScouter(character) {
 
 export function hasKiSense(character) {
   const t = character.techniques || [];
-  return t.includes('ki_sense') || t.includes('ki_suppress') || t.includes('instant_transmission');
+  if (t.includes('ki_sense') || t.includes('ki_suppress') || t.includes('instant_transmission')) return true;
+  // A body that moves before you decide to does not need to try to sense
+  // anything either - the same reflex reads a power level without being
+  // asked. Only while the overlay is actually held open, not merely learned.
+  const forms = character.transformations || [];
+  return !!(character.flags && character.flags.uiOverlay
+    && (forms.includes('ui_mastered') || forms.includes('ui_perfected')));
 }
 
 /** Can this character read exact numbers off anybody at all? */

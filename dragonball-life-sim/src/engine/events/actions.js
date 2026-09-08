@@ -1184,6 +1184,31 @@ export const ACTIONS = [
     },
   },
   {
+    id: 'toggle_ui_overlay', maxPerYear: 6, minMaturity: 10, slots: 1, name: 'Hold the instinct open', cat: 'power', cost: 'A moment',
+    desc: 'Once it is real, you do not have to reach for it any more - you can just stop getting in its own way.',
+    available: (s) => !s.character.inAfterlife
+      && (s.character.transformations.includes('ui_mastered') || s.character.transformations.includes('ui_perfected')),
+    run: (s, rng) => {
+      const c = s.character;
+      const on = !c.flags.uiOverlay;
+      c.flags.uiOverlay = on;
+      const formName = c.transformations.includes('ui_mastered') ? 'Mastered Ultra Instinct' : 'Ultra Instinct';
+      fact(s, on ? `Stopped fighting ${formName} and let it stay open.` : `Let ${formName} go quiet again.`,
+        { type: 'transformation', weight: 4, tags: ['transformation', 'identity'] });
+      return {
+        text: render(on
+          ? `{You stop getting in your own way|You let go of the part of you that was still holding it back|`
+            + `It stops being something you reach for and starts being something you simply do not stop}. `
+            + `${formName} does not wait for a decision from you any more - it is just how you are standing now. `
+            + `A fight starts already inside it.`
+          : `{You let it go quiet|You step back into deciding things on purpose again|`
+            + `The stillness recedes, and the ordinary effort of being yourself comes back}. `
+            + `${formName} is still there. You are just not asking it to answer for you before you have even chosen to fight.`,
+        {}, rng),
+      };
+    },
+  },
+  {
     id: 'learn_technique', maxPerYear: 3, minMaturity: 6, tooYoung: 'You cannot hold the shapes yet.', slots: 2, name: 'Study a technique', cat: 'power',
     desc: 'Something from the tree. You have to be able to do the movement before it does anything.',
     available: (s) => availableTechniques(s.character).length > 0,

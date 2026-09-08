@@ -250,6 +250,22 @@ export function createBattle(state, rng, opts = {}) {
   me.staminaMax = Math.max(40, Math.round(c.vitals.staminaMax || staminaMaxFor(c)));
   me.stamina = me.staminaMax;
 
+  // Mastered/Perfected Ultra Instinct is not something you reach for mid-
+  // fight the way every other form is - once it stops being a decision, the
+  // player can leave it standing open (toggle_ui_overlay) and a fight simply
+  // starts already inside it, the same way the real thing does not wait for
+  // a first exchange to show up.
+  if (c.flags.uiOverlay) {
+    const overlayId = c.transformations.includes('ui_mastered') ? 'ui_mastered'
+      : c.transformations.includes('ui_perfected') ? 'ui_perfected' : null;
+    const overlay = overlayId && getTransformation(overlayId);
+    if (overlay) {
+      me.form = overlayId;
+      me.formName = overlay.name;
+      me.ki = Math.max(0, me.ki - overlay.drain * masteryDrain(c, overlayId));
+    }
+  }
+
   const makeFoe = (spec) => sideTemplate(spec.name, Math.max(1, spec.power), {
     hpMax: spec.hpMax ?? Math.round(clamp(70 + Math.log10(Math.max(10, spec.power)) * 14, 70, 260)),
     speedStat: spec.speedStat ?? 50,

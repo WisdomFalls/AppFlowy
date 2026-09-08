@@ -1259,8 +1259,11 @@ function panelPower() {
     main.appendChild(el('div', 'row-title', form.name));
     const mastery = getMastery(GAME, form.id);
     const credit = form.creator ? `Created by ${form.creator}.` : (form.creatorNote || null);
+    const overlay = form.owned && (form.id === 'ui_mastered' || form.id === 'ui_perfected')
+      ? (c.flags.uiOverlay ? ' Held open - a fight starts already inside it.' : ' Not held open - reach for it like any other form.')
+      : '';
     main.appendChild(el('div', 'row-note', form.owned
-      ? `${mastery}% worn in (${masteryLabel(mastery)}) - ${form.desc}${credit ? ' ' + credit : ''}`
+      ? `${mastery}% worn in (${masteryLabel(mastery)}) - ${form.desc}${credit ? ' ' + credit : ''}${overlay}`
       : form.missing.length ? 'Needs ' + form.missing.slice(0, 3).join(', ') : 'Ready to attempt'));
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', 'x' + numberish(form.mult)));

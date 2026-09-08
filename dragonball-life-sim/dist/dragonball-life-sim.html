@@ -12410,6 +12410,22 @@ function createBattle(state, rng, opts = {}) {
   me.staminaMax = Math.max(40, Math.round(c.vitals.staminaMax || staminaMaxFor(c)));
   me.stamina = me.staminaMax;
 
+  // Mastered/Perfected Ultra Instinct is not something you reach for mid-
+  // fight the way every other form is - once it stops being a decision, the
+  // player can leave it standing open (toggle_ui_overlay) and a fight simply
+  // starts already inside it, the same way the real thing does not wait for
+  // a first exchange to show up.
+  if (c.flags.uiOverlay) {
+    const overlayId = c.transformations.includes('ui_mastered') ? 'ui_mastered'
+      : c.transformations.includes('ui_perfected') ? 'ui_perfected' : null;
+    const overlay = overlayId && getTransformation(overlayId);
+    if (overlay) {
+      me.form = overlayId;
+      me.formName = overlay.name;
+      me.ki = Math.max(0, me.ki - overlay.drain * masteryDrain(c, overlayId));
+    }
+  }
+
   const makeFoe = (spec) => sideTemplate(spec.name, Math.max(1, spec.power), {
     hpMax: spec.hpMax ?? Math.round(clamp(70 + Math.log10(Math.max(10, spec.power)) * 14, 70, 260)),
     speedStat: spec.speedStat ?? 50,
@@ -29488,6 +29504,31 @@ const ACTIONS = [
     },
   },
   {
+    id: 'toggle_ui_overlay', maxPerYear: 6, minMaturity: 10, slots: 1, name: 'Hold the instinct open', cat: 'power', cost: 'A moment',
+    desc: 'Once it is real, you do not have to reach for it any more - you can just stop getting in its own way.',
+    available: (s) => !s.character.inAfterlife
+      && (s.character.transformations.includes('ui_mastered') || s.character.transformations.includes('ui_perfected')),
+    run: (s, rng) => {
+      const c = s.character;
+      const on = !c.flags.uiOverlay;
+      c.flags.uiOverlay = on;
+      const formName = c.transformations.includes('ui_mastered') ? 'Mastered Ultra Instinct' : 'Ultra Instinct';
+      fact(s, on ? `Stopped fighting ${formName} and let it stay open.` : `Let ${formName} go quiet again.`,
+        { type: 'transformation', weight: 4, tags: ['transformation', 'identity'] });
+      return {
+        text: render(on
+          ? `{You stop getting in your own way|You let go of the part of you that was still holding it back|`
+            + `It stops being something you reach for and starts being something you simply do not stop}. `
+            + `${formName} does not wait for a decision from you any more - it is just how you are standing now. `
+            + `A fight starts already inside it.`
+          : `{You let it go quiet|You step back into deciding things on purpose again|`
+            + `The stillness recedes, and the ordinary effort of being yourself comes back}. `
+            + `${formName} is still there. You are just not asking it to answer for you before you have even chosen to fight.`,
+        {}, rng),
+      };
+    },
+  },
+  {
     id: 'learn_technique', maxPerYear: 3, minMaturity: 6, tooYoung: 'You cannot hold the shapes yet.', slots: 2, name: 'Study a technique', cat: 'power',
     desc: 'Something from the tree. You have to be able to do the movement before it does anything.',
     available: (s) => availableTechniques(s.character).length > 0,
@@ -31575,7 +31616,13 @@ function hasScouter(character) {
 
 function hasKiSense(character) {
   const t = character.techniques || [];
-  return t.includes('ki_sense') || t.includes('ki_suppress') || t.includes('instant_transmission');
+  if (t.includes('ki_sense') || t.includes('ki_suppress') || t.includes('instant_transmission')) return true;
+  // A body that moves before you decide to does not need to try to sense
+  // anything either - the same reflex reads a power level without being
+  // asked. Only while the overlay is actually held open, not merely learned.
+  const forms = character.transformations || [];
+  return !!(character.flags && character.flags.uiOverlay
+    && (forms.includes('ui_mastered') || forms.includes('ui_perfected')));
 }
 
 /** Can this character read exact numbers off anybody at all? */
@@ -33427,8 +33474,11 @@ function panelPower() {
     main.appendChild(el('div', 'row-title', form.name));
     const mastery = getMastery(GAME, form.id);
     const credit = form.creator ? `Created by ${form.creator}.` : (form.creatorNote || null);
+    const overlay = form.owned && (form.id === 'ui_mastered' || form.id === 'ui_perfected')
+      ? (c.flags.uiOverlay ? ' Held open - a fight starts already inside it.' : ' Not held open - reach for it like any other form.')
+      : '';
     main.appendChild(el('div', 'row-note', form.owned
-      ? `${mastery}% worn in (${masteryLabel(mastery)}) - ${form.desc}${credit ? ' ' + credit : ''}`
+      ? `${mastery}% worn in (${masteryLabel(mastery)}) - ${form.desc}${credit ? ' ' + credit : ''}${overlay}`
       : form.missing.length ? 'Needs ' + form.missing.slice(0, 3).join(', ') : 'Ready to attempt'));
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', 'x' + numberish(form.mult)));
