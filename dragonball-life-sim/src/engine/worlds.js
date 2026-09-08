@@ -10,6 +10,7 @@ import { addFact } from './memory.js';
 import { adjust } from './state.js';
 import { spreadWord, DEED_SCALE } from './settlement.js';
 import { pushNews } from './news.js';
+import { placeFamiliarity, attemptLock, transmissionMissLine } from './comms.js';
 
 export function worldRecord(state, planetId) {
   state.world.planets = state.world.planets || {};
@@ -275,16 +276,31 @@ export function travelOptions(state, targetPlanetId) {
 export function travelTo(state, rng, placeId, methodId) {
   const c = state.character;
   const dest = getPlace(placeId);
-  const years = travelYears(getPlace(c.placeId).planet, dest.planet, methodId);
+  let years = travelYears(getPlace(c.placeId).planet, dest.planet, methodId);
+  const rec = worldRecord(state, dest.planet);
+
+  // Instant Transmission is a mortal's lock on a ki signature, not a fixed
+  // coordinate - it can miss. Kai Kai belongs to a god and does not.
+  let missed = false;
+  if (methodId === 'instant' && !c.techniques.includes('kai_kai')) {
+    const lock = attemptLock(c, rng, placeFamiliarity(rec.visits));
+    if (!lock.success) {
+      missed = true;
+      years = Math.max(years, 1);
+      adjust(state, { happiness: -4 });
+    }
+  }
+
   c.placeId = placeId;
-  worldRecord(state, dest.planet).visits += 1;
+  rec.visits += 1;
 
   addFact(state.memory, {
     type: 'travel', year: c.age, weight: 3, tags: ['travel'],
-    text: years > 0 ? `Travelled to ${dest.name}. It took ${years} year${years === 1 ? '' : 's'}.`
-      : `Stepped straight to ${dest.name}.`,
+    text: missed ? `${transmissionMissLine(rng)} You still got to ${dest.name}, eventually.`
+      : years > 0 ? `Travelled to ${dest.name}. It took ${years} year${years === 1 ? '' : 's'}.`
+        : `Stepped straight to ${dest.name}.`,
   });
-  return { years, dest };
+  return { years, dest, missed };
 }
 
 const PLANET_ACTS = {

@@ -23857,6 +23857,100 @@ registerEvents([
 ]);
 })();
 
+/* ==== engine/comms.js ==== */
+const __mod_engine_comms_js = (function () {
+// Reaching somebody who is not on this world. Two related things live here:
+// a signature lock for Instant Transmission (canonically imprecise even for
+// Goku - this is the mortal, "aim and hope" version; Kai Kai belongs to a
+// god and is exempted below) and an on-demand call across space, for a
+// player who does not want to wait for the random long_distance event to
+// bring word from somebody.
+
+const { clamp } = __mod_engine_rng_js;
+const { livingNpcs } = __mod_engine_state_js;
+const { getPlace } = __mod_data_places_js;
+
+/** Living NPCs who are not standing on the same planet as the player right now. */
+function offWorldContacts(state) {
+  const here = getPlace(state.character.placeId).planet;
+  return livingNpcs(state).filter((n) => {
+    const p = getPlace(n.placeId || 'east_city');
+    return p && p.planet !== here && (n.closeness || 0) > 20;
+  });
+}
+
+/** Familiarity 0-1 with a specific person's ki signature - closeness plus how recently you actually stood near them. */
+function npcFamiliarity(npc, year) {
+  if (!npc) return 0.3;
+  const close = clamp((npc.closeness || 0) / 100, 0, 1);
+  const recent = npc.lastSeen != null ? clamp(1 - (year - npc.lastSeen) / 20, 0, 1) : 0.25;
+  return clamp(close * 0.7 + recent * 0.3, 0, 1);
+}
+
+/** Familiarity 0-1 with a whole world - have you actually stood on it before. */
+function placeFamiliarity(visits) {
+  return clamp((visits || 0) / 6, 0, 1);
+}
+
+/**
+ * How good a lock Instant Transmission gets, 0-1. Ki control helps, but
+ * actually knowing the target matters more - this is a technique about
+ * recognising somebody or somewhere, not aiming a weapon at a fixed point.
+ */
+function transmissionLockChance(character, familiarity) {
+  const control = (character.stats && character.stats.kiControl) || 0;
+  const skill = clamp((control - 50) / 150, 0, 0.3);
+  return clamp(0.55 + skill + familiarity * 0.3, 0.4, 0.97);
+}
+
+/**
+ * Roll the lock. `kaiKai` skips the roll entirely - a god's version of this
+ * does not miss.
+ */
+function attemptLock(character, rng, familiarity, kaiKai = false) {
+  if (kaiKai) return { success: true, chance: 1 };
+  const chance = transmissionLockChance(character, familiarity);
+  return { success: rng.chance(chance), chance };
+}
+
+const MISS_LINES = [
+  'You aim for the feeling of them and land somewhere near it instead - close, not right.',
+  'The signature slips half a second before you arrive and you go with where it used to be.',
+  'You are certain, right up until you are standing in completely the wrong place.',
+  'Something about the lock is wrong and you only find out after you have already gone.',
+];
+
+const CALL_LINES = [
+  '{The line takes a while to find a clear channel|Static resolves into a voice, eventually|Whoever built this thing knew what they were doing, mostly}.',
+  '{The signal lags behind the words by half a second, the whole conversation|There is a delay that never quite goes away|You talk over each other twice before you find the rhythm}.',
+  '{It is not the same as being in the room and it is not nothing either|The picture freezes twice and neither of you mentions it|You can hear something in the background you do not recognise, on their end of a different sky}.',
+];
+
+/**
+ * An on-demand call across space to somebody who is not on this world -
+ * the proactive version of the long_distance event, for a player who wants
+ * to reach out rather than wait for word to arrive. Returns text and the
+ * relationship deltas the caller applies via `relate`.
+ */
+function callAcrossSpace(state, rng, npc) {
+  const year = state.world.year;
+  const gap = npc.lastCalled != null ? Math.max(0, year - npc.lastCalled) : null;
+  npc.lastCalled = year;
+  const opener = rng.pick(CALL_LINES);
+  const body = gap === 0
+    ? '{You only just spoke and you call again anyway|Nothing new has happened since last time, and you say so, and neither of you minds}.'
+    : gap != null && gap <= 2
+      ? '{It has not been long, and it still matters that you called|Not much has changed, which is its own kind of good news}.'
+      : `{It has been a while|You have both been letting it go a while|There is a lot to say and not enough of it fits in one call}.`;
+  return { text: `${opener} ${body}`, gap };
+}
+
+function transmissionMissLine(rng) {
+  return rng.pick(MISS_LINES);
+}
+  return { offWorldContacts, npcFamiliarity, placeFamiliarity, transmissionLockChance, attemptLock, callAcrossSpace, transmissionMissLine };
+})();
+
 /* ==== engine/events/growingup.js ==== */
 const __mod_engine_events_growingup_js = (function () {
 // The things a life teaches you whether or not you go looking.
@@ -23880,6 +23974,7 @@ const { addItem, findEntry } = __mod_engine_inventory_js;
 const { numberish } = __mod_engine_text_js;
 const { clamp } = __mod_engine_rng_js;
 const { startTrial } = __mod_engine_trials_js;
+const { npcFamiliarity, attemptLock, transmissionMissLine } = __mod_engine_comms_js;
 
 /** People you know who are not on this world. */
 function offWorld(ctx) {
@@ -23978,8 +24073,16 @@ registerEvents([
       { id: 'go', label: 'Go and see them', hint: 'It is a long way.', effect: (c2, sl) => {
         const npc = findNpc(c2.state, sl.npcId);
         const dest = getPlace(npc && npc.placeId ? npc.placeId : 'east_city');
-        const instant = c2.character.techniques.includes('instant_transmission');
+        const instant = c2.character.techniques.includes('instant_transmission') || c2.character.techniques.includes('kai_kai');
         if (instant) {
+          const kaiKai = c2.character.techniques.includes('kai_kai');
+          const lock = attemptLock(c2.character, c2.rng, npcFamiliarity(npc, c2.year), kaiKai);
+          if (!lock.success) {
+            // A missed lock does not strand you - it just costs the year you
+            // meant to save, and the moment you meant to have.
+            return { text: `{${transmissionMissLine(c2.rng)}} By the time you sort out where you actually are, the year is mostly gone.`,
+            changes: apply(c2, { happiness: -6 }) };
+          }
           c2.character.placeId = dest.id;
           if (npc) { npc.lastSeen = c2.year; relate(c2, npc, { closeness: 22, trust: 14 }); }
           return { text: `{You lock onto them and go|It takes no time at all, which never stops being strange|`
@@ -27474,6 +27577,7 @@ const { addFact } = __mod_engine_memory_js;
 const { adjust } = __mod_engine_state_js;
 const { spreadWord, DEED_SCALE } = __mod_engine_settlement_js;
 const { pushNews } = __mod_engine_news_js;
+const { placeFamiliarity, attemptLock, transmissionMissLine } = __mod_engine_comms_js;
 
 function worldRecord(state, planetId) {
   state.world.planets = state.world.planets || {};
@@ -27739,16 +27843,31 @@ function travelOptions(state, targetPlanetId) {
 function travelTo(state, rng, placeId, methodId) {
   const c = state.character;
   const dest = getPlace(placeId);
-  const years = travelYears(getPlace(c.placeId).planet, dest.planet, methodId);
+  let years = travelYears(getPlace(c.placeId).planet, dest.planet, methodId);
+  const rec = worldRecord(state, dest.planet);
+
+  // Instant Transmission is a mortal's lock on a ki signature, not a fixed
+  // coordinate - it can miss. Kai Kai belongs to a god and does not.
+  let missed = false;
+  if (methodId === 'instant' && !c.techniques.includes('kai_kai')) {
+    const lock = attemptLock(c, rng, placeFamiliarity(rec.visits));
+    if (!lock.success) {
+      missed = true;
+      years = Math.max(years, 1);
+      adjust(state, { happiness: -4 });
+    }
+  }
+
   c.placeId = placeId;
-  worldRecord(state, dest.planet).visits += 1;
+  rec.visits += 1;
 
   addFact(state.memory, {
     type: 'travel', year: c.age, weight: 3, tags: ['travel'],
-    text: years > 0 ? `Travelled to ${dest.name}. It took ${years} year${years === 1 ? '' : 's'}.`
-      : `Stepped straight to ${dest.name}.`,
+    text: missed ? `${transmissionMissLine(rng)} You still got to ${dest.name}, eventually.`
+      : years > 0 ? `Travelled to ${dest.name}. It took ${years} year${years === 1 ? '' : 's'}.`
+        : `Stepped straight to ${dest.name}.`,
   });
-  return { years, dest };
+  return { years, dest, missed };
 }
 
 const PLANET_ACTS = {
@@ -28132,6 +28251,7 @@ const { generateFullName, generateSignatureName } = __mod_data_names_js;
 const { numberish } = __mod_engine_text_js;
 const { localMoney } = __mod_engine_events_helpers_js;
 const { watchBroadcast } = __mod_engine_broadcast_js;
+const { offWorldContacts, callAcrossSpace, transmissionMissLine } = __mod_engine_comms_js;
 
 /** Living blood-or-marriage family who are not standing where you are. */
 function familyElsewhere(state) {
@@ -29727,22 +29847,25 @@ const ACTIONS = [
         debit(s.character, cur.id, price);
       }
       const trip = travelTo(s, rng, dest.id, best.id);
-      const how = {
-        instant: 'You lock onto something you can feel from here and step through.',
-        ship: 'You take the ship. There is a kitchen and a gravity setting and nothing else to do.',
-        pod: 'The pod puts you under and wakes you when it is time.',
-        flight: 'You fly it. All of it. There is no air out there and after a while you stop noticing.',
-        passage: 'You buy a berth on a freighter and spend the crossing in a room the size of a cupboard.',
-        stowaway: 'You get into a container and stay in it. Twice somebody almost opens it.',
-        kai_kai: 'You step across the boundary between universes like it is a doorway.',
-        angel: 'You are carried across, and the crossing itself barely registers.',
-        pass: 'Whoever cleared this in advance made sure nothing stops you at the boundary.',
-        smuggler: 'Somebody who has done this before takes your money and does not explain how it works.',
-      }[best.id] || '';
+      const how = trip.missed
+        ? transmissionMissLine(rng)
+        : {
+          instant: 'You lock onto something you can feel from here and step through.',
+          ship: 'You take the ship. There is a kitchen and a gravity setting and nothing else to do.',
+          pod: 'The pod puts you under and wakes you when it is time.',
+          flight: 'You fly it. All of it. There is no air out there and after a while you stop noticing.',
+          passage: 'You buy a berth on a freighter and spend the crossing in a room the size of a cupboard.',
+          stowaway: 'You get into a container and stay in it. Twice somebody almost opens it.',
+          kai_kai: 'You step across the boundary between universes like it is a doorway.',
+          angel: 'You are carried across, and the crossing itself barely registers.',
+          pass: 'Whoever cleared this in advance made sure nothing stops you at the boundary.',
+          smuggler: 'Somebody who has done this before takes your money and does not explain how it works.',
+        }[best.id] || '';
       // Years in transit are years of your life.
       return {
         text: `${how} ${dest.name}. ${dest.desc}`
-          + (trip.years > 0 ? ` The crossing takes ${trip.years} year${trip.years === 1 ? '' : 's'}.` : ' You are simply there.'),
+          + (trip.missed ? ` You still get there, just later and more embarrassed than you meant to be.`
+            : trip.years > 0 ? ` The crossing takes ${trip.years} year${trip.years === 1 ? '' : 's'}.` : ' You are simply there.'),
         skipYears: trip.years,
       };
     },
@@ -30056,6 +30179,23 @@ const ACTIONS = [
     desc: 'Whatever is on. Sometimes that is the news, and sometimes it is exactly the point that it is not.',
     available: (s) => !s.character.inAfterlife && !!homeOf(s) && homeBonus(s).here,
     run: (s, rng) => watchBroadcast(s, rng),
+  },
+  {
+    id: 'contact_offworld', maxPerYear: 6, slots: 1, name: 'Call someone off-world', cat: 'social', cost: 'A moment',
+    desc: 'Reach out across space instead of waiting for word to find its own way to you.',
+    available: (s) => !s.character.inAfterlife && offWorldContacts(s).length > 0,
+    options: (s) => offWorldContacts(s).map((n) => ({ id: n.id, label: n.name, hint: `${relationLabel(n)}, on ${getPlace(n.placeId || 'east_city').name}` })),
+    run: (s, rng, params) => {
+      const npc = params && params.option ? findNpc(s, params.option) : null;
+      if (!npc) return { text: 'There is nobody off-world to reach right now.' };
+      const call = callAcrossSpace(s, rng, npc);
+      const gain = call.gap === 0 ? 4 : call.gap != null && call.gap <= 2 ? 8 : 14;
+      npc.closeness = clamp((npc.closeness || 0) + gain, 0, 100);
+      npc.trust = clamp((npc.trust ?? 30) + Math.round(gain * 0.6), 0, 100);
+      fact(s, `Called ${npc.name}, off on ${getPlace(npc.placeId || 'east_city').name}.`, { type: 'social', weight: 2, subject: npc.id, tags: ['social'] });
+      adjust(s, { happiness: 6 });
+      return { text: render(`${call.text} ${npc.name} {is glad you called|says it should not have taken this long|does not let you go easily}.`, {}, rng) };
+    },
   },
   {
     id: 'commit_crime', maxPerYear: 3, minMaturity: 8, slots: 1, name: 'Commit a crime', cat: 'world', cost: 'A moment', danger: true,

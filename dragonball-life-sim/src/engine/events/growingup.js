@@ -19,6 +19,7 @@ import { addItem, findEntry } from '../inventory.js';
 import { numberish } from '../text.js';
 import { clamp } from '../rng.js';
 import { startTrial } from '../trials.js';
+import { npcFamiliarity, attemptLock, transmissionMissLine } from '../comms.js';
 
 /** People you know who are not on this world. */
 function offWorld(ctx) {
@@ -117,8 +118,16 @@ registerEvents([
       { id: 'go', label: 'Go and see them', hint: 'It is a long way.', effect: (c2, sl) => {
         const npc = findNpc(c2.state, sl.npcId);
         const dest = getPlace(npc && npc.placeId ? npc.placeId : 'east_city');
-        const instant = c2.character.techniques.includes('instant_transmission');
+        const instant = c2.character.techniques.includes('instant_transmission') || c2.character.techniques.includes('kai_kai');
         if (instant) {
+          const kaiKai = c2.character.techniques.includes('kai_kai');
+          const lock = attemptLock(c2.character, c2.rng, npcFamiliarity(npc, c2.year), kaiKai);
+          if (!lock.success) {
+            // A missed lock does not strand you - it just costs the year you
+            // meant to save, and the moment you meant to have.
+            return { text: `{${transmissionMissLine(c2.rng)}} By the time you sort out where you actually are, the year is mostly gone.`,
+            changes: apply(c2, { happiness: -6 }) };
+          }
           c2.character.placeId = dest.id;
           if (npc) { npc.lastSeen = c2.year; relate(c2, npc, { closeness: 22, trust: 14 }); }
           return { text: `{You lock onto them and go|It takes no time at all, which never stops being strange|`

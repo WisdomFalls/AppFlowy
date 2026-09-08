@@ -38,6 +38,7 @@ import { generateFullName, generateSignatureName } from '../../data/names.js';
 import { numberish } from '../text.js';
 import { localMoney } from './helpers.js';
 import { watchBroadcast } from '../broadcast.js';
+import { offWorldContacts, callAcrossSpace, transmissionMissLine } from '../comms.js';
 
 /** Living blood-or-marriage family who are not standing where you are. */
 function familyElsewhere(state) {
@@ -1633,22 +1634,25 @@ export const ACTIONS = [
         debit(s.character, cur.id, price);
       }
       const trip = travelTo(s, rng, dest.id, best.id);
-      const how = {
-        instant: 'You lock onto something you can feel from here and step through.',
-        ship: 'You take the ship. There is a kitchen and a gravity setting and nothing else to do.',
-        pod: 'The pod puts you under and wakes you when it is time.',
-        flight: 'You fly it. All of it. There is no air out there and after a while you stop noticing.',
-        passage: 'You buy a berth on a freighter and spend the crossing in a room the size of a cupboard.',
-        stowaway: 'You get into a container and stay in it. Twice somebody almost opens it.',
-        kai_kai: 'You step across the boundary between universes like it is a doorway.',
-        angel: 'You are carried across, and the crossing itself barely registers.',
-        pass: 'Whoever cleared this in advance made sure nothing stops you at the boundary.',
-        smuggler: 'Somebody who has done this before takes your money and does not explain how it works.',
-      }[best.id] || '';
+      const how = trip.missed
+        ? transmissionMissLine(rng)
+        : {
+          instant: 'You lock onto something you can feel from here and step through.',
+          ship: 'You take the ship. There is a kitchen and a gravity setting and nothing else to do.',
+          pod: 'The pod puts you under and wakes you when it is time.',
+          flight: 'You fly it. All of it. There is no air out there and after a while you stop noticing.',
+          passage: 'You buy a berth on a freighter and spend the crossing in a room the size of a cupboard.',
+          stowaway: 'You get into a container and stay in it. Twice somebody almost opens it.',
+          kai_kai: 'You step across the boundary between universes like it is a doorway.',
+          angel: 'You are carried across, and the crossing itself barely registers.',
+          pass: 'Whoever cleared this in advance made sure nothing stops you at the boundary.',
+          smuggler: 'Somebody who has done this before takes your money and does not explain how it works.',
+        }[best.id] || '';
       // Years in transit are years of your life.
       return {
         text: `${how} ${dest.name}. ${dest.desc}`
-          + (trip.years > 0 ? ` The crossing takes ${trip.years} year${trip.years === 1 ? '' : 's'}.` : ' You are simply there.'),
+          + (trip.missed ? ` You still get there, just later and more embarrassed than you meant to be.`
+            : trip.years > 0 ? ` The crossing takes ${trip.years} year${trip.years === 1 ? '' : 's'}.` : ' You are simply there.'),
         skipYears: trip.years,
       };
     },
@@ -1962,6 +1966,23 @@ export const ACTIONS = [
     desc: 'Whatever is on. Sometimes that is the news, and sometimes it is exactly the point that it is not.',
     available: (s) => !s.character.inAfterlife && !!homeOf(s) && homeBonus(s).here,
     run: (s, rng) => watchBroadcast(s, rng),
+  },
+  {
+    id: 'contact_offworld', maxPerYear: 6, slots: 1, name: 'Call someone off-world', cat: 'social', cost: 'A moment',
+    desc: 'Reach out across space instead of waiting for word to find its own way to you.',
+    available: (s) => !s.character.inAfterlife && offWorldContacts(s).length > 0,
+    options: (s) => offWorldContacts(s).map((n) => ({ id: n.id, label: n.name, hint: `${relationLabel(n)}, on ${getPlace(n.placeId || 'east_city').name}` })),
+    run: (s, rng, params) => {
+      const npc = params && params.option ? findNpc(s, params.option) : null;
+      if (!npc) return { text: 'There is nobody off-world to reach right now.' };
+      const call = callAcrossSpace(s, rng, npc);
+      const gain = call.gap === 0 ? 4 : call.gap != null && call.gap <= 2 ? 8 : 14;
+      npc.closeness = clamp((npc.closeness || 0) + gain, 0, 100);
+      npc.trust = clamp((npc.trust ?? 30) + Math.round(gain * 0.6), 0, 100);
+      fact(s, `Called ${npc.name}, off on ${getPlace(npc.placeId || 'east_city').name}.`, { type: 'social', weight: 2, subject: npc.id, tags: ['social'] });
+      adjust(s, { happiness: 6 });
+      return { text: render(`${call.text} ${npc.name} {is glad you called|says it should not have taken this long|does not let you go easily}.`, {}, rng) };
+    },
   },
   {
     id: 'commit_crime', maxPerYear: 3, minMaturity: 8, slots: 1, name: 'Commit a crime', cat: 'world', cost: 'A moment', danger: true,
