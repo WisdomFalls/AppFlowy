@@ -4,7 +4,7 @@
 
 import { clamp } from './rng.js';
 import { generateFullName, generateTitle, generateEpithet, generateSignatureName } from '../data/names.js';
-import { RACES, getRace, raceHasTail, sexesFor } from '../data/races.js';
+import { RACES, getRace, raceHasTail, sexesFor, generateRace } from '../data/races.js';
 import { getCanon, canonPower, canonAlive } from '../data/canon.js';
 import { getPlace, PLACES } from '../data/places.js';
 import { getItem } from '../data/items.js';
@@ -107,6 +107,11 @@ export function makeAppearance(rng, raceId, sex) {
 export function makeNpc(rng, opts = {}) {
   const raceId = opts.raceId || pickRaceFor(rng, opts);
   const race = getRace(raceId);
+  // A generated race (see races.js) only lives in the module's in-memory
+  // RACE_BY_ID for as long as this session runs - stash the full
+  // definition on the npc itself so save.js's migrate() can put it back
+  // after a save/load, rather than this npc silently reading as Earthling.
+  const raceDef = race.generated ? race : null;
   const year = opts.year || 750;
   const age = opts.age ?? rng.int(opts.minAge ?? 14, opts.maxAge ?? 55);
   const powerScale = opts.powerScale ?? 1;
@@ -127,6 +132,7 @@ export function makeNpc(rng, opts = {}) {
     id: opts.id || nextNpcId(),
     name: opts.name || generateFullName(rng, raceId),
     raceId,
+    raceDef,
     canonId: null,
     sex: opts.sex || rng.pick(sexesFor(raceId)),
     age,
@@ -192,6 +198,13 @@ export function makeNpc(rng, opts = {}) {
 function pickRaceFor(rng, opts) {
   const place = opts.placeId ? getPlace(opts.placeId) : null;
   const tags = place ? place.tags : [];
+  // A world with no species tag pulling toward one of the recognised
+  // peoples sometimes turns up somebody from a species nobody has bothered
+  // to catalogue - the whole point of a universe this size.
+  const speciesTags = ['saiyan', 'namek', 'hivekind', 'imperial', 'divine'];
+  if (!tags.some((t) => speciesTags.includes(t)) && rng.chance(0.08)) {
+    return generateRace(rng).id;
+  }
   const weights = {
     earthling: tags.includes('urban') || tags.includes('civilised') ? 60 : 20,
     saiyan: tags.includes('saiyan') ? 60 : 2,

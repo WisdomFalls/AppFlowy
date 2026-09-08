@@ -2,6 +2,7 @@
 // never stored - so a save is just JSON.
 
 import { SAVE_VERSION } from './state.js';
+import { registerRace } from '../data/races.js';
 
 const KEY_PREFIX = 'dbls.save.';
 const SLOTS = ['auto', 'a', 'b', 'c'];
@@ -43,9 +44,15 @@ function migrate(state, from) {
   delete state.character.slotsLeft;
   if (!state.character.yearUse) state.character.yearUse = {};
   if (!state.character.yearUse) state.character.yearUse = {};
+  // A generated race (races.js's generateRace()) only lives in RACE_BY_ID
+  // for as long as the session that made it ran - the character (and any
+  // npc) carries its own copy specifically so it can be put back here, on
+  // every load, rather than quietly reading as Earthling from now on.
+  if (state.character && state.character.raceDef) registerRace(state.character.raceDef);
   for (const npc of Object.values(state.npcs || {})) {
     if (npc.trust === undefined) npc.trust = 30;
     if (npc.knowledge === undefined) npc.knowledge = 1;
+    if (npc.raceDef) registerRace(npc.raceDef);
   }
   state.version = SAVE_VERSION;
   return state;

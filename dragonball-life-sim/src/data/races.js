@@ -509,6 +509,100 @@ export function getRace(id) {
   return RACE_BY_ID[id] || RACE_BY_ID.earthling;
 }
 
+// ------------------------------------------------------- generated races
+// The curated NPC-only additions above (Metamoran, Vezrin, Driftkin,
+// Kryllian...) are still a fixed list - a universe this size should not
+// keep producing the same dozen background species forever. generateRace()
+// invents one on the spot: real stats, a real lifespan, a couple of perks
+// drawn from a pool safe for any species to have (nothing species-defining
+// like oozaru or kaiKai), and a name nobody wrote down in advance.
+//
+// Registered into RACE_BY_ID immediately, same as any curated entry, so
+// getRace() resolves it right away - but a generated id will not survive a
+// save/load on its own, since RACE_BY_ID is rebuilt fresh from this file
+// every time the module loads. makeNpc() also stashes the full definition
+// on the npc itself (npc.raceDef) as a durable backup, and save.js's
+// migrate() re-registers every npc.raceDef it finds on load, before
+// anything else runs.
+const RACE_SYL_A = ['Vez', 'Kry', 'Zor', 'Mel', 'Thal', 'Cor', 'Ish', 'Dren', 'Sol', 'Vash', 'Nyx', 'Quor', 'Bryn', 'Xel', 'Or', 'Jhen', 'Ral'];
+const RACE_SYL_B = ['ra', 'ith', 'an', 'or', 'eth', 'ul', 'ax', 'in', 'yr', 'os', 'ad'];
+const RACE_SUFFIX = ['ian', 'kin', 'ari', 'ite', 'oth', 'an', 'ese'];
+
+function generateRaceName(rng) {
+  const name = `${rng.pick(RACE_SYL_A)}${rng.pick(RACE_SYL_B)}${rng.pick(RACE_SUFFIX)}`;
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+const GENERIC_PERK_POOL = [
+  'hardToKill', 'fastLearner', 'luck', 'senseDanger', 'telepathic', 'wanderer',
+  'socialAnimal', 'stoutBuild', 'goodHumoured', 'survivor', 'meditative',
+  'longView', 'unshakeable', 'coldLogic', 'battleLust', 'noKiSignature', 'vacuumProof',
+];
+
+const GENERIC_BODY = [
+  { note: 'chitin-plated', hairColours: ['none (chitin, not hair)'] },
+  { note: 'scaled', hairColours: ['none (scales, not hair)'] },
+  { note: 'furred', hairColours: ['black', 'brown', 'grey', 'white'] },
+  { note: 'crystalline along the skull and spine', hairColours: ['none (crystal growths, not hair)'] },
+  { note: 'faintly bioluminescent', hairColours: ['none (light patterns, not hair)'] },
+  { note: 'ordinary-skinned, otherwise unremarkable to look at', hairColours: ['black', 'brown', 'red', 'white'] },
+];
+
+const GENERIC_HOME = [
+  'a heavy-gravity world', 'a world with three suns and no real night', 'an ocean world with no dry land to speak of',
+  'a world scoured by radiation, adapted to rather than escaped', 'a world so cold most life lives underground',
+  'a world nobody outside its own system has bothered to properly chart',
+];
+
+/** Invent a wholly new species. Registers it into RACE_BY_ID and returns
+ * the full definition (also stash on npc.raceDef - see makeNpc()). */
+export function generateRace(rng) {
+  const body = rng.pick(GENERIC_BODY);
+  const home = rng.pick(GENERIC_HOME);
+  const id = 'gen_' + Math.floor(rng.next() * 1e12).toString(36);
+  const name = generateRaceName(rng);
+  const spread = () => rng.int(28, 92);
+  const base = {
+    strength: spread(), speed: spread(), technique: spread(), kiControl: spread(),
+    durability: spread(), intellect: spread(), charisma: spread(), discipline: spread(),
+  };
+  const round2 = (v) => Math.round(v * 100) / 100;
+  const race = {
+    id, name, short: name, generated: true,
+    blurb: `${body.note.charAt(0).toUpperCase()}${body.note.slice(1)}, from ${home}. Nobody outside their own system has much reason to have heard of them.`,
+    homeworlds: [],
+    base,
+    growth: {
+      power: round2(rng.float(0.75, 1.5)),
+      technique: round2(rng.float(0.85, 1.3)),
+      kiControl: round2(rng.float(0.85, 1.3)),
+      discipline: round2(rng.float(0.85, 1.25)),
+    },
+    startPower: [1, rng.int(4, 20)],
+    lifespan: [rng.int(50, 90), rng.int(100, 260)],
+    agingRate: round2(rng.float(0.6, 1.3)),
+    maturityRate: round2(rng.float(0.75, 1.3)),
+    appetite: round2(rng.float(0.6, 1.4)),
+    perks: rng.sample(GENERIC_PERK_POOL, rng.int(1, 2)),
+    transformLadder: 'earthling',
+    naming: 'other',
+    tags: ['mortal', 'generated'],
+    hairColours: body.hairColours,
+    startingTechniques: [],
+    notes: `One of countless species nobody bothered writing a proper field guide for. ${name}s do not think of themselves as exotic.`,
+  };
+  registerRace(race);
+  return race;
+}
+
+/** Wire a generated race back into the shared lookup table - used both by
+ * generateRace() itself and by save.js's migrate() when restoring one
+ * found on an npc.raceDef after a save/load. Idempotent. */
+export function registerRace(race) {
+  RACE_BY_ID[race.id] = race;
+  if (!RACES.includes(race)) RACES.push(race);
+}
+
 /** Which sexes a race actually shows. Most have both; a few, canonically, do not. */
 export function sexesFor(raceId) {
   return getRace(raceId).sexes || ['female', 'male'];

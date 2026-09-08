@@ -832,6 +832,10 @@ export function beginLegacy(state) {
     ...old,
     name: heir.name,
     raceId: heir.raceId,
+    // A generated race (races.js's generateRace()) only stays resolvable
+    // via its stashed definition - an heir who happens to have one needs
+    // it carried across into the character they become.
+    raceDef: heir.raceDef || null,
     sex: heir.sex,
     age: heir.age,
     birthYear: heir.birthYear,
