@@ -2536,7 +2536,9 @@ function renderBattle() {
   $('foe-name').textContent = st.them.name;
   const foeLimbState = st.them.armsBroken >= 2 ? 'both arms broken'
     : st.them.armsBroken === 1 ? 'an arm broken' : null;
-  $('foe-sub').textContent = [st.them.tier, st.them.form, st.them.stance, foeLimbState,
+  $('foe-sub').textContent = [st.them.tier, st.them.form,
+    st.them.layerForm ? `${st.them.layerForm} through it` : null,
+    st.them.stance, foeLimbState,
     st.them.legBroken ? 'a leg broken' : null].filter(Boolean).join(' - ');
   // A number on the foe panel is a scouter reading, not a birthright.
   const foeRead = readPower(GAME, st.them.power, { peek: true });
@@ -2591,7 +2593,7 @@ function renderBattle() {
   const myLimbState = st.me.armsBroken >= 2 ? 'both arms broken'
     : st.me.armsBroken === 1 ? 'an arm broken' : null;
   $('my-state').textContent = [
-    st.me.form, st.me.stance,
+    st.me.form, st.me.layerForm ? `${st.me.layerForm} through it` : null, st.me.stance,
     held < 1 ? `holding back (${Math.round(held * 100)}%)` : null,
     myLimbState, st.me.legBroken ? 'a leg broken' : null,
   ].filter(Boolean).join(' - ');

@@ -182,6 +182,13 @@ function sideTemplate(name, power, opts = {}) {
     stance: 'neutral',
     form: null,
     formName: null,
+    // A second transformation held through the first rather than replacing
+    // it - keep your tail, go Great Ape, then push Super Saiyan on top of
+    // that once you actually have control of the ape. Only certain forms
+    // (transformations.js's `layerOn`) can be stacked, and only onto the
+    // specific base forms they name.
+    layerForm: null,
+    layerFormName: null,
     guarding: false,
     charged: 0,
     staggered: 0,
@@ -317,13 +324,19 @@ function effectivePower(side, battle) {
   const form = side.form ? getTransformation(side.form) : null;
   // A form is worth what you can hold of it, not what the book says.
   const mult = form ? form.mult * (side.mastery ? masteryMult({ formMastery: side.mastery }, form.id) : 1) : 1;
+  // A layered form is real, but stacking it onto a base form that is
+  // already reshaping your body is a harder, less complete grip than
+  // wearing either one alone - roughly half of what the layer would be
+  // worth if it were the only thing active.
+  const layer = side.layerForm ? getTransformation(side.layerForm) : null;
+  const layerMult = layer ? 1 + (layer.mult - 1) * 0.5 : 1;
   const condition = clamp(0.45 + (side.hp / side.hpMax) * 0.55, 0.45, 1);
   const kiFactor = clamp(0.6 + (side.ki / Math.max(1, side.kiMax)) * 0.4, 0.6, 1);
   // Whatever you are keeping in reserve does not land on them - and an NPC
   // sparring you at less than everything they have is doing the same thing.
   const held = battle && side === battle.me ? (battle.restraint ?? 1) : (side.restraint ?? 1);
   const crowd = side.crowdPenalty ?? 1;
-  return Math.max(1, side.basePower * mult * condition * kiFactor * held * crowd);
+  return Math.max(1, side.basePower * mult * layerMult * condition * kiFactor * held * crowd);
 }
 
 /** The gap that decides whether somebody can be touched at all. */
@@ -531,6 +544,37 @@ export function battleActions(state, battle) {
     out.push({ id: 'form:none', kind: 'form', label: 'Drop the form', hint: 'Stop the ki drain' });
   }
 
+  // Some forms do not replace what you are already holding - they stack on
+  // top of it, if you actually have control of the base shape. Keep your
+  // tail, go Great Ape, and once you have real mastery of the ape itself,
+  // push Super Saiyan on top of that instead of losing the ape to get it.
+  if (me.form) {
+    const baseMastery = (c.formMastery && c.formMastery[me.form]) || 0;
+    const layerCandidates = me.forms
+      .map((id) => getTransformation(id))
+      .filter((f) => f && f.layerOn && f.layerOn.includes(me.form) && f.id !== me.layerForm);
+    for (const form of layerCandidates) {
+      const ready = baseMastery >= 60;
+      out.push({
+        id: 'layer:' + form.id,
+        kind: 'form',
+        label: `Hold ${form.name} through it`,
+        hint: ready
+          ? `Stack on top of ${getTransformation(me.form).name} - x${numberish(form.mult)} more, unstable - ${form.drain} ki upkeep`
+          : `Needs real control of ${getTransformation(me.form).name} first (${Math.round(baseMastery)}/60% mastery)`,
+        disabled: !ready || me.ki < form.drain * 2,
+        reason: !ready ? 'Not enough control over the base form yet' : (me.ki < form.drain * 2 ? 'Not enough ki to hold it' : null),
+      });
+    }
+    if (me.layerForm) {
+      out.push({
+        id: 'layer:none', kind: 'form',
+        label: `Let go of ${getTransformation(me.layerForm).name}`,
+        hint: `Drop the layer, keep ${getTransformation(me.form).name}.`,
+      });
+    }
+  }
+
   if (c.senzu > 0) {
     out.push({ id: 'senzu', kind: 'item', label: 'Eat a senzu bean', hint: `Full heal - ${c.senzu} left` });
   }
@@ -591,7 +635,24 @@ function applyUpkeep(side, lines) {
         side.ki = 0;
         side.form = null;
         side.formName = null;
+        // Nothing to layer on top of once the base form is gone.
+        side.layerForm = null;
+        side.layerFormName = null;
         lines.push(`${side.name} cannot hold the form any longer and drops out of it.`);
+      }
+    }
+  }
+  // A layered form is a harder grip than the base one - it drains, and
+  // slips first if the ki runs short, well before the base form itself does.
+  if (side.form && side.layerForm) {
+    const layer = getTransformation(side.layerForm);
+    if (layer) {
+      side.ki -= layer.drain * 0.6 * (side.mastery ? masteryDrain({ formMastery: side.mastery }, layer.id) : 1);
+      if (side.ki <= 0) {
+        side.ki = 0;
+        side.layerForm = null;
+        side.layerFormName = null;
+        lines.push(`${side.name} cannot hold both any longer. The second form slips first.`);
       }
     }
   }
@@ -922,6 +983,9 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
     if (id === 'none') {
       me.form = null;
       me.formName = null;
+      // Nothing left to layer on top of.
+      me.layerForm = null;
+      me.layerFormName = null;
       lines.push('You let the form go. The drain stops.');
     } else {
       const form = getTransformation(id);
@@ -929,6 +993,15 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
         me.form = id;
         me.formName = form.name;
         me.ki = Math.max(0, me.ki - form.drain * masteryDrain(c, form.id));
+        // Whatever was layered onto the old base does not carry over onto a
+        // different one unless the new base can actually hold it too.
+        if (me.layerForm) {
+          const layer = getTransformation(me.layerForm);
+          if (!layer || !layer.layerOn || !layer.layerOn.includes(id)) {
+            me.layerForm = null;
+            me.layerFormName = null;
+          }
+        }
         battle.formRounds = battle.formRounds || {};
         lines.push(`${form.name}. ${form.desc}`);
         const worn = masteryMult(c, form.id);
@@ -938,6 +1011,26 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
         else if (them.hp / them.hpMax > 0.5) {
           lines.push(`${them.name} ${rng.pick(['takes a step back', 'stops smiling', 'says nothing', 'looks at you differently'])}.`);
         }
+      }
+    }
+  } else if (actionId.startsWith('layer:')) {
+    const id = actionId.slice(6);
+    if (id === 'none') {
+      lines.push(me.layerForm
+        ? `You let ${getTransformation(me.layerForm).name} go. ${getTransformation(me.form)?.name || 'The base form'} holds on its own.`
+        : 'Nothing layered to drop.');
+      me.layerForm = null;
+      me.layerFormName = null;
+    } else {
+      const form = getTransformation(id);
+      const baseMastery = (c.formMastery && c.formMastery[me.form]) || 0;
+      if (form && me.form && me.forms.includes(id) && form.layerOn && form.layerOn.includes(me.form) && baseMastery >= 60) {
+        me.layerForm = id;
+        me.layerFormName = form.name;
+        me.ki = Math.max(0, me.ki - form.drain * masteryDrain(c, form.id));
+        lines.push(`${form.name}, held through ${getTransformation(me.form).name} rather than instead of it. ${form.desc}`);
+        const said = voiceLine(battle, rng, 'form');
+        if (said) lines.push(said);
       }
     }
   } else if (actionId.startsWith('say:')) {
@@ -1296,7 +1389,7 @@ export function battleStatus(battle) {
       hp: Math.round(battle.me.hp), hpMax: Math.round(battle.me.hpMax),
       ki: Math.round(battle.me.ki), kiMax: Math.round(battle.me.kiMax),
       stamina: Math.round(battle.me.stamina), staminaMax: Math.round(battle.me.staminaMax),
-      form: battle.me.formName, stance: STANCES[battle.me.stance].name,
+      form: battle.me.formName, layerForm: battle.me.layerFormName, stance: STANCES[battle.me.stance].name,
       power: Math.round(effectivePower(battle.me, battle)),
       armsBroken: battle.me.armsBroken || 0, legBroken: !!battle.me.legBroken,
     },
@@ -1304,7 +1397,7 @@ export function battleStatus(battle) {
       name: battle.them.name,
       hp: Math.round(battle.them.hp), hpMax: Math.round(battle.them.hpMax),
       ki: Math.round(battle.them.ki),
-      form: battle.them.formName, stance: STANCES[battle.them.stance].name,
+      form: battle.them.formName, layerForm: battle.them.layerFormName, stance: STANCES[battle.them.stance].name,
       power: Math.round(effectivePower(battle.them, battle)),
       tier: powerTier(effectivePower(battle.them, battle)),
       armsBroken: battle.them.armsBroken || 0, legBroken: !!battle.them.legBroken,

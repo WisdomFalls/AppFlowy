@@ -48,6 +48,9 @@ export const TRANSFORMATIONS = [
     hint: 'Enough raw power, and a loss you cannot fight your way out of.',
     desc: 'Gold hair, green eyes, and a rage that finally has somewhere to go.',
     creator: 'Yamoshi', creatorNote: 'The legendary first Super Saiyan, generations before Goku. Every gold-haired Saiyan since is retracing what he found first.',
+    // Kept your tail, went Great Ape, and actually have control of it - push
+    // this on top rather than losing the ape to get it.
+    layerOn: ['oozaru'],
   },
   {
     id: 'ssj_grade2', name: 'Super Saiyan Grade 2', ladder: ['saiyan', 'halfsaiyan'], tier: 5.4,
@@ -56,6 +59,7 @@ export const TRANSFORMATIONS = [
     hint: 'Push Super Saiyan past its resting point and let the muscle catch up to the power.',
     desc: 'Thicker, harder, gold hair a little wilder. More bulk than finesse, and it shows.',
     creator: 'Vegeta',
+    layerOn: ['oozaru'],
   },
   {
     id: 'ssj_grade3', name: 'Super Saiyan Grade 3', ladder: ['saiyan', 'halfsaiyan'], tier: 5.6,
@@ -85,6 +89,9 @@ export const TRANSFORMATIONS = [
     hint: 'Push Super Saiyan into Grade 2, then find something worth losing your temper over.',
     desc: 'Crackling lightning, still eyes. The calm part of you is the dangerous part.',
     creator: 'Gohan', creatorNote: 'First reached in grief and rage, not training.',
+    // This is the ceiling on the ape - past here it is too much form to
+    // hold on top of another form at once, mastered control or not.
+    layerOn: ['oozaru'],
   },
   {
     id: 'ssj3', name: 'Super Saiyan 3', ladder: ['saiyan', 'halfsaiyan'], tier: 8,
