@@ -46,6 +46,7 @@ import { worldManifest } from '../engine/worlds.js';
 import { factionsPresent } from '../data/factions.js';
 import { getPlanet } from '../data/planets.js';
 import { getCareer, dutiesFor } from '../data/jobs.js';
+import { getKiColor } from '../data/kicolors.js';
 import { startSurvival, survivalActions, survivalTurn, survivalStatus, resolveTeamWish, RULES } from '../engine/survival.js';
 import { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, finishLethalWin, lootDefeatedNpc, killKarmaDelta, moralAlignmentOf, STANCES } from '../engine/battle.js';
 import { costLabel, limitFor, usedThisYear, yearCapacity } from '../engine/economy.js';
@@ -1210,6 +1211,18 @@ function panelPower() {
     grid.appendChild(box);
   }
   body.appendChild(grid);
+
+  if (c.kiColor) {
+    const color = getKiColor(c.kiColor);
+    if (color) {
+      const colorRow = el('div', 'row');
+      const colorMain = el('div', 'row-main');
+      colorMain.appendChild(el('div', 'row-title', `Ki colour: ${color.name}`));
+      colorMain.appendChild(el('div', 'row-note', color.desc));
+      colorRow.appendChild(colorMain);
+      body.appendChild(colorRow);
+    }
+  }
 
   const rankRow = el('button', 'row');
   rankRow.type = 'button';

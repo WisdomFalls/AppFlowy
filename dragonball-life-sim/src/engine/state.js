@@ -156,6 +156,7 @@ export function createGame(creation, seedInput) {
     trainingFocus: null,
     yearsInAfterlife: 0,
     institution: null,
+    kiColor: null,
     faction: null,
     factionRank: 0,
     factionStanding: 0,

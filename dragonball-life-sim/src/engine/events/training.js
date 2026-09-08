@@ -12,6 +12,7 @@ import { numberish } from '../text.js';
 import { getPlace } from '../../data/places.js';
 import { unlockableForms, tryUnlockForm, describeRequirement } from '../progression.js';
 import { zenkaiBoost } from '../stats.js';
+import { KI_COLORS, getKiColor } from '../../data/kicolors.js';
 
 const FOCUSES = [
   { id: 'strength', name: 'Raw strength', stats: { strength: 5, durability: 2 }, intensity: 1.3 },
@@ -237,6 +238,29 @@ registerEvents([
         return { text: `You never name it. {Opponents describe it afterwards, badly|It has no name and it still lands|Let them call it whatever they like}.`, changes };
       } },
     ],
+  },
+
+  // ------------------------------------------------------- what colour it is
+  {
+    id: 'ki_takes_a_color', once: true, tags: ['training', 'identity'], weight: 12,
+    minBioAge: 8,
+    when: (ctx) => !ctx.character.kiColor && ctx.has('ki_blast'),
+    slots: (ctx) => ({ options: ctx.rng.shuffle(KI_COLORS.map((k) => k.id)).slice(0, 4) }),
+    title: 'What Colour It Is',
+    text: `{You have thrown a hundred of these and never actually looked|Somebody points it out before you notice yourself|`
+      + `It is not white. It was never going to stay white}. Your ki has a colour of its own now, and it is not going back.`,
+    choices: (ctx, s) => s.options.map((id) => {
+      const color = getKiColor(id);
+      return {
+        id, label: `${color.name.charAt(0).toUpperCase()}${color.name.slice(1)}`, hint: color.desc,
+        effect: (c2) => {
+          c2.character.kiColor = id;
+          const changes = apply(c2, { happiness: 6, stats: { kiControl: 2 } });
+          fact(c2, `Their ki settled on ${color.name}.`, { type: 'identity', weight: 4, tags: ['identity'] });
+          return { text: `${color.name.charAt(0).toUpperCase()}${color.name.slice(1)}. ${color.desc} {It is yours now, whether you meant to choose it or not|Nobody else throws quite that colour|You get used to it faster than you expected}.`, changes };
+        },
+      };
+    }),
   },
 
   {

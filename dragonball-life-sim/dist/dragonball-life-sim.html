@@ -9666,6 +9666,7 @@ function createGame(creation, seedInput) {
     trainingFocus: null,
     yearsInAfterlife: 0,
     institution: null,
+    kiColor: null,
     faction: null,
     factionRank: 0,
     factionStanding: 0,
@@ -15698,6 +15699,35 @@ registerEvents([
 ]);
 })();
 
+/* ==== data/kicolors.js ==== */
+const __mod_data_kicolors_js = (function () {
+// The colour a character's own ki actually takes, once they have enough
+// control over it to notice. Purely descriptive - a name and a line of
+// flavour text, nothing about how it renders. What this looks like on
+// screen is separate, later work; this just gives the game's own text
+// something specific to say instead of "ki" every time.
+
+const KI_COLORS = [
+  { id: 'white', name: 'white', desc: 'Plain, and plainly enough - most people never get further than this.' },
+  { id: 'blue', name: 'blue', desc: 'Cool and steady. The default most fighters settle into.' },
+  { id: 'gold', name: 'gold', desc: 'Warm and loud. It gets noticed from a long way off.' },
+  { id: 'crimson', name: 'crimson', desc: 'Dark red, closer to a wound than a fire.' },
+  { id: 'violet', name: 'violet', desc: 'Somewhere between a bruise and a threat.' },
+  { id: 'emerald', name: 'emerald', desc: 'Green, sharp-edged, easy to mistake for something poisonous.' },
+  { id: 'silver', name: 'silver', desc: 'Cold and precise, like it was measured before it was let out.' },
+  { id: 'magenta', name: 'magenta', desc: 'Bright enough that nobody who has seen it once forgets it.' },
+  { id: 'jet', name: 'jet black', desc: 'Wrong to look at directly, and nobody quite says why.' },
+  { id: 'amber', name: 'amber', desc: 'The colour of something about to catch.' },
+  { id: 'cyan', name: 'cyan', desc: 'Bright and cold, like the inside of a glacier lit from within.' },
+  { id: 'rose', name: 'rose', desc: 'Softer than anyone expects, right up until it is not.' },
+];
+
+function getKiColor(id) {
+  return KI_COLORS.find((k) => k.id === id) || null;
+}
+  return { KI_COLORS, getKiColor };
+})();
+
 /* ==== engine/combat.js ==== */
 const __mod_engine_combat_js = (function () {
 // Fights. Resolved as a short exchange model rather than a single dice roll, so
@@ -15709,6 +15739,7 @@ const { combatPower, winChance, zenkaiBoost, bestForm, powerTier } = __mod_engin
 const { getTransformation } = __mod_data_transformations_js;
 const { TECH_BY_ID } = __mod_data_techniques_js;
 const { hasPerk } = __mod_data_races_js;
+const { getKiColor } = __mod_data_kicolors_js;
 
 /** Effective power for a non-player fighter. */
 function opponentPower(opponent) {
@@ -15788,6 +15819,7 @@ function fight(state, rng, opponent, opts = {}) {
     myPower: Math.round(mine), theirPower: Math.round(theirs),
     form: form ? form.id : null,
     formName: form ? form.name : null,
+    kiColorName: c.kiColor ? (getKiColor(c.kiColor) || {}).name : null,
     usedSignature,
     kiSpent: Math.max(0, c.vitals.ki - myKi),
     ratio: mine / Math.max(1, theirs),
@@ -15798,7 +15830,12 @@ function fight(state, rng, opponent, opts = {}) {
 function narrateFight(result, rng, opponentName) {
   const lines = [];
   if (result.formName) {
-    lines.push(render(`{You go|You drop into|You take} ${result.formName} {before the first exchange|the moment it starts|without announcing it}.`, {}, rng));
+    lines.push(render(`{You go|You drop into|You take} ${result.formName}`
+      + `${result.kiColorName ? `, ${result.kiColorName} ki spilling out immediately` : ''}`
+      + ` {before the first exchange|the moment it starts|without announcing it}.`, {}, rng));
+  } else if (result.kiColorName && rng.chance(0.35)) {
+    lines.push(render(`{Your ki comes up ${result.kiColorName} before anything else does|`
+      + `The first thing anyone sees is the ${result.kiColorName}|Same colour it always is}.`, {}, rng));
   }
   const shown = result.rounds.slice(0, 3);
   for (const round of shown) {
@@ -16505,6 +16542,7 @@ const { numberish } = __mod_engine_text_js;
 const { getPlace } = __mod_data_places_js;
 const { unlockableForms, tryUnlockForm, describeRequirement } = __mod_engine_progression_js;
 const { zenkaiBoost } = __mod_engine_stats_js;
+const { KI_COLORS, getKiColor } = __mod_data_kicolors_js;
 
 const FOCUSES = [
   { id: 'strength', name: 'Raw strength', stats: { strength: 5, durability: 2 }, intensity: 1.3 },
@@ -16730,6 +16768,29 @@ registerEvents([
         return { text: `You never name it. {Opponents describe it afterwards, badly|It has no name and it still lands|Let them call it whatever they like}.`, changes };
       } },
     ],
+  },
+
+  // ------------------------------------------------------- what colour it is
+  {
+    id: 'ki_takes_a_color', once: true, tags: ['training', 'identity'], weight: 12,
+    minBioAge: 8,
+    when: (ctx) => !ctx.character.kiColor && ctx.has('ki_blast'),
+    slots: (ctx) => ({ options: ctx.rng.shuffle(KI_COLORS.map((k) => k.id)).slice(0, 4) }),
+    title: 'What Colour It Is',
+    text: `{You have thrown a hundred of these and never actually looked|Somebody points it out before you notice yourself|`
+      + `It is not white. It was never going to stay white}. Your ki has a colour of its own now, and it is not going back.`,
+    choices: (ctx, s) => s.options.map((id) => {
+      const color = getKiColor(id);
+      return {
+        id, label: `${color.name.charAt(0).toUpperCase()}${color.name.slice(1)}`, hint: color.desc,
+        effect: (c2) => {
+          c2.character.kiColor = id;
+          const changes = apply(c2, { happiness: 6, stats: { kiControl: 2 } });
+          fact(c2, `Their ki settled on ${color.name}.`, { type: 'identity', weight: 4, tags: ['identity'] });
+          return { text: `${color.name.charAt(0).toUpperCase()}${color.name.slice(1)}. ${color.desc} {It is yours now, whether you meant to choose it or not|Nobody else throws quite that colour|You get used to it faster than you expected}.`, changes };
+        },
+      };
+    }),
   },
 
   {
@@ -32118,6 +32179,7 @@ const { worldManifest } = __mod_engine_worlds_js;
 const { factionsPresent } = __mod_data_factions_js;
 const { getPlanet } = __mod_data_planets_js;
 const { getCareer, dutiesFor } = __mod_data_jobs_js;
+const { getKiColor } = __mod_data_kicolors_js;
 const { startSurvival, survivalActions, survivalTurn, survivalStatus, resolveTeamWish, RULES } = __mod_engine_survival_js;
 const { createBattle, battleActions, takeTurn, battleStatus, describeMatchup, battleAftermath, finishLethalWin, lootDefeatedNpc, killKarmaDelta, moralAlignmentOf, STANCES } = __mod_engine_battle_js;
 const { costLabel, limitFor, usedThisYear, yearCapacity } = __mod_engine_economy_js;
@@ -33278,6 +33340,18 @@ function panelPower() {
     grid.appendChild(box);
   }
   body.appendChild(grid);
+
+  if (c.kiColor) {
+    const color = getKiColor(c.kiColor);
+    if (color) {
+      const colorRow = el('div', 'row');
+      const colorMain = el('div', 'row-main');
+      colorMain.appendChild(el('div', 'row-title', `Ki colour: ${color.name}`));
+      colorMain.appendChild(el('div', 'row-note', color.desc));
+      colorRow.appendChild(colorMain);
+      body.appendChild(colorRow);
+    }
+  }
 
   const rankRow = el('button', 'row');
   rankRow.type = 'button';

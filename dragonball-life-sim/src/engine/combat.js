@@ -7,6 +7,7 @@ import { combatPower, winChance, zenkaiBoost, bestForm, powerTier } from './stat
 import { getTransformation } from '../data/transformations.js';
 import { TECH_BY_ID } from '../data/techniques.js';
 import { hasPerk } from '../data/races.js';
+import { getKiColor } from '../data/kicolors.js';
 
 /** Effective power for a non-player fighter. */
 export function opponentPower(opponent) {
@@ -86,6 +87,7 @@ export function fight(state, rng, opponent, opts = {}) {
     myPower: Math.round(mine), theirPower: Math.round(theirs),
     form: form ? form.id : null,
     formName: form ? form.name : null,
+    kiColorName: c.kiColor ? (getKiColor(c.kiColor) || {}).name : null,
     usedSignature,
     kiSpent: Math.max(0, c.vitals.ki - myKi),
     ratio: mine / Math.max(1, theirs),
@@ -96,7 +98,12 @@ export function fight(state, rng, opponent, opts = {}) {
 export function narrateFight(result, rng, opponentName) {
   const lines = [];
   if (result.formName) {
-    lines.push(render(`{You go|You drop into|You take} ${result.formName} {before the first exchange|the moment it starts|without announcing it}.`, {}, rng));
+    lines.push(render(`{You go|You drop into|You take} ${result.formName}`
+      + `${result.kiColorName ? `, ${result.kiColorName} ki spilling out immediately` : ''}`
+      + ` {before the first exchange|the moment it starts|without announcing it}.`, {}, rng));
+  } else if (result.kiColorName && rng.chance(0.35)) {
+    lines.push(render(`{Your ki comes up ${result.kiColorName} before anything else does|`
+      + `The first thing anyone sees is the ${result.kiColorName}|Same colour it always is}.`, {}, rng));
   }
   const shown = result.rounds.slice(0, 3);
   for (const round of shown) {
