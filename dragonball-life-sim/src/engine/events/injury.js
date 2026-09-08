@@ -59,7 +59,7 @@ registerEvents([
           return { text: 'You cannot cover it, and they are not doing it on credit.', changes: [] };
         }
         if (price) debit(c2.character, cur2.id, price);
-        const res = fitProsthetic(c2.state, sl.injuryId, quality);
+        const res = fitProsthetic(c2.character, sl.injuryId, quality);
         const fitter = fittersFor(c2.year, getPlace(c2.character.placeId).planet).find((f) => f.id === fitterId);
         fact(c2, `Had ${res.part ? res.part.name : 'a replacement'} fitted by ${name}.`,
           { type: 'body', weight: 6, tags: ['injury'] });
@@ -134,7 +134,7 @@ registerEvents([
             const npc = meetCanon(c2, sl.canonId);
             if (npc) relate(c2, npc, { closeness: 14, trust: 20 });
           }
-          const res = restoreBody(c2.state);
+          const res = restoreBody(c2.character);
           fact(c2, `Was made whole again by ${sl.who}.`, { type: 'body', weight: 8, tags: ['injury'] });
           return {
             text: `${res.text} {You look at your own hand for a while|`

@@ -286,6 +286,7 @@ export function createBattle(state, rng, opts = {}) {
     allies: (opts.allies || []).map((spec) => {
       const side = makeFoe(spec);
       side.ally = true;
+      side.ref = { canonId: spec.canonId || null, npcId: spec.npcId || null };
       return side;
     }),
     foeRef: { canonId: foeSpec.canonId || null, npcId: foeSpec.npcId || null },
@@ -1638,6 +1639,23 @@ export function battleAftermath(state, rng, battle, opts = {}) {
   const scarred = markBody(state, rng, battle);
   if (scarred) lines.push(scarred);
 
+  // Whoever fought beside you is not exempt from what a fight can cost -
+  // they came home from something serious carrying the same real risk you
+  // did, and a lost limb here is the reason mechanization exists at all.
+  for (const ally of (battle.allies || [])) {
+    if (ally.hp > ally.hpMax * 0.25) continue;
+    const npcId = (ally.ref && ally.ref.npcId) || null;
+    const allyNpc = npcId ? state.npcs[npcId] : null;
+    if (!allyNpc || hasPerk(allyNpc, 'regeneration')) continue;
+    const chance = clamp(0.14 + (battle.stakes === 'lethal' ? 0.16 : 0), 0.05, 0.4);
+    if (rng.chance(chance)) {
+      const type = foeAttackType(state, battle);
+      const table = (MAIM_BY_TYPE[type] || MAIM_BY_TYPE.blunt).moderate.slice();
+      const line = maim(allyNpc, rng, rng.pick(table), battle.them.name);
+      if (line) lines.push(`${allyNpc.name}: ${line}`);
+    }
+  }
+
   // Collateral. Fighting over a city is a choice, and it is remembered.
   if (battle.civilians && battle.destruction > 25) {
     const severity = battle.destruction > 70 ? 'most of a district' : 'several streets';
@@ -1869,7 +1887,7 @@ function markBody(state, rng, battle) {
       const type = foeAttackType(state, battle);
       const table = (gap > 6 ? MAIM_BY_TYPE[type].severe : MAIM_BY_TYPE[type].moderate).slice();
       if (c.tail && rng.chance(0.3)) table.unshift('lost_tail');
-      const line = maim(state, rng, rng.pick(table), from);
+      const line = maim(c, rng, rng.pick(table), from);
       if (line) return line;
     }
   }

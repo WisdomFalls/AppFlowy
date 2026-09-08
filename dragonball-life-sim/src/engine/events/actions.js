@@ -20,7 +20,7 @@ import { homeOptions, settleHome, homeOf, starshipOption, buildStarship, shipOf,
 import { currencyFor, formatMoney, balance, priceIn, canAfford, debit } from '../../data/currency.js';
 import { CAREERS, getCareer, careersFor } from '../../data/jobs.js';
 import { getRace, hasPerk } from '../../data/races.js';
-import { prostheticOptions, fittersFor, fitProsthetic } from '../body.js';
+import { prostheticOptions, fittersFor, fitProsthetic, injuries, injuryList, mechanize } from '../body.js';
 import { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel,
   limitFor, usedThisYear, trainingRoomLeft } from '../economy.js';
 import { makeNpc, bondScore, relationLabel, RELATIONS } from '../npc.js';
@@ -71,6 +71,14 @@ function engineerCandidates(state) {
 
 function hireCost(npc) {
   return Math.round(20000 * Math.pow(1.045, npc.stats.intellect));
+}
+
+/** Anyone standing where you are who has something missing worth paying to
+ * replace - a captive you took apart, or an ally who lost something in a
+ * fight you were both in. */
+function mechanizableAllies(state) {
+  const c = state.character;
+  return livingNpcs(state).filter((n) => n.placeId === c.placeId && injuries(n).length > 0);
 }
 
 /** Where a genetic sample can actually come from: your own captive (which
@@ -315,7 +323,7 @@ export const ACTIONS = [
         return { text: 'You cannot cover it, and they are not doing it on credit.' };
       }
       if (price) debit(s.character, cur.id, price);
-      const res = fitProsthetic(s, opt.entry.id, fitter.quality);
+      const res = fitProsthetic(s.character, opt.entry.id, fitter.quality);
       adjust(s, { happiness: 12, karma: fitter.karma || 0 });
       return { text: `${res.text} ${render('{The first week is the worst part|Learning it takes a season and you have the season|You spend a month reaching for things and missing}.', {}, rng)}` };
     },
@@ -398,6 +406,69 @@ export const ACTIONS = [
         line = `A sample, nothing more. ${npc.name} will not know either way.`;
       }
       return { text: line };
+    },
+  },
+  {
+    id: 'mechanize_self', minMaturity: 8, slots: 2, name: 'Mechanize what was lost', cat: 'body', cost: 'A season', danger: true,
+    desc: 'Not one prosthetic at a time - replace everything currently missing in one long procedure, and take the rest of the body further if it has come to that.',
+    available: (s) => !s.character.inAfterlife && injuries(s.character).length > 0,
+    options: (s) => {
+      const c = s.character;
+      const missing = injuryList(c).filter((i) => i.fixable).length;
+      const severe = injuries(c).length >= 2 || !!c.flags.brink_of_death;
+      return [
+        {
+          id: 'partial', label: 'Partial mechanization',
+          hint: missing ? `Fits everything currently missing (${missing}) in one session.` : 'Nothing left unfitted, but the session still overhauls what is already there.',
+        },
+        {
+          id: 'full', label: 'Full mechanization',
+          hint: severe ? 'Everything missing, plus the rest of the body brought up to match it. There is no version of you that is not visibly different after this.'
+            : 'Not warranted yet - this is for a body that has lost real ground, not one prosthetic.',
+          disabled: !severe,
+        },
+      ];
+    },
+    run: (s, rng, params) => {
+      const c = s.character;
+      const degree = (params && params.option === 'full') ? 'full' : 'partial';
+      if (degree === 'full' && !(injuries(c).length >= 2 || c.flags.brink_of_death)) {
+        return { text: 'Not warranted yet. Fit what is actually missing first.' };
+      }
+      const cur = currencyFor(getPlace(c.placeId).planet);
+      const cost = priceIn((degree === 'full' ? 700000 : 250000) + injuries(c).length * 150000, cur.id);
+      if (!canAfford(c, cur.id, cost)) return { text: `This is not back-street work. ${formatMoney(cost, cur.id)}, and you do not have it.` };
+      debit(c, cur.id, cost);
+      const res = mechanize(c, degree);
+      fact(s, `Underwent ${degree} mechanization.`, { type: 'body', weight: 10, tags: ['mecha', 'body'] });
+      adjust(s, { happiness: degree === 'full' ? -6 : 2 });
+      return { text: `${res.text} ${formatMoney(cost, cur.id)}, and there is no putting it back the way it was without a wish or a Namekian healer.` };
+    },
+  },
+  {
+    id: 'mechanize_ally', slots: 2, name: 'Mechanize an ally', cat: 'body', cost: 'A season', danger: true,
+    desc: 'Somebody you know lost something real. You can pay to give it back to them as hardware, whether or not they would have chosen this.',
+    available: (s) => mechanizableAllies(s).length > 0,
+    options: (s) => mechanizableAllies(s).map((n) => ({
+      id: n.id, label: n.name,
+      hint: `${relationLabel(n)} - ${injuryList(n).map((i) => i.name).join(', ')}`,
+    })),
+    run: (s, rng, params) => {
+      const c = s.character;
+      const npc = params && params.option ? findNpc(s, params.option) : null;
+      if (!npc || !npc.alive) return { text: 'Nobody to treat.' };
+      const degree = (injuries(npc).length >= 2) ? 'full' : 'partial';
+      const cur = currencyFor(getPlace(c.placeId).planet);
+      const cost = priceIn((degree === 'full' ? 700000 : 250000) + injuries(npc).length * 150000, cur.id);
+      if (!canAfford(c, cur.id, cost)) return { text: `This is not back-street work. ${formatMoney(cost, cur.id)}, and you do not have it.` };
+      debit(c, cur.id, cost);
+      const res = mechanize(npc, degree);
+      npc.trust = clamp((npc.trust ?? 30) + (npc.captive ? -10 : 15), 0, 100);
+      addFact(s.memory, {
+        type: 'body', weight: 9, year: c.age, subject: npc.id, tags: ['mecha', 'body'],
+        text: `Paid for ${npc.name}'s ${degree} mechanization.`,
+      });
+      return { text: `${res.text} ${formatMoney(cost, cur.id)}, and ${npc.name} ${npc.captive ? 'was not exactly asked' : 'will carry this for the rest of their life'}.` };
     },
   },
   {

@@ -11125,12 +11125,22 @@ const INJURIES = {
     desc: 'Ki does not cut. It cooks. The skin healed over, eventually, in a way that does not match the rest of you.',
     stats: { charisma: -4, durability: -4 }, powerMult: 0.93,
   },
+  // Not a wound with an edge to it - something inside just stopped, the way
+  // Vegeta's heart gave out from the Heart Virus. A senzu bean and a year's
+  // rest do not fix this; a real replacement does.
+  organ_failure: {
+    id: 'organ_failure', name: 'an organ that no longer works on its own', mark: null,
+    desc: 'Something in you gave out. Nothing about how you fight looks different, right up until it matters.',
+    stats: { durability: -14, discipline: -3 }, powerMult: 0.8,
+    prosthetic: 'artificial_organ',
+  },
 };
 
 const PROSTHETICS = {
   mech_arm: { id: 'mech_arm', name: 'a mechanical arm', restores: 0.85, stats: { strength: 4 }, mark: 'cyber_arm' },
   mech_leg: { id: 'mech_leg', name: 'a mechanical leg', restores: 0.85, stats: { speed: 3 }, mark: 'cyber_leg' },
   mech_eye: { id: 'mech_eye', name: 'an artificial eye', restores: 0.9, stats: { technique: 2 }, mark: 'cyber_eye' },
+  artificial_organ: { id: 'artificial_organ', name: 'an artificial organ', restores: 0.8, stats: { durability: 2 }, mark: null },
 };
 
 /** Who can fit one, and how well, in a given year and place. */
@@ -11162,9 +11172,10 @@ function hasInjury(character, id) {
 /**
  * Take a permanent injury. Returns the line to show, or null if it did not
  * apply (already have it, or the body regrows it before anyone can notice).
+ * Takes the character directly - the player's, or an ally's or captive's -
+ * so a fight or a bad accident can maim anyone the same way.
  */
-function maim(state, rng, id, from, opts = {}) {
-  const c = state.character;
+function maim(c, rng, id, from, opts = {}) {
   const spec = INJURIES[id];
   if (!spec || hasInjury(c, id)) return null;
 
@@ -11244,9 +11255,10 @@ function prostheticOptions(character) {
     .map((e) => ({ entry: e, spec: INJURIES[e.id], part: PROSTHETICS[INJURIES[e.id].prosthetic] }));
 }
 
-/** Fit one. Gives most of the lost ground back, and none of the lost flesh. */
-function fitProsthetic(state, injuryId, quality = 1) {
-  const c = state.character;
+/** Fit one. Gives most of the lost ground back, and none of the lost flesh.
+ * Takes the character directly, same as maim() - the player's own, or
+ * whoever an engineer is actually working on. */
+function fitProsthetic(c, injuryId, quality = 1) {
   const entry = injuries(c).find((e) => e.id === injuryId && !e.prosthetic);
   if (!entry) return { ok: false, text: 'Nothing to fit.' };
   const spec = INJURIES[injuryId];
@@ -11278,9 +11290,9 @@ function fitProsthetic(state, injuryId, quality = 1) {
   };
 }
 
-/** Undo everything: a wish, a Namekian healer, a proper regeneration tank. */
-function restoreBody(state) {
-  const c = state.character;
+/** Undo everything: a wish, a Namekian healer, a proper regeneration tank.
+ * Takes the character directly, same as maim() and fitProsthetic(). */
+function restoreBody(c) {
   const list = injuries(c);
   if (!list.length) return { ok: false, text: 'There is nothing to put back.' };
   for (const e of list) {
@@ -11302,7 +11314,41 @@ function restoreBody(state) {
   c.injuries = [];
   return { ok: true, text: `Everything that was taken off you is back on. ${n === 1 ? 'It' : 'All of it'} works.` };
 }
-  return { INJURIES, PROSTHETICS, FITTERS, fittersFor, injuries, hasInjury, maim, injuryList, prostheticOptions, fitProsthetic, restoreBody };
+
+/**
+ * A body a senzu bean cannot touch, put back together with hardware instead
+ * of flesh. Partial fits whatever is currently missing and stops there;
+ * full does the same and then gives the rest of the body an overhaul on
+ * top of it - the "Full Mecha Android Saiyan" reading of the request,
+ * where the species never changes, only how much of it is still organic.
+ */
+function mechanize(c, degree = 'partial') {
+  const fitted = [];
+  for (const opt of prostheticOptions(c)) {
+    const res = fitProsthetic(c, opt.entry.id, degree === 'full' ? 1 : 0.85);
+    if (res.ok) fitted.push(res.part.name);
+  }
+  c.flags = c.flags || {};
+  const before = c.power;
+  if (degree === 'full') {
+    c.flags.full_mecha = true;
+    c.flags.partial_mecha = false;
+    c.power = Math.max(1, Math.round(c.power * 1.4));
+    c.stats.durability = clamp(Math.round(c.stats.durability + 12), 1, 100);
+    c.stats.strength = clamp(Math.round(c.stats.strength + 6), 1, 100);
+  } else {
+    c.flags.partial_mecha = true;
+    c.power = Math.max(1, Math.round(c.power * 1.15));
+    c.stats.durability = clamp(Math.round(c.stats.durability + 5), 1, 100);
+  }
+  return {
+    ok: true, fitted, gained: c.power - before,
+    text: degree === 'full'
+      ? `Full mechanization. ${fitted.length ? `Everything that was gone - ${fitted.join(', ')} - is metal now, and so is a great deal that was not gone.` : 'Nothing was missing, and the overhaul still touches all of it.'} Whatever you were, you are also something else now.`
+      : `Partial mechanization. ${fitted.length ? `${fitted.join(', ')}, replaced in one long session.` : 'There was nothing to fit, so the work stops at what was already lost.'}`,
+  };
+}
+  return { INJURIES, PROSTHETICS, FITTERS, fittersFor, injuries, hasInjury, maim, injuryList, prostheticOptions, fitProsthetic, restoreBody, mechanize };
 })();
 
 /* ==== data/factions.js ==== */
@@ -11960,6 +12006,7 @@ function createBattle(state, rng, opts = {}) {
     allies: (opts.allies || []).map((spec) => {
       const side = makeFoe(spec);
       side.ally = true;
+      side.ref = { canonId: spec.canonId || null, npcId: spec.npcId || null };
       return side;
     }),
     foeRef: { canonId: foeSpec.canonId || null, npcId: foeSpec.npcId || null },
@@ -13312,6 +13359,23 @@ function battleAftermath(state, rng, battle, opts = {}) {
   const scarred = markBody(state, rng, battle);
   if (scarred) lines.push(scarred);
 
+  // Whoever fought beside you is not exempt from what a fight can cost -
+  // they came home from something serious carrying the same real risk you
+  // did, and a lost limb here is the reason mechanization exists at all.
+  for (const ally of (battle.allies || [])) {
+    if (ally.hp > ally.hpMax * 0.25) continue;
+    const npcId = (ally.ref && ally.ref.npcId) || null;
+    const allyNpc = npcId ? state.npcs[npcId] : null;
+    if (!allyNpc || hasPerk(allyNpc, 'regeneration')) continue;
+    const chance = clamp(0.14 + (battle.stakes === 'lethal' ? 0.16 : 0), 0.05, 0.4);
+    if (rng.chance(chance)) {
+      const type = foeAttackType(state, battle);
+      const table = (MAIM_BY_TYPE[type] || MAIM_BY_TYPE.blunt).moderate.slice();
+      const line = maim(allyNpc, rng, rng.pick(table), battle.them.name);
+      if (line) lines.push(`${allyNpc.name}: ${line}`);
+    }
+  }
+
   // Collateral. Fighting over a city is a choice, and it is remembered.
   if (battle.civilians && battle.destruction > 25) {
     const severity = battle.destruction > 70 ? 'most of a district' : 'several streets';
@@ -13543,7 +13607,7 @@ function markBody(state, rng, battle) {
       const type = foeAttackType(state, battle);
       const table = (gap > 6 ? MAIM_BY_TYPE[type].severe : MAIM_BY_TYPE[type].moderate).slice();
       if (c.tail && rng.chance(0.3)) table.unshift('lost_tail');
-      const line = maim(state, rng, rng.pick(table), from);
+      const line = maim(c, rng, rng.pick(table), from);
       if (line) return line;
     }
   }
@@ -24222,7 +24286,7 @@ registerEvents([
           return { text: 'You cannot cover it, and they are not doing it on credit.', changes: [] };
         }
         if (price) debit(c2.character, cur2.id, price);
-        const res = fitProsthetic(c2.state, sl.injuryId, quality);
+        const res = fitProsthetic(c2.character, sl.injuryId, quality);
         const fitter = fittersFor(c2.year, getPlace(c2.character.placeId).planet).find((f) => f.id === fitterId);
         fact(c2, `Had ${res.part ? res.part.name : 'a replacement'} fitted by ${name}.`,
           { type: 'body', weight: 6, tags: ['injury'] });
@@ -24297,7 +24361,7 @@ registerEvents([
             const npc = meetCanon(c2, sl.canonId);
             if (npc) relate(c2, npc, { closeness: 14, trust: 20 });
           }
-          const res = restoreBody(c2.state);
+          const res = restoreBody(c2.character);
           fact(c2, `Was made whole again by ${sl.who}.`, { type: 'body', weight: 8, tags: ['injury'] });
           return {
             text: `${res.text} {You look at your own hand for a while|`
@@ -26024,7 +26088,7 @@ const { homeOptions, settleHome, homeOf, starshipOption, buildStarship, shipOf, 
 const { currencyFor, formatMoney, balance, priceIn, canAfford, debit } = __mod_data_currency_js;
 const { CAREERS, getCareer, careersFor } = __mod_data_jobs_js;
 const { getRace, hasPerk } = __mod_data_races_js;
-const { prostheticOptions, fittersFor, fitProsthetic } = __mod_engine_body_js;
+const { prostheticOptions, fittersFor, fitProsthetic, injuries, injuryList, mechanize } = __mod_engine_body_js;
 const { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel, limitFor, usedThisYear, trainingRoomLeft } = __mod_engine_economy_js;
 const { makeNpc, bondScore, relationLabel, RELATIONS } = __mod_engine_npc_js;
 const { canonAvailable, canonPower, canonPlace, canonUniverse } = __mod_data_canon_js;
@@ -26074,6 +26138,14 @@ function engineerCandidates(state) {
 
 function hireCost(npc) {
   return Math.round(20000 * Math.pow(1.045, npc.stats.intellect));
+}
+
+/** Anyone standing where you are who has something missing worth paying to
+ * replace - a captive you took apart, or an ally who lost something in a
+ * fight you were both in. */
+function mechanizableAllies(state) {
+  const c = state.character;
+  return livingNpcs(state).filter((n) => n.placeId === c.placeId && injuries(n).length > 0);
 }
 
 /** Where a genetic sample can actually come from: your own captive (which
@@ -26318,7 +26390,7 @@ const ACTIONS = [
         return { text: 'You cannot cover it, and they are not doing it on credit.' };
       }
       if (price) debit(s.character, cur.id, price);
-      const res = fitProsthetic(s, opt.entry.id, fitter.quality);
+      const res = fitProsthetic(s.character, opt.entry.id, fitter.quality);
       adjust(s, { happiness: 12, karma: fitter.karma || 0 });
       return { text: `${res.text} ${render('{The first week is the worst part|Learning it takes a season and you have the season|You spend a month reaching for things and missing}.', {}, rng)}` };
     },
@@ -26401,6 +26473,69 @@ const ACTIONS = [
         line = `A sample, nothing more. ${npc.name} will not know either way.`;
       }
       return { text: line };
+    },
+  },
+  {
+    id: 'mechanize_self', minMaturity: 8, slots: 2, name: 'Mechanize what was lost', cat: 'body', cost: 'A season', danger: true,
+    desc: 'Not one prosthetic at a time - replace everything currently missing in one long procedure, and take the rest of the body further if it has come to that.',
+    available: (s) => !s.character.inAfterlife && injuries(s.character).length > 0,
+    options: (s) => {
+      const c = s.character;
+      const missing = injuryList(c).filter((i) => i.fixable).length;
+      const severe = injuries(c).length >= 2 || !!c.flags.brink_of_death;
+      return [
+        {
+          id: 'partial', label: 'Partial mechanization',
+          hint: missing ? `Fits everything currently missing (${missing}) in one session.` : 'Nothing left unfitted, but the session still overhauls what is already there.',
+        },
+        {
+          id: 'full', label: 'Full mechanization',
+          hint: severe ? 'Everything missing, plus the rest of the body brought up to match it. There is no version of you that is not visibly different after this.'
+            : 'Not warranted yet - this is for a body that has lost real ground, not one prosthetic.',
+          disabled: !severe,
+        },
+      ];
+    },
+    run: (s, rng, params) => {
+      const c = s.character;
+      const degree = (params && params.option === 'full') ? 'full' : 'partial';
+      if (degree === 'full' && !(injuries(c).length >= 2 || c.flags.brink_of_death)) {
+        return { text: 'Not warranted yet. Fit what is actually missing first.' };
+      }
+      const cur = currencyFor(getPlace(c.placeId).planet);
+      const cost = priceIn((degree === 'full' ? 700000 : 250000) + injuries(c).length * 150000, cur.id);
+      if (!canAfford(c, cur.id, cost)) return { text: `This is not back-street work. ${formatMoney(cost, cur.id)}, and you do not have it.` };
+      debit(c, cur.id, cost);
+      const res = mechanize(c, degree);
+      fact(s, `Underwent ${degree} mechanization.`, { type: 'body', weight: 10, tags: ['mecha', 'body'] });
+      adjust(s, { happiness: degree === 'full' ? -6 : 2 });
+      return { text: `${res.text} ${formatMoney(cost, cur.id)}, and there is no putting it back the way it was without a wish or a Namekian healer.` };
+    },
+  },
+  {
+    id: 'mechanize_ally', slots: 2, name: 'Mechanize an ally', cat: 'body', cost: 'A season', danger: true,
+    desc: 'Somebody you know lost something real. You can pay to give it back to them as hardware, whether or not they would have chosen this.',
+    available: (s) => mechanizableAllies(s).length > 0,
+    options: (s) => mechanizableAllies(s).map((n) => ({
+      id: n.id, label: n.name,
+      hint: `${relationLabel(n)} - ${injuryList(n).map((i) => i.name).join(', ')}`,
+    })),
+    run: (s, rng, params) => {
+      const c = s.character;
+      const npc = params && params.option ? findNpc(s, params.option) : null;
+      if (!npc || !npc.alive) return { text: 'Nobody to treat.' };
+      const degree = (injuries(npc).length >= 2) ? 'full' : 'partial';
+      const cur = currencyFor(getPlace(c.placeId).planet);
+      const cost = priceIn((degree === 'full' ? 700000 : 250000) + injuries(npc).length * 150000, cur.id);
+      if (!canAfford(c, cur.id, cost)) return { text: `This is not back-street work. ${formatMoney(cost, cur.id)}, and you do not have it.` };
+      debit(c, cur.id, cost);
+      const res = mechanize(npc, degree);
+      npc.trust = clamp((npc.trust ?? 30) + (npc.captive ? -10 : 15), 0, 100);
+      addFact(s.memory, {
+        type: 'body', weight: 9, year: c.age, subject: npc.id, tags: ['mecha', 'body'],
+        text: `Paid for ${npc.name}'s ${degree} mechanization.`,
+      });
+      return { text: `${res.text} ${formatMoney(cost, cur.id)}, and ${npc.name} ${npc.captive ? 'was not exactly asked' : 'will carry this for the rest of their life'}.` };
     },
   },
   {

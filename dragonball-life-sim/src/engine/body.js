@@ -67,12 +67,22 @@ export const INJURIES = {
     desc: 'Ki does not cut. It cooks. The skin healed over, eventually, in a way that does not match the rest of you.',
     stats: { charisma: -4, durability: -4 }, powerMult: 0.93,
   },
+  // Not a wound with an edge to it - something inside just stopped, the way
+  // Vegeta's heart gave out from the Heart Virus. A senzu bean and a year's
+  // rest do not fix this; a real replacement does.
+  organ_failure: {
+    id: 'organ_failure', name: 'an organ that no longer works on its own', mark: null,
+    desc: 'Something in you gave out. Nothing about how you fight looks different, right up until it matters.',
+    stats: { durability: -14, discipline: -3 }, powerMult: 0.8,
+    prosthetic: 'artificial_organ',
+  },
 };
 
 export const PROSTHETICS = {
   mech_arm: { id: 'mech_arm', name: 'a mechanical arm', restores: 0.85, stats: { strength: 4 }, mark: 'cyber_arm' },
   mech_leg: { id: 'mech_leg', name: 'a mechanical leg', restores: 0.85, stats: { speed: 3 }, mark: 'cyber_leg' },
   mech_eye: { id: 'mech_eye', name: 'an artificial eye', restores: 0.9, stats: { technique: 2 }, mark: 'cyber_eye' },
+  artificial_organ: { id: 'artificial_organ', name: 'an artificial organ', restores: 0.8, stats: { durability: 2 }, mark: null },
 };
 
 /** Who can fit one, and how well, in a given year and place. */
@@ -104,9 +114,10 @@ export function hasInjury(character, id) {
 /**
  * Take a permanent injury. Returns the line to show, or null if it did not
  * apply (already have it, or the body regrows it before anyone can notice).
+ * Takes the character directly - the player's, or an ally's or captive's -
+ * so a fight or a bad accident can maim anyone the same way.
  */
-export function maim(state, rng, id, from, opts = {}) {
-  const c = state.character;
+export function maim(c, rng, id, from, opts = {}) {
   const spec = INJURIES[id];
   if (!spec || hasInjury(c, id)) return null;
 
@@ -186,9 +197,10 @@ export function prostheticOptions(character) {
     .map((e) => ({ entry: e, spec: INJURIES[e.id], part: PROSTHETICS[INJURIES[e.id].prosthetic] }));
 }
 
-/** Fit one. Gives most of the lost ground back, and none of the lost flesh. */
-export function fitProsthetic(state, injuryId, quality = 1) {
-  const c = state.character;
+/** Fit one. Gives most of the lost ground back, and none of the lost flesh.
+ * Takes the character directly, same as maim() - the player's own, or
+ * whoever an engineer is actually working on. */
+export function fitProsthetic(c, injuryId, quality = 1) {
   const entry = injuries(c).find((e) => e.id === injuryId && !e.prosthetic);
   if (!entry) return { ok: false, text: 'Nothing to fit.' };
   const spec = INJURIES[injuryId];
@@ -220,9 +232,9 @@ export function fitProsthetic(state, injuryId, quality = 1) {
   };
 }
 
-/** Undo everything: a wish, a Namekian healer, a proper regeneration tank. */
-export function restoreBody(state) {
-  const c = state.character;
+/** Undo everything: a wish, a Namekian healer, a proper regeneration tank.
+ * Takes the character directly, same as maim() and fitProsthetic(). */
+export function restoreBody(c) {
   const list = injuries(c);
   if (!list.length) return { ok: false, text: 'There is nothing to put back.' };
   for (const e of list) {
@@ -243,4 +255,38 @@ export function restoreBody(state) {
   const n = list.length;
   c.injuries = [];
   return { ok: true, text: `Everything that was taken off you is back on. ${n === 1 ? 'It' : 'All of it'} works.` };
+}
+
+/**
+ * A body a senzu bean cannot touch, put back together with hardware instead
+ * of flesh. Partial fits whatever is currently missing and stops there;
+ * full does the same and then gives the rest of the body an overhaul on
+ * top of it - the "Full Mecha Android Saiyan" reading of the request,
+ * where the species never changes, only how much of it is still organic.
+ */
+export function mechanize(c, degree = 'partial') {
+  const fitted = [];
+  for (const opt of prostheticOptions(c)) {
+    const res = fitProsthetic(c, opt.entry.id, degree === 'full' ? 1 : 0.85);
+    if (res.ok) fitted.push(res.part.name);
+  }
+  c.flags = c.flags || {};
+  const before = c.power;
+  if (degree === 'full') {
+    c.flags.full_mecha = true;
+    c.flags.partial_mecha = false;
+    c.power = Math.max(1, Math.round(c.power * 1.4));
+    c.stats.durability = clamp(Math.round(c.stats.durability + 12), 1, 100);
+    c.stats.strength = clamp(Math.round(c.stats.strength + 6), 1, 100);
+  } else {
+    c.flags.partial_mecha = true;
+    c.power = Math.max(1, Math.round(c.power * 1.15));
+    c.stats.durability = clamp(Math.round(c.stats.durability + 5), 1, 100);
+  }
+  return {
+    ok: true, fitted, gained: c.power - before,
+    text: degree === 'full'
+      ? `Full mechanization. ${fitted.length ? `Everything that was gone - ${fitted.join(', ')} - is metal now, and so is a great deal that was not gone.` : 'Nothing was missing, and the overhaul still touches all of it.'} Whatever you were, you are also something else now.`
+      : `Partial mechanization. ${fitted.length ? `${fitted.join(', ')}, replaced in one long session.` : 'There was nothing to fit, so the work stops at what was already lost.'}`,
+  };
 }
