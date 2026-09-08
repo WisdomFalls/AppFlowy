@@ -446,6 +446,23 @@ export function battleActions(state, battle) {
     });
   }
 
+  // A coordinated finish: whoever is fighting alongside you gets a hold on
+  // the one thing you are both looking at, and if it lands you get to throw
+  // the actual finish instead of just another exchange. Only makes sense
+  // against a single, focused target - a crowd has nowhere clean to grab.
+  if ((battle.allies || []).some((a) => a.hp > 0)) {
+    const single = standingFoes(battle).length === 1;
+    const pinCost = me.infiniteStamina ? 0 : 13;
+    out.push({
+      id: 'pin_combo', kind: 'physical', label: 'Signal the pin',
+      hint: single
+        ? `${pinCost ? pinCost + ' stamina' : 'free'} - they hold your target down. If it lands, a near-guaranteed finish; if it does not, a normal exchange.`
+        : 'Only works on one clear target - too many of them standing for a coordinated hold.',
+      disabled: !single || me.stamina < pinCost,
+      reason: !single ? 'Too many of them standing for a coordinated hold' : (me.stamina < pinCost ? 'Not enough stamina' : null),
+    });
+  }
+
   // Aimed strikes: less likely to land than just swinging, but where they
   // land matters. Always on the table - you do not need a weapon to aim for
   // an eye - a blade equipped through equippedWeapon() just makes what
@@ -1241,6 +1258,38 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
         }
       }
     }
+  } else if (actionId === 'pin_combo') {
+    const cost = me.infiniteStamina ? 0 : 13;
+    me.stamina = Math.max(0, me.stamina - cost);
+    const allies = (battle.allies || []).filter((a) => a.hp > 0);
+    const ally = allies.length ? allies.reduce((best, a) => (effectivePower(a, battle) > effectivePower(best, battle) ? a : best)) : null;
+    if (!ally) {
+      lines.push('Nobody is close enough to help with that.');
+    } else {
+      const pinChance = clamp(0.3 + (ratioOf(ally, them, battle) - 1) * 0.3, 0.15, 0.9);
+      if (rng.chance(pinChance)) {
+        them.staggered = Math.max(them.staggered, 2);
+        lines.push(rng.pick([
+          `${ally.name} gets a lock on them and does not let go.`,
+          `${ally.name} grabs both arms from behind and pins them there.`,
+          `${ally.name} drives them down and holds the legs. They are not going anywhere.`,
+        ]));
+        const res = strike(me, them, battle, rng, { base: 30, hit: 0.98, pierce: true, crit: 0.3 });
+        lines.push(describeStrike(res, 'You', them.name, 'the finish', rng, true));
+      } else {
+        lines.push(rng.pick([
+          `${ally.name} goes for the hold and does not get it.`,
+          `${ally.name} is half a second too slow.`,
+          `${ally.name} cannot get a grip on them.`,
+        ]));
+        const move = PHYSICAL.find((m) => m.id === 'combo');
+        const res = strike(me, them, battle, rng, move);
+        lines.push(describeStrike(res, 'You', them.name, move.name, rng, true));
+      }
+      // The automatic end-of-turn ally pass below should not have this one
+      // swing again - it already acted, on the pin, this exchange.
+      ally.pinnedThisTurn = true;
+    }
   } else if (actionId.startsWith('tech:')) {
     const tech = TECH_BY_ID[actionId.slice(5)];
     if (tech && techHands(tech.id) > handsLeft(me)) {
@@ -1427,8 +1476,11 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
       if (battle.over) return { lines, over: true, outcome: battle.outcome };
       if (me.hp <= 0) break;
     }
-    // And anybody fighting on your side answers back.
+    // And anybody fighting on your side answers back - unless they already
+    // spent this exchange on a pin (pin_combo), in which case that was
+    // their turn.
     for (const ally of (battle.allies || [])) {
+      if (ally.pinnedThisTurn) { ally.pinnedThisTurn = false; continue; }
       if (ally.hp <= 0) continue;
       const mark = standingFoes(battle)[0];
       if (!mark) break;
