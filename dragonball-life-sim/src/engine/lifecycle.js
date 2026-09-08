@@ -21,6 +21,7 @@ import { resolveTrial } from './trials.js';
 import { getItem } from '../data/items.js';
 import { checkEarnedTraits, traitEffect } from '../data/traits.js';
 import { processReputationQueue, homeBonus, shipOf, SHIP_ROOM_BY_ID } from './settlement.js';
+import { currencyFor, credit, priceIn, formatMoney } from '../data/currency.js';
 
 const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
 
@@ -535,6 +536,17 @@ function passiveYear(state, rng) {
     const before = inst.renown;
     const growth = 0.6 + inst.members.length * 0.4 + (c.fame / 100) * 1.2;
     inst.renown = clamp(inst.renown + growth, 0, 100);
+    // A business is the one legacy that pays for itself - profit scales with
+    // how well known it is, how many places carry the name, and how many
+    // people are actually working there.
+    if (inst.type === 'business') {
+      const cur = currencyFor(inst.homePlanet);
+      const branches = (inst.branches || [inst.homePlanet]).length;
+      const revenue = Math.round(priceIn(3000, cur.id)
+        * (1 + inst.renown / 40) * (1 + (branches - 1) * 0.6) * (1 + inst.members.length * 0.15));
+      credit(c, cur.id, revenue);
+      entries.push({ kind: 'legacy', text: `${inst.name} turns a profit this year: ${formatMoney(revenue, cur.id)}.` });
+    }
     const crossed = (t) => before < t && inst.renown >= t;
     if (crossed(30)) {
       entries.push({ kind: 'legacy', text: `${inst.name} is not just yours to know about any more. People are starting to send their own here.` });

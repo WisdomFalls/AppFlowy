@@ -1771,13 +1771,18 @@ function panelRecords() {
     const row = el('div', 'row');
     const main = el('div', 'row-main');
     main.appendChild(el('div', 'row-title', inst.name));
-    const memberWord = inst.type === 'school' ? 'students' : 'members';
-    main.appendChild(el('div', 'row-note',
-      `Founded age ${inst.founded - c.birthYear}. ${inst.members.length} ${memberWord}. `
-      + (c.flags.worldIcon ? 'A name known even where you have never been.'
-        : inst.renown >= 60 ? 'A real reputation of its own now.'
-          : inst.renown >= 30 ? 'People are starting to send their own here.'
-            : 'Still mostly just you.')));
+    const memberWord = inst.type === 'school' ? 'students' : inst.type === 'business' ? 'staff' : 'members';
+    const bits = [`Founded age ${inst.founded - c.birthYear}.`, `${inst.members.length} ${memberWord}.`];
+    if (inst.type === 'business') {
+      const branches = (inst.branches || [inst.homePlanet]).length;
+      bits.push(`${branches} location${branches === 1 ? '' : 's'}.`);
+      bits.push(`${formatMoney(inst.capital || 0, currencyFor(inst.homePlanet).id)} invested.`);
+    }
+    bits.push(c.flags.worldIcon ? 'A name known even where you have never been.'
+      : inst.renown >= 60 ? 'A real reputation of its own now.'
+        : inst.renown >= 30 ? 'People are starting to send their own here.'
+          : 'Still mostly just you.');
+    main.appendChild(el('div', 'row-note', bits.join(' ')));
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', Math.round(inst.renown) + '%'));
     body.appendChild(row);

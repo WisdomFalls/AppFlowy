@@ -147,6 +147,8 @@ export const INSTITUTION_TYPES = [
     desc: 'A real unit, not just people who happen to fight near you.' },
   { id: 'organisation', label: 'Order', verb: 'Built', name: 'an organisation',
     desc: 'Something bigger than fighting - relief, order, protection, whatever the galaxy is short of where you are.' },
+  { id: 'business', label: 'Business', verb: 'Started', name: 'a business',
+    desc: 'Something that makes money whether or not you are the one standing behind the counter.' },
 ];
 
 export const ACTIONS = [
@@ -832,12 +834,107 @@ export const ACTIONS = [
         members: [],
         renown: 4,
       };
+      // A business is the one kind of legacy that pays you back - it needs
+      // a home currency to turn a profit in (lifecycle.js's passiveYear tick)
+      // and somewhere to expand to (expand_business).
+      if (type.id === 'business') {
+        c.institution.homePlanet = getPlace(c.placeId).planet;
+        c.institution.capital = 0;
+        c.institution.branches = [c.institution.homePlanet];
+      }
       adjust(s, { happiness: 12, fame: 3 });
       addFact(s.memory, {
         type: 'legacy', weight: 9, year: c.age, tags: ['legacy', 'identity'],
         text: `${type.verb} ${c.institution.name}.`,
       });
       return { text: `${c.institution.name}. ${type.desc} It exists now, whatever it becomes.` };
+    },
+  },
+  {
+    id: 'invest_business', maxPerYear: 3, slots: 1, name: 'Invest in it', cat: 'legacy', cost: 'A season',
+    desc: 'Put money into growing what you built. Capital in, reputation and reach out.',
+    available: (s) => s.character.institution && s.character.institution.type === 'business',
+    options: (s) => {
+      const cur = currencyFor(s.character.institution.homePlanet);
+      const tiers = [
+        { mult: 20000, label: 'Modest' },
+        { mult: 80000, label: 'Serious' },
+        { mult: 300000, label: 'Everything you can spare' },
+      ];
+      return tiers.map((t, i) => {
+        const amount = priceIn(t.mult, cur.id);
+        return { id: String(i), label: `${t.label} - ${formatMoney(amount, cur.id)}`, disabled: !canAfford(s.character, cur.id, amount) };
+      });
+    },
+    run: (s, rng, params) => {
+      const inst = s.character.institution;
+      if (!inst || inst.type !== 'business') return { text: 'There is nothing here to invest in.' };
+      const cur = currencyFor(inst.homePlanet);
+      const amounts = [priceIn(20000, cur.id), priceIn(80000, cur.id), priceIn(300000, cur.id)];
+      const idx = clamp(Number((params && params.option) || 0), 0, 2);
+      const amount = amounts[idx];
+      if (!canAfford(s.character, cur.id, amount)) return { text: `${formatMoney(amount, cur.id)}, and you do not have it.` };
+      debit(s.character, cur.id, amount);
+      inst.capital = (inst.capital || 0) + amount;
+      inst.renown = clamp(inst.renown + 1 + idx * 1.5, 0, 100);
+      adjust(s, { happiness: 6 });
+      return { text: `${formatMoney(amount, cur.id)}, put back into ${inst.name}. It is worth more than it was.` };
+    },
+  },
+  {
+    id: 'expand_business', maxPerYear: 1, slots: 2, name: 'Open a branch here', cat: 'legacy', cost: 'A season',
+    desc: 'Take what you built somewhere it does not exist yet.',
+    available: (s) => {
+      const inst = s.character.institution;
+      if (!inst || inst.type !== 'business') return false;
+      const planet = getPlace(s.character.placeId).planet;
+      return !(inst.branches || [inst.homePlanet]).includes(planet);
+    },
+    run: (s) => {
+      const inst = s.character.institution;
+      const planet = getPlace(s.character.placeId).planet;
+      const cur = currencyFor(planet);
+      const cost = priceIn(150000, cur.id);
+      if (!canAfford(s.character, cur.id, cost)) return { text: `Opening a branch here costs ${formatMoney(cost, cur.id)}, and you do not have it.` };
+      debit(s.character, cur.id, cost);
+      inst.branches = inst.branches || [inst.homePlanet];
+      inst.branches.push(planet);
+      inst.renown = clamp(inst.renown + 6, 0, 100);
+      adjust(s, { happiness: 10, fame: 2 });
+      const planetName = (getPlanet(planet) && getPlanet(planet).name) || planet;
+      addFact(s.memory, {
+        type: 'legacy', weight: 5, year: s.character.age, tags: ['legacy', 'business'],
+        text: `Opened a branch of ${inst.name} on ${planetName}.`,
+      });
+      return { text: `${inst.name} now stands here too. ${inst.branches.length} place${inst.branches.length === 1 ? '' : 's'} carry the name.` };
+    },
+  },
+  {
+    id: 'hire_staff', maxPerYear: 3, slots: 1, name: 'Hire someone', cat: 'legacy', cost: 'A season',
+    desc: 'Bring somebody on properly - a wage, a role, a stake in whether this works.',
+    available: (s) => {
+      const inst = s.character.institution;
+      return !!inst && inst.type === 'business'
+        && livingNpcs(s).some((n) => n.placeId === s.character.placeId && !inst.members.includes(n.id));
+    },
+    options: (s) => livingNpcs(s)
+      .filter((n) => n.placeId === s.character.placeId && !s.character.institution.members.includes(n.id))
+      .slice(0, 10)
+      .map((n) => ({ id: n.id, label: n.name, hint: relationLabel(n) })),
+    run: (s, rng, params) => {
+      const inst = s.character.institution;
+      if (!inst || inst.type !== 'business') return { text: 'There is no business here to hire for.' };
+      const npc = params && params.option ? findNpc(s, params.option) : null;
+      if (!npc) return { text: 'Nobody takes the offer.' };
+      const cur = currencyFor(inst.homePlanet);
+      const wage = priceIn(8000, cur.id);
+      if (!canAfford(s.character, cur.id, wage)) return { text: 'You cannot cover even the first wage.' };
+      debit(s.character, cur.id, wage);
+      inst.members.push(npc.id);
+      inst.renown = clamp(inst.renown + 2, 0, 100);
+      npc.closeness = clamp((npc.closeness || 0) + 4, 0, 100);
+      adjust(s, { happiness: 4 });
+      return { text: `${npc.name} comes on board. ${inst.members.length} people carry ${inst.name} now.` };
     },
   },
 
