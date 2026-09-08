@@ -3606,9 +3606,56 @@ function techniquePower(character) {
     def += (t.effect.def || 0) * purity;
     speed += (t.effect.speed || 0) * purity;
   }
+  // Invented techniques (inventTechnique, below) are not in TECH_BY_ID - they
+  // are shaped the same as any catalog entry but live on the character
+  // itself, the same way customForms does for transformations, so they
+  // survive a save/load without mutating shared, module-level data.
+  for (const t of character.customTechniques || []) {
+    atk += t.effect.atk || 0;
+    def += t.effect.def || 0;
+    speed += t.effect.speed || 0;
+  }
   return { atk, def, speed };
 }
-  return { BRANCHES, TECHNIQUES, techniqueOrigin, TECH_BY_ID, getTechnique, availableTechniques, techniquePurity, setTechniquePurity, techniqueDisplayName, techniquePower };
+
+/** Themes a player can actually build a technique around - the three
+ * branches techniquePower reads a number out of (atk/def/speed). Support,
+ * forbidden and divine either need an effect this system does not track or
+ * are lore-gated, so they are not on offer here. */
+const INVENTABLE_BRANCHES = ['ki', 'body', 'motion'];
+
+/**
+ * Build a technique nobody taught you, out of a theme rather than a
+ * teacher's example. Takes the character directly (a bag of stats and an
+ * ever-growing customTechniques list), the same shape trials.js's
+ * inventForm() uses for transformations.
+ */
+function inventTechnique(character, rng, opts = {}) {
+  character.customTechniques = character.customTechniques || [];
+  const branch = INVENTABLE_BRANCHES.includes(opts.branch) ? opts.branch : 'ki';
+  // Sharper and more disciplined hands get more out of the same idea - the
+  // same read invent_form already gives intellect and discipline.
+  const bound = (v, min, max) => Math.max(min, Math.min(max, v));
+  const bonus = bound(((character.stats.intellect || 50) - 50) / 300, -0.08, 0.25)
+    + bound(((character.stats.technique || 50) - 50) / 300, -0.05, 0.2);
+  const base = Math.round((14 + character.customTechniques.length * 3) * (1 + bonus) * rng.float(0.85, 1.25));
+  const effect = { kiCost: Math.max(2, Math.round(7 - bonus * 12)) };
+  if (branch === 'ki') effect.atk = base;
+  else if (branch === 'body') effect.def = base;
+  else effect.speed = base;
+  const invented = {
+    id: 'custom_tech_' + (character.customTechniques.length + 1),
+    name: opts.name || 'Something Of Your Own',
+    branch,
+    custom: true,
+    effect,
+    desc: 'Nobody taught you this. You built it from something that already worked and something that did not.',
+    year: character.birthYear + character.age,
+  };
+  character.customTechniques.push(invented);
+  return invented;
+}
+  return { BRANCHES, TECHNIQUES, techniqueOrigin, TECH_BY_ID, getTechnique, availableTechniques, techniquePurity, setTechniquePurity, techniqueDisplayName, techniquePower, INVENTABLE_BRANCHES, inventTechnique };
 })();
 
 /* ==== data/items.js ==== */
@@ -27332,7 +27379,7 @@ const { adjust, findNpc, livingNpcs, currentYear, addNpc } = __mod_engine_state_
 const { addFact, openThread } = __mod_engine_memory_js;
 const { trainingRate, combatPower, powerTier, kiMaxFor, STAT_LABELS } = __mod_engine_stats_js;
 const { fight, narrateFight, describeGap } = __mod_engine_combat_js;
-const { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique, techniquePurity, techniqueDisplayName } = __mod_data_techniques_js;
+const { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique, techniquePurity, techniqueDisplayName, BRANCHES, INVENTABLE_BRANCHES, inventTechnique } = __mod_data_techniques_js;
 const { getTransformation } = __mod_data_transformations_js;
 const { unlockableForms, tryUnlockForm, nearbyForms } = __mod_engine_progression_js;
 const { getPlace, PLACES } = __mod_data_places_js;
@@ -28486,6 +28533,32 @@ const ACTIONS = [
         'Whatever you were reaching for tears something instead.',
         'It does not become a form. It becomes a month in bed.',
         'You get halfway to something and your body refuses the rest.',
+      ]) };
+    },
+  },
+  // Not learned from a teacher's example - built out of a theme instead.
+  // See inventTechnique() in data/techniques.js for why this lives on
+  // character.customTechniques rather than the shared TECH_BY_ID table.
+  {
+    id: 'invent_custom_technique', maxPerYear: 1, minMaturity: 16, tooYoung: 'You have not lived enough to build a technique of your own yet.', slots: 3, name: 'Build a technique of your own', cat: 'power',
+    desc: 'Pick the shape it takes - what you know how to do already decides the rest.',
+    available: (s) => s.character.techniques.length >= 3 && s.character.stats.technique >= 55,
+    options: () => INVENTABLE_BRANCHES.map((id) => ({
+      id, label: BRANCHES[id].name, hint: BRANCHES[id].blurb,
+    })),
+    run: (s, rng, params) => {
+      const branch = INVENTABLE_BRANCHES.includes(params && params.option) ? params.option : 'ki';
+      if (rng.chance(0.5 + s.character.stats.discipline / 400)) {
+        const invented = inventTechnique(s.character, rng, { branch, name: generateSignatureName(rng) });
+        adjust(s, { happiness: 20, health: -15, stats: { technique: 4 } });
+        fact(s, `Invented a technique of their own: ${invented.name}.`, { type: 'technique', weight: 8, tags: ['technique', 'identity'] });
+        return { text: `${invented.name}. ${BRANCHES[branch].blurb} Nobody else in the universe has this one.`, unlocked: invented.name };
+      }
+      adjust(s, { health: -18, happiness: -8 });
+      return { text: rng.pick([
+        'Whatever you were reaching for does not come together this year.',
+        'It almost works. Almost is not a technique.',
+        'You burn a season on it and end up with nothing you can use.',
       ]) };
     },
   },
@@ -32158,6 +32231,27 @@ function panelPower() {
       rename.addEventListener('click', (e) => {
         e.stopPropagation();
         openRenamePanel(`Rename ${form.name}`, form.name, (name) => { form.name = name; });
+      });
+      row.appendChild(rename);
+      body.appendChild(row);
+    }
+  }
+
+  if (c.customTechniques && c.customTechniques.length) {
+    body.appendChild(el('div', 'group-label', 'Techniques nobody else has'));
+    for (const tech of c.customTechniques) {
+      const row = el('div', 'row owned');
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', tech.name));
+      const num = tech.effect.atk || tech.effect.def || tech.effect.speed || 0;
+      main.appendChild(el('div', 'row-note', `${BRANCHES[tech.branch].name}. Built in Age ${tech.year}. ${tech.desc}`));
+      row.appendChild(main);
+      row.appendChild(el('div', 'row-value', '+' + numberish(num)));
+      const rename = el('button', 'mini', 'Rename');
+      rename.type = 'button';
+      rename.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openRenamePanel(`Rename ${tech.name}`, tech.name, (name) => { tech.name = name; });
       });
       row.appendChild(rename);
       body.appendChild(row);

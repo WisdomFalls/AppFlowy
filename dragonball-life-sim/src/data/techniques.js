@@ -317,5 +317,52 @@ export function techniquePower(character) {
     def += (t.effect.def || 0) * purity;
     speed += (t.effect.speed || 0) * purity;
   }
+  // Invented techniques (inventTechnique, below) are not in TECH_BY_ID - they
+  // are shaped the same as any catalog entry but live on the character
+  // itself, the same way customForms does for transformations, so they
+  // survive a save/load without mutating shared, module-level data.
+  for (const t of character.customTechniques || []) {
+    atk += t.effect.atk || 0;
+    def += t.effect.def || 0;
+    speed += t.effect.speed || 0;
+  }
   return { atk, def, speed };
+}
+
+/** Themes a player can actually build a technique around - the three
+ * branches techniquePower reads a number out of (atk/def/speed). Support,
+ * forbidden and divine either need an effect this system does not track or
+ * are lore-gated, so they are not on offer here. */
+export const INVENTABLE_BRANCHES = ['ki', 'body', 'motion'];
+
+/**
+ * Build a technique nobody taught you, out of a theme rather than a
+ * teacher's example. Takes the character directly (a bag of stats and an
+ * ever-growing customTechniques list), the same shape trials.js's
+ * inventForm() uses for transformations.
+ */
+export function inventTechnique(character, rng, opts = {}) {
+  character.customTechniques = character.customTechniques || [];
+  const branch = INVENTABLE_BRANCHES.includes(opts.branch) ? opts.branch : 'ki';
+  // Sharper and more disciplined hands get more out of the same idea - the
+  // same read invent_form already gives intellect and discipline.
+  const bound = (v, min, max) => Math.max(min, Math.min(max, v));
+  const bonus = bound(((character.stats.intellect || 50) - 50) / 300, -0.08, 0.25)
+    + bound(((character.stats.technique || 50) - 50) / 300, -0.05, 0.2);
+  const base = Math.round((14 + character.customTechniques.length * 3) * (1 + bonus) * rng.float(0.85, 1.25));
+  const effect = { kiCost: Math.max(2, Math.round(7 - bonus * 12)) };
+  if (branch === 'ki') effect.atk = base;
+  else if (branch === 'body') effect.def = base;
+  else effect.speed = base;
+  const invented = {
+    id: 'custom_tech_' + (character.customTechniques.length + 1),
+    name: opts.name || 'Something Of Your Own',
+    branch,
+    custom: true,
+    effect,
+    desc: 'Nobody taught you this. You built it from something that already worked and something that did not.',
+    year: character.birthYear + character.age,
+  };
+  character.customTechniques.push(invented);
+  return invented;
 }

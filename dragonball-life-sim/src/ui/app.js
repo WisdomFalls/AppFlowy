@@ -1262,6 +1262,27 @@ function panelPower() {
     }
   }
 
+  if (c.customTechniques && c.customTechniques.length) {
+    body.appendChild(el('div', 'group-label', 'Techniques nobody else has'));
+    for (const tech of c.customTechniques) {
+      const row = el('div', 'row owned');
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', tech.name));
+      const num = tech.effect.atk || tech.effect.def || tech.effect.speed || 0;
+      main.appendChild(el('div', 'row-note', `${BRANCHES[tech.branch].name}. Built in Age ${tech.year}. ${tech.desc}`));
+      row.appendChild(main);
+      row.appendChild(el('div', 'row-value', '+' + numberish(num)));
+      const rename = el('button', 'mini', 'Rename');
+      rename.type = 'button';
+      rename.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openRenamePanel(`Rename ${tech.name}`, tech.name, (name) => { tech.name = name; });
+      });
+      row.appendChild(rename);
+      body.appendChild(row);
+    }
+  }
+
   body.appendChild(el('div', 'group-label', 'Techniques'));
   if (!c.techniques.length) body.appendChild(el('p', 'row-note', 'You know nothing worth naming yet.'));
   const byBranch = {};

@@ -7,7 +7,8 @@ import { adjust, findNpc, livingNpcs, currentYear, addNpc } from '../state.js';
 import { addFact, openThread } from '../memory.js';
 import { trainingRate, combatPower, powerTier, kiMaxFor, STAT_LABELS } from '../stats.js';
 import { fight, narrateFight, describeGap } from '../combat.js';
-import { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique, techniquePurity, techniqueDisplayName } from '../../data/techniques.js';
+import { TECHNIQUES, TECH_BY_ID, availableTechniques, getTechnique, techniquePurity, techniqueDisplayName,
+  BRANCHES, INVENTABLE_BRANCHES, inventTechnique } from '../../data/techniques.js';
 import { getTransformation } from '../../data/transformations.js';
 import { unlockableForms, tryUnlockForm, nearbyForms } from '../progression.js';
 import { getPlace, PLACES } from '../../data/places.js';
@@ -1163,6 +1164,32 @@ export const ACTIONS = [
         'Whatever you were reaching for tears something instead.',
         'It does not become a form. It becomes a month in bed.',
         'You get halfway to something and your body refuses the rest.',
+      ]) };
+    },
+  },
+  // Not learned from a teacher's example - built out of a theme instead.
+  // See inventTechnique() in data/techniques.js for why this lives on
+  // character.customTechniques rather than the shared TECH_BY_ID table.
+  {
+    id: 'invent_custom_technique', maxPerYear: 1, minMaturity: 16, tooYoung: 'You have not lived enough to build a technique of your own yet.', slots: 3, name: 'Build a technique of your own', cat: 'power',
+    desc: 'Pick the shape it takes - what you know how to do already decides the rest.',
+    available: (s) => s.character.techniques.length >= 3 && s.character.stats.technique >= 55,
+    options: () => INVENTABLE_BRANCHES.map((id) => ({
+      id, label: BRANCHES[id].name, hint: BRANCHES[id].blurb,
+    })),
+    run: (s, rng, params) => {
+      const branch = INVENTABLE_BRANCHES.includes(params && params.option) ? params.option : 'ki';
+      if (rng.chance(0.5 + s.character.stats.discipline / 400)) {
+        const invented = inventTechnique(s.character, rng, { branch, name: generateSignatureName(rng) });
+        adjust(s, { happiness: 20, health: -15, stats: { technique: 4 } });
+        fact(s, `Invented a technique of their own: ${invented.name}.`, { type: 'technique', weight: 8, tags: ['technique', 'identity'] });
+        return { text: `${invented.name}. ${BRANCHES[branch].blurb} Nobody else in the universe has this one.`, unlocked: invented.name };
+      }
+      adjust(s, { health: -18, happiness: -8 });
+      return { text: rng.pick([
+        'Whatever you were reaching for does not come together this year.',
+        'It almost works. Almost is not a technique.',
+        'You burn a season on it and end up with nothing you can use.',
       ]) };
     },
   },
