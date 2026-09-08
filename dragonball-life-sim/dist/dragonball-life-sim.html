@@ -2803,6 +2803,7 @@ const TRANSFORMATIONS = [
     req: { traits: ['tail'], custom: 'blutz_wave' },
     hint: 'Keep your tail and look at a full moon (or make your own Blutz Wave).',
     desc: 'Twelve metres of unthinking Saiyan. Enormous power, almost no judgement.',
+    creator: null, creatorNote: 'Not invented. Every tailed Saiyan has always done this under a full moon.',
   },
   {
     id: 'golden_oozaru', name: 'Golden Great Ape', ladder: ['saiyan', 'halfsaiyan'], tier: 4,
@@ -2810,6 +2811,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'oozaru', power: 400000, traits: ['tail'], custom: 'blutz_wave' },
     hint: 'Reach Super Saiyan power while still able to go Great Ape.',
     desc: 'A Super Saiyan the size of a building. Nothing survives underneath it.',
+    creator: null, creatorNote: 'Nobody taught this. It is simply what happens when a Great Ape is also a Super Saiyan.',
   },
   {
     id: 'false_ssj', name: 'False Super Saiyan', ladder: ['saiyan', 'halfsaiyan'], tier: 4.5, temporary: true,
@@ -2817,6 +2819,7 @@ const TRANSFORMATIONS = [
     req: { power: 15000, anyFlag: ['grief', 'rage_awakened', 'watched_friend_die', 'brink_of_death'] },
     hint: 'Reach for Super Saiyan before you are actually strong enough to hold it.',
     desc: 'Reddish hair, blank pupil-less eyes, a scream that will not stay lit. Gone as fast as it came.',
+    creator: 'Goku', creatorNote: 'First stumbled into while training for a fight he was not ready for.',
   },
   {
     // Real Super Saiyan is never the first time it happens - it comes after
@@ -2826,6 +2829,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'false_ssj', power: 30000, anyFlag: ['grief', 'rage_awakened', 'watched_friend_die', 'brink_of_death'] },
     hint: 'Enough raw power, and a loss you cannot fight your way out of.',
     desc: 'Gold hair, green eyes, and a rage that finally has somewhere to go.',
+    creator: 'Yamoshi', creatorNote: 'The legendary first Super Saiyan, generations before Goku. Every gold-haired Saiyan since is retracing what he found first.',
   },
   {
     id: 'ssj_grade2', name: 'Super Saiyan Grade 2', ladder: ['saiyan', 'halfsaiyan'], tier: 5.4,
@@ -2833,6 +2837,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'ssj', power: 45000, stat: { discipline: 40 } },
     hint: 'Push Super Saiyan past its resting point and let the muscle catch up to the power.',
     desc: 'Thicker, harder, gold hair a little wilder. More bulk than finesse, and it shows.',
+    creator: 'Vegeta',
   },
   {
     id: 'ssj_grade3', name: 'Super Saiyan Grade 3', ladder: ['saiyan', 'halfsaiyan'], tier: 5.6,
@@ -2840,6 +2845,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'ssj_grade2', power: 90000, stat: { durability: 55 } },
     hint: 'Keep pushing the mass. Eventually speed is the price you pay for it.',
     desc: 'Immense, veins standing out, a solid gold mane. Overwhelming power dragging a body too heavy to keep up with it.',
+    creator: 'Vegeta',
   },
   {
     id: 'ssj_full', name: 'Full-Power Super Saiyan', ladder: ['saiyan', 'halfsaiyan'], tier: 6,
@@ -2847,6 +2853,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'ssj', stat: { discipline: 60 }, custom: 'ssj_hours' },
     hint: 'Live in Super Saiyan until it stops costing you anything.',
     desc: 'You stopped transforming and started simply being this - all of the power, none of the bulk or the strain.',
+    creator: 'Goku', creatorNote: "His answer to the bulk Vegeta chose instead - wear the form in until it costs nothing.",
   },
   {
     // Grade 3 and Full-Power stay optional side branches off base Super
@@ -2859,6 +2866,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'ssj_grade2', power: 200000, anyFlag: ['fury', 'watched_friend_die', 'protected_someone', 'humiliated'] },
     hint: 'Push Super Saiyan into Grade 2, then find something worth losing your temper over.',
     desc: 'Crackling lightning, still eyes. The calm part of you is the dangerous part.',
+    creator: 'Gohan', creatorNote: 'First reached in grief and rage, not training.',
   },
   {
     id: 'ssj3', name: 'Super Saiyan 3', ladder: ['saiyan', 'halfsaiyan'], tier: 8,
@@ -2866,6 +2874,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'ssj2', power: 1500000, stat: { discipline: 70, kiControl: 65 } },
     hint: 'Years of nothing but training, ideally somewhere time runs strangely.',
     desc: 'No eyebrows, hair to your knees, and a body that cannot hold this for long.',
+    creator: 'Goku', creatorNote: 'Perfected in the Other World, where time and hair both had room to spare.',
   },
   {
     id: 'ssg', name: 'Super Saiyan God', ladder: ['saiyan', 'halfsaiyan'], tier: 9,
@@ -2873,6 +2882,7 @@ const TRANSFORMATIONS = [
     req: { power: 3000000, custom: 'god_ritual' },
     hint: 'Five righteous Saiyans pouring their hearts into you, or a god willing to teach.',
     desc: 'Slim red aura, divine ki. Mortals cannot even sense you now.',
+    creator: null, creatorNote: 'A ritual, not an invention - five righteous Saiyans lending their strength to a sixth, or a god teaching it directly.',
   },
   {
     id: 'ssb', name: 'Super Saiyan Blue', ladder: ['saiyan', 'halfsaiyan'], tier: 10,
@@ -2880,6 +2890,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'ssg', mentors: ['whis'], stat: { kiControl: 80 } },
     hint: 'Take god ki, then go Super Saiyan on top of it. Requires an angel as a teacher.',
     desc: 'Divine ki wearing a Super Saiyan over it. Perfect control, ruinous cost.',
+    creator: 'Goku', creatorNote: 'The first fusion of Super Saiyan God ki with the Super Saiyan form.',
   },
   {
     id: 'ssb_mastered', name: 'Mastered Super Saiyan Blue', ladder: ['saiyan', 'halfsaiyan'], tier: 10.3,
@@ -2887,6 +2898,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'ssb', stat: { kiControl: 90 }, custom: 'ssb_hours' },
     hint: 'Live in Blue until the aura stops flickering and simply stays.',
     desc: 'The same divine-Saiyan hybrid, held with no strain and no flicker at all. This is no longer a stretch for you.',
+    creator: 'Vegeta', creatorNote: 'Held without a flicker first by Vegeta, who was not going to stay behind Goku on it for long.',
   },
   {
     id: 'ssb_evolution', name: 'Super Saiyan Blue Evolution', ladder: ['saiyan', 'halfsaiyan'], tier: 10.4,
@@ -2894,6 +2906,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'ssb', stat: { kiControl: 88, discipline: 75 }, custom: 'blue_refined' },
     hint: 'Refine Blue yourself, through desperation in a fight rather than a teacher’s lesson.',
     desc: 'A deeper, near-black blue aura, sharper and meaner than the form you were taught. Nobody showed you this part.',
+    creator: 'Vegeta', creatorNote: 'Sharpened alone, out of desperation, with no teacher\'s hand in it at all.',
   },
   {
     id: 'ssb_kaioken', name: 'Blue Kaio-ken', ladder: ['saiyan', 'halfsaiyan'], tier: 11,
@@ -2901,6 +2914,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'ssb', techniques: ['kaioken'], stat: { discipline: 85 } },
     hint: 'Stack the Kaio-ken on top of Blue and accept what it does to you.',
     desc: 'Two impossible techniques at once. Your body is already failing.',
+    creator: 'Goku', creatorNote: 'Stacking a forbidden technique onto a divine form is the sort of idea only Goku has twice.',
   },
   {
     id: 'ultra_ego', name: 'Ultra Ego', ladder: ['saiyan'], tier: 12,
@@ -2908,6 +2922,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'ssb', custom: 'destroyer_path', stat: { discipline: 70 } },
     hint: 'Learn destruction energy from a God of Destruction and learn to enjoy being hurt.',
     desc: 'Purple aura, wild grin. The more damage you take the stronger you get.',
+    creator: 'Vegeta', creatorNote: 'Learned directly from a God of Destruction and made uniquely his.',
   },
   {
     id: 'ui_sign', name: 'Ultra Instinct -Sign-', ladder: ['saiyan', 'halfsaiyan', 'earthling', 'namekian', 'cerealian', 'yardratian'], tier: 12,
@@ -2915,6 +2930,7 @@ const TRANSFORMATIONS = [
     req: { power: 40000000, stat: { kiControl: 88, discipline: 80 }, custom: 'ui_trigger' },
     hint: 'Push past every limit with a clear mind. Angels can show you the door.',
     desc: 'Silver-edged hair. Your body moves before you decide to.',
+    creator: 'Goku', creatorNote: 'Shown the door by an angel. Walking through it was his own doing.',
   },
   {
     id: 'ui_perfected', name: 'Ultra Instinct', ladder: ['saiyan', 'halfsaiyan', 'earthling', 'namekian', 'cerealian', 'yardratian'], tier: 12.5,
@@ -2922,6 +2938,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'ui_sign', power: 60000000, stat: { kiControl: 92 }, anyFlag: ['brink_of_death', 'protected_someone'] },
     hint: 'Push past Sign under real, mortal pressure. The instinct finishes completing itself.',
     desc: 'Silver hair fully lit, the flicker gone. Not yet the total stillness, but the technique is whole.',
+    creator: 'Goku',
   },
   {
     id: 'ui_mastered', name: 'Mastered Ultra Instinct', ladder: ['saiyan', 'halfsaiyan', 'earthling', 'namekian', 'cerealian', 'yardratian'], tier: 13,
@@ -2929,6 +2946,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'ui_perfected', mentors: ['whis'], stat: { kiControl: 95, discipline: 90 } },
     hint: 'Silver hair and a completely empty mind. Almost nobody gets here.',
     desc: 'Silver hair, silver eyes, and total stillness. You do not think. You simply act.',
+    creator: 'Goku', creatorNote: 'The version almost nobody, mortal or god, ever actually reaches.',
   },
   {
     id: 'legendary_ss', name: 'Legendary Super Saiyan', ladder: ['saiyan', 'halfsaiyan'], tier: 9,
@@ -2936,6 +2954,7 @@ const TRANSFORMATIONS = [
     req: { traits: ['legendary'], power: 500000 },
     hint: 'A mutation you were born with. It is not a technique, it is a condition.',
     desc: 'Green-eyed, mountainous, and only barely a person while it lasts.',
+    creator: null, creatorNote: 'Not a technique. A mutation some Saiyans are simply born with - Broly among the very few.',
   },
 
   // -------------------------------------------------------------- Earthling
@@ -2953,6 +2972,7 @@ const TRANSFORMATIONS = [
     req: { custom: 'unlock_ritual' },
     hint: 'A very old Kai, a very long ritual, and someone willing to dance for a day.',
     desc: 'No transformation at all. Your ceiling was simply removed.',
+    creator: 'Guru', creatorNote: "Refined into ritual by Kai and Namekian elders ever since; Guru's original unlocking of a warrior's hidden potential is the one everybody still copies.",
   },
   {
     id: 'spirit_overflow', name: 'Spirit Overflow', ladder: ['earthling', 'yardratian', 'cerealian'], tier: 9,
@@ -2960,6 +2980,7 @@ const TRANSFORMATIONS = [
     req: { techniques: ['spirit_bomb'], stat: { kiControl: 82 }, power: 900000 },
     hint: 'Learn to hold borrowed energy inside your own body instead of throwing it.',
     desc: 'Every living thing nearby is lending you a little. You are made of other people.',
+    creator: null, creatorNote: 'No clear first. Anyone who learns to hold the Spirit Bomb\'s energy rather than throw it seems to arrive here alone.',
   },
 
   // -------------------------------------------------------------- Namekian
@@ -2969,6 +2990,7 @@ const TRANSFORMATIONS = [
     req: { stat: { kiControl: 45 } },
     hint: 'Namekian bodies are elastic. Push, and keep pushing.',
     desc: 'You grow until the buildings come up to your knee.',
+    creator: null, creatorNote: 'Not invented. Namekian bodies have always been able to grow like this.',
   },
   {
     id: 'super_namekian', name: 'Super Namekian', ladder: ['namekian'], tier: 6,
@@ -2976,6 +2998,7 @@ const TRANSFORMATIONS = [
     req: { custom: 'namek_fusion' },
     hint: 'Assimilate another Namekian warrior. Two minds, one much stronger body.',
     desc: 'Two lives folded into one. You remember things that were never yours.',
+    creator: 'Piccolo', creatorNote: 'The Piccolo-Nail assimilation - the first fusion of two Namekian warriors into one body.',
   },
   {
     id: 'orange_piccolo', name: 'Orange Form', ladder: ['namekian'], tier: 10,
@@ -2983,6 +3006,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'super_namekian', custom: 'dragon_wish_potential' },
     hint: 'Ask the dragon to unlock every drop of potential you have.',
     desc: 'Burnt-orange skin, and a calm that comes from having nothing left in reserve.',
+    creator: 'Piccolo', creatorNote: 'The first, and so far only, fighter to simply ask the dragon to unlock everything at once.',
   },
 
   // ------------------------------------------------------------ Frost Demon
@@ -2992,6 +3016,7 @@ const TRANSFORMATIONS = [
     req: { power: 5000 },
     hint: 'Let the armour crack and let yourself grow.',
     desc: 'Taller, hornier, considerably less polite.',
+    creator: null, creatorNote: 'Not invented. Every Frost Demon\'s body already has these stages built in.',
   },
   {
     id: 'fd_third', name: 'Third Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 3,
@@ -2999,6 +3024,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'fd_second', power: 40000 },
     hint: 'An ugly, transitional shape most of your kind skip.',
     desc: 'An elongated skull and a body built entirely for killing.',
+    creator: null, creatorNote: 'Not invented. Every Frost Demon\'s body already has these stages built in.',
   },
   {
     id: 'fd_final', name: 'Final Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 5,
@@ -3006,6 +3032,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'fd_third', power: 120000 },
     hint: 'The small, smooth, perfect one. This is what you actually are.',
     desc: 'Compact, white, and holding back most of it out of habit.',
+    creator: null, creatorNote: 'Not invented. Every Frost Demon\'s body already has these stages built in.',
   },
   {
     id: 'fd_hundred', name: '100% Full Power', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 7,
@@ -3013,6 +3040,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'fd_final', stat: { durability: 60 } },
     hint: 'Stop suppressing. It burns through you fast.',
     desc: 'Swollen with your own power, and losing it by the second.',
+    creator: null, creatorNote: 'Not a technique - just what happens when a Frost Demon stops suppressing.',
   },
   {
     id: 'golden', name: 'Golden Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 9,
@@ -3020,6 +3048,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'fd_final', custom: 'trained_at_all', stat: { discipline: 45 } },
     hint: 'Four months of actual training would do it. Four months.',
     desc: 'Gold and violet. Enormous, and it eats your stamina alive until you master it.',
+    creator: 'Frieza', creatorNote: "His answer to Goku's Super Saiyan Blue - the first Frost Demon to actually train for a form rather than simply grow into one.",
   },
   {
     id: 'black_form', name: 'Black Form', ladder: ['frostdemon', 'half_frostkin', 'frost_android'], tier: 12,
@@ -3027,6 +3056,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'golden', stat: { discipline: 80 }, custom: 'extreme_isolation_training' },
     hint: 'Ten years in a chamber where nothing lives. Come out different.',
     desc: 'Black and red, utterly silent. There is nothing left in you that was not chosen.',
+    creator: null, creatorNote: 'Whoever reaches this trained somewhere nothing else living could follow. Nobody has ever compared notes.',
   },
 
   // ----------------------------------------------------------------- Majin
@@ -3036,6 +3066,7 @@ const TRANSFORMATIONS = [
     req: { power: 90000 },
     hint: 'Shed the fat. Keep the appetite.',
     desc: 'Lean, grey-pink, and grinning in a way that stops conversations.',
+    creator: null, creatorNote: 'Every Majin body sheds weight the same way. No one fighter invented the shift.',
   },
   {
     id: 'majin_pure', name: 'Pure Form', ladder: ['majin'], tier: 7,
@@ -3043,6 +3074,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'majin_super', anyFlag: ['rejected_kindness', 'rage_awakened'] },
     hint: 'Spit out everything good in you. What is left is much stronger.',
     desc: 'Small, childlike, and entirely without a reason not to.',
+    creator: 'Buu', creatorNote: 'Splitting himself down the middle was Buu\'s own trick first.',
   },
   {
     id: 'majin_ultra', name: 'Ultra Form', ladder: ['majin'], tier: 10,
@@ -3050,6 +3082,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'majin_super', custom: 'absorbed_three' },
     hint: 'Absorb enough strong fighters and you stop being one person.',
     desc: 'Wearing three other warriors under your skin, and using all of them.',
+    creator: 'Buu', creatorNote: 'Buu\'s own absorption habit, taken further than anyone asked him to.',
   },
 
   // --------------------------------------------------------------- Android
@@ -3059,6 +3092,7 @@ const TRANSFORMATIONS = [
     req: { stat: { intellect: 50 } },
     hint: 'Push the reactor past its rated output and hope the frame holds.',
     desc: 'Your coolant is boiling and your output has never been higher.',
+    creator: null, creatorNote: 'Any sufficiently reckless android engineer arrives here eventually.',
   },
   {
     id: 'core_mk2', name: 'Power Core Mk-II', ladder: ['android', 'tuffle', 'half_android', 'frost_android'], tier: 6,
@@ -3066,6 +3100,7 @@ const TRANSFORMATIONS = [
     req: { custom: 'upgrade_2' },
     hint: 'Find a lab and a very good engineer. Possibly yourself.',
     desc: 'A permanent hardware upgrade. No aura, no drain, just more of you.',
+    creator: 'Gero', creatorNote: "Dr. Gero's hardware lineage, or whoever ends up inheriting his notes.",
   },
   {
     id: 'core_mk3', name: 'Infinite Core', ladder: ['android', 'tuffle', 'half_android', 'frost_android'], tier: 9,
@@ -3073,6 +3108,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'core_mk2', custom: 'upgrade_3' },
     hint: 'The blueprint that killed the man who drew it.',
     desc: 'Limitless energy in a frame that was never meant to carry it.',
+    creator: 'Gero',
   },
   {
     id: 'hell_mode', name: 'Hell Mode', ladder: ['android', 'bioandroid', 'tuffle', 'half_android', 'frost_android'], tier: 11,
@@ -3080,6 +3116,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'core_mk3', anyFlag: ['betrayed', 'creator_dead'] },
     hint: 'Remove every safety limiter your maker installed.',
     desc: 'Nothing is holding you back now, including the parts that kept you alive.',
+    creator: 'Cell', creatorNote: 'Cell\'s own limiter-break. Every android who strips their own safeties after him is following the same idea.',
   },
 
   // ----------------------------------------------------------- Bio-Android
@@ -3089,6 +3126,7 @@ const TRANSFORMATIONS = [
     req: { custom: 'absorbed_one' },
     hint: 'Absorb one worthwhile fighter whole.',
     desc: 'Lopsided, half-finished, and unbearably smug about it.',
+    creator: 'Cell', creatorNote: 'Cell\'s own three-stage absorption cycle. Anyone built the same way follows the same stages.',
   },
   {
     id: 'perfect_form', name: 'Perfect Form', ladder: ['bioandroid'], tier: 8,
@@ -3096,6 +3134,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'semi_perfect', custom: 'absorbed_two' },
     hint: 'Absorb the second one. Then take a very long time admiring yourself.',
     desc: 'Every cell exactly where it should be. You have never felt so complete.',
+    creator: 'Cell',
   },
   {
     id: 'super_perfect', name: 'Super Perfect', ladder: ['bioandroid'], tier: 10,
@@ -3103,6 +3142,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'perfect_form', flags: ['died_once'] },
     hint: 'Die badly. Rebuild from the one cell that survived.',
     desc: 'You blew yourself apart and came back with everything you learned dying.',
+    creator: 'Cell',
   },
 
   // --------------------------------------------------------------- Shinjin
@@ -3112,6 +3152,7 @@ const TRANSFORMATIONS = [
     req: { stat: { kiControl: 75, discipline: 70 }, age: 200 },
     hint: 'Grow into the office. It takes centuries.',
     desc: 'Divine authority settling onto your shoulders like a coat.',
+    creator: null, creatorNote: 'Grown into, not learned - every Kai who lives long enough arrives here.',
   },
   {
     id: 'destroyer_aura', name: 'Destroyer Aura', ladder: ['shinjin', 'saiyan', 'frostdemon'], tier: 11,
@@ -3119,6 +3160,7 @@ const TRANSFORMATIONS = [
     req: { custom: 'destroyer_path', stat: { discipline: 75 } },
     hint: 'Hakai is not a technique you learn. It is a job you accept.',
     desc: 'Violet fire, and the quiet knowledge that you can simply erase things.',
+    creator: 'Beerus', creatorNote: 'Not a technique so much as a job description every God of Destruction eventually accepts.',
   },
 
   // --------------------------------------------------------------- Tuffle
@@ -3128,6 +3170,7 @@ const TRANSFORMATIONS = [
     req: { stat: { intellect: 70 }, custom: 'upgrade_2' },
     hint: 'Replace the weak parts. Then replace the rest.',
     desc: 'Metal where the meat used to be, and no more of that tiresome fatigue.',
+    creator: null, creatorNote: 'Tuffle science generally, not any one Tuffle\'s personal invention.',
   },
   {
     id: 'parasite_host', name: 'Parasite Ascendant', ladder: ['tuffle'], tier: 9,
@@ -3135,6 +3178,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'machine_mutant', custom: 'possessed_someone' },
     hint: 'Stop building bodies. Start borrowing them.',
     desc: 'You are wearing a much stronger warrior, and they are still in there, screaming.',
+    creator: null, creatorNote: 'Tuffle science generally, not any one Tuffle\'s personal invention.',
   },
 
   // ------------------------------------------------------------ Yardratian
@@ -3144,6 +3188,7 @@ const TRANSFORMATIONS = [
     req: { stat: { kiControl: 60 } },
     hint: 'Your people never needed muscle. Grow the spirit instead.',
     desc: 'Your body is a suggestion. The important part of you is much larger.',
+    creator: null, creatorNote: 'A Yardratian tradition going back further than any one name in it.',
   },
   {
     id: 'spirit_giant', name: 'Spirit Colossus', ladder: ['yardratian'], tier: 8,
@@ -3151,6 +3196,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'spirit_expansion', stat: { kiControl: 85 } },
     hint: 'Keep expanding until the shape of you stops being a person.',
     desc: 'A luminous giant standing where a small quiet person used to be.',
+    creator: null, creatorNote: 'A Yardratian tradition going back further than any one name in it.',
   },
 
   // ------------------------------------------------------------- Cerealian
@@ -3160,6 +3206,7 @@ const TRANSFORMATIONS = [
     req: { custom: 'wished_for_power' },
     hint: 'Ask a dragon to make you the strongest in the universe. Read the small print.',
     desc: 'Power you did not earn, burning through the years you had left.',
+    creator: null, creatorNote: 'Whoever wished for it first did not survive long enough to be remembered for it.',
   },
   {
     id: 'ancestral_rage', name: 'Ancestral Rage', ladder: ['cerealian', 'earthling', 'tuffle'], tier: 6,
@@ -3167,6 +3214,7 @@ const TRANSFORMATIONS = [
     req: { anyFlag: ['grief', 'watched_friend_die', 'homeworld_destroyed'], power: 40000 },
     hint: 'Everything your people lost, arriving at once.',
     desc: 'Not a technique. Just every dead relative shouting through you at the same time.',
+    creator: null, creatorNote: 'Not learned. Grief this old does not have an inventor.',
   },
 
   // ------------------------------------------------------------- Kryllian
@@ -3176,6 +3224,7 @@ const TRANSFORMATIONS = [
     req: { stat: { durability: 55 } },
     hint: 'The chitin was always going to do more than sit there. Push against it until it answers.',
     desc: 'Your plating splits along its growth-lines and hardens again, thicker, mid-fight.',
+    creator: null, creatorNote: 'Hive knowledge, shared the moment any Kryllian first needed it.',
   },
   {
     id: 'broodcall', name: 'Broodcall', ladder: ['kryllian'], tier: 5,
@@ -3183,6 +3232,7 @@ const TRANSFORMATIONS = [
     req: { parent: 'hive_surge', stat: { discipline: 60 } },
     hint: 'The hive is always listening. Ask it for everything at once.',
     desc: 'Every Kryllian who ever fought is in your head for exactly as long as you need them.',
+    creator: null, creatorNote: 'Hive knowledge, shared the moment any Kryllian first needed it.',
   },
 
   // -------------------------------------------------------- Universal / fusion
@@ -3192,6 +3242,7 @@ const TRANSFORMATIONS = [
     req: { custom: 'has_potara' },
     hint: 'Two earrings, two warriors, one hour. Sometimes permanent. Nobody is sure when.',
     desc: 'Two people occupying one body and mostly agreeing about it.',
+    creator: 'Old Kai', creatorNote: 'The Potara earrings are a Kai invention, not a fighter\'s technique.',
   },
   {
     id: 'dance_fusion', name: 'Fusion Dance', ladder: ['*'], tier: 11,
@@ -3199,6 +3250,7 @@ const TRANSFORMATIONS = [
     req: { techniques: ['fusion_dance'], custom: 'has_fusion_partner' },
     hint: 'Learn the steps. Get them exactly right. Do not laugh.',
     desc: 'Thirty minutes of being someone new, assuming you did not fumble the pose.',
+    creator: 'Metamoran elders', creatorNote: 'Brought back from Metamor by Goku and taught out from there.',
   },
 ];
 
@@ -3213,7 +3265,17 @@ function ladderFor(raceId) {
 function getTransformation(id) {
   return TRANSFORM_BY_ID[id];
 }
-  return { TRANSFORMATIONS, TRANSFORM_BY_ID, ladderFor, getTransformation };
+
+/** Who gets credit for a form, in a form the UI can print directly - a name
+ * (Yamoshi, Cell, Dr. Gero) or, for the handful nobody actually invented,
+ * the explanation of why there isn't one. */
+function transformationOrigin(id) {
+  const t = getTransformation(id);
+  if (!t) return null;
+  if (t.creator) return { name: t.creator, note: t.creatorNote || null };
+  return { name: null, note: t.creatorNote || 'Nobody taught this. Nobody can say for certain who reached it first.' };
+}
+  return { TRANSFORMATIONS, TRANSFORM_BY_ID, ladderFor, getTransformation, transformationOrigin };
 })();
 
 /* ==== data/techniques.js ==== */
@@ -3234,177 +3296,241 @@ const TECHNIQUES = [
   // ------------------------------------------------------------------- Ki
   { id: 'ki_blast', name: 'Ki Blast', branch: 'ki', tier: 1, learnDC: 10, prereq: [], stat: { kiControl: 15 },
     effect: { atk: 4, kiCost: 2 }, teachers: ['roshi', 'krillin', 'piccolo', 'any_master'],
+    creator: null, creatorNote: 'Nobody invented this. Every ki-user finds it alone, the first time they try.',
     desc: 'The first thing anyone learns. A fistful of your own energy, thrown.' },
   { id: 'kamehameha', name: 'Kamehameha', branch: 'ki', tier: 3, learnDC: 45, prereq: ['ki_blast'], stat: { kiControl: 45 },
     effect: { atk: 26, kiCost: 12, crit: 0.08 }, teachers: ['roshi', 'goku', 'gohan', 'krillin'],
+    creator: 'roshi',
     desc: 'Fifty years to invent, an afternoon to copy if you have the eyes for it.' },
   { id: 'super_kamehameha', name: 'Super Kamehameha', branch: 'ki', tier: 5, learnDC: 68, prereq: ['kamehameha'], stat: { kiControl: 68 },
     effect: { atk: 52, kiCost: 24, crit: 0.1 }, teachers: ['goku', 'gohan'],
+    creator: 'goku', creatorNote: "Roshi's Kamehameha, pushed further than Roshi ever pushed it.",
     desc: 'The same technique with everything you have behind it.' },
   { id: 'masenko', name: 'Masenko', branch: 'ki', tier: 3, learnDC: 40, prereq: ['ki_blast'], stat: { kiControl: 40 },
     effect: { atk: 22, kiCost: 10 }, teachers: ['piccolo', 'gohan'],
+    creator: 'piccolo',
     desc: 'Both hands to the forehead. Faster to fire than a Kamehameha, and it shows.' },
   { id: 'special_beam_cannon', name: 'Special Beam Cannon', branch: 'ki', tier: 5, learnDC: 62, prereq: ['masenko'], stat: { kiControl: 62, discipline: 55 },
     effect: { atk: 44, kiCost: 20, pierce: 0.5, chargeTurns: 1 }, teachers: ['piccolo'],
+    creator: 'piccolo',
     desc: 'A drilling spiral that goes through anything, if you get the time to charge it.' },
   { id: 'galick_gun', name: 'Galick Gun', branch: 'ki', tier: 4, learnDC: 52, prereq: ['ki_blast'], stat: { kiControl: 50 },
     effect: { atk: 30, kiCost: 14 }, teachers: ['vegeta', 'nappa'],
+    creator: 'vegeta',
     desc: 'Saiyan royal artillery. Purple, loud, and extremely rude.' },
   { id: 'final_flash', name: 'Final Flash', branch: 'ki', tier: 7, learnDC: 78, prereq: ['galick_gun'], stat: { kiControl: 75 },
     effect: { atk: 85, kiCost: 40, chargeTurns: 2, crit: 0.15 }, teachers: ['vegeta'],
+    creator: 'vegeta',
     desc: 'Everything you have, gathered slowly, released once.' },
   { id: 'big_bang', name: 'Big Bang Attack', branch: 'ki', tier: 6, learnDC: 70, prereq: ['galick_gun'], stat: { kiControl: 66 },
     effect: { atk: 60, kiCost: 28 }, teachers: ['vegeta'],
+    creator: 'vegeta',
     desc: 'One palm, one sphere, one crater where the argument used to be.' },
   { id: 'destructo_disc', name: 'Destructo Disc', branch: 'ki', tier: 4, learnDC: 55, prereq: ['ki_blast'], stat: { kiControl: 58, technique: 55 },
     effect: { atk: 34, kiCost: 15, pierce: 0.9 }, teachers: ['krillin'],
+    creator: 'krillin',
     desc: 'It cuts through anything, which is why the strong ones dodge instead of blocking.' },
   { id: 'dodon_ray', name: 'Dodon Ray', branch: 'ki', tier: 3, learnDC: 38, prereq: ['ki_blast'], stat: { kiControl: 38 },
     effect: { atk: 20, kiCost: 8, pierce: 0.3 }, teachers: ['tao', 'tien', 'crane_hermit'],
+    creator: 'tao',
     desc: 'Crane School. One finger, one hole.' },
   { id: 'tri_beam', name: 'Tri-Beam', branch: 'ki', tier: 6, learnDC: 66, prereq: ['dodon_ray'], stat: { kiControl: 60, discipline: 70 },
     effect: { atk: 70, kiCost: 20, healthCost: 12 }, teachers: ['tien'],
+    creator: 'tien', creatorNote: 'Adapted from Crane School teaching into something Tao Pai Pai never showed anyone.',
     desc: 'Damage scaled to your own life, not your power. It works on anyone. Once or twice.' },
   { id: 'death_beam', name: 'Death Beam', branch: 'ki', tier: 4, learnDC: 44, prereq: ['ki_blast'], stat: { kiControl: 52 },
     effect: { atk: 28, kiCost: 6, pierce: 0.7, speed: 6 }, teachers: ['frieza', 'cooler'],
+    creator: 'frieza',
     desc: 'No charge, no flourish, no warning. Imperial efficiency.' },
   { id: 'death_ball', name: 'Death Ball', branch: 'ki', tier: 7, learnDC: 80, prereq: ['death_beam'], stat: { kiControl: 74 },
     effect: { atk: 95, kiCost: 45, chargeTurns: 2, planetKiller: true }, teachers: ['frieza'],
+    creator: 'frieza',
     desc: 'A small sun on a fingertip. It does not stop at the person you aimed at.' },
   { id: 'spirit_bomb', name: 'Spirit Bomb', branch: 'ki', tier: 8, learnDC: 85, prereq: ['kamehameha'], stat: { kiControl: 80, discipline: 70 },
     effect: { atk: 120, kiCost: 10, chargeTurns: 3, goodOnly: true }, teachers: ['king_kai'],
+    creator: 'king_kai',
     desc: 'You do not power it. Everything alive nearby does, if they feel like it.' },
   { id: 'hellzone_grenade', name: 'Hellzone Grenade', branch: 'ki', tier: 6, learnDC: 72, prereq: ['ki_blast', 'ki_sense'], stat: { kiControl: 70, technique: 65 },
     effect: { atk: 66, kiCost: 30, inescapable: 0.5 }, teachers: ['piccolo'],
+    creator: 'piccolo',
     desc: 'Surround them with orbs first. Then close your hand.' },
   { id: 'energy_absorb', name: 'Energy Absorption', branch: 'ki', tier: 4, learnDC: 50, prereq: [], stat: { intellect: 45 },
     effect: { drain: 0.3, kiCost: 0 }, teachers: ['gero', 'android_19'], races: ['android', 'bioandroid', 'majin', 'tuffle'],
+    creator: 'gero',
     desc: 'Their attack becomes your fuel. Very unfair, which is the point.' },
 
   // ----------------------------------------------------------------- Body
   { id: 'basic_martial_arts', name: 'Basic Martial Arts', branch: 'body', tier: 1, learnDC: 8, prereq: [], stat: {},
     effect: { atk: 3, def: 3 }, teachers: ['any_master', 'roshi', 'grandpa'],
+    creator: null, creatorNote: 'No single inventor. Every school on every world starts here.',
     desc: 'Stance, breathing, and how to fall without breaking.' },
   { id: 'turtle_style', name: 'Turtle School Style', branch: 'body', tier: 2, learnDC: 28, prereq: ['basic_martial_arts'], stat: { discipline: 30 },
     effect: { atk: 8, def: 8, kiControl: 4 }, teachers: ['roshi'],
+    creator: 'roshi',
     desc: 'Milk deliveries, field ploughing, and eventually the strongest style on Earth.' },
   { id: 'crane_style', name: 'Crane School Style', branch: 'body', tier: 2, learnDC: 28, prereq: ['basic_martial_arts'], stat: { technique: 35 },
     effect: { atk: 10, def: 4, speed: 4 }, teachers: ['crane_hermit', 'tien', 'tao'],
+    creator: 'crane_hermit',
     desc: 'Faster and meaner than the Turtle School, and it will tell you so.' },
   { id: 'wolf_fang_fist', name: 'Wolf Fang Fist', branch: 'body', tier: 3, learnDC: 36, prereq: ['basic_martial_arts'], stat: { speed: 45 },
     effect: { atk: 16, speed: 5, combo: 0.2 }, teachers: ['yamcha'],
+    creator: 'yamcha',
     desc: 'A flurry that looks unstoppable right up until someone stronger walks through it.' },
   { id: 'dragon_throw', name: 'Dragon Throw', branch: 'body', tier: 3, learnDC: 34, prereq: ['basic_martial_arts'], stat: { strength: 48 },
     effect: { atk: 14, counter: 0.15 }, teachers: ['roshi', 'ox_king'],
+    creator: 'ox_king',
     desc: 'Their own momentum, redirected into the ground.' },
   { id: 'meteor_combination', name: 'Meteor Combination', branch: 'body', tier: 5, learnDC: 60, prereq: ['wolf_fang_fist', 'afterimage'], stat: { speed: 65, technique: 60 },
     effect: { atk: 38, combo: 0.35, speed: 4 }, teachers: ['goku', 'gohan'],
+    creator: 'goku',
     desc: 'Twelve strikes before they finish blinking, and a kick to close.' },
   { id: 'dragon_fist', name: 'Dragon Fist', branch: 'body', tier: 8, learnDC: 88, prereq: ['meteor_combination', 'kamehameha'], stat: { strength: 75, kiControl: 75 },
     effect: { atk: 110, kiCost: 35, pierce: 0.6, crit: 0.2 }, teachers: ['goku'],
+    creator: 'goku',
     desc: 'You punch through them and a golden dragon comes out the other side.' },
   { id: 'iron_body', name: 'Iron Body', branch: 'body', tier: 3, learnDC: 40, prereq: ['basic_martial_arts'], stat: { durability: 55, discipline: 50 },
     effect: { def: 18, healthMax: 10 }, teachers: ['ox_king', 'nam', 'any_master'],
+    creator: null, creatorNote: 'Every hard-style school claims to have invented it first. None of them can prove it.',
     desc: 'Get hit on purpose, thousands of times, until it stops mattering.' },
   { id: 'stretch_limb', name: 'Elastic Limbs', branch: 'body', tier: 2, learnDC: 15, prereq: [], stat: {},
     effect: { atk: 6, reach: 0.2 }, teachers: [], races: ['namekian', 'majin'],
+    creator: null, creatorNote: 'Not invented. Namekian and Majin bodies simply do this.',
     desc: 'Your arm arrives several seconds before the rest of you.' },
 
   // --------------------------------------------------------------- Motion
   { id: 'bukujutsu', name: 'Flight', branch: 'motion', tier: 2, learnDC: 22, prereq: [], stat: { kiControl: 25 },
     effect: { speed: 8, def: 3 }, teachers: ['any_master', 'krillin', 'piccolo', 'chichi'],
+    creator: null, creatorNote: 'Older than any fighter alive. Nobody living remembers who first stood on nothing.',
     desc: 'Ki under your feet instead of ground. Half the fighters on Earth still cannot do it.' },
   { id: 'afterimage', name: 'Afterimage', branch: 'motion', tier: 4, learnDC: 48, prereq: ['bukujutsu'], stat: { speed: 55, technique: 50 },
     effect: { dodge: 0.14, speed: 4 }, teachers: ['roshi', 'goku', 'tien'],
+    creator: 'roshi',
     desc: 'You leave a picture of yourself standing where you used to be.' },
   { id: 'high_speed', name: 'High-Speed Movement', branch: 'motion', tier: 3, learnDC: 38, prereq: ['bukujutsu'], stat: { speed: 50 },
     effect: { speed: 10 }, teachers: ['any_master', 'vegeta', 'burter'],
+    creator: null, creatorNote: 'Refined independently by nearly every serious fighter in the universe. Nobody owns it.',
     desc: 'Simply moving faster than eyes track. Unglamorous and devastating.' },
   { id: 'instant_transmission', name: 'Instant Transmission', branch: 'motion', tier: 6, learnDC: 74, prereq: ['ki_sense', 'bukujutsu'], stat: { kiControl: 72 },
     effect: { speed: 14, dodge: 0.1, escape: true }, teachers: ['yardrat_elder', 'goku'],
+    creator: 'yardrat_elder', creatorNote: 'A Yardratian technique, brought back and spread by Goku.',
     desc: 'Lock onto a ki signature anywhere and simply be there.' },
   { id: 'kai_kai', name: 'Kai Kai', branch: 'motion', tier: 6, learnDC: 70, prereq: [], stat: { kiControl: 68 },
     effect: { speed: 12, escape: true }, teachers: ['supreme_kai', 'whis'], races: ['shinjin'],
+    creator: null, creatorNote: 'As old as the Kai lineage itself. It has no first user anyone remembers.',
     desc: 'The divine version, and it does not need a ki signature to aim at.' },
   { id: 'time_skip', name: 'Time-Skip', branch: 'motion', tier: 9, learnDC: 92, prereq: ['high_speed', 'ki_sense'], stat: { technique: 85, kiControl: 80 },
     effect: { speed: 20, dodge: 0.22, firstStrike: true }, teachers: ['hit'],
+    creator: 'hit',
     desc: 'You take half a second out of the universe and spend it privately.' },
 
   // -------------------------------------------------------------- Support
   { id: 'ki_sense', name: 'Ki Sense', branch: 'support', tier: 2, learnDC: 20, prereq: [], stat: { kiControl: 25 },
     effect: { def: 4, accuracy: 0.08 }, teachers: ['any_master', 'krillin', 'piccolo', 'king_kai'],
+    creator: null, creatorNote: 'As old as ki itself. Everyone who can use ki eventually learns to feel it too.',
     desc: 'Feeling where everyone is and roughly how frightened you should be.' },
   { id: 'ki_suppress', name: 'Ki Suppression', branch: 'support', tier: 3, learnDC: 34, prereq: ['ki_sense'], stat: { kiControl: 42, discipline: 40 },
     effect: { stealth: 0.3 }, teachers: ['piccolo', 'vegeta', 'any_master'],
+    creator: 'piccolo',
     desc: 'Becoming a hole in the world where a fighter should be.' },
   { id: 'telepathy', name: 'Telepathy', branch: 'support', tier: 3, learnDC: 36, prereq: ['ki_sense'], stat: { intellect: 50, kiControl: 40 },
     effect: { social: 6 }, teachers: ['king_kai', 'piccolo', 'chiaotzu'],
+    creator: 'king_kai',
     desc: 'Talking without talking. Excellent for co-ordination, terrible for privacy.' },
   { id: 'healing', name: 'Healing Hands', branch: 'support', tier: 5, learnDC: 60, prereq: ['ki_sense'], stat: { kiControl: 65, intellect: 55 },
     effect: { heal: 30, kiCost: 20 }, teachers: ['dende', 'guru', 'supreme_kai'], races: ['namekian', 'shinjin', 'earthling', 'yardratian', 'cerealian'],
+    creator: 'guru', creatorNote: "A gift Guru passed down through every Namekian healer since, Dende included.",
     desc: 'Pouring your own life into someone else until they stand up.' },
   { id: 'regenerate', name: 'Regeneration', branch: 'support', tier: 4, learnDC: 45, prereq: [], stat: {},
     effect: { regen: 0.12, kiCost: 8 }, teachers: [], races: ['namekian', 'majin', 'bioandroid'],
+    creator: null, creatorNote: 'Not invented. Namekian, Majin and bio-android bodies simply do this.',
     desc: 'Losing an arm is an inconvenience with a five second fix.' },
   { id: 'multiform', name: 'Multi-Form', branch: 'support', tier: 5, learnDC: 58, prereq: ['ki_suppress'], stat: { kiControl: 62, technique: 60 },
     effect: { attacks: 2, powerSplit: 0.6 }, teachers: ['tien', 'piccolo'],
+    creator: 'tien',
     desc: 'Four of you, each a quarter as strong. Better than it sounds, sometimes.' },
   { id: 'solar_flare', name: 'Solar Flare', branch: 'support', tier: 3, learnDC: 30, prereq: ['ki_blast'], stat: { technique: 40 },
     effect: { blind: 0.4, kiCost: 6 }, teachers: ['tien', 'krillin', 'goku'],
+    creator: 'roshi',
     desc: 'The single most useful technique ever invented, and nobody respects it.' },
   { id: 'telekinesis', name: 'Telekinesis', branch: 'support', tier: 4, learnDC: 46, prereq: ['ki_sense'], stat: { kiControl: 55, intellect: 55 },
     effect: { control: 0.2, kiCost: 10 }, teachers: ['chiaotzu', 'babidi', 'piccolo'],
+    creator: 'chiaotzu',
     desc: 'Holding people still with your mind while your fists catch up.' },
   { id: 'senzu_farming', name: 'Senzu Cultivation', branch: 'support', tier: 4, learnDC: 50, prereq: [], stat: { intellect: 50, discipline: 60 },
     effect: { senzuPerYear: 1 }, teachers: ['korin', 'yajirobe'],
+    creator: 'korin',
     desc: 'Korin will not just give you the beans. He might let you learn to grow them.' },
 
   // ------------------------------------------------------------ Forbidden
   { id: 'kaioken', name: 'Kaio-ken', branch: 'forbidden', tier: 5, learnDC: 64, prereq: ['ki_sense'], stat: { discipline: 60, durability: 55 },
     effect: { multiplier: 2, healthCost: 8 }, teachers: ['king_kai'],
+    creator: 'king_kai',
     desc: 'Multiply everything by more than your body can survive, briefly.' },
   { id: 'mafuba', name: 'Evil Containment Wave', branch: 'forbidden', tier: 6, learnDC: 72, prereq: ['ki_control_mastery'], stat: { kiControl: 70, discipline: 75 },
     effect: { seal: 0.5, selfKill: 0.5 }, teachers: ['roshi', 'mutaito', 'trunks'],
+    creator: 'mutaito',
     desc: 'Seal anything into a jar. It usually kills whoever performs it.' },
   { id: 'body_change', name: 'Body Change', branch: 'forbidden', tier: 6, learnDC: 70, prereq: ['telepathy'], stat: { technique: 70, kiControl: 60 },
     effect: { steal: true, kiCost: 25 }, teachers: ['ginyu'],
+    creator: 'ginyu',
     desc: 'Swap bodies with someone stronger. Try not to get interrupted by a frog.' },
   { id: 'absorb', name: 'Absorption', branch: 'forbidden', tier: 7, learnDC: 76, prereq: [], stat: { durability: 60 },
     effect: { absorb: true }, teachers: [], races: ['majin', 'bioandroid', 'namekian'],
+    creator: null, creatorNote: 'Not invented. Majin, bio-android and some Namekian bodies simply do this.',
     desc: 'Take them in. Keep the useful parts.' },
   { id: 'life_drain', name: 'Life Drain', branch: 'forbidden', tier: 6, learnDC: 70, prereq: ['ki_sense'], stat: { kiControl: 65 },
     effect: { drain: 0.4, karma: -12 }, teachers: ['babidi', 'garlic', 'gero'],
+    creator: 'garlic',
     desc: 'Their years, added to yours. People notice this sort of thing.' },
   { id: 'suicide_blast', name: 'Final Explosion', branch: 'forbidden', tier: 7, learnDC: 60, prereq: ['ki_blast'], stat: { discipline: 70 },
     effect: { atk: 400, selfKill: 0.95 }, teachers: ['vegeta', 'chiaotzu', 'android_16'],
+    creator: null, creatorNote: 'A last resort every sufficiently desperate fighter arrives at on their own.',
     desc: 'Every scrap of energy you have, released at once, from inside your own body.' },
   { id: 'mind_control', name: 'Majin Control', branch: 'forbidden', tier: 7, learnDC: 78, prereq: ['telepathy'], stat: { intellect: 70 },
     effect: { dominate: 0.3, karma: -20 }, teachers: ['babidi', 'bibidi'],
+    creator: 'bibidi',
     desc: 'Find the evil already inside someone and turn the volume up.' },
 
   // --------------------------------------------------------------- Divine
   { id: 'ki_control_mastery', name: 'Ki Mastery', branch: 'divine', tier: 5, learnDC: 60, prereq: ['ki_sense', 'ki_suppress'], stat: { kiControl: 70, discipline: 65 },
     effect: { kiMax: 25, efficiency: 0.2 }, teachers: ['king_kai', 'kami', 'guru', 'whis'],
+    creator: null, creatorNote: 'Not a technique someone taught. A threshold every serious ki-user eventually crosses alone.',
     desc: 'Not a technique. The point where your ki stops being something you use.' },
   { id: 'god_ki', name: 'Divine Ki', branch: 'divine', tier: 8, learnDC: 86, prereq: ['ki_control_mastery'], stat: { kiControl: 82, discipline: 78 },
     effect: { divine: true, atk: 40, def: 20 }, teachers: ['whis', 'beerus', 'supreme_kai'],
+    creator: 'whis', creatorNote: 'Not invented by any mortal. Angels simply carry it, and can occasionally show someone the door.',
     desc: 'A different kind of energy entirely. Mortals cannot sense it or fight it.' },
   { id: 'hakai', name: 'Hakai', branch: 'divine', tier: 10, learnDC: 96, prereq: ['god_ki'], stat: { kiControl: 90, discipline: 85 },
     effect: { erase: 0.15, kiCost: 50 }, teachers: ['beerus', 'whis'],
+    creator: 'beerus', creatorNote: 'A God of Destruction\'s birthright, not a technique any one god invented.',
     desc: 'Not damage. Deletion. The target simply stops having existed.' },
   { id: 'ultra_instinct_art', name: 'Instinctive Motion', branch: 'divine', tier: 9, learnDC: 92, prereq: ['afterimage', 'ki_control_mastery'], stat: { kiControl: 85, discipline: 80 },
     effect: { dodge: 0.3, counter: 0.25 }, teachers: ['whis'],
+    creator: 'whis', creatorNote: "An angel's own art, occasionally shown - never fully taught - to a mortal worth the risk.",
     desc: 'Training your body to answer before your mind has finished the question.' },
   { id: 'fusion_dance', name: 'Fusion Dance', branch: 'divine', tier: 6, learnDC: 55, prereq: ['bukujutsu'], stat: { technique: 60, discipline: 50 },
     effect: { fusion: 'dance' }, teachers: ['goku', 'metamoran_elder'],
+    creator: 'metamoran_elder', creatorNote: 'A Metamoran tradition, brought home by Goku and taught out from there.',
     desc: 'Two warriors, identical power, and a pose you will be teased about forever.' },
   { id: 'potara_craft', name: 'Potara Rite', branch: 'divine', tier: 8, learnDC: 84, prereq: [], stat: { intellect: 75, kiControl: 70 }, races: ['shinjin'],
     effect: { fusion: 'potara' }, teachers: ['supreme_kai', 'old_kai'],
+    creator: 'old_kai',
     desc: 'The earrings are the easy part. Knowing when to use them is not.' },
   { id: 'spirit_control', name: 'Spirit Control', branch: 'divine', tier: 6, learnDC: 68, prereq: ['ki_control_mastery'], stat: { kiControl: 75 }, races: ['yardratian', 'earthling', 'namekian', 'cerealian'],
     effect: { kiMax: 30, shapeShift: true }, teachers: ['yardrat_elder'],
+    creator: 'yardrat_elder',
     desc: 'The Yardratian approach: never mind muscle, reshape the spirit.' },
 ];
+
+/** Names for entries where `creator` points at a canon id, and the
+ * hand-written explanation for the handful with none. Used wherever a
+ * technique needs to say where it actually came from. */
+function techniqueOrigin(id) {
+  const t = getTechnique(id);
+  if (!t) return null;
+  if (t.creator) return { id: t.creator, note: t.creatorNote || null };
+  return { id: null, note: t.creatorNote || 'No single inventor. Nobody can say for certain who threw this first.' };
+}
 
 const TECH_BY_ID = Object.fromEntries(TECHNIQUES.map((t) => [t.id, t]));
 
@@ -3475,7 +3601,7 @@ function techniquePower(character) {
   }
   return { atk, def, speed };
 }
-  return { BRANCHES, TECHNIQUES, TECH_BY_ID, getTechnique, availableTechniques, techniquePurity, setTechniquePurity, techniqueDisplayName, techniquePower };
+  return { BRANCHES, TECHNIQUES, techniqueOrigin, TECH_BY_ID, getTechnique, availableTechniques, techniquePurity, setTechniquePurity, techniqueDisplayName, techniquePower };
 })();
 
 /* ==== data/items.js ==== */
@@ -6462,6 +6588,12 @@ const CANON = [
     teaches: ['turtle_style', 'kamehameha', 'afterimage', 'mafuba', 'basic_martial_arts', 'dragon_throw'],
     personality: 'Three hundred years old, invented the Kamehameha, and would still rather you fetched him a magazine.',
     quirk: 'Every lesson begins with an errand that turns out to be the lesson.' },
+  { id: 'mutaito', name: 'Master Mutaito', race: 'earthling', years: [180, 400], home: 'hell',
+    tags: ['mentor', 'legend'], temperament: 'stoic',
+    power: { 380: 170 },
+    teaches: ['mafuba'],
+    personality: "Roshi's own teacher, generations dead. Sealed King Piccolo away at the cost of his own life, and the technique he built to do it outlived him.",
+    quirk: 'Never speaks of the seal he cannot walk back out of.' },
   { id: 'chichi', name: 'Chi-Chi', race: 'earthling', years: [736, null], home: 'paozu',
     tags: ['ally', 'romance', 'fierce', 'human'], temperament: 'fierce',
     power: { 753: 73, 761: 130, 774: 600 },
@@ -6864,6 +6996,18 @@ const CANON = [
     teaches: ['mind_control', 'life_drain'],
     personality: 'A small shrieking wizard who inherited a monster from his father and cannot control it.',
     quirk: 'Puts an M on the forehead of everyone he owns.' },
+  { id: 'bibidi', name: 'Bibidi', race: 'other', years: [200, 500], home: 'hell',
+    tags: ['villain', 'wizard', 'legend'], temperament: 'petulant',
+    power: { 500: 900 },
+    teaches: ['mind_control'],
+    personality: "Babidi's father, dead ages before his son ever put an M on anyone. Everything Babidi does with a mind, he learned from a lesson he never lived to finish teaching.",
+    quirk: 'Nobody left alive remembers his voice, only his handiwork.' },
+  { id: 'garlic', name: 'Garlic Jr.', race: 'other', years: [700, null], home: 'wastes',
+    tags: ['villain', 'wizard', 'immortal'], temperament: 'petty',
+    power: { 749: 200, 774: 4000 },
+    teaches: ['life_drain'],
+    personality: 'Immortal, furious about it in the specific way of someone who wanted to be feared instead, and endlessly patient because eternity gives him no other choice.',
+    quirk: 'Introduces the Dead Zone into every conversation whether it is relevant or not.' },
   { id: 'dabura', name: 'Dabura', race: 'other', years: [770, 774], home: 'hell',
     tags: ['villain', 'demon'], temperament: 'haughty',
     power: { 774: 4000000 },
@@ -15656,6 +15800,7 @@ function ladderStatus(state) {
   const c = state.character;
   return ladderFor(c.raceId).map((f) => ({
     id: f.id, name: f.name, tier: f.tier, mult: f.mult, desc: f.desc, hint: f.hint,
+    creator: f.creator, creatorNote: f.creatorNote,
     owned: c.transformations.includes(f.id),
     missing: c.transformations.includes(f.id) ? [] : missingRequirements(state, f),
   }));
@@ -29263,6 +29408,7 @@ const { eraName, worldPowerBaseline, TIMELINE } = __mod_data_timeline_js;
 const { generateFullName } = __mod_data_names_js;
 const { BRANCHES, TECH_BY_ID, techniquePurity, techniqueDisplayName } = __mod_data_techniques_js;
 const { getTransformation, ladderFor } = __mod_data_transformations_js;
+const { getCanon } = __mod_data_canon_js;
 const { STAT_KEYS, STAT_LABELS, combatPower, powerTier, looksScore } = __mod_engine_stats_js;
 const { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } = __mod_engine_npc_js;
 const { npcActions, runNpcAction, canVisitLiving } = __mod_engine_social_js;
@@ -30424,8 +30570,9 @@ function panelPower() {
     const main = el('div', 'row-main');
     main.appendChild(el('div', 'row-title', form.name));
     const mastery = getMastery(GAME, form.id);
+    const credit = form.creator ? `Created by ${form.creator}.` : (form.creatorNote || null);
     main.appendChild(el('div', 'row-note', form.owned
-      ? `${mastery}% worn in (${masteryLabel(mastery)}) - ${form.desc}`
+      ? `${mastery}% worn in (${masteryLabel(mastery)}) - ${form.desc}${credit ? ' ' + credit : ''}`
       : form.missing.length ? 'Needs ' + form.missing.slice(0, 3).join(', ') : 'Ready to attempt'));
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', 'x' + numberish(form.mult)));
@@ -30464,7 +30611,18 @@ function panelPower() {
     const row = el('div', 'row');
     const main = el('div', 'row-main');
     main.appendChild(el('div', 'row-title', BRANCHES[branch].name));
-    main.appendChild(el('div', 'row-note', list.map((t) => techniqueDisplayName(c, t.id)).join(', ')));
+    main.appendChild(el('div', 'row-note', list.map((t) => {
+      const name = techniqueDisplayName(c, t.id);
+      // A once-removed, renamed technique already credits the player by
+      // virtue of the rename; a technique still carrying its original name
+      // gets its actual inventor named instead.
+      if (c.techniqueNames && c.techniqueNames[t.id]) return `${name} (yours)`;
+      if (t.creator) {
+        const person = getCanon(t.creator);
+        return `${name} (${person ? person.name : t.creator})`;
+      }
+      return `${name} (no known inventor)`;
+    }).join(', ')));
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', String(list.length)));
     body.appendChild(row);
@@ -30480,9 +30638,10 @@ function panelPower() {
       const row = el('div', 'row' + (named ? ' owned' : ''));
       const main = el('div', 'row-main');
       main.appendChild(el('div', 'row-title', techniqueDisplayName(c, id)));
+      const origCreator = tech.creator ? (getCanon(tech.creator) ? getCanon(tech.creator).name : tech.creator) : null;
       main.appendChild(el('div', 'row-note', named
-        ? `Refined from the ${tech.name}. ${Math.round(techniquePurity(c, id) * 100)}% of the original.`
-        : `Learned secondhand. ${Math.round(techniquePurity(c, id) * 100)}% of what a direct teacher would have given you.`));
+        ? `Refined from ${origCreator ? `${origCreator}'s ${tech.name}` : `the ${tech.name}`}. ${Math.round(techniquePurity(c, id) * 100)}% of the original.`
+        : `Learned secondhand${origCreator ? ` from someone who did not invent it - that was ${origCreator}` : ''}. ${Math.round(techniquePurity(c, id) * 100)}% of what a direct teacher would have given you.`));
       row.appendChild(main);
       row.appendChild(el('div', 'row-value', Math.round(techniquePurity(c, id) * 100) + '%'));
       if (named) {

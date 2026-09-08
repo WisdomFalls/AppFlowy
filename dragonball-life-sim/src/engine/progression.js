@@ -161,6 +161,7 @@ export function ladderStatus(state) {
   const c = state.character;
   return ladderFor(c.raceId).map((f) => ({
     id: f.id, name: f.name, tier: f.tier, mult: f.mult, desc: f.desc, hint: f.hint,
+    creator: f.creator, creatorNote: f.creatorNote,
     owned: c.transformations.includes(f.id),
     missing: c.transformations.includes(f.id) ? [] : missingRequirements(state, f),
   }));

@@ -22,6 +22,7 @@ import { eraName, worldPowerBaseline, TIMELINE } from '../data/timeline.js';
 import { generateFullName } from '../data/names.js';
 import { BRANCHES, TECH_BY_ID, techniquePurity, techniqueDisplayName } from '../data/techniques.js';
 import { getTransformation, ladderFor } from '../data/transformations.js';
+import { getCanon } from '../data/canon.js';
 import { STAT_KEYS, STAT_LABELS, combatPower, powerTier, looksScore } from '../engine/stats.js';
 import { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } from '../engine/npc.js';
 import { npcActions, runNpcAction, canVisitLiving } from '../engine/social.js';
@@ -1188,8 +1189,9 @@ function panelPower() {
     const main = el('div', 'row-main');
     main.appendChild(el('div', 'row-title', form.name));
     const mastery = getMastery(GAME, form.id);
+    const credit = form.creator ? `Created by ${form.creator}.` : (form.creatorNote || null);
     main.appendChild(el('div', 'row-note', form.owned
-      ? `${mastery}% worn in (${masteryLabel(mastery)}) - ${form.desc}`
+      ? `${mastery}% worn in (${masteryLabel(mastery)}) - ${form.desc}${credit ? ' ' + credit : ''}`
       : form.missing.length ? 'Needs ' + form.missing.slice(0, 3).join(', ') : 'Ready to attempt'));
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', 'x' + numberish(form.mult)));
@@ -1228,7 +1230,18 @@ function panelPower() {
     const row = el('div', 'row');
     const main = el('div', 'row-main');
     main.appendChild(el('div', 'row-title', BRANCHES[branch].name));
-    main.appendChild(el('div', 'row-note', list.map((t) => techniqueDisplayName(c, t.id)).join(', ')));
+    main.appendChild(el('div', 'row-note', list.map((t) => {
+      const name = techniqueDisplayName(c, t.id);
+      // A once-removed, renamed technique already credits the player by
+      // virtue of the rename; a technique still carrying its original name
+      // gets its actual inventor named instead.
+      if (c.techniqueNames && c.techniqueNames[t.id]) return `${name} (yours)`;
+      if (t.creator) {
+        const person = getCanon(t.creator);
+        return `${name} (${person ? person.name : t.creator})`;
+      }
+      return `${name} (no known inventor)`;
+    }).join(', ')));
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', String(list.length)));
     body.appendChild(row);
@@ -1244,9 +1257,10 @@ function panelPower() {
       const row = el('div', 'row' + (named ? ' owned' : ''));
       const main = el('div', 'row-main');
       main.appendChild(el('div', 'row-title', techniqueDisplayName(c, id)));
+      const origCreator = tech.creator ? (getCanon(tech.creator) ? getCanon(tech.creator).name : tech.creator) : null;
       main.appendChild(el('div', 'row-note', named
-        ? `Refined from the ${tech.name}. ${Math.round(techniquePurity(c, id) * 100)}% of the original.`
-        : `Learned secondhand. ${Math.round(techniquePurity(c, id) * 100)}% of what a direct teacher would have given you.`));
+        ? `Refined from ${origCreator ? `${origCreator}'s ${tech.name}` : `the ${tech.name}`}. ${Math.round(techniquePurity(c, id) * 100)}% of the original.`
+        : `Learned secondhand${origCreator ? ` from someone who did not invent it - that was ${origCreator}` : ''}. ${Math.round(techniquePurity(c, id) * 100)}% of what a direct teacher would have given you.`));
       row.appendChild(main);
       row.appendChild(el('div', 'row-value', Math.round(techniquePurity(c, id) * 100) + '%'));
       if (named) {
