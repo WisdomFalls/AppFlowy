@@ -394,7 +394,7 @@ export const ACTIONS = [
     options: (s) => s.character.transformations.map((id) => {
       const f = getTransformation(id);
       const m = masteryEffect(s, id);
-      return { id, label: f ? f.name : id, hint: `Mastery ${m.mastery}% - ki drain at ${Math.round(m.drainMult * 100)}%` };
+      return { id, label: f ? f.name : id, hint: `Mastery ${m.mastery}% - ki and stamina drain at ${Math.round(m.drainMult * 100)}%` };
     }),
     run: (s, rng, params) => {
       const formId = (params && params.option) || s.character.transformations[0];

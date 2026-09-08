@@ -872,7 +872,8 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
     const chance = clamp(0.32 + Math.pow(ratio, 0.3) * 0.28
       + (them.staggered ? 0.18 : 0) + (them.blinded ? 0.14 : 0)
       + (1 - them.hp / them.hpMax) * 0.25, 0.1, 0.94);
-    me.stamina = Math.max(0, me.stamina - (me.infiniteStamina ? 0 : 18));
+    const ringFormMult = me.form ? masteryDrain(c, me.form) : 1;
+    me.stamina = Math.max(0, me.stamina - (me.infiniteStamina ? 0 : Math.round(18 * ringFormMult)));
     if (rng.chance(chance)) {
       lines.push(render(`{You get under them and put them over the edge|You take their balance and throw|You lift them off the stone and let go}. `
         + `{They land outside|Both feet outside the ring|Out}.`, {}, rng));
@@ -886,13 +887,16 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
     const moveId = actionId.slice(5);
     const move = PHYSICAL.find((m) => m.id === moveId);
     const aim = AIMED_STRIKES.find((m) => m.id === moveId);
+    // A form you have actually worn in stops wasting your motion, the same
+    // way it stops wasting your ki - an unmastered one costs more of both.
+    const formStaminaMult = me.form ? masteryDrain(c, me.form) : 1;
     if (move) {
-      const cost = me.infiniteStamina ? 0 : move.stamina;
+      const cost = me.infiniteStamina ? 0 : Math.round(move.stamina * formStaminaMult);
       me.stamina = Math.max(0, me.stamina - cost);
       const res = strike(me, them, battle, rng, move);
       lines.push(describeStrike(res, 'You', them.name, move.name, rng, true));
     } else if (aim) {
-      const cost = me.infiniteStamina ? 0 : aim.stamina;
+      const cost = me.infiniteStamina ? 0 : Math.round(aim.stamina * formStaminaMult);
       me.stamina = Math.max(0, me.stamina - cost);
       const type = playerAttackType(c);
       const res = strike(me, them, battle, rng, { ...aim, pierce: type === 'blade' });
