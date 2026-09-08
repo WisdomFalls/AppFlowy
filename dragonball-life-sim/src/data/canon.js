@@ -457,7 +457,7 @@ export const CANON = [
     teaches: ['life_drain'],
     personality: 'Immortal, furious about it in the specific way of someone who wanted to be feared instead, and endlessly patient because eternity gives him no other choice.',
     quirk: 'Introduces the Dead Zone into every conversation whether it is relevant or not.' },
-  { id: 'dabura', name: 'Dabura', race: 'other', years: [770, 774], home: 'hell',
+  { id: 'dabura', name: 'Dabura', race: 'other', years: [770, 774], home: 'makai',
     tags: ['villain', 'demon'], temperament: 'haughty',
     power: { 774: 4000000 },
     teaches: ['basic_martial_arts', 'dodon_ray'],

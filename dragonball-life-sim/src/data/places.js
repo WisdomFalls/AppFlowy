@@ -55,6 +55,11 @@ export const PLACES = [
   { id: 'universe10', name: 'Bell', planet: 'u10_world', danger: 5, training: 2.0, tags: ['u10', 'devout', 'civilised'], desc: 'Universe 10. Strength as worship, and a god in the stands taking notes.' },
   { id: 'tournament_u6', name: 'World of Void Arena', planet: 'void', danger: 6, training: 1.0, tags: ['tournament', 'u6'], desc: 'A neutral ring between universes, with gods in the stands.' },
   { id: 'driftkin_fleet', name: 'The Driftkin Fleet', planet: 'void', danger: 3, training: 1.4, tags: ['wild', 'nomadic', 'ships'], desc: 'A few hundred linked hulls, none of them younger than a century, going wherever the last vote decided.' },
+  // Not the afterlife, and not marked 'otherworld' for it - Makai sits
+  // beside the material universe rather than after it, reachable only when
+  // the tear between the two happens to be open (world.js's demon_tear
+  // event), the same way nobody ever books passage to Beerus's world either.
+  { id: 'makai', name: 'The Demon Realm', planet: 'void', danger: 7, training: 2.3, tags: ['demonic', 'evil', 'extreme'], desc: 'A sky the colour of a bruise, over ground that was never meant to hold weight. Nothing here is trying to be anywhere else.' },
 ];
 
 export const PLACE_BY_ID = Object.fromEntries(PLACES.map((p) => [p.id, p]));

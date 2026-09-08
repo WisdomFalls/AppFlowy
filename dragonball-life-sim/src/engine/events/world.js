@@ -772,4 +772,61 @@ registerEvents([
       },
     ],
   },
+
+  // The Demon Realm has never had a place of its own in this data - a
+  // faction (factions.js's demon_realm) with nowhere to actually be. This
+  // is the other half of that: the tear opens wherever you happen to be
+  // standing, not the other way around, so there is no travel destination
+  // to add - only a doorway that shows up uninvited.
+  {
+    id: 'demon_tear', tags: ['world', 'dark', 'cosmic'], weight: 6,
+    when: (ctx) => !ctx.character.inAfterlife && ctx.year >= 770 && (ctx.character.universe || 7) === 7
+      && combatPower(ctx.character) > ctx.baseline * 0.08,
+    slots: (ctx) => ({
+      demonName: ctx.rng.pick(['a demon soldier', 'something with too many joints', 'a scout from the other side', 'one of Dabura\'s own']),
+    }),
+    title: () => 'The Air Tears',
+    text: () => `{The air in front of you splits along an edge that should not exist|Something in the world simply stops being solid, for a moment, in a straight line|`
+      + `A seam opens that was not there a second ago, and the wrong colour of red comes through it}. `
+      + `[demonName] steps out of the Demon Realm like it owns the ground on this side too.`,
+    choices: (ctx, sl) => [
+      {
+        id: 'fight', label: 'Fight it here', effect: (c2, sl2) => offerBattle(c2, {
+          name: sl2.demonName.replace(/^a /, '').replace(/^one of /, ''),
+          power: scaledFoePower(c2, 1.1, 0.4), raceId: 'other', techniques: ['dodon_ray'],
+        }, {
+          reason: 'fight', stakes: 'serious', placeId: 'makai',
+          intro: 'The seam does not close while either of you is still standing in it.',
+        }),
+      },
+      {
+        id: 'seal', label: 'Try to force the tear shut', effect: (c2, sl2) => {
+          const chance = 0.3 + (c2.character.stats.kiControl - 40) / 260 + (c2.character.stats.discipline - 40) / 300;
+          if (odds(c2, chance)) {
+            const changes = apply(c2, { karma: 4, fame: 2, happiness: 2 });
+            fact(c2, 'Sealed a tear into the Demon Realm before anything worse came through.', { type: 'world', weight: 5, tags: ['world', 'dark'] });
+            return { text: `{It takes both hands and everything you have, but the seam closes|You get your hands on the edges of it and pull|`
+              + `It fights you the whole way and then it is just air again}. Nothing else gets through. Nobody official ever knows this happened.`, changes };
+          }
+          apply(c2, { health: -14 });
+          const intro = `{It does not want to close and it is stronger than the effort you put in|`
+            + `You get it half shut before it shrugs you off|`
+            + `Whatever is holding it open from the other side is not interested in negotiating}. `
+            + `It comes the rest of the way open anyway, and now you are already hurt.`;
+          return offerBattle(c2, {
+            name: sl2.demonName.replace(/^a /, '').replace(/^one of /, ''),
+            power: scaledFoePower(c2, 1.1, 0.4), raceId: 'other', techniques: ['dodon_ray'],
+          }, { reason: 'fight', stakes: 'serious', placeId: 'makai', intro });
+        },
+      },
+      {
+        id: 'avoid', label: 'Get clear and let it close on its own', effect: (c2) => {
+          const changes = apply(c2, { happiness: -3 });
+          return { text: `{You put distance between yourself and it and wait|You are not the one it is looking for, so you let it look elsewhere|`
+            + `Whatever it wants, it does not seem to want you specifically, and you do not correct that impression}. `
+            + `The seam holds for a while, then simply is not there any more.`, changes };
+        },
+      },
+    ],
+  },
 ]);
