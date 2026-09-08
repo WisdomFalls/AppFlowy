@@ -20765,7 +20765,26 @@ registerEvents([
         }
         return list;
       }
-      if (s.reachable) {
+      // A tournament has a draw and officials checking it, not just a threat
+      // you can choose to walk into - old enough to survive a fight is not
+      // the same question as old enough to be entered in a bracket. Nothing
+      // else on the timeline (an invasion, a threat arriving) works that way,
+      // so this only touches the tournament entries.
+      const isTournament = s.reachable && !!TIMELINE_TOURNAMENTS[s.evId];
+      const tooYoungForDraw = isTournament && ctx.bioAge < 14;
+      if (s.reachable && tooYoungForDraw) {
+        list.push({
+          id: 'too_young_for_draw', label: 'Watch from the stands',
+          effect: (c2, sl) => {
+            const ev = TIMELINE.find((t) => t.id === sl.evId);
+            c2.state.world.resolved.push(ev.id);
+            const changes = apply(c2, { happiness: -4, stats: { discipline: 2 } });
+            fact(c2, `Was too young for the draw at ${ev.name} and watched instead.`, { type: 'history', weight: 4, tags: ['witness'] });
+            return { text: `{The officials take one look at you and shake their heads|Nobody says it outright, but you are not old enough for this draw|You watch the bracket fill in without your name in it}. ${describeGap(combatPower(ctx.character), s.evThreat)}`, changes };
+          },
+        });
+      }
+      if (s.reachable && !tooYoungForDraw) {
         list.push({
           id: 'intervene',
           label: TIMELINE_TOURNAMENTS[s.evId] ? 'Enter it' : 'Go. Put yourself in the middle of it.',
@@ -27225,7 +27244,7 @@ const { topicsFor, converse } = __mod_engine_conversation_js;
 const { homeOptions, settleHome, homeOf, starshipOptions, buildStarship, shipOf, shipRoomOptions, addShipRoom, shipComponentOptions, addShipComponent, inviteAboard, sellStarship, spreadWord, DEED_SCALE, homeBonus } = __mod_engine_settlement_js;
 const { currencyFor, formatMoney, balance, priceIn, canAfford, debit, credit } = __mod_data_currency_js;
 const { CAREERS, getCareer, careersFor } = __mod_data_jobs_js;
-const { getRace, hasPerk } = __mod_data_races_js;
+const { getRace, hasPerk, maturity } = __mod_data_races_js;
 const { prostheticOptions, fittersFor, fitProsthetic, injuries, injuryList, mechanize } = __mod_engine_body_js;
 const { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel, limitFor, usedThisYear, trainingRoomLeft } = __mod_engine_economy_js;
 const { makeNpc, bondScore, relationLabel, RELATIONS } = __mod_engine_npc_js;
@@ -27432,6 +27451,31 @@ const ACTIONS = [
         lines.push('That is the syllabus finished. Whatever you do with it now is yours.');
       }
       return { text: lines.join(' '), trial };
+    },
+  },
+  // A real bracket, but a school one - classmates, not champions, and no
+  // draw official anywhere checks an age on the door. This is deliberately
+  // the one tournament in the game that is NOT gated behind being old enough
+  // (see timeline_event in world.js for where the lore tournaments are).
+  {
+    id: 'academy_tournament', maxPerYear: 1, slots: 2, name: 'The academy tournament', cat: 'body',
+    desc: 'A bracket among your own year. Nobody here is famous yet, which is rather the point.',
+    available: (s) => getPlace(s.character.placeId).tags.includes('academy') && maturity(s.character) < 14,
+    run: (s, rng) => {
+      const t = createTournament(s, rng, {
+        formatId: 'invitational',
+        purse: 0,
+        spread: 3.5,
+        canon: false,
+        size: 6,
+        name: 'The Academy Bracket',
+        placeId: s.character.placeId,
+      });
+      const opener = render('{The instructors run it every term|Somebody posts a draw on the noticeboard and it fills within a day|It is not official, but everybody treats it like it is}.', {}, rng);
+      if (!s.autoBattle) return { text: opener, tournament: t };
+      autoRunTournament(s, rng, t);
+      const out = settle(s, t, rng);
+      return { text: `${opener} ${out.text}` };
     },
   },
   {

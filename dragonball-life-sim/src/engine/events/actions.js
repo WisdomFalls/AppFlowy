@@ -19,7 +19,7 @@ import { homeOptions, settleHome, homeOf, starshipOptions, buildStarship, shipOf
   shipRoomOptions, addShipRoom, shipComponentOptions, addShipComponent, inviteAboard, sellStarship, spreadWord, DEED_SCALE, homeBonus } from '../settlement.js';
 import { currencyFor, formatMoney, balance, priceIn, canAfford, debit, credit } from '../../data/currency.js';
 import { CAREERS, getCareer, careersFor } from '../../data/jobs.js';
-import { getRace, hasPerk } from '../../data/races.js';
+import { getRace, hasPerk, maturity } from '../../data/races.js';
 import { prostheticOptions, fittersFor, fitProsthetic, injuries, injuryList, mechanize } from '../body.js';
 import { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel,
   limitFor, usedThisYear, trainingRoomLeft } from '../economy.js';
@@ -227,6 +227,31 @@ export const ACTIONS = [
         lines.push('That is the syllabus finished. Whatever you do with it now is yours.');
       }
       return { text: lines.join(' '), trial };
+    },
+  },
+  // A real bracket, but a school one - classmates, not champions, and no
+  // draw official anywhere checks an age on the door. This is deliberately
+  // the one tournament in the game that is NOT gated behind being old enough
+  // (see timeline_event in world.js for where the lore tournaments are).
+  {
+    id: 'academy_tournament', maxPerYear: 1, slots: 2, name: 'The academy tournament', cat: 'body',
+    desc: 'A bracket among your own year. Nobody here is famous yet, which is rather the point.',
+    available: (s) => getPlace(s.character.placeId).tags.includes('academy') && maturity(s.character) < 14,
+    run: (s, rng) => {
+      const t = createTournament(s, rng, {
+        formatId: 'invitational',
+        purse: 0,
+        spread: 3.5,
+        canon: false,
+        size: 6,
+        name: 'The Academy Bracket',
+        placeId: s.character.placeId,
+      });
+      const opener = render('{The instructors run it every term|Somebody posts a draw on the noticeboard and it fills within a day|It is not official, but everybody treats it like it is}.', {}, rng);
+      if (!s.autoBattle) return { text: opener, tournament: t };
+      autoRunTournament(s, rng, t);
+      const out = settle(s, t, rng);
+      return { text: `${opener} ${out.text}` };
     },
   },
   {

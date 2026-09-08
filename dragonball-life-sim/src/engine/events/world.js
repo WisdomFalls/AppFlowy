@@ -173,7 +173,26 @@ registerEvents([
         }
         return list;
       }
-      if (s.reachable) {
+      // A tournament has a draw and officials checking it, not just a threat
+      // you can choose to walk into - old enough to survive a fight is not
+      // the same question as old enough to be entered in a bracket. Nothing
+      // else on the timeline (an invasion, a threat arriving) works that way,
+      // so this only touches the tournament entries.
+      const isTournament = s.reachable && !!TIMELINE_TOURNAMENTS[s.evId];
+      const tooYoungForDraw = isTournament && ctx.bioAge < 14;
+      if (s.reachable && tooYoungForDraw) {
+        list.push({
+          id: 'too_young_for_draw', label: 'Watch from the stands',
+          effect: (c2, sl) => {
+            const ev = TIMELINE.find((t) => t.id === sl.evId);
+            c2.state.world.resolved.push(ev.id);
+            const changes = apply(c2, { happiness: -4, stats: { discipline: 2 } });
+            fact(c2, `Was too young for the draw at ${ev.name} and watched instead.`, { type: 'history', weight: 4, tags: ['witness'] });
+            return { text: `{The officials take one look at you and shake their heads|Nobody says it outright, but you are not old enough for this draw|You watch the bracket fill in without your name in it}. ${describeGap(combatPower(ctx.character), s.evThreat)}`, changes };
+          },
+        });
+      }
+      if (s.reachable && !tooYoungForDraw) {
         list.push({
           id: 'intervene',
           label: TIMELINE_TOURNAMENTS[s.evId] ? 'Enter it' : 'Go. Put yourself in the middle of it.',
