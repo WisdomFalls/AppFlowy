@@ -11643,11 +11643,40 @@ function usableInBattle(e) {
 }
 
 const PHYSICAL = [
-  { id: 'jab', name: 'Quick strike', base: 9, stamina: 6, speedWeight: 1.3, hit: 0.92 },
-  { id: 'combo', name: 'Combination', base: 17, stamina: 13, speedWeight: 1.0, hit: 0.82 },
-  { id: 'heavy', name: 'Heavy blow', base: 28, stamina: 21, speedWeight: 0.7, hit: 0.68, stagger: 0.3 },
-  { id: 'grapple', name: 'Grapple and throw', base: 14, stamina: 15, speedWeight: 0.8, hit: 0.74, stagger: 0.5 },
+  { id: 'jab', name: 'Quick strike', base: 9, stamina: 6, speedWeight: 1.3, hit: 0.92, hands: 1 },
+  { id: 'combo', name: 'Combination', base: 17, stamina: 13, speedWeight: 1.0, hit: 0.82, hands: 1 },
+  { id: 'heavy', name: 'Heavy blow', base: 28, stamina: 21, speedWeight: 0.7, hit: 0.68, stagger: 0.3, hands: 1 },
+  { id: 'grapple', name: 'Grapple and throw', base: 14, stamina: 15, speedWeight: 0.8, hit: 0.74, stagger: 0.5, hands: 2 },
+  // What is left once an arm stops answering. A knee or a kick does not need
+  // a working hand at all; a headbutt does not need a working leg either -
+  // it is worse than either of the above, but it is never off the table.
+  { id: 'kick', name: 'Knee or kick', base: 12, stamina: 10, speedWeight: 0.9, hit: 0.8, hands: 0, legMove: true },
+  { id: 'headbutt', name: 'Headbutt', base: 6, stamina: 7, speedWeight: 0.5, hit: 0.55, hands: 0 },
 ];
+
+/**
+ * How many working hands/arms a technique needs to actually throw. Missing
+ * here means 1, the ordinary case - a fist, a beam thrown one-handed, a
+ * touch. An explicit 2 is for the techniques canon always shows charged or
+ * released with both hands together (a Kamehameha, a Spirit Bomb). An
+ * explicit 0 is for anything that does not run through the hands at all -
+ * an aura state, a mental lock-on, a body-wide detonation, a race's own
+ * automatic regrowth.
+ */
+const TECH_HANDS = {
+  kamehameha: 2, super_kamehameha: 2, masenko: 2, final_flash: 2, tri_beam: 2,
+  spirit_bomb: 2, death_ball: 2, solar_flare: 2, dragon_throw: 2,
+  kaioken: 0, regenerate: 0, instant_transmission: 0, kai_kai: 0,
+  suicide_blast: 0, god_ki: 0,
+};
+function techHands(id) {
+  return TECH_HANDS[id] ?? 1;
+}
+
+/** How many hands a side currently has to work with, 0 to 2. */
+function handsLeft(side) {
+  return Math.max(0, 2 - (side.armsBroken || 0));
+}
 
 // A jab does not have to just be fast - it can be aimed. Trading raw
 // accuracy for exactly where it lands is how Frieza's finger blasts or
@@ -11657,9 +11686,9 @@ const PHYSICAL = [
 // playerAttackType below), a blade just makes the piece it exploits count
 // for more.
 const AIMED_STRIKES = [
-  { id: 'aim_head', name: 'Aim for the head', location: 'head', base: 10, stamina: 9, speedWeight: 1.1, hit: 0.58 },
-  { id: 'aim_joint', name: 'Aim for a joint', location: 'joint', base: 10, stamina: 9, speedWeight: 1.0, hit: 0.64 },
-  { id: 'aim_vitals', name: 'Aim for the throat', location: 'vitals', base: 15, stamina: 12, speedWeight: 0.9, hit: 0.5, crit: 0.12 },
+  { id: 'aim_head', name: 'Aim for the head', location: 'head', base: 10, stamina: 9, speedWeight: 1.1, hit: 0.58, hands: 1 },
+  { id: 'aim_joint', name: 'Aim for a joint', location: 'joint', base: 10, stamina: 9, speedWeight: 1.0, hit: 0.64, hands: 1 },
+  { id: 'aim_vitals', name: 'Aim for the throat', location: 'vitals', base: 15, stamina: 12, speedWeight: 0.9, hit: 0.5, crit: 0.12, hands: 1 },
 ];
 
 function sideTemplate(name, power, opts = {}) {
@@ -11680,6 +11709,13 @@ function sideTemplate(name, power, opts = {}) {
     charged: 0,
     staggered: 0,
     blinded: 0,
+    // What this fight has broken outright, not merely bruised - 0/1/2 good
+    // arms, and whether the legs still hold weight properly. Resets between
+    // fights: by the next time anyone sees this fighter, it has set (or been
+    // set, or been given a senzu bean), the same way every other bruise from
+    // an ordinary fight already does off-screen.
+    armsBroken: 0,
+    legBroken: false,
     infiniteStamina: !!opts.infiniteStamina,
     regenerates: !!opts.regenerates,
     techniques: opts.techniques || [],
@@ -11879,15 +11915,23 @@ function battleActions(state, battle) {
     ];
   }
 
+  // A broken arm or two takes options off the table outright, not just for
+  // the enemy across from you - the same fight can do it to you.
+  const handsGot = handsLeft(me);
   for (const move of PHYSICAL) {
     const cost = me.infiniteStamina ? 0 : move.stamina;
+    const handsOk = (move.hands || 0) <= handsGot;
+    const legOk = !(move.legMove && me.legBroken);
     out.push({
       id: 'phys:' + move.id,
       kind: 'physical',
       label: move.name,
-      hint: `${cost ? cost + ' stamina' : 'free'} - ${move.base} base`,
-      disabled: me.stamina < cost,
-      reason: me.stamina < cost ? 'Not enough stamina' : null,
+      hint: `${cost ? cost + ' stamina' : 'free'} - ${move.base} base`
+        + (move.hands === 2 ? ' - needs both arms' : ''),
+      disabled: me.stamina < cost || !handsOk || !legOk,
+      reason: !handsOk ? 'You do not have the arm for that right now'
+        : !legOk ? 'Your leg will not hold you for that'
+          : (me.stamina < cost ? 'Not enough stamina' : null),
     });
   }
 
@@ -11897,18 +11941,19 @@ function battleActions(state, battle) {
   // happens at that spot count for more.
   const AIM_HINTS = {
     head: 'Low odds. Blinds them for a moment if it lands.',
-    joint: 'Aimed at the knee or the working arm. Staggers them if it lands.',
+    joint: 'Aimed at the knee or the working arm. Can stagger, or break it outright.',
     vitals: 'The riskiest of the three. Hits hard when it lands.',
   };
   for (const move of AIMED_STRIKES) {
     const cost = me.infiniteStamina ? 0 : move.stamina;
+    const handsOk = (move.hands || 1) <= handsGot;
     out.push({
       id: 'phys:' + move.id,
       kind: 'physical',
       label: move.name,
       hint: `${cost ? cost + ' stamina' : 'free'} - ${AIM_HINTS[move.location]}`,
-      disabled: me.stamina < cost,
-      reason: me.stamina < cost ? 'Not enough stamina' : null,
+      disabled: me.stamina < cost || !handsOk,
+      reason: !handsOk ? 'You do not have the arm for that right now' : (me.stamina < cost ? 'Not enough stamina' : null),
     });
   }
 
@@ -11918,6 +11963,8 @@ function battleActions(state, battle) {
     const e = tech.effect;
     if (!usableInBattle(e)) continue;
     const cost = e.kiCost || 0;
+    const needs = techHands(id);
+    const handsOk = needs <= handsGot;
     out.push({
       id: 'tech:' + id,
       kind: 'ki',
@@ -11930,9 +11977,10 @@ function battleActions(state, battle) {
         e.blind ? 'blinds' : null,
         e.heal ? 'heals' : null,
         e.escape ? 'escape' : null,
+        needs === 2 ? 'needs both arms' : null,
       ].filter(Boolean).join(' - '),
-      disabled: me.ki < cost,
-      reason: me.ki < cost ? 'Not enough ki' : null,
+      disabled: me.ki < cost || !handsOk,
+      reason: !handsOk ? 'You do not have the arm for that right now' : (me.ki < cost ? 'Not enough ki' : null),
     });
   }
 
@@ -12012,15 +12060,18 @@ function battleActions(state, battle) {
 
   if (battle.ringOut) {
     // Throwing somebody out of the ring is a real option against a fighter
-    // you could never knock down, and it is how most tournaments end.
+    // you could never knock down, and it is how most tournaments end - but
+    // it takes a leg to plant with, same as the throw itself does.
     const off = them_off_balance(battle);
+    const canThrow = off && !me.legBroken;
     out.push({
       id: 'ringout',
       kind: 'move',
       label: 'Throw them out of the ring',
-      hint: off ? 'They are off balance. Take the chance.' : 'Needs them staggered, hurt, or blinded first.',
-      disabled: !off,
-      reason: off ? null : 'They are still set',
+      hint: me.legBroken ? 'Your leg will not let you plant for a throw.'
+        : off ? 'They are off balance. Take the chance.' : 'Needs them staggered, hurt, or blinded first.',
+      disabled: !canThrow,
+      reason: me.legBroken ? 'Your leg will not hold for that' : (off ? null : 'They are still set'),
     });
   }
 
@@ -12092,6 +12143,10 @@ function strike(attacker, defender, battle, rng, spec) {
   if (defender.blinded > 0) hitChance += 0.3;
   if (attacker.blinded > 0) hitChance -= 0.35;
   if (defender.staggered > 0) hitChance += 0.2;
+  // A leg that will not hold weight properly costs you the footing to land
+  // things and costs them the footing to get out of the way.
+  if (attacker.legBroken) hitChance -= 0.15;
+  if (defender.legBroken) hitChance += 0.18;
   hitChance = clamp(hitChance, 0.05, 0.97);
 
   if (!rng.chance(hitChance)) {
@@ -12127,7 +12182,27 @@ function strike(attacker, defender, battle, rng, spec) {
   // Big exchanges wreck the landscape, and somebody lives here.
   battle.destruction = clamp(battle.destruction + damage * (spec.blast ? 0.9 : 0.35) / 10
     + (terrainCrash ? rng.int(5, 12) : 0), 0, 100);
-  return { miss: false, damage, crit, terrainCrash };
+
+  // Something can just plain break, not merely stagger. Android 18 did not
+  // hit Vegeta especially hard breaking his arm - she went for the joint
+  // outright. A strike aimed at one does that far more often than a blow
+  // that just happens to land heavy, but either can do it.
+  let limbBreak = null;
+  const goodArm = (defender.armsBroken || 0) < 2;
+  const goodLeg = !defender.legBroken;
+  if (goodArm || goodLeg) {
+    const jointShot = spec.location === 'joint';
+    const breakChance = jointShot ? (crit ? 0.4 : 0.18) : (damage > defender.hpMax * 0.32 ? 0.07 : 0);
+    if (breakChance && rng.chance(breakChance)) {
+      const pool = [];
+      if (goodArm) pool.push('arm', 'arm');
+      if (goodLeg) pool.push('leg');
+      const kind = rng.pick(pool);
+      if (kind === 'arm') { defender.armsBroken = (defender.armsBroken || 0) + 1; limbBreak = 'arm'; }
+      else { defender.legBroken = true; limbBreak = 'leg'; }
+    }
+  }
+  return { miss: false, damage, crit, terrainCrash, limbBreak };
 }
 
 /**
@@ -12162,6 +12237,13 @@ function describeStrike(res, attackerName, defenderName, moveName, rng, byPlayer
     text += ' ' + render(byPlayer
       ? `{[d] goes through whatever was standing behind them|A wall, a rock face, a building - [d] finds out the hard way|[d] hits something solid on the way down, and it does not hold}. {A second to get their bearings back|That costs them the recovery|They are not ready for what comes next}.`
       : `{You go through whatever was standing behind you|A wall, a rock face, a building - you find out the hard way|You hit something solid on the way down, and it does not hold}. {A second to get your bearings back|That costs you the recovery|You are not ready for what comes next}.`,
+    slots, rng);
+  }
+  if (res.limbBreak) {
+    const part = res.limbBreak;
+    text += ' ' + render(byPlayer
+      ? `{Something in [d]'s ${part} gives with a sound you feel more than hear|[d]'s ${part} bends wrong and stays that way|That did not just hurt - [d]'s ${part} is broken}. {They are fighting on what is left now|Whatever they do next, they are doing it without that|That is not coming back for the rest of this}.`
+      : `{Something in your ${part} gives with a sound you feel more than hear|Your ${part} bends wrong and stays that way|That did not just hurt - your ${part} is broken}. {You are fighting on what is left now|Whatever you do next, you are doing it without that|That is not coming back for the rest of this}.`,
     slots, rng);
   }
   return text;
@@ -12258,9 +12340,12 @@ function foeTurn(state, battle, rng, actor) {
     them.stance = 'aggressive';
   }
 
+  // A hand missing outright takes whatever needs it off the table, for them
+  // exactly the same way it does for you.
+  const handsGot = handsLeft(them);
   const kiMoves = them.techniques
     .map((id) => TECH_BY_ID[id])
-    .filter((t) => t && t.effect && t.effect.atk > 0 && (t.effect.kiCost || 0) <= them.ki);
+    .filter((t) => t && t.effect && t.effect.atk > 0 && (t.effect.kiCost || 0) <= them.ki && techHands(t.id) <= handsGot);
 
   if (lastResort && kiMoves.length) {
     const tech = kiMoves.slice().sort((a, b) => (b.effect.atk || 0) - (a.effect.atk || 0))[0];
@@ -12270,6 +12355,22 @@ function foeTurn(state, battle, rng, actor) {
     });
     lines.push(`${them.name} is not holding anything back. This is everything they have left.`);
     lines.push(describeStrike(res, them.name, 'you', tech.name, rng, false));
+    return lines;
+  }
+
+  // A capable opponent goes for a joint outright the same way you can - not
+  // a bigger hit, a smarter one, and it costs you exactly what it would cost
+  // them: a hand or a leg that stops answering for the rest of this fight.
+  const jointCapable = (them.techniques || []).length >= 2 || (them.instinct ?? 50) > 60;
+  if (jointCapable && !lastResort && handsGot >= 1 && rng.chance(0.14)) {
+    const move = AIMED_STRIKES[1]; // aim_joint
+    if (!them.infiniteStamina) them.stamina = Math.max(0, them.stamina - move.stamina);
+    const res = strike(them, me, battle, rng, move);
+    lines.push(describeStrike(res, them.name, 'you', move.name, rng, false));
+    if (!res.miss && !res.lockedOut && !res.limbBreak) {
+      me.staggered = Math.max(me.staggered, 2);
+      lines.push(`Something in your joint gives. You are not standing right after that.`);
+    }
     return lines;
   }
 
@@ -12283,7 +12384,9 @@ function foeTurn(state, battle, rng, actor) {
     return lines;
   }
 
-  const move = rng.weighted(PHYSICAL, (m) => (them.stamina >= m.stamina ? m.base : 0));
+  const move = rng.weighted(PHYSICAL, (m) => (
+    them.stamina >= m.stamina && (m.hands || 0) <= handsGot && !(m.legMove && them.legBroken) ? m.base : 0
+  ));
   if (!them.infiniteStamina) them.stamina = Math.max(0, them.stamina - move.stamina);
   const res = strike(them, me, battle, rng, move);
   lines.push(describeStrike(res, them.name, 'you', move.name, rng, false));
@@ -12405,6 +12508,8 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
       lines.push(voiceLine(battle, rng, 'insulted') || `${them.name} notices, and does not thank you for it.`);
     }
     skipFoe = false;
+  } else if (actionId === 'ringout' && me.legBroken) {
+    lines.push('Your leg will not let you get under them for that.');
   } else if (actionId === 'ringout') {
     // Strength and technique against their weight and whatever balance they
     // have left. Failing it puts you in a bad spot, which is the trade.
@@ -12425,8 +12530,23 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
     freeSwing = true;
   } else if (actionId.startsWith('phys:')) {
     const moveId = actionId.slice(5);
-    const move = PHYSICAL.find((m) => m.id === moveId);
-    const aim = AIMED_STRIKES.find((m) => m.id === moveId);
+    const handsGot = handsLeft(me);
+    // A move your body cannot currently throw does not just fail - it
+    // becomes whatever you can still manage. This is the backstop for
+    // anything that reaches takeTurn without going through the UI's own
+    // disabling first (autoResolve included).
+    let move = PHYSICAL.find((m) => m.id === moveId);
+    let aim = move ? null : AIMED_STRIKES.find((m) => m.id === moveId);
+    let downgraded = false;
+    if (move && ((move.hands || 0) > handsGot || (move.legMove && me.legBroken))) {
+      move = PHYSICAL.find((m) => m.id === 'headbutt');
+      downgraded = true;
+    } else if (aim && (aim.hands || 1) > handsGot) {
+      move = PHYSICAL.find((m) => m.id === 'headbutt');
+      aim = null;
+      downgraded = true;
+    }
+    if (downgraded) lines.push(`You do not have the arm for that. You get a headbutt in instead.`);
     // A form you have actually worn in stops wasting your motion, the same
     // way it stops wasting your ki - an unmastered one costs more of both.
     const formStaminaMult = me.form ? masteryDrain(c, me.form) : 1;
@@ -12461,7 +12581,9 @@ function takeTurn(state, battle, rng, actionId, params = {}) {
     }
   } else if (actionId.startsWith('tech:')) {
     const tech = TECH_BY_ID[actionId.slice(5)];
-    if (tech) {
+    if (tech && techHands(tech.id) > handsLeft(me)) {
+      lines.push(`You do not have the arm for that right now. It fizzles out unthrown.`);
+    } else if (tech) {
       const e = tech.effect;
       const name = techniqueDisplayName(c, tech.id);
       // A once-removed version is not just a worse number on the character
@@ -12699,6 +12821,7 @@ function battleStatus(battle) {
       stamina: Math.round(battle.me.stamina), staminaMax: Math.round(battle.me.staminaMax),
       form: battle.me.formName, stance: STANCES[battle.me.stance].name,
       power: Math.round(effectivePower(battle.me, battle)),
+      armsBroken: battle.me.armsBroken || 0, legBroken: !!battle.me.legBroken,
     },
     them: {
       name: battle.them.name,
@@ -12707,6 +12830,7 @@ function battleStatus(battle) {
       form: battle.them.formName, stance: STANCES[battle.them.stance].name,
       power: Math.round(effectivePower(battle.them, battle)),
       tier: powerTier(effectivePower(battle.them, battle)),
+      armsBroken: battle.them.armsBroken || 0, legBroken: !!battle.them.legBroken,
     },
     destruction: Math.round(battle.destruction),
     civilians: battle.civilians,
@@ -31632,7 +31756,10 @@ function renderBattle() {
     meFace.innerHTML = portraitSvg(GAME.character, { form: myForm });
   }
   $('foe-name').textContent = st.them.name;
-  $('foe-sub').textContent = [st.them.tier, st.them.form, st.them.stance].filter(Boolean).join(' - ');
+  const foeLimbState = st.them.armsBroken >= 2 ? 'both arms broken'
+    : st.them.armsBroken === 1 ? 'an arm broken' : null;
+  $('foe-sub').textContent = [st.them.tier, st.them.form, st.them.stance, foeLimbState,
+    st.them.legBroken ? 'a leg broken' : null].filter(Boolean).join(' - ');
   // A number on the foe panel is a scouter reading, not a birthright.
   const foeRead = readPower(GAME, st.them.power, { peek: true });
   $('foe-power').textContent = foeRead.known ? numberish(st.them.power) : (foeRead.broke ? '—' : '?');
@@ -31683,9 +31810,12 @@ function renderBattle() {
   $('my-ki').style.width = Math.max(0, (st.me.ki / Math.max(1, st.me.kiMax)) * 100) + '%';
   $('my-sta').style.width = Math.max(0, (st.me.stamina / Math.max(1, st.me.staminaMax)) * 100) + '%';
   const held = BATTLE.restraint ?? 1;
+  const myLimbState = st.me.armsBroken >= 2 ? 'both arms broken'
+    : st.me.armsBroken === 1 ? 'an arm broken' : null;
   $('my-state').textContent = [
     st.me.form, st.me.stance,
     held < 1 ? `holding back (${Math.round(held * 100)}%)` : null,
+    myLimbState, st.me.legBroken ? 'a leg broken' : null,
   ].filter(Boolean).join(' - ');
 
   const tabs = $('battle-tabs');

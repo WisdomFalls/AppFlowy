@@ -2520,7 +2520,10 @@ function renderBattle() {
     meFace.innerHTML = portraitSvg(GAME.character, { form: myForm });
   }
   $('foe-name').textContent = st.them.name;
-  $('foe-sub').textContent = [st.them.tier, st.them.form, st.them.stance].filter(Boolean).join(' - ');
+  const foeLimbState = st.them.armsBroken >= 2 ? 'both arms broken'
+    : st.them.armsBroken === 1 ? 'an arm broken' : null;
+  $('foe-sub').textContent = [st.them.tier, st.them.form, st.them.stance, foeLimbState,
+    st.them.legBroken ? 'a leg broken' : null].filter(Boolean).join(' - ');
   // A number on the foe panel is a scouter reading, not a birthright.
   const foeRead = readPower(GAME, st.them.power, { peek: true });
   $('foe-power').textContent = foeRead.known ? numberish(st.them.power) : (foeRead.broke ? '—' : '?');
@@ -2571,9 +2574,12 @@ function renderBattle() {
   $('my-ki').style.width = Math.max(0, (st.me.ki / Math.max(1, st.me.kiMax)) * 100) + '%';
   $('my-sta').style.width = Math.max(0, (st.me.stamina / Math.max(1, st.me.staminaMax)) * 100) + '%';
   const held = BATTLE.restraint ?? 1;
+  const myLimbState = st.me.armsBroken >= 2 ? 'both arms broken'
+    : st.me.armsBroken === 1 ? 'an arm broken' : null;
   $('my-state').textContent = [
     st.me.form, st.me.stance,
     held < 1 ? `holding back (${Math.round(held * 100)}%)` : null,
+    myLimbState, st.me.legBroken ? 'a leg broken' : null,
   ].filter(Boolean).join(' - ');
 
   const tabs = $('battle-tabs');
