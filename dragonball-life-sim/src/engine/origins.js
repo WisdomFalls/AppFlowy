@@ -83,6 +83,9 @@ function upbringingWeights(raceId, year, homeworld) {
     case 'frost_android':
       Object.assign(w, { saiyan_creche: 0, lab: 8, exile: 6, royal: 3, self_raised: 3, city: 1, wealthy: 1, farm: 0, temple: 0, street: 1 });
       break;
+    case 'half_cerealian':
+      Object.assign(w, { saiyan_creche: 0, city: 6, farm: 4, foster: 3, exile: 2, temple: 1, self_raised: 1, wealthy: 1, royal: 0.3, warrior_clan: 0.5, animals: 0.4 });
+      break;
     case 'kryllian':
       Object.assign(w, { saiyan_creche: 0, warrior_clan: 10, self_raised: 1, foster: 1, exile: 3, city: 0.5, temple: 2, animals: 2, farm: 1, wealthy: 0, royal: 0 });
       break;

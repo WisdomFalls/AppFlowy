@@ -468,6 +468,7 @@ const HYBRID_ROOTS = {
   half_android: ['android', 'bioandroid'],
   half_frostkin: ['frostdemon'],
   frost_android: ['frostdemon', 'android', 'bioandroid'],
+  half_cerealian: ['cerealian'],
 };
 const DILUTION_FLOOR = 0.12;
 
@@ -480,6 +481,7 @@ const DEFAULT_LINEAGE = {
   half_android: { android: 0.5, earthling: 0.5 },
   half_frostkin: { frostdemon: 0.5, earthling: 0.5 },
   frost_android: { frostdemon: 0.5, android: 0.5 },
+  half_cerealian: { cerealian: 0.5, earthling: 0.5 },
 };
 
 /** A person's ancestry as fractions of root species, defaulting to "entirely
@@ -531,6 +533,9 @@ export function makeChild(rng, character, partner, year) {
   const mix = [character.raceId, p].sort().join('+');
   if (mix === 'earthling+saiyan' || mix === 'earthling+halfsaiyan' || mix === 'halfsaiyan+saiyan') raceId = 'halfsaiyan';
   else if (character.raceId === 'halfsaiyan' && p === 'halfsaiyan') raceId = 'halfsaiyan';
+  else if (character.raceId === 'half_cerealian' && p === 'half_cerealian') raceId = 'half_cerealian';
+  else if (isEarthlingLike(character.raceId) && p === 'cerealian') raceId = 'half_cerealian';
+  else if (isEarthlingLike(p) && character.raceId === 'cerealian') raceId = 'half_cerealian';
   else if (isEarthlingLike(character.raceId) && ANDROID_KIN.includes(p)) raceId = 'half_android';
   else if (isEarthlingLike(p) && ANDROID_KIN.includes(character.raceId)) raceId = 'half_android';
   else if (isEarthlingLike(character.raceId) && FROST_KIN.includes(p)) raceId = 'half_frostkin';

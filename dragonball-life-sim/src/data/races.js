@@ -337,6 +337,28 @@ export const RACES = [
     hasTail: true,
     notes: 'Two separate reasons to underestimate you, and both of them are wrong.',
   },
+  {
+    id: 'half_cerealian',
+    name: 'Half-Cerealian',
+    short: 'Half-Cerealian',
+    hybrid: true,
+    blurb: 'Earth blood and the last blood of a murdered world. One half of your family tree has almost nobody left on it.',
+    homeworlds: ['east_city', 'west_city', 'cereal'],
+    base: { strength: 41, speed: 46, technique: 59, kiControl: 57, durability: 43, intellect: 59, charisma: 56, discipline: 59 },
+    growth: { power: 0.92, technique: 1.38, kiControl: 1.32, discipline: 1.22 },
+    startPower: [1, 8],
+    lifespan: [76, 108],
+    agingRate: 0.95,
+    maturityRate: 1.0,
+    appetite: 1.0,
+    perks: ['survivor', 'fastLearner', 'techniqueGenius', 'luck'],
+    transformLadder: 'cerealian',
+    naming: 'cerealian',
+    tags: ['mortal', 'earthling'],
+    hairColours: ['orange', 'black', 'brown', 'dark red'],
+    startingTechniques: [],
+    notes: 'Half of a people that is almost gone. Whether anyone remembers that is up to you.',
+  },
 
   // ------------------------------------------------------------ new worlds
   {
