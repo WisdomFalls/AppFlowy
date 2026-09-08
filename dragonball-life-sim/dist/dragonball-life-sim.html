@@ -22207,6 +22207,64 @@ function usableWishes(state, dragon) {
   });
 }
 
+/**
+ * A blunt, personality-flavoured read on who is asking. Not every wisher
+ * gets the same dragon - a wary one has met people like this before, a
+ * warm one has not needed to grant many of these to somebody decent.
+ * Deliberately reads off what the character has actually become (traits
+ * picked up over a life, karma earned by it), not the temperament they
+ * started with alone.
+ */
+function traitRead(c) {
+  if (c.traits.includes('cruel') || c.traits.includes('evil') || c.traits.includes('compromised') || c.karma < -30) {
+    return 'wary';
+  }
+  if (c.traits.includes('kind') || c.traits.includes('good') || c.karma > 40) {
+    return 'warm';
+  }
+  if (c.traits.includes('reckless') || c.traits.includes('hotblooded')) {
+    return 'impatient';
+  }
+  if (c.traits.includes('proud')) {
+    return 'proud';
+  }
+  return null;
+}
+
+const TRAIT_LINES = {
+  wary: `{It has read worse than you before it even finished rising|"I know what you are," it says, and grants the wish anyway|`
+    + `Something in the way it looks at you does not relax the whole time}.`,
+  warm: `{It does not need to ask what kind of person you are|"You have earned an easy one of these," it says, unprompted|`
+    + `There is something almost gentle in how it waits}.`,
+  impatient: `{It can tell you have not thought this all the way through, and grants it anyway|`
+    + `"Slow down," it says, which is not something a dragon usually bothers with|It waits exactly as long as you need and not a second longer}.`,
+  proud: `{It does not flatter you, which you notice|"Say it plainly," it says, uninterested in a performance|`
+    + `It has heard grander requests than whatever you are about to make}.`,
+};
+
+/**
+ * What the dragon is already half-expecting, read off the same state the
+ * player can see: a death that still shows, a happiness that has not moved
+ * in a while, a trait that has been pushing them toward more power or
+ * toward doing right by a world. Never forces the choice - only marks it.
+ */
+function suggestedWish(state, pool) {
+  const c = state.character;
+  const ids = new Set(pool.map((w) => w.id));
+  const deadLoved = Object.values(state.npcs).find((n) => !n.alive && (n.closeness || 0) > 50);
+  if (deadLoved && ids.has('revive_named')) return 'revive_named';
+  const lonely = c.vitals.happiness < 40
+    && !Object.values(state.npcs).some((n) => n.alive && ['spouse', 'lover'].includes(n.relation));
+  if (lonely && ids.has('partner')) return 'partner';
+  const ambitious = c.traits.includes('proud') || c.traits.includes('ambitious') || c.traits.includes('hotblooded');
+  if (ambitious && ids.has('next_form')) return 'next_form';
+  if (ambitious && ids.has('power_up')) return 'power_up';
+  const heroic = c.karma > 40 || c.traits.includes('kind') || c.traits.includes('good');
+  if (heroic && ids.has('restore_planet')) return 'restore_planet';
+  if (heroic && ids.has('peace')) return 'peace';
+  return null;
+}
+
 /** People, worlds and threats a wish can be pointed at. */
 function targetsFor(state, wish) {
   const npcs = Object.values(state.npcs);
@@ -22505,6 +22563,7 @@ registerEvents([
         already: summon ? summon.used.length : 0,
         left: summon ? summon.remaining : dragon.wishes,
         zeno: !!(summon && summon.zenoGifted),
+        read: traitRead(ctx.character),
       };
     },
     title: (ctx, s) => (s.zeno ? 'What Do You Want' : s.already ? `[dragon] Is Still Here` : 'Summoning'),
@@ -22519,15 +22578,19 @@ registerEvents([
            ${s.voice ? `You speak into [voice].` : ''}`
         : `Seven balls in a circle, and {the sky goes black|the sun goes out|the clouds come apart}.
            [dragon] {rises|uncoils|fills the sky}, and there is [voice].
-           {"State your wish"|"Speak. I will grant [left]"|"You have summoned me. Make it quick"}.`),
+           {"State your wish"|"Speak. I will grant [left]"|"You have summoned me. Make it quick"}.
+           ${s.read ? TRAIT_LINES[s.read] : ''}`),
     choices: (ctx, s) => {
       const dragon = dragonFor(ctx.state);
       const pool = usableWishes(ctx.state, dragon);
+      const suggested = suggestedWish(ctx.state, pool);
+      const suggestedGroup = suggested ? (WISH_BY_ID[suggested] || {}).group : null;
       const groups = WISH_GROUPS.filter((g) => pool.some((w) => w.group === g));
       const list = groups.map((g) => ({
         id: 'group:' + g,
         label: g,
-        hint: pool.filter((w) => w.group === g).slice(0, 3).map((w) => w.name).join('. '),
+        hint: pool.filter((w) => w.group === g).slice(0, 3).map((w) => w.name).join('. ')
+          + (g === suggestedGroup ? ' - the dragon is already looking at you like it knows why you came.' : ''),
         effect: (c2) => ({
           text: `{You think about it|The dragon does not hurry you|Nobody in the circle says anything}.`,
           followUp: 'wish_menu',
