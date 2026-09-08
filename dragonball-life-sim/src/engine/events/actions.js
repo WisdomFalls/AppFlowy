@@ -37,6 +37,7 @@ import { mostWantedBoard, clearBounty } from '../bounty.js';
 import { generateFullName, generateSignatureName } from '../../data/names.js';
 import { numberish } from '../text.js';
 import { localMoney } from './helpers.js';
+import { watchBroadcast } from '../broadcast.js';
 
 /** Living blood-or-marriage family who are not standing where you are. */
 function familyElsewhere(state) {
@@ -1955,6 +1956,12 @@ export const ACTIONS = [
       adjust(s, { zeni: -stake, happiness: -8 });
       return { text: render(`{It does not go your way|You lose it all in under an hour|The dealer is apologetic}. ${localMoney(s, stake)} gone.`, {}, rng) };
     },
+  },
+  {
+    id: 'watch_broadcast', maxPerYear: 8, slots: 1, name: 'Stay in and watch something', cat: 'mind', cost: 'A moment',
+    desc: 'Whatever is on. Sometimes that is the news, and sometimes it is exactly the point that it is not.',
+    available: (s) => !s.character.inAfterlife && !!homeOf(s) && homeBonus(s).here,
+    run: (s, rng) => watchBroadcast(s, rng),
   },
   {
     id: 'commit_crime', maxPerYear: 3, minMaturity: 8, slots: 1, name: 'Commit a crime', cat: 'world', cost: 'A moment', danger: true,
