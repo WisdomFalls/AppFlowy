@@ -8,7 +8,7 @@
 import { clamp } from './rng.js';
 import { render } from './text.js';
 import { combatPower, powerTier, zenkaiBoost, winChance, healthMaxFor, staminaMaxFor, trainingRate, equippedWeapon } from './stats.js';
-import { masteryMult, masteryDrain, trainMastery } from './mastery.js';
+import { masteryMult, masteryDrain, masteryOf, trainMastery } from './mastery.js';
 import { TECH_BY_ID, techniquePurity, techniqueDisplayName } from '../data/techniques.js';
 import { getTransformation, ladderFor } from '../data/transformations.js';
 import { getPlace } from '../data/places.js';
@@ -636,7 +636,30 @@ function them_off_balance(battle) {
 
 // ------------------------------------------------------------------- turn
 
-function applyUpkeep(side, lines) {
+/**
+ * A god-ki or instinct-driven form is not just a fuel tank - some of them
+ * (transformations.js's negative `control`) are not fully yours yet, and
+ * even with ki to spare a fighter can lose the thread and drop straight out
+ * of one under pressure. Positive-control forms (a mastered Super Saiyan 2,
+ * Blue with an angel's teaching behind it) do not carry this risk at all;
+ * that is what makes them mastered rather than merely reached.
+ */
+function isUnstableForm(formId) {
+  if (!formId) return false;
+  const form = getTransformation(formId);
+  return !!(form && form.control < 0);
+}
+
+function holdCheck(side, formId, rng) {
+  const form = getTransformation(formId);
+  if (!form || !(form.control < 0)) return false;
+  const mastery = side.mastery ? masteryOf({ formMastery: side.mastery }, formId) : 0;
+  const steadiness = clamp(((side.instinct ?? 50) - 50) / 150, -0.2, 0.2);
+  const chance = clamp((-form.control / 100) * 0.55 * (1 - (mastery / 100) * 0.9) - steadiness, 0.01, 0.5);
+  return rng.chance(chance);
+}
+
+function applyUpkeep(side, lines, rng) {
   if (side.form) {
     const form = getTransformation(side.form);
     if (form) {
@@ -649,6 +672,12 @@ function applyUpkeep(side, lines) {
         side.layerForm = null;
         side.layerFormName = null;
         lines.push(`${side.name} cannot hold the form any longer and drops out of it.`);
+      } else if (holdCheck(side, side.form, rng)) {
+        lines.push(`${side.name} loses the thread of it. ${side.formName || form.name} slips away mid-fight.`);
+        side.form = null;
+        side.formName = null;
+        side.layerForm = null;
+        side.layerFormName = null;
       }
     }
   }
@@ -663,6 +692,10 @@ function applyUpkeep(side, lines) {
         side.layerForm = null;
         side.layerFormName = null;
         lines.push(`${side.name} cannot hold both any longer. The second form slips first.`);
+      } else if (holdCheck(side, side.layerForm, rng)) {
+        lines.push(`${side.name} cannot keep both at once. ${side.layerFormName || layer.name} slips first.`);
+        side.layerForm = null;
+        side.layerFormName = null;
       }
     }
   }
@@ -1414,8 +1447,8 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
     battle.formRounds[me.form] = (battle.formRounds[me.form] || 0) + 1;
   }
 
-  applyUpkeep(me, lines);
-  applyUpkeep(them, lines);
+  applyUpkeep(me, lines, rng);
+  applyUpkeep(them, lines, rng);
   battle.round += 1;
   battle.log.push(...lines);
   if (battle.log.length > 60) battle.log = battle.log.slice(-60);
@@ -1438,6 +1471,7 @@ export function battleStatus(battle) {
       stamina: Math.round(battle.me.stamina), staminaMax: Math.round(battle.me.staminaMax),
       form: battle.me.formName, layerForm: battle.me.layerFormName, stance: STANCES[battle.me.stance].name,
       power: Math.round(effectivePower(battle.me, battle)),
+      unstable: isUnstableForm(battle.me.form) || isUnstableForm(battle.me.layerForm),
       armsBroken: battle.me.armsBroken || 0, legBroken: !!battle.me.legBroken,
     },
     them: {

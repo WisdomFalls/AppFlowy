@@ -2740,7 +2740,9 @@ function renderBattle() {
   const myLimbState = st.me.armsBroken >= 2 ? 'both arms broken'
     : st.me.armsBroken === 1 ? 'an arm broken' : null;
   $('my-state').textContent = [
-    st.me.form, st.me.layerForm ? `${st.me.layerForm} through it` : null, st.me.stance,
+    st.me.form, st.me.layerForm ? `${st.me.layerForm} through it` : null,
+    st.me.form && st.me.unstable ? 'not fully in your control' : null,
+    st.me.stance,
     held < 1 ? `holding back (${Math.round(held * 100)}%)` : null,
     myLimbState, st.me.legBroken ? 'a leg broken' : null,
   ].filter(Boolean).join(' - ');
