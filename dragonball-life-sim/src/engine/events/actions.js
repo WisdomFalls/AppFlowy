@@ -17,7 +17,7 @@ import { buyItem, valueHere, hasItem, addItem, inventoryOf, removeItem, findEntr
 import { topicsFor, converse } from '../conversation.js';
 import { homeOptions, settleHome, homeOf, starshipOptions, buildStarship, shipOf,
   shipRoomOptions, addShipRoom, shipComponentOptions, addShipComponent, inviteAboard, sellStarship, spreadWord, DEED_SCALE, homeBonus } from '../settlement.js';
-import { currencyFor, formatMoney, balance, priceIn, canAfford, debit } from '../../data/currency.js';
+import { currencyFor, formatMoney, balance, priceIn, canAfford, debit, credit } from '../../data/currency.js';
 import { CAREERS, getCareer, careersFor } from '../../data/jobs.js';
 import { getRace, hasPerk } from '../../data/races.js';
 import { prostheticOptions, fittersFor, fitProsthetic, injuries, injuryList, mechanize } from '../body.js';
@@ -31,6 +31,7 @@ import { startTrial, STAT_TRIALS, TRIAL_KINDS, getMastery, masteryEffect, invent
 import { createTournament, autoRunTournament, settle } from '../tournament.js';
 import { travelOptions, travelTo, actOnWorld, standingOn, planetAreas, wildTrainingRisk, trainAllOutOnWild, planetDestroyed } from '../worlds.js';
 import { getPlanet, PLANETS, planetExists } from '../../data/planets.js';
+import { randomHostileShip, resolveShipBattle, narrateShipBattle, resolveShipCrash } from '../shipbattle.js';
 import { generateFullName, generateSignatureName } from '../../data/names.js';
 import { numberish } from '../text.js';
 import { localMoney } from './helpers.js';
@@ -1670,6 +1671,36 @@ export const ACTIONS = [
         fact(s, res.text, { type: 'property', weight: 4, tags: ['home', 'ship'] });
       }
       return { text: res.text };
+    },
+  },
+  {
+    id: 'ship_patrol', maxPerYear: 3, minMaturity: 16, slots: 2, name: 'Take the ship out looking for trouble', cat: 'world', cost: 'A season', danger: true,
+    desc: 'Space is not empty. Something out here is worth fighting, or worth taking from - and something out here can do the same to you.',
+    available: (s) => !!shipOf(s) && shipOf(s).hull > 0,
+    run: (s, rng) => {
+      const ship = shipOf(s);
+      const foe = randomHostileShip(rng, { scale: rng.float(0.55, 1.1 + Math.min(1, s.character.fame / 120)) });
+      const mine = { speed: ship.speed || 1, hull: ship.hull ?? ship.hullMax ?? 60, hullMax: ship.hullMax || 60, firepower: ship.firepower || 5 };
+      const result = resolveShipBattle(mine, foe, rng);
+      ship.hull = clamp(result.myHullLeft, 0, ship.hullMax || 60);
+      const lines = [narrateShipBattle(result, rng, foe.name)];
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      if (result.won) {
+        const loot = Math.round(priceIn(60000, cur.id) * rng.float(0.6, 2.4));
+        credit(s.character, cur.id, loot);
+        adjust(s, { happiness: 10, fame: 3 });
+        lines.push(`Whatever they were carrying is yours now - ${formatMoney(loot, cur.id)} worth.`);
+        fact(s, `Beat ${foe.name} in open space.`, { type: 'combat', weight: 3, tags: ['ship', 'combat'] });
+      } else {
+        adjust(s, { happiness: -12 });
+      }
+      if (result.disabled) {
+        const crash = resolveShipCrash(s, rng, ship, { destroyed: result.destroyed });
+        lines.push(crash.text);
+        fact(s, crash.destroyed ? 'Lost the ship, going down over open ground.' : 'Crash-landed the ship after a fight in orbit.',
+          { type: 'body', weight: crash.destroyed ? 9 : 6, tags: ['ship', 'crash'] });
+      }
+      return { text: lines.join(' ') };
     },
   },
   {
