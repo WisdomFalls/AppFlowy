@@ -206,11 +206,31 @@ export function travelOptions(state, targetPlanetId) {
   if (myUniverse !== theirUniverse) {
     const ways = [];
     if (c.techniques.includes('kai_kai')) ways.push({ id: 'kai_kai', name: 'Kai Kai', years: 0, cost: 0, blurb: 'Across the boundary, in one step.' });
-    if (c.mentors.includes('whis') || c.mentors.includes('beerus') || c.flags.angel_escort) {
-      ways.push({ id: 'angel', name: 'Carried by an angel', years: 0, cost: 0, blurb: 'Whis takes you, and finds the whole thing mildly amusing.' });
+    // Every universe has its own angel and its own god of destruction, not
+    // just Universe 7's - this used to check for Whis and Beerus by name,
+    // which meant a Universe 6 character mentored by Vados or Champa (the
+    // actual intended path out of Sadala) got nothing for it at all.
+    const divineMentor = c.mentors
+      .map((id) => getCanon(id))
+      .find((m) => m && (m.race === 'angel' || (m.tags || []).includes('destroyer')));
+    if (divineMentor || c.flags.angel_escort) {
+      const name = divineMentor ? divineMentor.name : 'Somebody with the reach for it';
+      ways.push({ id: 'angel', name: 'Carried by an angel', years: 0, cost: 0, blurb: `${name} takes you, and finds the whole thing mildly amusing.` });
     }
     if (c.flags.zeno_pass || c.flags.won_tournament_of_power) {
       ways.push({ id: 'pass', name: 'The ring you were given', years: 0, cost: 0, blurb: 'Somebody very high up cleared this in advance.' });
+    }
+    // Nobody with real standing above needs to pay for this. Everybody else
+    // either finds somebody willing to risk the crossing for a great deal of
+    // money, or they never leave their own universe at all - and a whole
+    // universe with no way out at any price is a cell, not a setting.
+    if (!ways.length) {
+      const years = Math.max(2, travelYears(here, targetPlanetId, 'passage'));
+      const cost = Math.round(140000 + years * 70000);
+      ways.push({
+        id: 'smuggler', name: 'A smuggler who knows a way', years, cost,
+        blurb: 'Nobody crosses a universe boundary legally for this price. That is rather the point.',
+      });
     }
     return ways;
   }

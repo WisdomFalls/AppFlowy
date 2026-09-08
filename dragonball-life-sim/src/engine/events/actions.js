@@ -834,6 +834,10 @@ export const ACTIONS = [
         flight: 'You fly it. All of it. There is no air out there and after a while you stop noticing.',
         passage: 'You buy a berth on a freighter and spend the crossing in a room the size of a cupboard.',
         stowaway: 'You get into a container and stay in it. Twice somebody almost opens it.',
+        kai_kai: 'You step across the boundary between universes like it is a doorway.',
+        angel: 'You are carried across, and the crossing itself barely registers.',
+        pass: 'Whoever cleared this in advance made sure nothing stops you at the boundary.',
+        smuggler: 'Somebody who has done this before takes your money and does not explain how it works.',
       }[best.id] || '';
       // Years in transit are years of your life.
       return {
