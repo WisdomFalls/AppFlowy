@@ -7090,7 +7090,12 @@ const CANON = [
     personality: 'A rogue Saiyan who plants a tree that drains worlds and eats the fruit himself.',
     quirk: 'Looks exactly like someone you know, and enjoys it.' },
   { id: 'broly', name: 'Broly', race: 'saiyan', years: [770, null], home: 'wastes',
-    tags: ['saiyan', 'threat', 'tragic', 'legendary'], temperament: 'unstable',
+    // 'ally' and 'romance' added alongside the original threat/tragic tags
+    // rather than replacing them - everything that used to key off Broly
+    // being dangerous still should. This is what changed after Cheelai and
+    // Lemo got him off Vampa: he is not a threat looking for a reason any
+    // more, and he is not spending the rest of his life alone either.
+    tags: ['saiyan', 'threat', 'tragic', 'legendary', 'ally', 'romance'], temperament: 'unstable',
     power: { 774: 1400000000, 780: 3e13 },
     teaches: ['basic_martial_arts', 'iron_body'],
     personality: 'Raised alone on a hostile world by a father who fitted him with a control ring. Enormous, terrified, kind underneath.',
@@ -7101,6 +7106,18 @@ const CANON = [
     teaches: ['basic_martial_arts'],
     personality: 'Exiled with his son, and has spent every year since building a weapon out of him.',
     quirk: 'Speaks about his own child in the third person.' },
+  { id: 'cheelai', name: 'Cheelai', race: 'other', years: [755, null], home: 'wastes', sex: 'female',
+    tags: ['ally', 'romance', 'friendly'], temperament: 'wry',
+    power: { 780: 350 },
+    teaches: [],
+    personality: 'Frieza Force reconnaissance, technically, and the first person who ever asked Broly what he wanted instead of what he was for.',
+    quirk: 'Shapeshifts into whoever is most likely to get a straight answer out of somebody.' },
+  { id: 'lemo', name: 'Lemo', race: 'other', years: [748, null], home: 'wastes', sex: 'male',
+    tags: ['ally', 'friendly'], temperament: 'easygoing',
+    power: { 780: 90 },
+    teaches: [],
+    personality: 'Keeps the ship running and the other two fed, and deserted an army that never once deserved him.',
+    quirk: 'Names every piece of equipment he personally fixed.' },
   { id: 'cabba', name: 'Cabba', race: 'saiyan', years: [760, null], home: 'sadala',
     tags: ['saiyan', 'ally', 'u6', 'polite'], temperament: 'earnest',
     power: { 779: 8e9, 780: 4e10 },
@@ -7423,6 +7440,8 @@ const ITINERARY = {
   // `home` (the wastes) outside this window rather than pointing at
   // somewhere that does not exist.
   broly: [[779, 'planet_frieza_79']],
+  cheelai: [[779, 'planet_frieza_79']],
+  lemo: [[779, 'planet_frieza_79']],
   cabba: [[770, 'sadala']],
   caulifla: [[770, 'sadala']],
   kale: [[770, 'sadala']],
@@ -7449,6 +7468,24 @@ function canonUniverse(char) {
   return (home && getPlanet(home.planet).universe) || 7;
 }
 
+// Established, real pairings the story actually commits to - not everyone
+// carrying the 'romance' tag has one of these, and that is fine (a tag alone
+// used to be the whole system: canon_family could pick Chi-Chi and narrate a
+// child without ever naming Goku as the other parent). Listed both ways so a
+// lookup from either side works without a second pass.
+const CANON_PAIRS = {
+  goku: 'chichi', chichi: 'goku',
+  vegeta: 'bulma', bulma: 'vegeta',
+  krillin: 'android_18', android_18: 'krillin',
+  gohan: 'videl', videl: 'gohan',
+  broly: 'cheelai', cheelai: 'broly',
+};
+
+/** Who a canon character is actually paired with, or null. */
+function canonPartner(canonId) {
+  return CANON_PAIRS[canonId] || null;
+}
+
 /** The place id a canon character is standing in, in this Age. */
 function canonPlace(char, year) {
   const c = typeof char === 'string' ? CANON_BY_ID[char] : char;
@@ -7470,7 +7507,7 @@ function canonAvailable(year, filter = () => true) {
 function mentorsAvailable(year) {
   return canonAvailable(year, (c) => c.teaches && c.teaches.length > 0);
 }
-  return { CANON, CANON_BY_ID, getCanon, canonPower, canonAlive, ITINERARY, canonUniverse, canonPlace, canonAvailable, mentorsAvailable };
+  return { CANON, CANON_BY_ID, getCanon, canonPower, canonAlive, ITINERARY, canonUniverse, canonPartner, canonPlace, canonAvailable, mentorsAvailable };
 })();
 
 /* ==== data/jobs.js ==== */
@@ -22534,7 +22571,7 @@ const { registerEvents, npcSlot } = __mod_engine_generator_js;
 const { apply, fact, relate, thread, trainYear, powerLine, meetCanon, canonHere, odds, findNpc, offerBattle, stranger } = __mod_engine_events_helpers_js;
 const { combatPower, powerTier } = __mod_engine_stats_js;
 const { TIMELINE, eraName } = __mod_data_timeline_js;
-const { CANON, canonAlive, canonPower, getCanon } = __mod_data_canon_js;
+const { CANON, canonAlive, canonPower, getCanon, canonPartner } = __mod_data_canon_js;
 const { getPlace } = __mod_data_places_js;
 const { TECHNIQUES, getTechnique } = __mod_data_techniques_js;
 const { ladderFor, getTransformation } = __mod_data_transformations_js;
@@ -22766,11 +22803,19 @@ registerEvents([
         return age >= 18 && age <= 55 && (n.closeness || 0) > 25;
       });
       if (!npc) return null;
-      return { ...npcSlot(npc), kid: generateFullName(ctx.rng, npc.raceId || 'earthling') };
+      // A real pairing (canon.js's canonPartner - Broly and Cheelai among
+      // them) gets named as the other parent instead of staying anonymous,
+      // as long as they are actually still alive to be one.
+      const partnerId = canonPartner(npc.canonId);
+      const partner = partnerId ? getCanon(partnerId) : null;
+      return {
+        ...npcSlot(npc), kid: generateFullName(ctx.rng, npc.raceId || 'earthling'),
+        partnerName: partner && canonAlive(partner, ctx.year) ? partner.name : null,
+      };
     },
     title: (ctx, s) => `${s.npcName} Has News`,
-    text: `{It is the ordinary kind of news, for once|Nobody is dying|It takes you a moment to change gear}.
-      [npcName] {has a child|is a parent, which nobody saw coming|brings a very small person to meet you}. [kid].
+    text: (ctx, s) => `{It is the ordinary kind of news, for once|Nobody is dying|It takes you a moment to change gear}.
+      [npcName] {has a child|is a parent, which nobody saw coming|brings a very small person to meet you}${s.partnerName ? `, with ${s.partnerName}` : ''}. [kid].
       {They look terrified|They look happier than you have ever seen them|They have not slept in a month}.`,
     choices: (ctx, s) => [
       { id: 'godparent', label: 'Offer to be there for the child', effect: (c2, sl) => {

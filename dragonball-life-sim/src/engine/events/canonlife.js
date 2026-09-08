@@ -15,7 +15,7 @@ import { apply, fact, relate, thread, trainYear, powerLine, meetCanon, canonHere
   odds, findNpc, offerBattle, stranger } from './helpers.js';
 import { combatPower, powerTier } from '../stats.js';
 import { TIMELINE, eraName } from '../../data/timeline.js';
-import { CANON, canonAlive, canonPower, getCanon } from '../../data/canon.js';
+import { CANON, canonAlive, canonPower, getCanon, canonPartner } from '../../data/canon.js';
 import { getPlace } from '../../data/places.js';
 import { TECHNIQUES, getTechnique } from '../../data/techniques.js';
 import { ladderFor, getTransformation } from '../../data/transformations.js';
@@ -247,11 +247,19 @@ registerEvents([
         return age >= 18 && age <= 55 && (n.closeness || 0) > 25;
       });
       if (!npc) return null;
-      return { ...npcSlot(npc), kid: generateFullName(ctx.rng, npc.raceId || 'earthling') };
+      // A real pairing (canon.js's canonPartner - Broly and Cheelai among
+      // them) gets named as the other parent instead of staying anonymous,
+      // as long as they are actually still alive to be one.
+      const partnerId = canonPartner(npc.canonId);
+      const partner = partnerId ? getCanon(partnerId) : null;
+      return {
+        ...npcSlot(npc), kid: generateFullName(ctx.rng, npc.raceId || 'earthling'),
+        partnerName: partner && canonAlive(partner, ctx.year) ? partner.name : null,
+      };
     },
     title: (ctx, s) => `${s.npcName} Has News`,
-    text: `{It is the ordinary kind of news, for once|Nobody is dying|It takes you a moment to change gear}.
-      [npcName] {has a child|is a parent, which nobody saw coming|brings a very small person to meet you}. [kid].
+    text: (ctx, s) => `{It is the ordinary kind of news, for once|Nobody is dying|It takes you a moment to change gear}.
+      [npcName] {has a child|is a parent, which nobody saw coming|brings a very small person to meet you}${s.partnerName ? `, with ${s.partnerName}` : ''}. [kid].
       {They look terrified|They look happier than you have ever seen them|They have not slept in a month}.`,
     choices: (ctx, s) => [
       { id: 'godparent', label: 'Offer to be there for the child', effect: (c2, sl) => {

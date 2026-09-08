@@ -276,7 +276,12 @@ export const CANON = [
     personality: 'A rogue Saiyan who plants a tree that drains worlds and eats the fruit himself.',
     quirk: 'Looks exactly like someone you know, and enjoys it.' },
   { id: 'broly', name: 'Broly', race: 'saiyan', years: [770, null], home: 'wastes',
-    tags: ['saiyan', 'threat', 'tragic', 'legendary'], temperament: 'unstable',
+    // 'ally' and 'romance' added alongside the original threat/tragic tags
+    // rather than replacing them - everything that used to key off Broly
+    // being dangerous still should. This is what changed after Cheelai and
+    // Lemo got him off Vampa: he is not a threat looking for a reason any
+    // more, and he is not spending the rest of his life alone either.
+    tags: ['saiyan', 'threat', 'tragic', 'legendary', 'ally', 'romance'], temperament: 'unstable',
     power: { 774: 1400000000, 780: 3e13 },
     teaches: ['basic_martial_arts', 'iron_body'],
     personality: 'Raised alone on a hostile world by a father who fitted him with a control ring. Enormous, terrified, kind underneath.',
@@ -287,6 +292,18 @@ export const CANON = [
     teaches: ['basic_martial_arts'],
     personality: 'Exiled with his son, and has spent every year since building a weapon out of him.',
     quirk: 'Speaks about his own child in the third person.' },
+  { id: 'cheelai', name: 'Cheelai', race: 'other', years: [755, null], home: 'wastes', sex: 'female',
+    tags: ['ally', 'romance', 'friendly'], temperament: 'wry',
+    power: { 780: 350 },
+    teaches: [],
+    personality: 'Frieza Force reconnaissance, technically, and the first person who ever asked Broly what he wanted instead of what he was for.',
+    quirk: 'Shapeshifts into whoever is most likely to get a straight answer out of somebody.' },
+  { id: 'lemo', name: 'Lemo', race: 'other', years: [748, null], home: 'wastes', sex: 'male',
+    tags: ['ally', 'friendly'], temperament: 'easygoing',
+    power: { 780: 90 },
+    teaches: [],
+    personality: 'Keeps the ship running and the other two fed, and deserted an army that never once deserved him.',
+    quirk: 'Names every piece of equipment he personally fixed.' },
   { id: 'cabba', name: 'Cabba', race: 'saiyan', years: [760, null], home: 'sadala',
     tags: ['saiyan', 'ally', 'u6', 'polite'], temperament: 'earnest',
     power: { 779: 8e9, 780: 4e10 },
@@ -609,6 +626,8 @@ export const ITINERARY = {
   // `home` (the wastes) outside this window rather than pointing at
   // somewhere that does not exist.
   broly: [[779, 'planet_frieza_79']],
+  cheelai: [[779, 'planet_frieza_79']],
+  lemo: [[779, 'planet_frieza_79']],
   cabba: [[770, 'sadala']],
   caulifla: [[770, 'sadala']],
   kale: [[770, 'sadala']],
@@ -633,6 +652,24 @@ export function canonUniverse(char) {
   if (tag) return Number(tag.slice(1));
   const home = getPlace(c.home);
   return (home && getPlanet(home.planet).universe) || 7;
+}
+
+// Established, real pairings the story actually commits to - not everyone
+// carrying the 'romance' tag has one of these, and that is fine (a tag alone
+// used to be the whole system: canon_family could pick Chi-Chi and narrate a
+// child without ever naming Goku as the other parent). Listed both ways so a
+// lookup from either side works without a second pass.
+const CANON_PAIRS = {
+  goku: 'chichi', chichi: 'goku',
+  vegeta: 'bulma', bulma: 'vegeta',
+  krillin: 'android_18', android_18: 'krillin',
+  gohan: 'videl', videl: 'gohan',
+  broly: 'cheelai', cheelai: 'broly',
+};
+
+/** Who a canon character is actually paired with, or null. */
+export function canonPartner(canonId) {
+  return CANON_PAIRS[canonId] || null;
 }
 
 /** The place id a canon character is standing in, in this Age. */
