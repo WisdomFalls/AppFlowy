@@ -121,6 +121,35 @@ export const ITEMS = [
   { id: 'acc_wristbands', name: 'Wristbands', cat: 'accessory', cost: 2500, wear: 'wristbands', desc: 'Blue, thick, and heavier than they look.' },
   { id: 'acc_hat', name: 'Wide hat', cat: 'accessory', cost: 5000, wear: 'hat', desc: 'Shade in the wastelands and a target everywhere else.' },
 
+  // Creature parts. Not sold anywhere - cost 0 keeps them off every shop
+  // shelf (shopStock() drops anything free) - the only way to get one is to
+  // go to Bestia Prime or Cinder Reach and take it off something that was
+  // using it. Stack like a consumable so a hunt is worth doing more than
+  // once, and turn into something worn by crafting rather than a purchase.
+  { id: 'megafauna_hide', name: 'Megafauna Hide', cat: 'material', cost: 0,
+    desc: 'Thick enough to turn a glancing hit. Whatever wore it did not need the extra help.' },
+  { id: 'broken_fang', name: 'Broken Fang', cat: 'material', cost: 0,
+    desc: 'Snapped off mid-bite, longer than a forearm, still sharp at the tip.' },
+  { id: 'canopy_talon', name: 'Canopy Talon', cat: 'material', cost: 0,
+    desc: 'Curved, black, and heavier than it looks. It went through bark like paper.' },
+  { id: 'rockplate_hide', name: 'Rock-Plated Hide', cat: 'material', cost: 0,
+    desc: 'Stone-grade scale, still warm from where it lived. Shrugged off actual lava.' },
+  { id: 'ember_core', name: 'Ember Core', cat: 'material', cost: 0,
+    desc: 'A knot of something that used to glow from the inside. It has not gone fully cold yet.' },
+
+  // Crafted from the above at craft_trophy - not bought, made. passive.defence
+  // is the same field clothing uses, and feeds combat power the same way.
+  { id: 'hide_cloak', name: 'Megafauna Hide Cloak', cat: 'accessory', cost: 0, wear: 'cape',
+    passive: { defence: 10 }, desc: 'Cured yourself, badly, and worn anyway. It has already stopped one hit that would not have missed otherwise.' },
+  { id: 'fang_necklace', name: 'Fang Necklace', cat: 'accessory', cost: 0, wear: 'necklace',
+    passive: { defence: 4 }, desc: 'Strung on cord you made yourself. People ask what it took to get it, and you tell them.' },
+  { id: 'talon_bracers', name: 'Talon Bracers', cat: 'accessory', cost: 0, wear: 'wristbands',
+    passive: { defence: 6 }, desc: 'Bound flat along the forearm. Turns a block into something the other guy feels.' },
+  { id: 'rockplate_cloak', name: 'Rock-Plate Cloak', cat: 'accessory', cost: 0, wear: 'cape',
+    passive: { defence: 18 }, desc: 'Overlapping plates off something that lived in the magma and did not mind it. Heavy. Worth it.' },
+  { id: 'ember_pendant', name: 'Ember Pendant', cat: 'accessory', cost: 0, wear: 'necklace',
+    passive: { defence: 8 }, desc: 'Set in a plain band so it cannot burn you. It is still faintly warm, years later.' },
+
   // Clothing with real weight to it - a style (what it is, for the shop
   // list and for anyone commissioning one), a slot (body/face/feet, so a
   // gi and a mask and a pair of boots do not fight each other for the same

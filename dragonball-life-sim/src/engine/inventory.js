@@ -80,7 +80,7 @@ export function addItem(character, itemId, opts = {}) {
   ensureBag(character);
   const item = getItem(itemId);
   const existing = findEntry(character, itemId);
-  if (existing && (item ? item.cat === 'consumable' : true)) {
+  if (existing && (item ? (item.cat === 'consumable' || item.cat === 'material') : true)) {
     existing.qty = (existing.qty || 1) + (opts.qty || 1);
   } else if (!existing) {
     character.bag.push({

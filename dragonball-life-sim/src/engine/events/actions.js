@@ -111,6 +111,25 @@ function describeItemUse(use) {
   return bits.join(', ') || 'something';
 }
 
+// What a hunt's materials turn into, and how many of each it takes. Checked
+// against the bag directly rather than through inventoryOf() so options()
+// stays a cheap, pure read - no rng, no per-render recomputation of names.
+const CRAFT_RECIPES = [
+  { result: 'hide_cloak', need: [{ id: 'megafauna_hide', qty: 3 }] },
+  { result: 'fang_necklace', need: [{ id: 'broken_fang', qty: 2 }] },
+  { result: 'talon_bracers', need: [{ id: 'canopy_talon', qty: 2 }] },
+  { result: 'rockplate_cloak', need: [{ id: 'rockplate_hide', qty: 3 }] },
+  { result: 'ember_pendant', need: [{ id: 'ember_core', qty: 1 }] },
+];
+
+function craftable(character, recipe) {
+  if (hasItem(character, recipe.result)) return false;
+  return recipe.need.every((n) => {
+    const entry = findEntry(character, n.id);
+    return entry && (entry.qty || 0) >= n.qty;
+  });
+}
+
 function fact(state, text, opts = {}) {
   return addFact(state.memory, {
     type: opts.type || 'action', text, year: state.character.age,
@@ -1397,6 +1416,61 @@ export const ACTIONS = [
         text: `You cut loose completely, and this time the planet does not survive it. ${result.planetName} comes apart around you - you make it out, and there was nothing else on it that could.${result.killed ? ' Except, this time, there was.' : ''} You are back on ${result.fallbackName}.`,
         gained,
       };
+    },
+  },
+
+  // What a wild world's apex predators are actually made of, keyed by the
+  // place's own tags rather than its id - any future feral world only needs
+  // one of these tags to already drop something.
+  {
+    id: 'hunt_creature', maxPerYear: 3, minMaturity: 8, tooYoung: 'Whatever lives out here would not even notice you.', slots: 1, name: 'Hunt the local wildlife', cat: 'body', cost: 'A season', danger: true,
+    desc: 'Track down something big enough to be worth the trouble, and take from it what a craftsman could use.',
+    available: (s) => getPlace(s.character.placeId).tags.includes('feral'),
+    run: (s, rng) => {
+      const place = getPlace(s.character.placeId);
+      const drops = place.tags.includes('volcanic')
+        ? ['rockplate_hide', 'ember_core']
+        : ['megafauna_hide', 'broken_fang', 'canopy_talon'];
+      const mine = combatPower(s.character);
+      const creaturePower = 3000 * (place.danger || 5);
+      const chance = clamp(0.35 + Math.log10(Math.max(0.01, mine / creaturePower)) * 0.3, 0.08, 0.92);
+      if (!rng.chance(chance)) {
+        const hurt = Math.round(18 + (place.danger || 5) * 2.5);
+        adjust(s, { health: -hurt, happiness: -4 });
+        return { text: `${render('{It sees you coming|It was faster than it looked|You misjudge the reach on it}', {}, rng)}. `
+          + `You get clear, but not clean - this one is still out there.` };
+      }
+      const margin = clamp((mine / creaturePower - 1) * 0.15, 0, 1);
+      const count = 1 + (rng.chance(margin) ? 1 : 0);
+      const taken = [];
+      for (let i = 0; i < count; i++) {
+        const id = rng.pick(drops);
+        addItem(s.character, id, { from: 'a hunt' });
+        taken.push(getItem(id).name);
+      }
+      adjust(s, { happiness: 3 });
+      return {
+        text: `${render('{It goes down hard|It does not get back up|One clean opening was all it took}', {}, rng)}. `
+          + `You take ${taken.join(' and ')} off it before the rest of the place notices you were here.`,
+      };
+    },
+  },
+  {
+    id: 'craft_trophy', maxPerYear: 6, slots: 1, name: 'Craft something from what you took', cat: 'body',
+    desc: 'Turn what a hunt left you into something worth wearing.',
+    available: (s) => CRAFT_RECIPES.some((r) => craftable(s.character, r)),
+    options: (s) => CRAFT_RECIPES.filter((r) => craftable(s.character, r)).map((r) => ({
+      id: r.result,
+      label: getItem(r.result).name,
+      hint: `Needs ${r.need.map((n) => `${n.qty}× ${getItem(n.id).name}`).join(', ')}.`,
+    })),
+    run: (s, rng, params) => {
+      const recipe = CRAFT_RECIPES.find((r) => r.result === (params && params.option)) || CRAFT_RECIPES.find((r) => craftable(s.character, r));
+      if (!recipe) return { text: 'You do not have the parts for anything yet.' };
+      for (const n of recipe.need) removeItem(s.character, n.id, n.qty);
+      addItem(s.character, recipe.result, { from: 'your own hands' });
+      return { text: `${render('{It takes a while to get right|You ruin the first attempt and start over|It is not pretty, but it holds}', {}, rng)}. `
+        + `${getItem(recipe.result).name} is yours now.` };
     },
   },
 
