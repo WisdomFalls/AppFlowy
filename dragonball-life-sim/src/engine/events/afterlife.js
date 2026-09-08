@@ -480,10 +480,16 @@ registerEvents([
       [who] {has all seven|found the last one|is standing in front of the dragon}. {The wish is you|They are asking for you|Nobody had to ask them to do this}.`,
     choices: (ctx, s) => [
       { id: 'go', label: 'Go back', effect: (c2, sl) => {
+        const yearsGone = c2.character.yearsInAfterlife || 0;
         reviveCharacter(c2.state);
         const changes = apply(c2, { health: 100, happiness: 28, ki: 999 });
         fact(c2, `Brought back to life by ${sl.who}.`, { type: 'revival', weight: 10, tags: ['revival'] });
-        return { text: `{One moment there is cloud and then there is grass|You come back exactly where you died|The halo goes out}. ${sl.who} {is standing right there|will not let go of you|says your name like a question}. {You have a great deal to catch up on|Years have gone past|Nothing down here waited for you}.`, changes };
+        const text = `{One moment there is cloud and then there is grass|You come back exactly where you died|The halo goes out}. ${sl.who} {is standing right there|will not let go of you|says your name like a question}. {You have a great deal to catch up on|Years have gone past|Nothing down here waited for you}.`;
+        // A short trip barely needs remarking on twice - the day-pass system
+        // already covers that. A real absence gets its own reunion, once,
+        // covering more than just whoever performed the wish.
+        if (yearsGone >= 2) return { text, changes, followUp: 'long_reunion', followUpSlots: { yearsGone } };
+        return { text, changes };
       } },
       { id: 'refuse', label: 'Refuse it', effect: (c2, sl) => {
         c2.character.flags.refused_revival = true;
@@ -493,6 +499,53 @@ registerEvents([
         return { text: `{You send word down|"Leave me here"|You do not explain}. {${sl.who} does not understand|Somebody down there is furious with you|The wish goes to somebody else}.`, changes };
       } },
     ],
+  },
+
+  // A real absence gets a real reunion - not the personality-aware but
+  // single-line spouse reaction the day-pass system uses, and covering more
+  // than whoever performed the wish. weight: 0 keeps it out of organic
+  // selection entirely; it only ever arrives as wished_back's followUp.
+  {
+    id: 'long_reunion', tags: ['afterlife', 'family', 'reunion'], weight: 0,
+    slots: (ctx) => {
+      const yearsGone = Math.max(1, Math.round(ctx.forceSlots.yearsGone ?? 1));
+      const npcs = livingNpcs(ctx.state);
+      const spouse = npcs.find((n) => n.relation === 'spouse');
+      const children = npcs.filter((n) => n.relation === 'child');
+      const parents = npcs.filter((n) => n.relation === 'parent');
+      const friend = npcs.find((n) => ['friend', 'bestfriend'].includes(n.relation) && (n.closeness || 0) > 40);
+      if (!spouse && !children.length && !parents.length && !friend) return null;
+      return {
+        yearsGone,
+        spouseId: spouse ? spouse.id : null,
+        spouseName: spouse ? spouse.name : null,
+        childIds: children.map((n) => n.id),
+        parentIds: parents.map((n) => n.id),
+        friendId: friend ? friend.id : null,
+      };
+    },
+    title: 'Everyone You Left',
+    text: (ctx, s) => `{You were gone|You had been gone} ${s.yearsGone} year${s.yearsGone === 1 ? '' : 's'}. `
+      + `{Word travels fast when the dead come back|Nobody needed telling twice|By the time you are properly standing, people are already arriving}. `
+      + `{This is not the borrowed day King Yemma sometimes grants - this is your life, actually returned to you|`
+      + `There is no sundown to be back by, this time|Nobody down there is timing this}.`,
+    choices: (ctx, s) => {
+      const opts = [
+        { id: 'linger', label: 'Spend it with everyone', effect: (c2, sl) => {
+          const { lines } = longReunionBeats(c2, sl, null);
+          return { text: lines.join(' ') || 'You spend the day just being back, which is enough.', changes: apply(c2, { happiness: 20 }) };
+        } },
+      ];
+      if (s.spouseId) opts.push({ id: 'spouse', label: `Spend it with ${s.spouseName}`, effect: (c2, sl) => {
+        const { lines } = longReunionBeats(c2, sl, 'spouse');
+        return { text: lines.join(' ') || 'You spend the day with them, and it is enough.', changes: apply(c2, { happiness: 18 }) };
+      } });
+      if (s.childIds && s.childIds.length) opts.push({ id: 'children', label: 'Spend it with the kids', effect: (c2, sl) => {
+        const { lines } = longReunionBeats(c2, sl, 'children');
+        return { text: lines.join(' ') || 'You spend the day with them, and it is enough.', changes: apply(c2, { happiness: 18 }) };
+      } });
+      return opts;
+    },
   },
 
   {
@@ -858,4 +911,63 @@ function livingWorldReactions(ctx) {
   }
   relate(ctx, spouse, { closeness: 10, trust: 8 });
   return [line];
+}
+
+/**
+ * The wider version, for a return long enough that it isn't just the spouse
+ * who has something to say about it - kids who visibly grew while you were
+ * gone, parents who did not need the theatrics, a friend who kept a seat
+ * warm. `focus` narrows it to one relationship (used by long_reunion's
+ * "spend it with just them" choices); left null, it touches everyone the
+ * event found. Mutates closeness/trust as a side effect, same as
+ * livingWorldReactions - only called from inside a resolved choice.
+ */
+function longReunionBeats(ctx, s, focus) {
+  const long = s.yearsGone >= 5;
+  const lines = [];
+
+  if (!focus || focus === 'spouse') {
+    const spouse = s.spouseId && findNpc(ctx.state, s.spouseId);
+    if (spouse && spouse.alive) {
+      const close = (spouse.closeness || 0) > 60;
+      lines.push(long
+        ? `${spouse.name} {kept your side of things exactly as it was, which is its own kind of answer|`
+          + `stopped explaining the halo to people a while ago and just waited|`
+          + `says your name like she is testing whether it still works}.`
+        : `${spouse.name} {has not let go since you got here|keeps checking you are actually solid|`
+          + `is furious and relieved in an order that keeps changing}.`);
+      relate(ctx, spouse, { closeness: close ? 8 : 14, trust: 8 });
+    }
+  }
+
+  if (!focus || focus === 'children') {
+    for (const id of s.childIds || []) {
+      const child = findNpc(ctx.state, id);
+      if (!child || !child.alive) continue;
+      lines.push(long
+        ? `${child.name} {is not the size you remember|has opinions now that were not there before|`
+          + `introduces you to people you have never met, like this is normal}.`
+        : `${child.name} {has not stopped talking since you arrived|keeps finding reasons to be in the same room|`
+          + `acts like nothing happened, which is its own kind of relief}.`);
+      relate(ctx, child, { closeness: 10, trust: 6 });
+    }
+  }
+
+  if (!focus) {
+    for (const id of s.parentIds || []) {
+      const parent = findNpc(ctx.state, id);
+      if (!parent || !parent.alive) continue;
+      lines.push(`${parent.name} {does not say much, and does not need to|`
+        + `holds on the way a parent does, like the years are beside the point}.`);
+      relate(ctx, parent, { closeness: 8, trust: 5 });
+    }
+    const friend = s.friendId && findNpc(ctx.state, s.friendId);
+    if (friend && friend.alive) {
+      lines.push(`${friend.name} {saved you a spot without saying so|acts like you were only ever late|`
+        + `does the thing where the relief comes out as an insult}.`);
+      relate(ctx, friend, { closeness: 6 });
+    }
+  }
+
+  return { lines };
 }
