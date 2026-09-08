@@ -12115,9 +12115,19 @@ function strike(attacker, defender, battle, rng, spec) {
   defender.hp = Math.max(0, defender.hp - raw);
   if (spec.stagger && rng.chance(spec.stagger)) defender.staggered = 2;
 
+  // A hit big enough does not just land - it puts somebody through
+  // something solid. That costs them the same beat to recover as a
+  // staggering strike, and it is not the landscape's fault they were there.
+  let terrainCrash = false;
+  if (damage > defender.hpMax * 0.22 && rng.chance(0.3)) {
+    defender.staggered = Math.max(defender.staggered, 2);
+    terrainCrash = true;
+  }
+
   // Big exchanges wreck the landscape, and somebody lives here.
-  battle.destruction = clamp(battle.destruction + damage * (spec.blast ? 0.9 : 0.35) / 10, 0, 100);
-  return { miss: false, damage, crit };
+  battle.destruction = clamp(battle.destruction + damage * (spec.blast ? 0.9 : 0.35) / 10
+    + (terrainCrash ? rng.int(5, 12) : 0), 0, 100);
+  return { miss: false, damage, crit, terrainCrash };
 }
 
 /**
@@ -12147,7 +12157,14 @@ function describeStrike(res, attackerName, defenderName, moveName, rng, byPlayer
     : (heavy
       ? `{[a] lands the [m] and you fold around it|The [m] connects properly and you get up slower|[a] puts everything into the [m]}.`
       : `{[a] catches you with the [m]|The [m] lands|[a] gets the [m] through}.`);
-  return render(`${template} (${shown})`, slots, rng);
+  let text = render(`${template} (${shown})`, slots, rng);
+  if (res.terrainCrash) {
+    text += ' ' + render(byPlayer
+      ? `{[d] goes through whatever was standing behind them|A wall, a rock face, a building - [d] finds out the hard way|[d] hits something solid on the way down, and it does not hold}. {A second to get their bearings back|That costs them the recovery|They are not ready for what comes next}.`
+      : `{You go through whatever was standing behind you|A wall, a rock face, a building - you find out the hard way|You hit something solid on the way down, and it does not hold}. {A second to get your bearings back|That costs you the recovery|You are not ready for what comes next}.`,
+    slots, rng);
+  }
+  return text;
 }
 
 /** The opponent's move. Simple, but it escalates when it is losing. */
