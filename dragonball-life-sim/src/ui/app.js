@@ -33,6 +33,7 @@ import { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere,
   repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot, findEntry } from '../engine/inventory.js';
 import { currencyFor, balance, formatMoney, exchange, CURRENCIES, priceIn } from '../data/currency.js';
 import { mostWantedBoard, wantedLevel } from '../engine/bounty.js';
+import { newsFeed } from '../engine/news.js';
 import { getItem } from '../data/items.js';
 import { TRAITS, getTrait, TRAIT_KINDS } from '../data/traits.js';
 import { reputationOf, homeOf, homeBonus, shipOf, SHIP_ROOM_BY_ID, SHIP_HULL_BY_ID, SHIP_COMPONENT_BY_ID, renameShip } from '../engine/settlement.js';
@@ -1766,6 +1767,20 @@ function panelWorlds() {
     }
   }
 
+  const news = newsFeed(GAME, 6);
+  if (news.length) {
+    body.appendChild(el('div', 'group-label', 'Word from the galaxy'));
+    for (const n of news) {
+      const memo = el('div', 'memo');
+      memo.innerHTML = `<b>AGE ${n.year - c.birthYear}</b> ${n.headline.replace(/[<>]/g, '')}`;
+      body.appendChild(memo);
+    }
+    const more = el('button', 'ghost-btn', 'All the news');
+    more.type = 'button';
+    more.addEventListener('click', panelNews);
+    body.appendChild(more);
+  }
+
   body.appendChild(el('div', 'group-label', 'Everywhere else'));
   for (const w of worldManifest(GAME)) {
     if (w.visits || w.here || w.standing !== 'Does not know you') continue;
@@ -1773,6 +1788,25 @@ function panelWorlds() {
     memo.innerHTML = `<b>${w.name.replace(/[<>]/g, '')}</b> ${String(w.inhabitants).replace(/[<>]/g, '')}. ${String(w.law).replace(/[<>]/g, '')}`;
     body.appendChild(memo);
   }
+  openSheet('panel');
+}
+
+function panelNews() {
+  const c = GAME.character;
+  const { body } = sheetShell('Word from the galaxy', `Age ${c.age}`);
+  const news = newsFeed(GAME, 30);
+  if (!news.length) {
+    body.appendChild(el('p', 'row-note', 'Nothing has reached you yet. Give it a few years.'));
+  }
+  for (const n of news) {
+    const memo = el('div', 'memo');
+    memo.innerHTML = `<b>AGE ${n.year - c.birthYear}</b> ${n.headline.replace(/[<>]/g, '')}`;
+    body.appendChild(memo);
+  }
+  const back = el('button', 'ghost-btn', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', panelWorlds);
+  body.appendChild(back);
   openSheet('panel');
 }
 

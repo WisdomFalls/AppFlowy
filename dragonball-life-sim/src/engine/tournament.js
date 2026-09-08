@@ -15,6 +15,7 @@ import { generateFullName } from '../data/names.js';
 import { getRace } from '../data/races.js';
 import { spreadWord, DEED_SCALE } from './settlement.js';
 import { universeFighters, multiverseField } from '../data/universes.js';
+import { pushNews } from './news.js';
 
 // ------------------------------------------------------------------ formats
 
@@ -419,6 +420,10 @@ export function advanceRound(state, rng, t) {
   if (winners.length <= 1) {
     t.finished = true;
     t.placement = stillIn ? 1 : placementFor(t);
+    // The player's own final match decides the whole bracket here - unlike
+    // the eliminated-early path below, nothing else sets t.champion, so a
+    // runner-up finish was leaving it undefined and "X took it" unsaid.
+    t.champion = winners[0] || null;
     return { finished: true, champion: winners[0] || null };
   }
 
@@ -651,5 +656,19 @@ export function settle(state, t, rng = null) {
   }
   const fate = rng ? topConsequence(state, rng, t) : null;
   if (fate) bits.push(fate);
+
+  // A tournament crowd, unlike most deeds, already saw the whole thing -
+  // this one does not wait on spreadWord's delay to be worth reporting. A
+  // school bracket among classmates is not news beyond the school itself.
+  if (t.name !== 'The Academy Bracket') {
+    const champion = result.won ? c.name : result.champion;
+    if (champion) {
+      pushNews(state, {
+        headline: `${t.name}${t.edition ? `, ${t.edition}` : ''}: ${champion} takes it.`,
+        tag: 'tournament', scope: t.formatId === 'top' ? 'multiverse' : 'local',
+      });
+    }
+  }
+
   return { ...result, text: bits.join(' '), erased: !!(fate && /stops existing/.test(fate)) };
 }

@@ -33,6 +33,7 @@ function migrate(state, from) {
   // Older saves predate fields added later; fill them rather than reject.
   if (!state.stats) state.stats = { fights: 0, wins: 0, losses: 0, kills: 0, deaths: 0, yearsPlayed: 0, techniquesLearned: 0 };
   if (!state.world.wishesUsed) state.world.wishesUsed = [];
+  if (!state.world.news) state.world.news = [];
   if (!state.world.divergences) state.world.divergences = [];
   if (!state.memory.threads) state.memory.threads = [];
   if (!state.memory.beatUse) state.memory.beatUse = {};

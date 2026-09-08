@@ -23,6 +23,7 @@ import { checkEarnedTraits, traitEffect } from '../data/traits.js';
 import { processReputationQueue, homeBonus, shipOf, SHIP_ROOM_BY_ID } from './settlement.js';
 import { currencyFor, credit, priceIn, formatMoney } from '../data/currency.js';
 import { refreshMostWantedBoard } from './bounty.js';
+import { pushNews, ambientNews } from './news.js';
 
 const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
 
@@ -504,7 +505,14 @@ function passiveYear(state, rng) {
         ? `Word of something you did a while ago keeps spreading. You are ${wordArrived.crossed.text}`
         : `Word of something you did a while ago is still making its way outward.`,
     });
+    if (wordArrived.crossed) {
+      pushNews(state, { headline: `The name "${c.name}" is starting to travel. ${wordArrived.crossed.text}`, tag: 'player', scope: 'galaxy' });
+    }
   }
+
+  // Some years the wider galaxy has something to say whether or not you did
+  // anything about it.
+  if (!c.inAfterlife) ambientNews(state, rng);
 
   // Hard training accrues toward forms that ask for it.
   if (c.flags.trainedHardThisYear) {
@@ -555,12 +563,15 @@ function passiveYear(state, rng) {
     const crossed = (t) => before < t && inst.renown >= t;
     if (crossed(30)) {
       entries.push({ kind: 'legacy', text: `${inst.name} is not just yours to know about any more. People are starting to send their own here.` });
+      pushNews(state, { headline: `${inst.name} is starting to be talked about beyond its own doors.`, tag: 'legacy', scope: 'local' });
     } else if (crossed(60)) {
       entries.push({ kind: 'legacy', text: `${inst.name} has a real reputation now, separate from your own.` });
+      pushNews(state, { headline: `${inst.name} has built a name that no longer needs ${c.name} attached to it.`, tag: 'legacy', scope: 'sector' });
     }
     if (inst.renown >= 90 && !c.flags.worldIcon) {
       c.flags.worldIcon = true;
       entries.push({ kind: 'legacy', text: `${inst.name} is a name people know even where you have never been. Whatever else happens to you now, that outlives it.` });
+      pushNews(state, { headline: `${inst.name} is now a name people know even where they have never been.`, tag: 'legacy', scope: 'galaxy' });
     }
   }
 

@@ -227,6 +227,7 @@ export function createGame(creation, seedInput) {
       dragonBalls: 0,
       dragonBallSet: null,
       wishesUsed: [],
+      news: [],
     },
     memory: createMemory(),
     log: [],

@@ -9655,6 +9655,7 @@ function createGame(creation, seedInput) {
       dragonBalls: 0,
       dragonBallSet: null,
       wishesUsed: [],
+      news: [],
     },
     memory: createMemory(),
     log: [],
@@ -19368,6 +19369,101 @@ function clearBounty(state, npcId) {
   return { wantedLevel, refreshMostWantedBoard, mostWantedBoard, clearBounty };
 })();
 
+/* ==== engine/news.js ==== */
+const __mod_engine_news_js = (function () {
+// Word from beyond your own life.
+//
+// A life sim where the only things that ever happened were things you did is
+// a smaller galaxy than the one this is set in. Most years get one of two
+// kinds of headline: a real one, when something the game already tracks -
+// your own reach crossing a tier, an institution you built getting a name of
+// its own, a planet going quiet for good - actually happens, and an ambient
+// one the rest of the time, so the place keeps moving whether or not you are
+// the one moving it.
+
+const { getPlanet, PLANETS } = __mod_data_planets_js;
+const { getPlace } = __mod_data_places_js;
+const { factionsPresent } = __mod_data_factions_js;
+const { render } = __mod_engine_text_js;
+
+// worlds.js already tracks per-planet destruction in state.world.planets,
+// but worlds.js is itself a caller of this module (purgeArea reports a full
+// purge here) - reading the record directly avoids a worlds.js <-> news.js
+// import cycle rather than pulling in worlds.js's own planetDestroyed().
+function isGone(state, planetId) {
+  const rec = state.world.planets && state.world.planets[planetId];
+  return !!(rec && (rec.destroyed || rec.purged));
+}
+
+const MAX_NEWS = 60;
+
+/** Append one headline, oldest trimmed off past MAX_NEWS. Silently skips an
+ * exact repeat of the most recent line from the same year - ambient rolls
+ * can otherwise print the same headline twice in a row. */
+function pushNews(state, { headline, tag = 'ambient', scope = 'galaxy' }) {
+  if (!headline) return;
+  state.world.news = state.world.news || [];
+  const year = state.world.year;
+  const last = state.world.news[state.world.news.length - 1];
+  if (last && last.headline === headline && last.year === year) return;
+  state.world.news.push({ year, headline, tag, scope });
+  if (state.world.news.length > MAX_NEWS) state.world.news.splice(0, state.world.news.length - MAX_NEWS);
+}
+
+/** Most recent first. */
+function newsFeed(state, limit = 30) {
+  return (state.world.news || []).slice(-limit).reverse();
+}
+
+function currentUniverse(state) {
+  const place = getPlace(state.character.placeId);
+  const planet = place && getPlanet(place.planet);
+  return (planet && planet.universe) || 7;
+}
+
+const AMBIENT_TEMPLATES = [
+  `Trade ships report {a delay|a shortage|higher prices than usual|an outright blockade} at [planet]. `
+    + `{Nobody official will say why|The listed reason does not add up|It is being called "routine"}.`,
+  `A {tournament|sparring circuit|open challenge} on [planet] draws a bigger crowd than usual this year.`,
+  `[planet] reports {an unusually quiet year|a strong harvest|a population boom|a wave of new arrivals}.`,
+  `Something came down hard on [planet] and nobody official has confirmed what it was.`,
+  `A minor territorial dispute breaks out near [planet]. `
+    + `{It is expected to blow over|Locals are already choosing sides|Neither side is backing down}.`,
+  `Scholars on [planet] claim to have found {a ruin|a wreck|a buried structure|writing} nobody can date.`,
+  `A bounty board somewhere near [planet] adds a name nobody recognises yet.`,
+  `[faction] is reported active again, this time near [planet].`,
+  `A fighter nobody has heard of levels a city block on [planet] and walks away from it. Nobody has come forward to explain.`,
+  `Weather stations on [planet] log {a storm nobody predicted|the coldest season on record|three straight years without rain}.`,
+  `A ship registered out of [planet] goes missing. `
+    + `{It is presumed lost|Search parties have not found wreckage|Insurance has already paid out, which tells you something}.`,
+  `Word from [planet]: {a local strongman has been dethroned|a new power broker has emerged and nobody elected them|`
+    + `the old guard is not happy about the new one}.`,
+  `A market on [planet] {crashes overnight|doubles in a week|stops accepting a currency it took for years, with no warning}.`,
+];
+
+const FACTION_TEMPLATES = new Set(['[faction] is reported active again, this time near [planet].']);
+
+/** Called once a year, and not every year gets one - a galaxy this size does
+ * not stop for you, but it also does not narrate itself just because you are
+ * listening. */
+function ambientNews(state, rng) {
+  if (!rng.chance(0.55)) return null;
+  const universe = currentUniverse(state);
+  const year = state.world.year;
+  const pool = PLANETS.filter((p) => (p.universe || 7) === universe && p.population && !isGone(state, p.id));
+  if (!pool.length) return null;
+  const planet = rng.pick(pool);
+  const factions = factionsPresent(year, planet.id, universe);
+  const templates = AMBIENT_TEMPLATES.filter((t) => !FACTION_TEMPLATES.has(t) || factions.length);
+  const tpl = rng.pick(templates);
+  const ctx = { planet: planet.name, faction: factions.length ? rng.pick(factions).name : '' };
+  const headline = render(tpl, ctx, rng);
+  pushNews(state, { headline, tag: 'ambient', scope: 'galaxy' });
+  return { headline };
+}
+  return { pushNews, newsFeed, ambientNews };
+})();
+
 /* ==== engine/lifecycle.js ==== */
 const __mod_engine_lifecycle_js = (function () {
 // The turn loop. A year is: passive drift, then a short queue of generated
@@ -19395,6 +19491,7 @@ const { checkEarnedTraits, traitEffect } = __mod_data_traits_js;
 const { processReputationQueue, homeBonus, shipOf, SHIP_ROOM_BY_ID } = __mod_engine_settlement_js;
 const { currencyFor, credit, priceIn, formatMoney } = __mod_data_currency_js;
 const { refreshMostWantedBoard } = __mod_engine_bounty_js;
+const { pushNews, ambientNews } = __mod_engine_news_js;
 
 const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
 
@@ -19876,7 +19973,14 @@ function passiveYear(state, rng) {
         ? `Word of something you did a while ago keeps spreading. You are ${wordArrived.crossed.text}`
         : `Word of something you did a while ago is still making its way outward.`,
     });
+    if (wordArrived.crossed) {
+      pushNews(state, { headline: `The name "${c.name}" is starting to travel. ${wordArrived.crossed.text}`, tag: 'player', scope: 'galaxy' });
+    }
   }
+
+  // Some years the wider galaxy has something to say whether or not you did
+  // anything about it.
+  if (!c.inAfterlife) ambientNews(state, rng);
 
   // Hard training accrues toward forms that ask for it.
   if (c.flags.trainedHardThisYear) {
@@ -19927,12 +20031,15 @@ function passiveYear(state, rng) {
     const crossed = (t) => before < t && inst.renown >= t;
     if (crossed(30)) {
       entries.push({ kind: 'legacy', text: `${inst.name} is not just yours to know about any more. People are starting to send their own here.` });
+      pushNews(state, { headline: `${inst.name} is starting to be talked about beyond its own doors.`, tag: 'legacy', scope: 'local' });
     } else if (crossed(60)) {
       entries.push({ kind: 'legacy', text: `${inst.name} has a real reputation now, separate from your own.` });
+      pushNews(state, { headline: `${inst.name} has built a name that no longer needs ${c.name} attached to it.`, tag: 'legacy', scope: 'sector' });
     }
     if (inst.renown >= 90 && !c.flags.worldIcon) {
       c.flags.worldIcon = true;
       entries.push({ kind: 'legacy', text: `${inst.name} is a name people know even where you have never been. Whatever else happens to you now, that outlives it.` });
+      pushNews(state, { headline: `${inst.name} is now a name people know even where they have never been.`, tag: 'legacy', scope: 'galaxy' });
     }
   }
 
@@ -20287,6 +20394,7 @@ const { generateFullName } = __mod_data_names_js;
 const { getRace } = __mod_data_races_js;
 const { spreadWord, DEED_SCALE } = __mod_engine_settlement_js;
 const { universeFighters, multiverseField } = __mod_data_universes_js;
+const { pushNews } = __mod_engine_news_js;
 
 // ------------------------------------------------------------------ formats
 
@@ -20691,6 +20799,10 @@ function advanceRound(state, rng, t) {
   if (winners.length <= 1) {
     t.finished = true;
     t.placement = stillIn ? 1 : placementFor(t);
+    // The player's own final match decides the whole bracket here - unlike
+    // the eliminated-early path below, nothing else sets t.champion, so a
+    // runner-up finish was leaving it undefined and "X took it" unsaid.
+    t.champion = winners[0] || null;
     return { finished: true, champion: winners[0] || null };
   }
 
@@ -20923,6 +21035,20 @@ function settle(state, t, rng = null) {
   }
   const fate = rng ? topConsequence(state, rng, t) : null;
   if (fate) bits.push(fate);
+
+  // A tournament crowd, unlike most deeds, already saw the whole thing -
+  // this one does not wait on spreadWord's delay to be worth reporting. A
+  // school bracket among classmates is not news beyond the school itself.
+  if (t.name !== 'The Academy Bracket') {
+    const champion = result.won ? c.name : result.champion;
+    if (champion) {
+      pushNews(state, {
+        headline: `${t.name}${t.edition ? `, ${t.edition}` : ''}: ${champion} takes it.`,
+        tag: 'tournament', scope: t.formatId === 'top' ? 'multiverse' : 'local',
+      });
+    }
+  }
+
   return { ...result, text: bits.join(' '), erased: !!(fate && /stops existing/.test(fate)) };
 }
   return { FORMATS, buildEntrants, createTournament, roundName, playerMatch, playerOpponent, resolveOtherMatches, recordPlayerResult, advanceRound, standings, bracketSummary, payout, placementLine, matchBattleSpec, describeField, autoRunTournament, topConsequence, settle };
@@ -27025,6 +27151,7 @@ const { combatPower } = __mod_engine_stats_js;
 const { addFact } = __mod_engine_memory_js;
 const { adjust } = __mod_engine_state_js;
 const { spreadWord, DEED_SCALE } = __mod_engine_settlement_js;
+const { pushNews } = __mod_engine_news_js;
 
 function worldRecord(state, planetId) {
   state.world.planets = state.world.planets || {};
@@ -27117,6 +27244,7 @@ function purgeArea(state, rng, placeId) {
     record.ruled = false;
     c.flags.purged_a_world = true;
     lines.push(`${planet.name} is empty now. All of it.`);
+    pushNews(state, { headline: `${planet.name} has gone silent. Nobody is answering from there any more.`, tag: 'catastrophe', scope: 'galaxy' });
   }
 
   const response = worldResponse(state, rng, place.planet, 'purge');
@@ -30332,6 +30460,7 @@ function migrate(state, from) {
   // Older saves predate fields added later; fill them rather than reject.
   if (!state.stats) state.stats = { fights: 0, wins: 0, losses: 0, kills: 0, deaths: 0, yearsPlayed: 0, techniquesLearned: 0 };
   if (!state.world.wishesUsed) state.world.wishesUsed = [];
+  if (!state.world.news) state.world.news = [];
   if (!state.world.divergences) state.world.divergences = [];
   if (!state.memory.threads) state.memory.threads = [];
   if (!state.memory.beatUse) state.memory.beatUse = {};
@@ -31222,6 +31351,7 @@ const { numberish, zeni } = __mod_engine_text_js;
 const { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere, repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot, findEntry } = __mod_engine_inventory_js;
 const { currencyFor, balance, formatMoney, exchange, CURRENCIES, priceIn } = __mod_data_currency_js;
 const { mostWantedBoard, wantedLevel } = __mod_engine_bounty_js;
+const { newsFeed } = __mod_engine_news_js;
 const { getItem } = __mod_data_items_js;
 const { TRAITS, getTrait, TRAIT_KINDS } = __mod_data_traits_js;
 const { reputationOf, homeOf, homeBonus, shipOf, SHIP_ROOM_BY_ID, SHIP_HULL_BY_ID, SHIP_COMPONENT_BY_ID, renameShip } = __mod_engine_settlement_js;
@@ -32951,6 +33081,20 @@ function panelWorlds() {
     }
   }
 
+  const news = newsFeed(GAME, 6);
+  if (news.length) {
+    body.appendChild(el('div', 'group-label', 'Word from the galaxy'));
+    for (const n of news) {
+      const memo = el('div', 'memo');
+      memo.innerHTML = `<b>AGE ${n.year - c.birthYear}</b> ${n.headline.replace(/[<>]/g, '')}`;
+      body.appendChild(memo);
+    }
+    const more = el('button', 'ghost-btn', 'All the news');
+    more.type = 'button';
+    more.addEventListener('click', panelNews);
+    body.appendChild(more);
+  }
+
   body.appendChild(el('div', 'group-label', 'Everywhere else'));
   for (const w of worldManifest(GAME)) {
     if (w.visits || w.here || w.standing !== 'Does not know you') continue;
@@ -32958,6 +33102,25 @@ function panelWorlds() {
     memo.innerHTML = `<b>${w.name.replace(/[<>]/g, '')}</b> ${String(w.inhabitants).replace(/[<>]/g, '')}. ${String(w.law).replace(/[<>]/g, '')}`;
     body.appendChild(memo);
   }
+  openSheet('panel');
+}
+
+function panelNews() {
+  const c = GAME.character;
+  const { body } = sheetShell('Word from the galaxy', `Age ${c.age}`);
+  const news = newsFeed(GAME, 30);
+  if (!news.length) {
+    body.appendChild(el('p', 'row-note', 'Nothing has reached you yet. Give it a few years.'));
+  }
+  for (const n of news) {
+    const memo = el('div', 'memo');
+    memo.innerHTML = `<b>AGE ${n.year - c.birthYear}</b> ${n.headline.replace(/[<>]/g, '')}`;
+    body.appendChild(memo);
+  }
+  const back = el('button', 'ghost-btn', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', panelWorlds);
+  body.appendChild(back);
   openSheet('panel');
 }
 

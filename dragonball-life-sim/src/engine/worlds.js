@@ -9,6 +9,7 @@ import { combatPower } from './stats.js';
 import { addFact } from './memory.js';
 import { adjust } from './state.js';
 import { spreadWord, DEED_SCALE } from './settlement.js';
+import { pushNews } from './news.js';
 
 export function worldRecord(state, planetId) {
   state.world.planets = state.world.planets || {};
@@ -101,6 +102,7 @@ export function purgeArea(state, rng, placeId) {
     record.ruled = false;
     c.flags.purged_a_world = true;
     lines.push(`${planet.name} is empty now. All of it.`);
+    pushNews(state, { headline: `${planet.name} has gone silent. Nobody is answering from there any more.`, tag: 'catastrophe', scope: 'galaxy' });
   }
 
   const response = worldResponse(state, rng, place.planet, 'purge');
