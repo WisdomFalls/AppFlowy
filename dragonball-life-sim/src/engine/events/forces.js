@@ -11,7 +11,7 @@ import { FACTIONS, factionsPresent, factionIntent, getFaction } from '../../data
 import { getPlace, PLACES } from '../../data/places.js';
 import { generateFullName } from '../../data/names.js';
 import { spreadWord, DEED_SCALE } from '../settlement.js';
-import { currencyFor, credit, formatMoney } from '../../data/currency.js';
+import { currencyFor, credit, formatMoney, priceIn } from '../../data/currency.js';
 import { worldPowerBaseline } from '../../data/timeline.js';
 import { numberish } from '../text.js';
 import { clamp } from '../rng.js';
@@ -258,6 +258,36 @@ registerEvents([
               return {
                 text: `{The paperwork clears faster than you expected|Somebody higher up signs off without asking why|"Granted." That is the whole conversation}. `
                   + `New station, new faces, same colours.`,
+                changes,
+              };
+            },
+          });
+        }
+
+        // Cutting ties is always available. Retiring - going out the front
+        // door instead of just vanishing - is only for somebody who reached
+        // the top of the ladder there.
+        if (faction && faction.ranks && rankIdx >= faction.ranks.length - 1) {
+          list.push({
+            id: 'retire', label: `Retire from ${s.factionName}`, hint: 'Go out on your own terms, at the top of it.',
+            effect: (c2, sl) => {
+              const f = getFaction(sl.factionId);
+              const topRank = f && f.ranks ? f.ranks[f.ranks.length - 1] : 'the top';
+              const cur = currencyFor(getPlace(c2.character.placeId).planet);
+              const payout = priceIn(60000, cur.id);
+              credit(c2.character, cur.id, payout);
+              c2.character.retiredFactions = c2.character.retiredFactions || [];
+              c2.character.retiredFactions.push({ factionId: sl.factionId, name: sl.factionName, rank: topRank, year: c2.year });
+              c2.character.faction = null;
+              c2.character.factionRank = 0;
+              c2.character.factionStanding = 0;
+              fact(c2, `Retired from ${sl.factionName} as ${topRank}.`, { type: 'faction', weight: 8, tags: ['faction', 'identity'] });
+              const changes = apply(c2, { happiness: 16, karma: 6, fame: 8 });
+              return {
+                text: `{They give you a send-off that is more sincere than you expected|`
+                  + `Somebody makes a speech and mostly means it|`
+                  + `Nobody replaces you right away, which is its own kind of compliment}. `
+                  + `${topRank}, and then nothing you owe anyone any more. ${formatMoney(payout, cur.id)} and a clean exit.`,
                 changes,
               };
             },

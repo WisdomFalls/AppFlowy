@@ -39,6 +39,7 @@ import { numberish } from '../text.js';
 import { localMoney } from './helpers.js';
 import { watchBroadcast } from '../broadcast.js';
 import { offWorldContacts, callAcrossSpace, transmissionMissLine } from '../comms.js';
+import { pushNews } from '../news.js';
 
 /** Living blood-or-marriage family who are not standing where you are. */
 function familyElsewhere(state) {
@@ -1081,6 +1082,44 @@ export const ACTIONS = [
       npc.closeness = clamp((npc.closeness || 0) + 4 + Math.round(charismaDiscount * 10), 0, 100);
       adjust(s, { happiness: 4 });
       return { text: `${npc.name} comes on board. ${inst.members.length} people carry ${inst.name} now.` };
+    },
+  },
+  {
+    id: 'hand_over_institution', maxPerYear: 1, slots: 2, name: 'Hand it off to somebody', cat: 'legacy', cost: 'A season',
+    desc: 'Step back from what you built. It keeps existing - just not because of you any more.',
+    available: (s) => !!s.character.institution && s.character.institution.members.length > 0,
+    options: (s) => (s.character.institution.members || [])
+      .map((id) => findNpc(s, id)).filter(Boolean)
+      .map((n) => ({ id: n.id, label: n.name, hint: relationLabel(n) })),
+    run: (s, rng, params) => {
+      const inst = s.character.institution;
+      if (!inst) return { text: 'There is nothing here to hand off.' };
+      const successor = params && params.option ? findNpc(s, params.option) : null;
+      if (!successor) return { text: 'There is nobody here you trust with it yet.' };
+      const c = s.character;
+      // The reward for a life's work is proportional to what it actually
+      // became - a school nobody heard of and a world-icon institution do
+      // not send their founder off the same way.
+      const cur = currencyFor(inst.homePlanet || getPlace(c.placeId).planet);
+      const payout = priceIn(Math.round(20000 + inst.renown * 4000), cur.id);
+      credit(c, cur.id, payout);
+      c.legaciesFounded = c.legaciesFounded || [];
+      c.legaciesFounded.push({
+        name: inst.name, type: inst.type, founded: inst.founded, handedOff: currentYear(s),
+        renown: Math.round(inst.renown), successor: successor.name, worldIcon: !!c.flags.worldIcon,
+      });
+      successor.closeness = clamp((successor.closeness || 0) + 12, 0, 100);
+      successor.respect = clamp((successor.respect || 0) + 20, 0, 100);
+      fact(s, `Handed ${inst.name} to ${successor.name}.`, { type: 'legacy', weight: 9, subject: successor.id, tags: ['legacy', 'identity'] });
+      pushNews(s, { headline: `${inst.name} passes to ${successor.name}, after ${currentYear(s) - inst.founded} years under ${c.name}.`, tag: 'legacy', scope: 'sector' });
+      adjust(s, { happiness: 18, karma: 3 });
+      c.institution = null;
+      return {
+        text: render(`{You say it out loud before you can talk yourself out of it|`
+          + `There is no ceremony, and then there is, because people insist on making one|`
+          + `You hand over the keys, the ledger, and whatever else actually matters}. `
+          + `${successor.name} takes it, and does not waste time being surprised. ${formatMoney(payout, cur.id)}, and it is not yours to run any more.`, {}, rng),
+      };
     },
   },
 
