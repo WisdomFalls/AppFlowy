@@ -18527,7 +18527,11 @@ const WORLD_OPENERS = {
   yardrat: `{Yardrat is small, cold, and much stranger than it looks|`
     + `The Yardratians are not warriors and are not worried about that|Yardrat teaches things that cannot be fought}.`,
   sadala: `{Sadala never burned. In this universe the Saiyans kept their home|`
-    + `Sadala is green in places Planet Vegeta never was}.`,
+    + `Sadala is green in places Planet Vegeta never was|`
+    + `Nothing here has ever needed to be conquered to still be standing}. `
+    + `{No one arrived here with a fleet and a number to paint on the ground|`
+    + `Whatever this world's people are, they built it themselves, over a long time, with nobody's permission|`
+    + `A whole history sits on this world that Universe 7's Saiyans never got to have}.`,
   cereal: `{Cereal is a farming world with two moons and no army|Cereal grows things and asks nothing of anyone}.`,
 };
 
@@ -31369,9 +31373,9 @@ function renderCreation() {
 
 /** A hint about what being this species in this century usually means. */
 function originHint(raceId, year) {
-  if (raceId === 'saiyan' && year < 737) return ' Planet Vegeta still stands, and it will not stand for long.';
-  if (raceId === 'saiyan' && year === 737) return ' You are born in the year Planet Vegeta falls. You will be very small when it happens.';
-  if (raceId === 'saiyan') return ' Your people are ash. You were not on the planet.';
+  if (raceId === 'saiyan' && year < 737) return ' Planet Vegeta still stands, and it will not stand for long - or, in a universe next door, Sadala never fell at all. Which one is not yours to pick.';
+  if (raceId === 'saiyan' && year === 737) return ' You are born in the year Planet Vegeta falls. You will be very small when it happens - unless it is Sadala under you instead, in the universe where nothing like that ever came.';
+  if (raceId === 'saiyan') return ' Your people are ash, and you were not on the planet - or your people never burned at all. Two different universes call themselves Saiyan.';
   if (raceId === 'namekian' && year < 763) return ' Namek is still there.';
   if (raceId === 'cerealian') return ' The Saiyans came to Cereal. Most of you did not survive it.';
   if (raceId === 'android' || raceId === 'bioandroid') return ' Somebody built you, and they had reasons.';

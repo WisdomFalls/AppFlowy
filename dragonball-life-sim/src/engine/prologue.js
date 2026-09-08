@@ -31,7 +31,11 @@ const WORLD_OPENERS = {
   yardrat: `{Yardrat is small, cold, and much stranger than it looks|`
     + `The Yardratians are not warriors and are not worried about that|Yardrat teaches things that cannot be fought}.`,
   sadala: `{Sadala never burned. In this universe the Saiyans kept their home|`
-    + `Sadala is green in places Planet Vegeta never was}.`,
+    + `Sadala is green in places Planet Vegeta never was|`
+    + `Nothing here has ever needed to be conquered to still be standing}. `
+    + `{No one arrived here with a fleet and a number to paint on the ground|`
+    + `Whatever this world's people are, they built it themselves, over a long time, with nobody's permission|`
+    + `A whole history sits on this world that Universe 7's Saiyans never got to have}.`,
   cereal: `{Cereal is a farming world with two moons and no army|Cereal grows things and asks nothing of anyone}.`,
 };
 

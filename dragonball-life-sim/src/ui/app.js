@@ -264,9 +264,9 @@ function renderCreation() {
 
 /** A hint about what being this species in this century usually means. */
 function originHint(raceId, year) {
-  if (raceId === 'saiyan' && year < 737) return ' Planet Vegeta still stands, and it will not stand for long.';
-  if (raceId === 'saiyan' && year === 737) return ' You are born in the year Planet Vegeta falls. You will be very small when it happens.';
-  if (raceId === 'saiyan') return ' Your people are ash. You were not on the planet.';
+  if (raceId === 'saiyan' && year < 737) return ' Planet Vegeta still stands, and it will not stand for long - or, in a universe next door, Sadala never fell at all. Which one is not yours to pick.';
+  if (raceId === 'saiyan' && year === 737) return ' You are born in the year Planet Vegeta falls. You will be very small when it happens - unless it is Sadala under you instead, in the universe where nothing like that ever came.';
+  if (raceId === 'saiyan') return ' Your people are ash, and you were not on the planet - or your people never burned at all. Two different universes call themselves Saiyan.';
   if (raceId === 'namekian' && year < 763) return ' Namek is still there.';
   if (raceId === 'cerealian') return ' The Saiyans came to Cereal. Most of you did not survive it.';
   if (raceId === 'android' || raceId === 'bioandroid') return ' Somebody built you, and they had reasons.';
