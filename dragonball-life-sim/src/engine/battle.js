@@ -190,6 +190,10 @@ function sideTemplate(name, power, opts = {}) {
     layerForm: null,
     layerFormName: null,
     guarding: false,
+    // A one-shot bet: give up landing anything yourself this exchange, but
+    // whatever they throw that actually connects gets punished properly
+    // instead of just absorbed. Same reset-every-turn lifecycle as guarding.
+    countering: false,
     charged: 0,
     staggered: 0,
     blinded: 0,
@@ -489,6 +493,11 @@ export function battleActions(state, battle) {
   }
 
   out.push({ id: 'guard', kind: 'defend', label: 'Guard', hint: 'Cut the next hit hard, recover stamina' });
+  out.push({
+    id: 'counter', kind: 'defend', label: 'Ready a counter',
+    hint: 'Land nothing yourself this exchange - but whatever they land on you, you land right back, harder.',
+    disabled: me.stamina < 10, reason: me.stamina < 10 ? 'Not enough stamina' : null,
+  });
   // Charging is not a free hit for them if you are far enough ahead: at that
   // gap you are simply not where the punch lands.
   const foe = battle.them;
@@ -686,6 +695,11 @@ function strike(attacker, defender, battle, rng, spec) {
   // things and costs them the footing to get out of the way.
   if (attacker.legBroken) hitChance -= 0.15;
   if (defender.legBroken) hitChance += 0.18;
+  // Going for a joint that already gave out this fight is not a fresh
+  // gamble - they are already favouring it, already flinching to protect
+  // it, and it is already broken. A weak point stays a weak point.
+  const reinjury = spec.location === 'joint' && ((defender.armsBroken || 0) > 0 || defender.legBroken);
+  if (reinjury) hitChance += 0.14;
   hitChance = clamp(hitChance, 0.05, 0.97);
 
   if (!rng.chance(hitChance)) {
@@ -695,6 +709,7 @@ function strike(attacker, defender, battle, rng, spec) {
   let dmg = spec.base * scaleByPower(ratio) * stance.atk;
   dmg /= dstance.def;
   if (defender.guarding && !spec.pierce) dmg *= 0.38;
+  if (reinjury) dmg *= 1.4;
   if (attacker.charged > 0) {
     dmg *= 1 + attacker.charged * 0.35;
     attacker.charged = 0;
@@ -741,7 +756,7 @@ function strike(attacker, defender, battle, rng, spec) {
       else { defender.legBroken = true; limbBreak = 'leg'; }
     }
   }
-  return { miss: false, damage, crit, terrainCrash, limbBreak };
+  return { miss: false, damage, crit, terrainCrash, limbBreak, reinjury };
 }
 
 /**
@@ -784,8 +799,30 @@ function describeStrike(res, attackerName, defenderName, moveName, rng, byPlayer
       ? `{Something in [d]'s ${part} gives with a sound you feel more than hear|[d]'s ${part} bends wrong and stays that way|That did not just hurt - [d]'s ${part} is broken}. {They are fighting on what is left now|Whatever they do next, they are doing it without that|That is not coming back for the rest of this}.`
       : `{Something in your ${part} gives with a sound you feel more than hear|Your ${part} bends wrong and stays that way|That did not just hurt - your ${part} is broken}. {You are fighting on what is left now|Whatever you do next, you are doing it without that|That is not coming back for the rest of this}.`,
     slots, rng);
+  } else if (res.reinjury) {
+    text += ' ' + render(byPlayer
+      ? `{Right where it already gave out|You go straight for what is already broken|They flinch protecting it before you even connect, and it does not help}.`
+      : `{Right where it already gave out|[a] goes straight for what is already broken|You flinch protecting it before the hit even lands, and it does not help}.`,
+    slots, rng);
   }
   return text;
+}
+
+/**
+ * A one-shot payoff for the 'counter' action - called right after any foe
+ * strike lands on the player. Only fires once (countering is cleared the
+ * instant it pays off), and only ever punishes a hit that actually
+ * connected: a miss or a locked-out swing gives you nothing to answer.
+ */
+function maybeCounter(battle, rng, lines, res, foeName) {
+  const me = battle.me;
+  const them = battle.them;
+  if (!me.countering || res.miss || res.lockedOut || me.hp <= 0 || them.hp <= 0) return;
+  me.countering = false;
+  const back = strike(me, them, battle, rng, { base: 22, hit: 0.92, stagger: 0.3 });
+  lines.push(render(`{You do not even try to block it - you were never going to. The counter lands instead|`
+    + `${foeName} commits and you are already moving|The opening was the point}.`, {}, rng));
+  lines.push(describeStrike(back, 'you', them.name, 'counter', rng, true));
 }
 
 /** The opponent's move. Simple, but it escalates when it is losing. */
@@ -894,6 +931,7 @@ function foeTurn(state, battle, rng, actor) {
     });
     lines.push(`${them.name} is not holding anything back. This is everything they have left.`);
     lines.push(describeStrike(res, them.name, 'you', tech.name, rng, false));
+    maybeCounter(battle, rng, lines, res, them.name);
     return lines;
   }
 
@@ -910,6 +948,7 @@ function foeTurn(state, battle, rng, actor) {
       me.staggered = Math.max(me.staggered, 2);
       lines.push(`Something in your joint gives. You are not standing right after that.`);
     }
+    maybeCounter(battle, rng, lines, res, them.name);
     return lines;
   }
 
@@ -920,6 +959,7 @@ function foeTurn(state, battle, rng, actor) {
       base: tech.effect.atk * 0.7, hit: 0.8, pierce: tech.effect.pierce > 0.5, blast: true,
     });
     lines.push(describeStrike(res, them.name, 'you', tech.name, rng, false));
+    maybeCounter(battle, rng, lines, res, them.name);
     return lines;
   }
 
@@ -929,6 +969,7 @@ function foeTurn(state, battle, rng, actor) {
   if (!them.infiniteStamina) them.stamina = Math.max(0, them.stamina - move.stamina);
   const res = strike(them, me, battle, rng, move);
   lines.push(describeStrike(res, them.name, 'you', move.name, rng, false));
+  maybeCounter(battle, rng, lines, res, them.name);
   return lines;
 }
 
@@ -972,6 +1013,7 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
   let freeSwing = false;
 
   me.guarding = false;
+  me.countering = false;
 
   if (actionId.startsWith('stance:')) {
     const key = actionId.slice(7);
@@ -1210,6 +1252,10 @@ export function takeTurn(state, battle, rng, actionId, params = {}) {
     me.guarding = true;
     me.stamina = clamp(me.stamina + 22, 0, me.staminaMax);
     lines.push('You cover up and wait for it.');
+  } else if (actionId === 'counter') {
+    me.countering = true;
+    me.stamina = clamp(me.stamina - 10, 0, me.staminaMax);
+    lines.push('You give up the exchange and wait for them to commit to something.');
   } else if (actionId === 'charge') {
     // Somebody far enough ahead in speed and power simply is not there when
     // the punch arrives. This is the whole point of Ultra Instinct.
