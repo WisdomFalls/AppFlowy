@@ -25822,6 +25822,51 @@ function chargeSocial(npc, changes) {
   if (changes.knowledge) learnAbout(npc, changes.knowledge);
 }
 
+/** Whether somebody is, on the surface, in a state to want closeness right
+ * now - agitated, frustrated, stressed, angry or grieving people mostly are
+ * not, whatever the bond between you says underneath it. Their mood is
+ * already visible on their own dossier, so choosing to try anyway despite
+ * what it says is a real, informed decision on the player's part. */
+function surfaceReceptive(npc) {
+  const badMood = /furious|frightened|grieving|exhausted|spoiling for a fight|restless/.test(npc.mood || '');
+  return !badMood && (npc.tension || 0) < 40;
+}
+
+/**
+ * Somebody who is not showing it can still actually want to be held - the
+ * read a partner who genuinely knows them can make. A real read, not a
+ * guarantee: a strong bond and real trust make it likely, nothing makes it
+ * certain. Grief and real fury shut most people down even to somebody who
+ * loves them; stress, frustration and plain sadness are the ones affection
+ * can actually still reach.
+ */
+function secretlyWantsCloseness(npc, rng) {
+  const bondedEnough = ['spouse', 'lover'].includes(npc.relation) && (npc.trust || 0) > 55 && (npc.romance || 0) > 40;
+  if (!bondedEnough) return false;
+  if (/furious|frightened|grieving/.test(npc.mood || '')) return false;
+  return rng.chance(clamp(0.3 + ((npc.trust || 0) - 55) / 150 + ((npc.romance || 0) - 40) / 150, 0.1, 0.8));
+}
+
+/** A physical romance beat that checks consent before it checks anything
+ * else: surface-receptive resolves as a normal success, a closed-off mood
+ * either refuses outright or - if the bond is real and the read is
+ * correct - resolves as somebody who was not going to say so but does not
+ * push you away either, and pulls you in instead. `reward` and
+ * `secretReward` are chargeSocial() deltas; `lines` supplies the three
+ * narrative registers (open, secretly-wanted, refused). */
+function physicalRomanceBeat(state, rng, npc, { reward, secretReward, refusedTension, lines }) {
+  if (surfaceReceptive(npc)) {
+    chargeSocial(npc, reward);
+    return { text: render(lines.open, {}, rng) };
+  }
+  if (secretlyWantsCloseness(npc, rng)) {
+    chargeSocial(npc, secretReward);
+    return { text: render(lines.secret, {}, rng) };
+  }
+  chargeSocial(npc, { tension: refusedTension ?? 6, closeness: -2 });
+  return { text: render(lines.refused, {}, rng) };
+}
+
 const SOCIAL_ACTIONS = [
   // ------------------------------------------------------------- warm
   {
@@ -26128,6 +26173,66 @@ const SOCIAL_ACTIONS = [
       adjust(state, { happiness: 16 });
       return { text: `${courtLine(npc, rng)} ${render('#joy#', {}, rng)}` };
     },
+  },
+  {
+    id: 'hug', name: 'Hug them', tone: 'romance', slots: 0, maxPerYear: 10,
+    desc: 'Close the distance. Whether they let you depends on more than whether they like you.',
+    available: (state, npc) => npc.alive && ['lover', 'spouse', 'friend', 'child', 'parent', 'sibling'].includes(npc.relation),
+    run: (state, rng, npc) => physicalRomanceBeat(state, rng, npc, {
+      reward: { closeness: rng.int(4, 9), tension: -6 },
+      secretReward: { closeness: rng.int(8, 16), trust: rng.int(4, 10), romance: ['lover', 'spouse'].includes(npc.relation) ? rng.int(4, 10) : 0, tension: -14 },
+      refusedTension: 4,
+      lines: {
+        open: `{They lean into it|Neither of you says anything, which is the point|A real hug, not a formality}.`,
+        secret: `{They stiffen for half a second and then do not pull away|Whatever they were holding onto, it slips a little|They do not push you off - they pull you in instead}. {That surprises both of you|It is not nothing|Something in them lets go, just for a moment}.`,
+        refused: `{They step back, not unkindly|"Not right now."|They let you, but it is not really there}.`,
+      },
+    }),
+  },
+  {
+    id: 'kiss', name: 'Kiss them', tone: 'romance', slots: 0, maxPerYear: 12,
+    desc: 'Simple, and never actually simple.',
+    available: (state, npc) => npc.alive && ['lover', 'spouse'].includes(npc.relation) && state.character.age >= ROMANCE_MIN_AGE,
+    run: (state, rng, npc) => physicalRomanceBeat(state, rng, npc, {
+      reward: { closeness: rng.int(5, 10), romance: rng.int(4, 9), tension: -6 },
+      secretReward: { closeness: rng.int(9, 16), romance: rng.int(8, 16), trust: rng.int(4, 10), tension: -16 },
+      refusedTension: 5,
+      lines: {
+        open: `{It is unhurried|Neither of you is the one who pulls back first|It says the thing neither of you has said out loud today}.`,
+        secret: `{They turn away first and then do not|"...Fine." It is not a complaint|Whatever was wrong a second ago is still wrong, and this happens anyway}.`,
+        refused: `{They turn their head|"Not now."|It lands somewhere that is not quite refusal and not quite yes, and you stop}.`,
+      },
+    }),
+  },
+  {
+    id: 'cuddle', name: 'Hold them close', tone: 'romance', slots: 1, maxPerYear: 8,
+    desc: 'No agenda. Just this, for a while - the one that actually needs them to want it, not just allow it.',
+    available: (state, npc) => npc.alive && ['lover', 'spouse'].includes(npc.relation),
+    run: (state, rng, npc) => physicalRomanceBeat(state, rng, npc, {
+      reward: { closeness: rng.int(8, 15), trust: rng.int(4, 9), romance: rng.int(4, 9), tension: -12 },
+      secretReward: { closeness: rng.int(14, 22), trust: rng.int(10, 18), romance: rng.int(8, 15), tension: -22 },
+      refusedTension: 3,
+      lines: {
+        open: `{You do not talk. You do not need to|An hour disappears and neither of you notices|They fall asleep first, which is its own kind of trust}.`,
+        secret: `{They do not have the energy to keep you out and stop trying to|"I did not think I wanted this until you were already here"|Whatever the day was, it is not in the room for a while}.`,
+        refused: `{"I need to be alone right now."|They are polite about it, which is somehow worse|Not tonight, and they say so}.`,
+      },
+    }),
+  },
+  {
+    id: 'carry', name: 'Carry them', tone: 'romance', slots: 0, maxPerYear: 6,
+    desc: 'Sweep them up. It says something, done right, and something else entirely done wrong.',
+    available: (state, npc) => npc.alive && ['lover', 'spouse'].includes(npc.relation),
+    run: (state, rng, npc) => physicalRomanceBeat(state, rng, npc, {
+      reward: { closeness: rng.int(6, 12), romance: rng.int(5, 10), respect: rng.int(2, 6) },
+      secretReward: { closeness: rng.int(11, 18), romance: rng.int(9, 16), trust: rng.int(5, 10), tension: -14 },
+      refusedTension: 8,
+      lines: {
+        open: `{They laugh, and let you|An arm around your neck and they do not ask why|It is showing off and it works anyway}.`,
+        secret: `{They protest for exactly one second|"Put me— " and then they stop arguing|They hold on tighter than the moment strictly needs}.`,
+        refused: `{"Put me down."|They mean it, and you do|Not the moment for it, and both of you know it}.`,
+      },
+    }),
   },
   {
     id: 'propose', name: 'Propose', tone: 'romance', slots: 1, maxPerYear: 1,
