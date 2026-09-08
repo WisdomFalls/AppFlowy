@@ -525,10 +525,14 @@ export const ACTIONS = [
       if (!canAfford(s.character, cur.id, cost)) return { text: `${formatMoney(cost, cur.id)}, and you do not have it.` };
       debit(s.character, cur.id, cost);
       // A hired hand is never quite the fight you would buy in the open -
-      // a discount contractor, not somebody you trained with.
-      const hitmanPower = Math.max(1, target.power * rng.float(0.5, 1.3));
+      // a discount contractor, not somebody you trained with. Who you can
+      // actually find for that money depends on who you can talk to and
+      // how well - the same charisma that gets you a better wage out of a
+      // hire also gets you a better contractor out of an underworld one.
+      const charismaBonus = clamp((s.character.stats.charisma - 50) / 300, -0.1, 0.25);
+      const hitmanPower = Math.max(1, target.power * rng.float(0.5, 1.3) * (1 + charismaBonus));
       const chance = clamp(0.3 + Math.log10(Math.max(1, hitmanPower / Math.max(1, target.power))) * 0.4, 0.1, 0.85);
-      const traced = rng.chance(0.3);
+      const traced = rng.chance(clamp(0.3 - charismaBonus * 0.3, 0.1, 0.4));
       adjust(s, { karma: -18 });
       if (rng.chance(chance)) {
         target.alive = false;
@@ -982,7 +986,10 @@ export const ACTIONS = [
       if (!canAfford(s.character, cur.id, amount)) return { text: `${formatMoney(amount, cur.id)}, and you do not have it.` };
       debit(s.character, cur.id, amount);
       inst.capital = (inst.capital || 0) + amount;
-      inst.renown = clamp(inst.renown + 1 + idx * 1.5, 0, 100);
+      // The pitch matters as much as the money - a charismatic owner gets
+      // more buzz out of the same investment than a quiet one does.
+      const charismaBonus = clamp((s.character.stats.charisma - 50) / 200, -0.15, 0.35);
+      inst.renown = clamp(inst.renown + (1 + idx * 1.5) * (1 + charismaBonus), 0, 100);
       adjust(s, { happiness: 6 });
       return { text: `${formatMoney(amount, cur.id)}, put back into ${inst.name}. It is worth more than it was.` };
     },
@@ -1033,12 +1040,15 @@ export const ACTIONS = [
       const npc = params && params.option ? findNpc(s, params.option) : null;
       if (!npc) return { text: 'Nobody takes the offer.' };
       const cur = currencyFor(inst.homePlanet);
-      const wage = priceIn(8000, cur.id);
+      // A better negotiator gets the same person for less, and keeps them
+      // happier about it once they are on board.
+      const charismaDiscount = clamp((s.character.stats.charisma - 50) / 300, -0.1, 0.3);
+      const wage = priceIn(Math.round(8000 * (1 - charismaDiscount)), cur.id);
       if (!canAfford(s.character, cur.id, wage)) return { text: 'You cannot cover even the first wage.' };
       debit(s.character, cur.id, wage);
       inst.members.push(npc.id);
       inst.renown = clamp(inst.renown + 2, 0, 100);
-      npc.closeness = clamp((npc.closeness || 0) + 4, 0, 100);
+      npc.closeness = clamp((npc.closeness || 0) + 4 + Math.round(charismaDiscount * 10), 0, 100);
       adjust(s, { happiness: 4 });
       return { text: `${npc.name} comes on board. ${inst.members.length} people carry ${inst.name} now.` };
     },

@@ -540,13 +540,15 @@ function passiveYear(state, rng) {
     const growth = 0.6 + inst.members.length * 0.4 + (c.fame / 100) * 1.2;
     inst.renown = clamp(inst.renown + growth, 0, 100);
     // A business is the one legacy that pays for itself - profit scales with
-    // how well known it is, how many places carry the name, and how many
-    // people are actually working there.
+    // how well known it is, how many places carry the name, how many people
+    // are actually working there, and how well the person running it thinks.
     if (inst.type === 'business') {
       const cur = currencyFor(inst.homePlanet);
       const branches = (inst.branches || [inst.homePlanet]).length;
+      const intellectBonus = clamp(((c.stats.intellect || 50) - 50) / 250, -0.1, 0.3);
       const revenue = Math.round(priceIn(3000, cur.id)
-        * (1 + inst.renown / 40) * (1 + (branches - 1) * 0.6) * (1 + inst.members.length * 0.15));
+        * (1 + inst.renown / 40) * (1 + (branches - 1) * 0.6) * (1 + inst.members.length * 0.15)
+        * (1 + intellectBonus));
       credit(c, cur.id, revenue);
       entries.push({ kind: 'legacy', text: `${inst.name} turns a profit this year: ${formatMoney(revenue, cur.id)}.` });
     }
