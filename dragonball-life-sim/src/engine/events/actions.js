@@ -39,6 +39,32 @@ function familyElsewhere(state) {
   return livingNpcs(state).filter((n) => RELATIONS[n.relation]?.family && n.placeId !== state.character.placeId);
 }
 
+/** Building an android or bio-android from scratch: money, seasons of your
+ * own attention, and real risk of failure along the way. */
+const ANDROID_PROJECTS = {
+  android: {
+    id: 'android', name: 'an android', race: 'android', baseCost: 900000,
+    blurb: 'A frame built from scratch - metal, a reactor, a mind grown into it rather than born.',
+  },
+  bioandroid: {
+    id: 'bioandroid', name: 'a bio-android', race: 'bioandroid', baseCost: 1600000,
+    blurb: 'Grown, not built - cell cultures and an absorption capacity, harder to get right and much worse to get wrong.',
+  },
+};
+
+/** Somebody worth bringing onto a project: real intellect, and actually
+ * standing where you are. */
+function engineerCandidates(state) {
+  const c = state.character;
+  const hired = (c.androidProject && c.androidProject.hired) || [];
+  return livingNpcs(state).filter((n) => n.placeId === c.placeId
+    && n.stats.intellect >= 55 && !hired.includes(n.id));
+}
+
+function hireCost(npc) {
+  return Math.round(20000 * Math.pow(1.045, npc.stats.intellect));
+}
+
 /** What using this item actually buys, for the option list. */
 function describeItemUse(use) {
   const bits = [];
@@ -269,6 +295,133 @@ export const ACTIONS = [
       const res = fitProsthetic(s, opt.entry.id, fitter.quality);
       adjust(s, { happiness: 12, karma: fitter.karma || 0 });
       return { text: `${res.text} ${render('{The first week is the worst part|Learning it takes a season and you have the season|You spend a month reaching for things and missing}.', {}, rng)}` };
+    },
+  },
+  {
+    id: 'start_android_project', slots: 1, name: 'Start building an android', cat: 'mind', cost: 'A season',
+    desc: 'A body from scratch, or a bio-android grown from cell cultures. Money, years of your own attention, and real risk of failure.',
+    available: (s) => !s.character.inAfterlife && !s.character.androidProject,
+    options: () => [
+      { id: 'android', label: 'An android', hint: `${formatMoney(priceIn(ANDROID_PROJECTS.android.baseCost, 'zeni'), 'zeni')} in parts and lab time. Metal, a reactor, a mind grown into it rather than born.` },
+      { id: 'bioandroid', label: 'A bio-android', hint: `${formatMoney(priceIn(ANDROID_PROJECTS.bioandroid.baseCost, 'zeni'), 'zeni')} in cultures and containment. Grown, not built - harder, and much worse when it goes wrong.` },
+    ],
+    run: (s, rng, params) => {
+      const kindId = (params && params.option) || 'android';
+      const kind = ANDROID_PROJECTS[kindId];
+      if (!kind) return { text: 'Nothing to build.' };
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      const cost = priceIn(kind.baseCost, cur.id);
+      if (!canAfford(s.character, cur.id, cost)) {
+        return { text: `${kind.blurb} It starts at ${formatMoney(cost, cur.id)} before anything else. You do not have it.` };
+      }
+      debit(s.character, cur.id, cost);
+      s.character.androidProject = { kind: kindId, progress: 0, sessions: 0, setbacks: 0, hired: [], startAge: s.character.age };
+      return { text: `${kind.blurb} ${formatMoney(cost, cur.id)}, gone before you have built anything at all. The work starts now.` };
+    },
+  },
+  {
+    id: 'hire_engineer', slots: 0, name: 'Hire help for the project', cat: 'mind', cost: 'A moment',
+    desc: 'Somebody who actually knows this field, if you can afford them and they will work for you.',
+    available: (s) => !!s.character.androidProject && s.character.androidProject.hired.length < 3
+      && engineerCandidates(s).length > 0,
+    options: (s) => {
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      return engineerCandidates(s).map((n) => ({
+        id: n.id, label: n.name,
+        hint: `Intellect ${Math.round(n.stats.intellect)} - ${formatMoney(priceIn(hireCost(n), cur.id), cur.id)} to sign on.`,
+      }));
+    },
+    run: (s, rng, params) => {
+      const proj = s.character.androidProject;
+      if (!proj) return { text: 'No project running to help with.' };
+      const npc = params && params.option && findNpc(s, params.option);
+      if (!npc || !npc.alive) return { text: 'They are not available.' };
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      const cost = priceIn(hireCost(npc), cur.id);
+      if (!canAfford(s.character, cur.id, cost)) return { text: `${npc.name} wants ${formatMoney(cost, cur.id)} to sign on. You do not have it.` };
+      debit(s.character, cur.id, cost);
+      proj.hired.push(npc.id);
+      return { text: `${npc.name} signs on. ${npc.stats.intellect >= 75 ? 'This is exactly the kind of problem they wanted.' : 'Competent, if nothing more, and another pair of hands.'}` };
+    },
+  },
+  {
+    id: 'work_on_android_project', slots: 1, name: 'Work on the project', cat: 'mind', cost: 'A season',
+    desc: 'Put the season into it. Real progress, or a real setback - which one depends on how ready you actually are.',
+    available: (s) => !!s.character.androidProject,
+    run: (s, rng) => {
+      const c = s.character;
+      const proj = c.androidProject;
+      if (!proj) return { text: 'Nothing to work on.' };
+      const kind = ANDROID_PROJECTS[proj.kind];
+      proj.sessions += 1;
+      const hiredNpcs = proj.hired.map((id) => findNpc(s, id)).filter((n) => n && n.alive);
+      const helpBonus = hiredNpcs.reduce((n, npc) => n + (npc.stats.intellect / 100) * 0.5, 0);
+      const skill = (c.stats.intellect * 0.7 + c.stats.discipline * 0.3) / 100;
+      const setbackChance = clamp(0.42 - skill * 0.32 - helpBonus * 0.18, 0.05, 0.55);
+
+      if (rng.chance(setbackChance)) {
+        proj.setbacks += 1;
+        const cur = currencyFor(getPlace(c.placeId).planet);
+        const loss = Math.round(priceIn(kind.baseCost, cur.id) * rng.float(0.04, 0.12));
+        debit(c, cur.id, loss);
+        const bioLoss = proj.kind === 'bioandroid' && rng.chance(0.3);
+        let line;
+        if (bioLoss) {
+          proj.progress = Math.max(0, proj.progress - 20);
+          line = rng.pick([
+            'The culture destabilises overnight. Weeks of growth, gone.',
+            'Something in the tank goes wrong while you sleep. You lose the sample.',
+          ]);
+        } else {
+          proj.progress = Math.max(0, proj.progress - 6);
+          line = rng.pick([
+            'A whole subsystem fails testing and has to be rebuilt.',
+            'The maths does not hold up under load. Back to the frame.',
+            'It very nearly works. That is somehow worse than it not working at all.',
+          ]);
+        }
+        return { text: `${line} Lost ${formatMoney(loss, cur.id)} in the failure. (${Math.round(proj.progress)}% - a setback, not the end of it.)` };
+      }
+
+      const gain = rng.float(6, 14) * (0.6 + skill * 0.8 + helpBonus * 0.4);
+      proj.progress = clamp(proj.progress + gain, 0, 100);
+      const line = rng.pick([
+        'Real progress today. It is starting to look like something.',
+        'A clean session. Everything that should fit, fits.',
+        'Slow, careful work, and it holds.',
+      ]);
+
+      if (proj.progress >= 100) {
+        const npc = makeNpc(rng, {
+          raceId: kind.race, age: 0, minAge: 0, maxAge: 0, year: c.birthYear + c.age,
+          placeId: c.placeId, relation: 'creation', metHow: 'created',
+          closeness: 60, trust: 70, respect: 50, tension: 0,
+        });
+        npc.tags = Array.from(new Set([...(npc.tags || []), 'your_creation']));
+        npc.createdBy = c.id;
+        npc.techniques = [];
+        addNpc(s, npc);
+        c.flags = c.flags || {};
+        c.flags['built_' + proj.kind] = true;
+        addFact(s.memory, {
+          type: 'creation', weight: 12, year: c.age, tags: ['creation', proj.kind],
+          text: `Finished building ${npc.name}, ${kind.name}, from scratch.`,
+        });
+        c.androidProject = null;
+        return { text: `${line} ${npc.name} opens their eyes for the first time. ${kind.name.charAt(0).toUpperCase()}${kind.name.slice(1)}, and yours.` };
+      }
+      return { text: `${line} (${Math.round(proj.progress)}% there.)` };
+    },
+  },
+  {
+    id: 'abandon_android_project', slots: 0, name: 'Shut the project down', cat: 'mind', cost: 'A moment',
+    desc: 'Walk away from it. Whatever it would have been stays unfinished, and whatever you spent stays spent.',
+    available: (s) => !!s.character.androidProject,
+    run: (s) => {
+      const proj = s.character.androidProject;
+      const kind = proj && ANDROID_PROJECTS[proj.kind];
+      s.character.androidProject = null;
+      return { text: `You shut it down and walk away. Whatever ${kind ? kind.name : 'it'} would have been, it stays unfinished at ${proj ? Math.round(proj.progress) : 0}%.` };
     },
   },
   {
