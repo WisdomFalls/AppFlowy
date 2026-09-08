@@ -18,12 +18,13 @@ You are taking over the **visual design, styling, and customization systems** fo
 src/
 ├── ui/
 │   ├── shell.html          ← Main HTML structure (modify for layout/new UI)
-│   └── styles.css          ← Complete stylesheet (main work area)
+│   ├── styles.css          ← Complete stylesheet (main work area)
+│   ├── portrait.js         ← Character portrait SVG generation (can enhance visuals)
+│   └── app.js              ← App logic (optional: add customization handlers)
 ├── engine/
 │   ├── state.js            ← Game state (READ ONLY)
 │   ├── generator.js        ← Event/text generation (READ ONLY)
 │   ├── render/
-│   │   ├── portrait.js     ← Character portrait SVG (can enhance)
 │   │   └── screens.js      ← Screen rendering (READ ONLY)
 │   └── [other logic]       ← DO NOT MODIFY
 ├── data/
@@ -41,39 +42,49 @@ dist/dragonball-life-sim.html ← Final bundled output (auto-generated)
 - Component system (buttons, cards, tabs, bars)
 - Sticky HUD and dock (header/footer)
 - Battle, tournament, trial screens
+- Comprehensive portrait system (16 hair styles, 12 colors, 11 skin tones, 13 outfits, 20+ marks, 13+ accessories)
+- State-responsive visuals (expressions, age changes, transformations, injuries)
 
 ⚠️ **Needs Improvement**
-- Character portrait customization (currently basic SVG)
-- Character creation UI (looks functional but not visually exciting)
-- Color palette could be used more strategically
-- Animations and micro-interactions are minimal
-- Portrait doesn't show enough personality/customization options
-- Battle UI could be more visually distinctive
-- No visual transformation effects
+- **Character customization UI** — portrait features exist but no in-game picker (players can't choose appearance during creation)
+- Character creation screen visual presentation (functional but could be more exciting)
+- Color palette strategic usage (more intentional accent colors)
+- Animations and micro-interactions (smooth transitions, hover states)
+- Transformation visual effects (aura glow, energy effects)
+- Battle UI visual distinction (better damage feedback, clearer turn states)
+- Optional: enhanced portrait animations (breathing, power pulses)
 
 ---
 
 ## Your Main Tasks
 
-### 1. Character Portrait Customization (Highest Priority)
-**Current state**: Basic SVG portrait, static appearance
-**Goal**: Rich customization that players can use to personalize their character
+### 1. Character Customization UI (Highest Priority)
+**Current state**: Portrait system has all features, but character creation randomly rolls appearance instead of letting players choose
+**Goal**: Create optional customization interface so players can personalize their character during creation
 
-What to design:
-- Hair style picker (spiky, straight, wavy, etc.)
-- Skin tone selector (8-12 colors)
-- Hair color picker (12+ colors, independent from style)
-- Eye style and color options
-- Gi/outfit color and style variations
-- Facial features (beard, scars, tattoos, optional)
-- Body build sliders (muscle tone, size)
-- Posture options (neutral, fighting stance, injured)
+What's **already implemented** (in `src/ui/portrait.js`):
+- 16 hair styles with 12 colors
+- 5 eye shapes with 8 eye colors
+- 11 skin tones (human + alien variants)
+- 4 face shapes
+- 13 outfit variants with color customization
+- 6 body build types
+- 20+ marks (scars, injuries, enhancements, tattoos)
+- 13+ accessories (headbands, glasses, capes, etc.)
+- 7 combat stances
+
+What to build:
+- **UI component**: Grid/picker interface for hair styles, colors, skin tones, eye colors, outfits, body builds, marks, accessories
+- **Live preview**: Portrait updates in real-time as player makes choices
+- **Character creation integration**: Add customization section to `#screen-create` in shell.html
+- **Optional flag**: Let players skip customization and get randomly rolled appearance (current behavior)
+- **Event handlers**: Hook customization UI to portrait rendering in `src/ui/portrait.js`
 
 **Integration**: 
 - Live preview updates as player customizes
-- Customization UI in character creation screen
+- Customization UI in character creation screen (optional/skippable)
 - Saved customization persists through game
-- Portrait updates reflect game state (power level, health, transformation)
+- Portrait automatically updates with game state (power level, health, transformation, age)
 
 ### 2. Character Creation Screen Enhancement
 **Current state**: Functional form with minimal styling
@@ -136,16 +147,17 @@ Enhancements:
 
 ### Modify These Files
 ```
-src/ui/styles.css          (PRIMARY - 99% of work here)
-src/ui/shell.html          (Secondary - HTML structure for new UI elements)
-src/engine/render/portrait.js (Optional - enhance SVG generation)
+src/ui/styles.css          (PRIMARY - UI polish, animations, customization UI styling)
+src/ui/shell.html          (PRIMARY - add customization UI to character creation screen)
+src/ui/portrait.js         (SECONDARY - enhance visual effects, transformations, state-responsive visuals)
+src/ui/app.js              (SECONDARY - add event handlers for customization UI)
 ```
 
 ### Read These (Do Not Modify)
 ```
 src/engine/*.js            (All game logic - READ ONLY)
 src/data/*.js              (Game data - READ ONLY)
-VISUAL_DESIGN_SPECIFICATION.md (Your design guide)
+VISUAL_DESIGN_SPECIFICATION.md (Your design guide - has been updated with actual features)
 ```
 
 ### Do Not Touch

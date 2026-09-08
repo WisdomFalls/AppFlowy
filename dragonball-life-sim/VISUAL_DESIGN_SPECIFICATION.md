@@ -353,43 +353,80 @@ Color coding:
 
 ### Current Technical Base
 - **Format**: SVG, dynamically generated from character data
-- **Canvas size**: 118px × 140px (default), scales to 40×47 in HUD, 130px in dossier
-- **Rendering**: JavaScript path elements, no external images
-- **Performance**: Instant load, cacheable
+- **Canvas size**: 220px × 260px, renders at various scales (40×47 in HUD, 130px in dossier)
+- **Rendering**: JavaScript path elements with inline styles, no external images
+- **Performance**: Instant load, cacheable, responsive to character state
+- **File location**: `src/ui/portrait.js`
 
-### Customization Scope (For ChatGPT)
+### Existing Customization Features
 
-The portrait system needs visual enhancement in:
+The portrait system **already includes comprehensive customization**:
 
-1. **Head/Face Shape & Features**
-   - Eye style variations (wide, angular, soft)
-   - Hair/style customization (length, color, spikes, etc.)
-   - Facial features (nose shape, mouth, scars, tattoos)
+1. **Hair (16 styles, 12 colors)**
+   - Styles: Spiked, wild, long, ponytail, bob, cropped, mohawk, bald, braid, topknot, flame, pigtails, afro, buzzed, side-part, middle-part
+   - Colors: Black, dark brown, brown, blonde, white, silver, lavender, blue, orange, red, green, pink
 
-2. **Body Anatomy**
-   - Muscle definition/tone slider
-   - Build variation (lean, athletic, muscular, bulky)
-   - Posture (neutral, fighting stance, relaxed, injured)
+2. **Eyes (5 shapes, 8 colors)**
+   - Shapes: Sharp, round, narrow, heavy-lidded, wide
+   - Colors: Black, brown, green, blue, grey, gold, red, violet
 
-3. **Customization UI**
-   - Color swatches (skin, hair, gi, accents)
-   - Sliders (muscle tone, size, age appearance)
-   - Toggle options (facial hair, scars, tattoos, jewelry)
-   - Hair style picker
-   - Gi style and color options
+3. **Skin Tones (11 options)**
+   - Human variants: pale, light, tan, brown, deep
+   - Alien variants: Namekian green, Majin pink, Chitin white, Cold blue, Ash grey, Kai violet
 
-4. **State-Responsive Visuals**
-   - Injury overlay (bruises, bandages)
-   - Power-up glow (aura around character)
-   - Transformation visual (color shifts, energy effects)
-   - Age appearance changes (young → old)
-   - Health status (pale if low health, glowing if full)
+4. **Face Shapes (4 options)**
+   - Square, round, angular, long
 
-5. **Animation Potential**
-   - Breathing/idle animation
+5. **Outfits (13 variants)**
+   - Traditional: Orange gi, blue gi, black gi
+   - Armor: Saiyan battle armor (3 variants), Frieza Force armor
+   - Robes: Namekian robes, Kai vestments
+   - Casual: Ordinary clothes, long coat, lab coat
+   - Bare-chested
+
+6. **Body Builds (6 types)**
+   - Small, wiry, lean, balanced, stocky, massive
+
+7. **Marks (20+ options)**
+   - Scars: Cheek, eye, brow, chest, arm, forearm
+   - Injuries: Burn marks on face/arms, missing eye/ear/arm/leg
+   - Enhancements: Mechanical eye/arm/leg
+   - Marks: Forehead dots, third eye, tattoos, cracked tooth, birthmark
+
+8. **Accessories (13+ options)**
+   - Headband, bandana, glasses, sunglasses, earring, earrings, necklace, wristbands, cape, turban, hat, eyepatch, scarf, and more
+
+9. **Stances (7 options)**
+   - Turtle School, Crane School, Saiyan brawler, Namekian guard, Demon style, formless, custom
+
+10. **State-Responsive Visuals**
+    - Expressions based on character state
+    - Life stage appearance changes (age, health)
+    - Transformation visuals (power-level-responsive appearance)
+    - Damage and injury visual indicators
+
+### What Needs Enhancement
+
+1. **Customization UI in Character Creation**
+   - Currently, appearance is randomly rolled at character creation
+   - Opportunity: Add optional customization UI where players can pick from preset options
+   - This requires both CSS for the UI and integration with the portrait rendering
+
+2. **Real-time Preview**
+   - Portrait updates as customization options change
+   - Live preview in character creation screen
+
+3. **Visual Polish**
+   - More expressive character animations
+   - Transformation visual effects (aura glow, color shifts)
+   - Battle-readiness stance changes
+   - Damage overlays and injury visualization
+
+4. **Animation Potential**
    - Power level pulse (glow intensifies with power)
    - Transformation effect (gradual color shift)
-   - Battle stance shifts
+   - Battle stance transitions
+   - Health status visual feedback
 
 ### Design Constraints
 - Must remain SVG-based for performance
@@ -658,15 +695,17 @@ You are responsible for **visual design and styling**, not game logic. Your work
 
 ### Integration Points
 The visual system integrates with the engine through:
-1. **Portrait rendering**: `src/engine/render/portrait.js` generates SVG
+1. **Portrait rendering**: `src/ui/portrait.js` generates SVG from character data
 2. **Event display**: Screens render state through template literals
 3. **Data binding**: CSS classes and data-attributes control visual state
 4. **Animation hooks**: Transitions and animations are CSS-based
+5. **Character customization**: Portrait data stored in character.appearance object
 
 ### Key Files to Modify
-- `src/ui/styles.css` — Stylesheet (main work)
-- `src/ui/shell.html` — HTML templates (component layout)
-- `src/engine/render/portrait.js` — Portrait customization (if extending)
+- `src/ui/styles.css` — Stylesheet (main work: UI Polish, animations)
+- `src/ui/shell.html` — HTML templates (component layout for customization UI)
+- `src/ui/portrait.js` — Portrait rendering (optional: enhance visual effects, add transformation effects)
+- `src/ui/app.js` — App logic (optional: add event handlers for customization UI)
 - `dist/dragonball-life-sim.html` — Bundled output (auto-generated)
 
 ### Testing & Validation
