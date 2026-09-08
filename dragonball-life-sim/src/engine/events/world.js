@@ -737,6 +737,7 @@ registerEvents([
       { id: 'accept', label: 'Accept the mark', danger: true, effect: (c2, sl) => {
         c2.character.flags.majinMark = true;
         c2.character.flags.majinMarkOffered = true;
+        c2.character.flags.majinCorruption = 30;
         if (sl.babidiAlive) meetCanon(c2, 'babidi', 'acquaintance');
         const changes = apply(c2, { karma: -18, happiness: -6 });
         const lines = ['{Something settles into you that was not there before|The mark burns for a second and then does not|You feel the ceiling move, all at once}.'];

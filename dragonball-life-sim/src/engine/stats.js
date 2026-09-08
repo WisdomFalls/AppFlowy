@@ -184,12 +184,15 @@ export function combatPower(character, opts = {}) {
   const tailBonus = (character.tail && !hasPerk(character, 'oozaru')) ? 1.06 : 1;
   // A standing mark (Babidi's Majin brand, or whatever a fighter picks up in
   // its place) stacks on top of whatever you already are rather than
-  // replacing it - a real amplifier, not a form. How much of it you can
-  // actually hold is discipline: a controlled mind gets close to the full
-  // amplification, a weak one barely more than the base jolt and none of
-  // the ceiling.
+  // replacing it - a real amplifier, not a form. It is not a fixed jolt: how
+  // deep it has taken root (character.flags.majinCorruption, driven by
+  // lifecycle.js's yearly drift and actions.js's resist_mark) is most of the
+  // multiplier, and how much of that you can actually hold is discipline -
+  // a controlled mind gets close to the full amplification, a weak one
+  // barely more than the base jolt and none of the ceiling.
+  const corruption = character.flags.majinMark ? (character.flags.majinCorruption ?? 30) : 0;
   const markBoost = character.flags.majinMark
-    ? 1.15 + clamp((character.stats.discipline - 40) / 200, 0, 0.35)
+    ? 1 + (corruption / 100) * 0.55 + clamp((character.stats.discipline - 40) / 200, 0, 0.35)
     : 1;
   const condition = opts.ignoreCondition ? 1 : health * ki;
   return Math.max(1, character.power * mult * techFactor * skill * condition * disarmed * tailBonus * markBoost);

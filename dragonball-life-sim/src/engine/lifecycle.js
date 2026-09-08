@@ -538,6 +538,34 @@ function passiveYear(state, rng) {
     c.flags.ssbYears = (c.flags.ssbYears || 0) + 1;
     if (c.flags.ssbYears >= 3 && c.stats.discipline > 60 && c.stats.kiControl > 85) c.flags.ssb_mastery = true;
   }
+  // A mark like Babidi's does not sit still. A disciplined mind starves it a
+  // little every year; anyone else feeds it just by carrying it, whether or
+  // not they ever reach for what it offers.
+  if (c.flags.majinMark) {
+    const before = c.flags.majinCorruption ?? 30;
+    const held = c.stats.discipline >= 60;
+    const after = clamp(before + (held ? -rng.float(2, 6) : rng.float(1, 5)), 0, 100);
+    c.flags.majinCorruption = after;
+    if (after >= 90 && before < 90) {
+      const close = livingNpcs(state).filter((n) => n.closeness > 40);
+      if (close.length && rng.chance(0.6)) {
+        const victim = rng.pick(close);
+        victim.closeness = clamp(victim.closeness - 30, 0, 100);
+        victim.trust = clamp((victim.trust ?? 30) - 20, 0, 100);
+        victim.tension = clamp((victim.tension || 0) + 30, 0, 100);
+        adjust(state, { karma: -12, happiness: -8 });
+        entries.push({ kind: 'transformation', text: `It has more of you than you have of it now. Something happens with ${victim.name} that you did not choose and cannot fully take back.` });
+      } else {
+        adjust(state, { health: -18, happiness: -10, karma: -6 });
+        entries.push({ kind: 'transformation', text: 'It has more of you than you have of it now. You spend the year losing ground you do not get back by waiting.' });
+      }
+      pushNews(state, { headline: `Something has gone wrong with ${c.name}. Whoever is close to them is starting to notice.`, tag: 'player', scope: 'local' });
+    } else if (after >= 60 && before < 60) {
+      entries.push({ kind: 'transformation', text: 'The mark is stronger than it was. You feel it more than you decide it, most days.' });
+    } else if (after <= 15 && before > 15) {
+      entries.push({ kind: 'transformation', text: 'It has gone quiet. Whatever it wanted, it is not getting much of it any more.' });
+    }
+  }
 
   // A founded institution keeps building a name of its own, whether or not
   // you personally do anything about it that year - more so with people

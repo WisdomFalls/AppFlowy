@@ -4495,12 +4495,15 @@ function combatPower(character, opts = {}) {
   const tailBonus = (character.tail && !hasPerk(character, 'oozaru')) ? 1.06 : 1;
   // A standing mark (Babidi's Majin brand, or whatever a fighter picks up in
   // its place) stacks on top of whatever you already are rather than
-  // replacing it - a real amplifier, not a form. How much of it you can
-  // actually hold is discipline: a controlled mind gets close to the full
-  // amplification, a weak one barely more than the base jolt and none of
-  // the ceiling.
+  // replacing it - a real amplifier, not a form. It is not a fixed jolt: how
+  // deep it has taken root (character.flags.majinCorruption, driven by
+  // lifecycle.js's yearly drift and actions.js's resist_mark) is most of the
+  // multiplier, and how much of that you can actually hold is discipline -
+  // a controlled mind gets close to the full amplification, a weak one
+  // barely more than the base jolt and none of the ceiling.
+  const corruption = character.flags.majinMark ? (character.flags.majinCorruption ?? 30) : 0;
   const markBoost = character.flags.majinMark
-    ? 1.15 + clamp((character.stats.discipline - 40) / 200, 0, 0.35)
+    ? 1 + (corruption / 100) * 0.55 + clamp((character.stats.discipline - 40) / 200, 0, 0.35)
     : 1;
   const condition = opts.ignoreCondition ? 1 : health * ki;
   return Math.max(1, character.power * mult * techFactor * skill * condition * disarmed * tailBonus * markBoost);
@@ -20069,6 +20072,34 @@ function passiveYear(state, rng) {
     c.flags.ssbYears = (c.flags.ssbYears || 0) + 1;
     if (c.flags.ssbYears >= 3 && c.stats.discipline > 60 && c.stats.kiControl > 85) c.flags.ssb_mastery = true;
   }
+  // A mark like Babidi's does not sit still. A disciplined mind starves it a
+  // little every year; anyone else feeds it just by carrying it, whether or
+  // not they ever reach for what it offers.
+  if (c.flags.majinMark) {
+    const before = c.flags.majinCorruption ?? 30;
+    const held = c.stats.discipline >= 60;
+    const after = clamp(before + (held ? -rng.float(2, 6) : rng.float(1, 5)), 0, 100);
+    c.flags.majinCorruption = after;
+    if (after >= 90 && before < 90) {
+      const close = livingNpcs(state).filter((n) => n.closeness > 40);
+      if (close.length && rng.chance(0.6)) {
+        const victim = rng.pick(close);
+        victim.closeness = clamp(victim.closeness - 30, 0, 100);
+        victim.trust = clamp((victim.trust ?? 30) - 20, 0, 100);
+        victim.tension = clamp((victim.tension || 0) + 30, 0, 100);
+        adjust(state, { karma: -12, happiness: -8 });
+        entries.push({ kind: 'transformation', text: `It has more of you than you have of it now. Something happens with ${victim.name} that you did not choose and cannot fully take back.` });
+      } else {
+        adjust(state, { health: -18, happiness: -10, karma: -6 });
+        entries.push({ kind: 'transformation', text: 'It has more of you than you have of it now. You spend the year losing ground you do not get back by waiting.' });
+      }
+      pushNews(state, { headline: `Something has gone wrong with ${c.name}. Whoever is close to them is starting to notice.`, tag: 'player', scope: 'local' });
+    } else if (after >= 60 && before < 60) {
+      entries.push({ kind: 'transformation', text: 'The mark is stronger than it was. You feel it more than you decide it, most days.' });
+    } else if (after <= 15 && before > 15) {
+      entries.push({ kind: 'transformation', text: 'It has gone quiet. Whatever it wanted, it is not getting much of it any more.' });
+    }
+  }
 
   // A founded institution keeps building a name of its own, whether or not
   // you personally do anything about it that year - more so with people
@@ -21857,6 +21888,7 @@ registerEvents([
       { id: 'accept', label: 'Accept the mark', danger: true, effect: (c2, sl) => {
         c2.character.flags.majinMark = true;
         c2.character.flags.majinMarkOffered = true;
+        c2.character.flags.majinCorruption = 30;
         if (sl.babidiAlive) meetCanon(c2, 'babidi', 'acquaintance');
         const changes = apply(c2, { karma: -18, happiness: -6 });
         const lines = ['{Something settles into you that was not there before|The mark burns for a second and then does not|You feel the ceiling move, all at once}.'];
@@ -28683,20 +28715,29 @@ const ACTIONS = [
     available: (s) => !!s.character.flags.majinMark,
     run: (s, rng) => {
       // Discipline is what it always was: the thing standing between you and
-      // whatever the mark wants. High enough, and it stops being a fight at
-      // all - a clean break instead of just this year's ground held.
+      // whatever the mark wants. This does not clear it in one sitting -
+      // lifecycle.js's yearly drift and this action pull the same meter in
+      // opposite directions, and only once it is driven down near nothing
+      // does a disciplined mind get the chance to break it off outright.
+      const corruption = s.character.flags.majinCorruption ?? 30;
       const chance = clamp(0.15 + (s.character.stats.discipline - 40) / 140, 0.05, 0.85);
-      if (s.character.stats.discipline >= 75 && rng.chance(chance)) {
+      if (!rng.chance(chance)) {
+        adjust(s, { health: -10, happiness: -6 });
+        const worse = clamp(corruption + rng.int(3, 8), 0, 100);
+        s.character.flags.majinCorruption = worse;
+        return { text: render(`{It pushes back harder than you expected|You lose more ground than you meant to|Not this year}.`, {}, rng) };
+      }
+      const reduced = clamp(corruption - rng.int(15, 28), 0, 100);
+      s.character.flags.majinCorruption = reduced;
+      if (reduced <= 5 && s.character.stats.discipline >= 75) {
         delete s.character.flags.majinMark;
+        delete s.character.flags.majinCorruption;
         adjust(s, { happiness: 10, karma: 8, stats: { discipline: 3 } });
         return { text: render(`{It goes all at once, like a held breath finally let out|You put it down and it does not come back up|Whatever was riding along with you is simply not there any more}. The mark is gone.`, {}, rng) };
       }
-      if (rng.chance(chance)) {
-        adjust(s, { happiness: 4, stats: { discipline: 2 } });
-        return { text: render(`{You hold it. That is all this year buys you - held, not broken|It does not go, but it does not get anything either|A quieter year than the mark wanted}.`, {}, rng) };
-      }
-      adjust(s, { health: -10, happiness: -6 });
-      return { text: render(`{It pushes back harder than you expected|You lose more ground than you meant to|Not this year}.`, {}, rng) };
+      adjust(s, { happiness: 4, stats: { discipline: 2 } });
+      return { text: render(`{You hold it. That is all this year buys you - held, not broken|It does not go, but it does not get anything either|A quieter year than the mark wanted}.`, {}, rng)
+        + ` Its grip is down to ${reduced}%.` };
     },
   },
 
@@ -32733,6 +32774,22 @@ function panelPower() {
       row.appendChild(rename);
       body.appendChild(row);
     }
+  }
+
+  if (c.flags.majinMark) {
+    body.appendChild(el('div', 'group-label', 'The mark'));
+    const corruption = Math.round(c.flags.majinCorruption ?? 30);
+    const status = corruption >= 90 ? 'It has more of you than you have of it.'
+      : corruption >= 60 ? 'It is stronger than it was. You feel it more than you decide it.'
+        : corruption >= 30 ? 'Held, for now.'
+          : 'Quiet. Whatever it wants, it is not getting much of it.';
+    const row = el('div', 'row owned');
+    const main = el('div', 'row-main');
+    main.appendChild(el('div', 'row-title', 'Grip'));
+    main.appendChild(el('div', 'row-note', status));
+    row.appendChild(main);
+    row.appendChild(el('div', 'row-value', corruption + '%'));
+    body.appendChild(row);
   }
 
   body.appendChild(el('div', 'group-label', 'Techniques'));

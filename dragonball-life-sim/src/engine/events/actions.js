@@ -930,20 +930,29 @@ export const ACTIONS = [
     available: (s) => !!s.character.flags.majinMark,
     run: (s, rng) => {
       // Discipline is what it always was: the thing standing between you and
-      // whatever the mark wants. High enough, and it stops being a fight at
-      // all - a clean break instead of just this year's ground held.
+      // whatever the mark wants. This does not clear it in one sitting -
+      // lifecycle.js's yearly drift and this action pull the same meter in
+      // opposite directions, and only once it is driven down near nothing
+      // does a disciplined mind get the chance to break it off outright.
+      const corruption = s.character.flags.majinCorruption ?? 30;
       const chance = clamp(0.15 + (s.character.stats.discipline - 40) / 140, 0.05, 0.85);
-      if (s.character.stats.discipline >= 75 && rng.chance(chance)) {
+      if (!rng.chance(chance)) {
+        adjust(s, { health: -10, happiness: -6 });
+        const worse = clamp(corruption + rng.int(3, 8), 0, 100);
+        s.character.flags.majinCorruption = worse;
+        return { text: render(`{It pushes back harder than you expected|You lose more ground than you meant to|Not this year}.`, {}, rng) };
+      }
+      const reduced = clamp(corruption - rng.int(15, 28), 0, 100);
+      s.character.flags.majinCorruption = reduced;
+      if (reduced <= 5 && s.character.stats.discipline >= 75) {
         delete s.character.flags.majinMark;
+        delete s.character.flags.majinCorruption;
         adjust(s, { happiness: 10, karma: 8, stats: { discipline: 3 } });
         return { text: render(`{It goes all at once, like a held breath finally let out|You put it down and it does not come back up|Whatever was riding along with you is simply not there any more}. The mark is gone.`, {}, rng) };
       }
-      if (rng.chance(chance)) {
-        adjust(s, { happiness: 4, stats: { discipline: 2 } });
-        return { text: render(`{You hold it. That is all this year buys you - held, not broken|It does not go, but it does not get anything either|A quieter year than the mark wanted}.`, {}, rng) };
-      }
-      adjust(s, { health: -10, happiness: -6 });
-      return { text: render(`{It pushes back harder than you expected|You lose more ground than you meant to|Not this year}.`, {}, rng) };
+      adjust(s, { happiness: 4, stats: { discipline: 2 } });
+      return { text: render(`{You hold it. That is all this year buys you - held, not broken|It does not go, but it does not get anything either|A quieter year than the mark wanted}.`, {}, rng)
+        + ` Its grip is down to ${reduced}%.` };
     },
   },
 

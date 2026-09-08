@@ -1284,6 +1284,22 @@ function panelPower() {
     }
   }
 
+  if (c.flags.majinMark) {
+    body.appendChild(el('div', 'group-label', 'The mark'));
+    const corruption = Math.round(c.flags.majinCorruption ?? 30);
+    const status = corruption >= 90 ? 'It has more of you than you have of it.'
+      : corruption >= 60 ? 'It is stronger than it was. You feel it more than you decide it.'
+        : corruption >= 30 ? 'Held, for now.'
+          : 'Quiet. Whatever it wants, it is not getting much of it.';
+    const row = el('div', 'row owned');
+    const main = el('div', 'row-main');
+    main.appendChild(el('div', 'row-title', 'Grip'));
+    main.appendChild(el('div', 'row-note', status));
+    row.appendChild(main);
+    row.appendChild(el('div', 'row-value', corruption + '%'));
+    body.appendChild(row);
+  }
+
   body.appendChild(el('div', 'group-label', 'Techniques'));
   if (!c.techniques.length) body.appendChild(el('p', 'row-note', 'You know nothing worth naming yet.'));
   const byBranch = {};
