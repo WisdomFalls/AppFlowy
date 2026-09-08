@@ -1774,6 +1774,10 @@ const RACES = [
     maturityRate: 3.0,
     appetite: 1.5,
     perks: ['absorption', 'regeneration', 'copyTechnique', 'perfectForm', 'noKiSignature'],
+    // The absorption tail is not incidental to what a Bio-Android is - it is
+    // how the absorbing happens, same as it always was for the fighter this
+    // race is built from.
+    hasTail: true,
     transformLadder: 'bioandroid',
     naming: 'bioandroid',
     tags: ['artificial', 'chaotic'],
@@ -1979,6 +1983,9 @@ const RACES = [
     maturityRate: 1.3,
     appetite: 1.4,
     perks: ['regeneration', 'fastLearner', 'hiveMind', 'chitinArmour'],
+    // Chitin, not skin, all the way down - the same plating that covers the
+    // rest of a Kryllian does not stop at the spine.
+    hasTail: true,
     transformLadder: 'kryllian',
     naming: 'kryllian',
     tags: ['mortal', 'hivekind'],
@@ -2100,6 +2107,7 @@ const RACES = [
     maturityRate: 2.0,
     appetite: 1.2,
     perks: [],
+    hasTail: true,
     transformLadder: 'beast',
     naming: 'other',
     tags: ['animal'],
