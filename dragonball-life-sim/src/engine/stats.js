@@ -139,6 +139,26 @@ export function weaponAttackBonus(character) {
 }
 
 /**
+ * How much worn clothing/armour actually adds. Every worn item with a
+ * defence passive contributes, scaled by its own wear and craftsmanship -
+ * the same treatment weapons get, just summed across everything worn
+ * instead of a single held slot.
+ */
+export function gearDefenseBonus(character) {
+  let total = 0;
+  for (const entry of character.bag || []) {
+    if (!entry.worn) continue;
+    const item = getItem(entry.id);
+    const defence = item && item.passive && item.passive.defence;
+    if (!defence) continue;
+    const wear = clamp((entry.condition ?? 100) / 100, 0.15, 1);
+    const quality = entry.qualityMult ?? 1;
+    total += defence * wear * quality;
+  }
+  return total;
+}
+
+/**
  * Combat power. Base power scaled by form, condition and technique library.
  * `form` may be forced; otherwise the best available form is used.
  */
@@ -150,7 +170,8 @@ export function combatPower(character, opts = {}) {
   const ki = clamp(0.55 + (character.vitals.ki / Math.max(1, character.vitals.kiMax)) * 0.45, 0.4, 1);
   const tech = techniquePower(character);
   const weaponBonus = weaponAttackBonus(character);
-  const techFactor = 1 + (tech.atk + tech.def + tech.speed + weaponBonus) / 260;
+  const gearBonus = gearDefenseBonus(character);
+  const techFactor = 1 + (tech.atk + tech.def + tech.speed + weaponBonus + gearBonus) / 260;
   const skill = 1 + ((character.stats.technique + character.stats.kiControl) / 200) * 0.5;
   // Someone who leans on a weapon and has not got one out is fighting below
   // their own style; a martial artist and someone trained in both never lose

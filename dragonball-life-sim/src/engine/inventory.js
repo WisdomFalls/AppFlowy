@@ -14,12 +14,19 @@ import { render } from './text.js';
 
 /** Slots a wearable item can occupy. One thing per slot. */
 export const SLOTS = {
-  body: 'Worn', head: 'Head', held: 'Carried', trinket: 'Trinket', none: null,
+  body: 'Worn', head: 'Head', face: 'Face', feet: 'Feet', held: 'Carried', trinket: 'Trinket', none: null,
 };
 
 function slotOf(item) {
   if (!item) return 'none';
-  if (item.cat === 'accessory') return ['acc_hat', 'acc_bandana', 'acc_headband', 'acc_sunglasses', 'acc_glasses'].includes(item.id) ? 'head' : 'trinket';
+  // Clothing (and anything else authored with a real slot) says where it
+  // goes directly, rather than being sorted by id-matching.
+  if (item.slot) return item.slot;
+  if (item.cat === 'accessory') {
+    if (['acc_hat', 'acc_bandana', 'acc_headband'].includes(item.id)) return 'head';
+    if (['acc_sunglasses', 'acc_glasses'].includes(item.id)) return 'face';
+    return 'trinket';
+  }
   if (item.id === 'battle_armour' || item.id === 'weighted_clothing' || item.id === 'turtle_shell') return 'body';
   if (item.cat === 'weapon') return 'held';
   if (item.id === 'scouter') return 'head';
@@ -31,7 +38,10 @@ export function itemSlot(itemId) {
   return slotOf(getItem(itemId));
 }
 
-/** Everything a character is carrying, as rows the UI can render. */
+/** Everything a character is carrying, as rows the UI can render. Anything
+ * given a custom name (a commission, or a rename after the fact) shows
+ * that instead of the catalog name - the entry is what makes it yours,
+ * the template just says what it is made of. */
 export function inventoryOf(character) {
   const bag = character.bag || [];
   return bag.map((entry) => {
@@ -39,7 +49,8 @@ export function inventoryOf(character) {
     return {
       ...entry,
       item,
-      name: item ? item.name : entry.id,
+      name: entry.customName || (item ? item.name : entry.id),
+      emblem: entry.emblem || null,
       desc: item ? item.desc : '',
       cat: item ? item.cat : 'misc',
       slot: slotOf(item),

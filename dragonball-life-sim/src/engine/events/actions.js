@@ -13,7 +13,7 @@ import { unlockableForms, tryUnlockForm, nearbyForms } from '../progression.js';
 import { getPlace, PLACES } from '../../data/places.js';
 import { getItem, ITEMS } from '../../data/items.js';
 import { liveShopStock, demandFor, isImportedHere, tradeRelationships } from '../market.js';
-import { buyItem, valueHere, hasItem, addItem, inventoryOf, removeItem } from '../inventory.js';
+import { buyItem, valueHere, hasItem, addItem, inventoryOf, removeItem, findEntry } from '../inventory.js';
 import { topicsFor, converse } from '../conversation.js';
 import { homeOptions, settleHome, homeOf, starshipOption, buildStarship, shipOf,
   shipRoomOptions, addShipRoom, inviteAboard, sellStarship, spreadWord, DEED_SCALE, homeBonus } from '../settlement.js';
@@ -327,6 +327,78 @@ export const ACTIONS = [
       const res = fitProsthetic(s.character, opt.entry.id, fitter.quality);
       adjust(s, { happiness: 12, karma: fitter.karma || 0 });
       return { text: `${res.text} ${render('{The first week is the worst part|Learning it takes a season and you have the season|You spend a month reaching for things and missing}.', {}, rng)}` };
+    },
+  },
+  // Clothing made to order rather than pulled off a shop shelf - same
+  // qualityMult mechanic weaponAttackBonus already reads, now also read by
+  // gearDefenseBonus (stats.js) for anything worn with a passive.defence.
+  {
+    id: 'commission_clothing', maxPerYear: 4, slots: 1, name: 'Commission an outfit', cat: 'body', cost: 'A season',
+    desc: 'Something made to fit rather than pulled off a rack. Whoever makes it decides more than the design does.',
+    available: (s) => !s.character.inAfterlife
+      && ITEMS.some((i) => i.cat === 'clothing' && !hasItem(s.character, i.id)),
+    options: (s) => {
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      const mine = (s.character.iq || 100) >= 110 || s.character.stats.technique >= 60;
+      const tailors = livingNpcs(s).filter((n) => (n.closeness || 0) > 30
+        && n.stats && (n.stats.technique >= 70 || n.stats.intellect >= 70)).slice(0, 2);
+      const list = [];
+      for (const item of ITEMS.filter((i) => i.cat === 'clothing' && !hasItem(s.character, i.id))) {
+        const baseCost = priceIn(item.cost, cur.id);
+        if (mine) {
+          list.push({ id: `self:${item.id}`, label: `${item.name} - make it yourself (${formatMoney(Math.round(baseCost * 0.5), cur.id)})`, hint: item.desc });
+        }
+        for (const t of tailors) {
+          list.push({ id: `hire:${item.id}:${t.id}`, label: `${item.name} - ask ${t.name} (${formatMoney(Math.round(baseCost * 1.15), cur.id)})`, hint: item.desc });
+        }
+        list.push({ id: `order:${item.id}`, label: `${item.name} - order it made (${formatMoney(baseCost, cur.id)})`, hint: item.desc });
+      }
+      return list;
+    },
+    run: (s, rng, params) => {
+      const raw = params && params.option;
+      if (!raw) return { text: 'You commission nothing.' };
+      const [tier, itemId, npcId] = raw.split(':');
+      const item = getItem(itemId);
+      if (!item || hasItem(s.character, itemId)) return { text: 'There is nothing left to commission.' };
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      const baseCost = priceIn(item.cost, cur.id);
+      const c = s.character;
+      const give = (qualityMult, from) => {
+        addItem(c, itemId, { condition: 100, from });
+        const entry = findEntry(c, itemId);
+        entry.qualityMult = qualityMult;
+        entry.worn = true;
+      };
+      if (tier === 'self') {
+        const cost = Math.round(baseCost * 0.5);
+        if (!canAfford(c, cur.id, cost)) return { text: `${formatMoney(cost, cur.id)} in materials, and you are short.` };
+        debit(c, cur.id, cost);
+        give(0.9);
+        adjust(s, { happiness: 10, stats: { technique: 2 } });
+        fact(s, `Made their own ${item.name}.`, { type: 'item', weight: 3, tags: ['asset', 'clothing'] });
+        return { text: `You cut and fit it yourself. ${item.name}, entirely yours.` };
+      }
+      if (tier === 'hire') {
+        const npc = npcId ? findNpc(s, npcId) : null;
+        const cost = Math.round(baseCost * 1.15);
+        if (!canAfford(c, cur.id, cost)) return { text: `${npc ? npc.name : 'They'} quote ${formatMoney(cost, cur.id)} and do not haggle.` };
+        debit(c, cur.id, cost);
+        give(1.1, npc ? npc.name : undefined);
+        if (npc) {
+          npc.closeness = clamp(npc.closeness + 4, 0, 100);
+          npc.respect = clamp((npc.respect || 0) + 4, 0, 100);
+        }
+        adjust(s, { happiness: 10 });
+        fact(s, `${npc ? npc.name : 'Someone'} made them ${item.name}.`, { type: 'item', weight: 3, tags: ['asset', 'clothing'] });
+        return { text: `${npc ? npc.name : 'They'} take your measurements. ${item.name}, properly made.` };
+      }
+      if (!canAfford(c, cur.id, baseCost)) return { text: `${formatMoney(baseCost, cur.id)}, and you do not have it.` };
+      debit(c, cur.id, baseCost);
+      give(1);
+      adjust(s, { happiness: 6 });
+      fact(s, `Commissioned ${item.name}.`, { type: 'item', weight: 2, tags: ['asset', 'clothing'] });
+      return { text: `${item.name}, made to order.` };
     },
   },
   {

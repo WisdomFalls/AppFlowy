@@ -121,6 +121,30 @@ export const ITEMS = [
   { id: 'acc_wristbands', name: 'Wristbands', cat: 'accessory', cost: 2500, wear: 'wristbands', desc: 'Blue, thick, and heavier than they look.' },
   { id: 'acc_hat', name: 'Wide hat', cat: 'accessory', cost: 5000, wear: 'hat', desc: 'Shade in the wastelands and a target everywhere else.' },
 
+  // Clothing with real weight to it - a style (what it is, for the shop
+  // list and for anyone commissioning one), a slot (body/face/feet, so a
+  // gi and a mask and a pair of boots do not fight each other for the same
+  // spot), and passive.defence, which actually feeds combat power the same
+  // way a weapon's attack already does.
+  { id: 'plain_gi', name: 'Plain Gi', cat: 'clothing', style: 'gi', slot: 'body', cost: 8000,
+    passive: { defence: 3 }, desc: 'Undyed cotton, no school marks. Anyone can wear one.' },
+  { id: 'school_gi', name: 'School Gi', cat: 'clothing', style: 'gi', slot: 'body', cost: 28000,
+    passive: { defence: 6 }, desc: 'Reinforced at the joints, cut for movement, and it says where you trained.' },
+  { id: 'light_armour', name: 'Light Combat Armour', cat: 'clothing', style: 'armour', slot: 'body', cost: 65000,
+    passive: { defence: 16 }, desc: 'Plates over mesh. Slows nothing down and stops most of what a fist can do.' },
+  { id: 'heavy_armour', name: 'Heavy Plate Armour', cat: 'clothing', style: 'armour', slot: 'body', cost: 180000,
+    passive: { defence: 30 }, desc: 'Built to stop a blade or a blast outright. You feel every kilo of it.' },
+  { id: 'casual_wear', name: 'Casual Wear', cat: 'clothing', style: 'casual', slot: 'body', cost: 4000,
+    passive: { defence: 1 }, desc: 'What you wear when nobody is trying to kill you. Most days, that is most days.' },
+  { id: 'combat_mask', name: 'Combat Mask', cat: 'clothing', style: 'face', slot: 'face', cost: 22000,
+    passive: { defence: 5 }, desc: 'Covers everything but the eyes. Nobody relaxes around a fighter wearing one.' },
+  { id: 'breather_visor', name: 'Breather Visor', cat: 'clothing', style: 'face', slot: 'face', cost: 45000,
+    passive: { defence: 4 }, desc: 'Filters vacuum and worse. Standard for anyone who fights off-world often.' },
+  { id: 'combat_boots', name: 'Combat Boots', cat: 'clothing', style: 'shoes', slot: 'feet', cost: 12000,
+    passive: { defence: 3 }, desc: 'Grip on anything, and they do not come off in a fight.' },
+  { id: 'reinforced_greaves', name: 'Reinforced Greaves', cat: 'clothing', style: 'shoes', slot: 'feet', cost: 38000,
+    passive: { defence: 9 }, desc: 'Plated to the shin. Kicking something no longer costs you anything.' },
+
   // Things you cannot buy. They arrive when you earn them.
   { id: 'championship_belt', name: 'World Championship Belt', cat: 'trophy', cost: 0, wear: 'belt', passive: { fame: 6 },
     desc: 'Heavy, gold, and yours until somebody takes it.' },

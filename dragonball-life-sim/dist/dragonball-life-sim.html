@@ -3736,6 +3736,30 @@ const ITEMS = [
   { id: 'acc_wristbands', name: 'Wristbands', cat: 'accessory', cost: 2500, wear: 'wristbands', desc: 'Blue, thick, and heavier than they look.' },
   { id: 'acc_hat', name: 'Wide hat', cat: 'accessory', cost: 5000, wear: 'hat', desc: 'Shade in the wastelands and a target everywhere else.' },
 
+  // Clothing with real weight to it - a style (what it is, for the shop
+  // list and for anyone commissioning one), a slot (body/face/feet, so a
+  // gi and a mask and a pair of boots do not fight each other for the same
+  // spot), and passive.defence, which actually feeds combat power the same
+  // way a weapon's attack already does.
+  { id: 'plain_gi', name: 'Plain Gi', cat: 'clothing', style: 'gi', slot: 'body', cost: 8000,
+    passive: { defence: 3 }, desc: 'Undyed cotton, no school marks. Anyone can wear one.' },
+  { id: 'school_gi', name: 'School Gi', cat: 'clothing', style: 'gi', slot: 'body', cost: 28000,
+    passive: { defence: 6 }, desc: 'Reinforced at the joints, cut for movement, and it says where you trained.' },
+  { id: 'light_armour', name: 'Light Combat Armour', cat: 'clothing', style: 'armour', slot: 'body', cost: 65000,
+    passive: { defence: 16 }, desc: 'Plates over mesh. Slows nothing down and stops most of what a fist can do.' },
+  { id: 'heavy_armour', name: 'Heavy Plate Armour', cat: 'clothing', style: 'armour', slot: 'body', cost: 180000,
+    passive: { defence: 30 }, desc: 'Built to stop a blade or a blast outright. You feel every kilo of it.' },
+  { id: 'casual_wear', name: 'Casual Wear', cat: 'clothing', style: 'casual', slot: 'body', cost: 4000,
+    passive: { defence: 1 }, desc: 'What you wear when nobody is trying to kill you. Most days, that is most days.' },
+  { id: 'combat_mask', name: 'Combat Mask', cat: 'clothing', style: 'face', slot: 'face', cost: 22000,
+    passive: { defence: 5 }, desc: 'Covers everything but the eyes. Nobody relaxes around a fighter wearing one.' },
+  { id: 'breather_visor', name: 'Breather Visor', cat: 'clothing', style: 'face', slot: 'face', cost: 45000,
+    passive: { defence: 4 }, desc: 'Filters vacuum and worse. Standard for anyone who fights off-world often.' },
+  { id: 'combat_boots', name: 'Combat Boots', cat: 'clothing', style: 'shoes', slot: 'feet', cost: 12000,
+    passive: { defence: 3 }, desc: 'Grip on anything, and they do not come off in a fight.' },
+  { id: 'reinforced_greaves', name: 'Reinforced Greaves', cat: 'clothing', style: 'shoes', slot: 'feet', cost: 38000,
+    passive: { defence: 9 }, desc: 'Plated to the shin. Kicking something no longer costs you anything.' },
+
   // Things you cannot buy. They arrive when you earn them.
   { id: 'championship_belt', name: 'World Championship Belt', cat: 'trophy', cost: 0, wear: 'belt', passive: { fame: 6 },
     desc: 'Heavy, gold, and yours until somebody takes it.' },
@@ -4234,6 +4258,26 @@ function weaponAttackBonus(character) {
 }
 
 /**
+ * How much worn clothing/armour actually adds. Every worn item with a
+ * defence passive contributes, scaled by its own wear and craftsmanship -
+ * the same treatment weapons get, just summed across everything worn
+ * instead of a single held slot.
+ */
+function gearDefenseBonus(character) {
+  let total = 0;
+  for (const entry of character.bag || []) {
+    if (!entry.worn) continue;
+    const item = getItem(entry.id);
+    const defence = item && item.passive && item.passive.defence;
+    if (!defence) continue;
+    const wear = clamp((entry.condition ?? 100) / 100, 0.15, 1);
+    const quality = entry.qualityMult ?? 1;
+    total += defence * wear * quality;
+  }
+  return total;
+}
+
+/**
  * Combat power. Base power scaled by form, condition and technique library.
  * `form` may be forced; otherwise the best available form is used.
  */
@@ -4245,7 +4289,8 @@ function combatPower(character, opts = {}) {
   const ki = clamp(0.55 + (character.vitals.ki / Math.max(1, character.vitals.kiMax)) * 0.45, 0.4, 1);
   const tech = techniquePower(character);
   const weaponBonus = weaponAttackBonus(character);
-  const techFactor = 1 + (tech.atk + tech.def + tech.speed + weaponBonus) / 260;
+  const gearBonus = gearDefenseBonus(character);
+  const techFactor = 1 + (tech.atk + tech.def + tech.speed + weaponBonus + gearBonus) / 260;
   const skill = 1 + ((character.stats.technique + character.stats.kiControl) / 200) * 0.5;
   // Someone who leans on a weapon and has not got one out is fighting below
   // their own style; a martial artist and someone trained in both never lose
@@ -4382,7 +4427,7 @@ function naturalDeathChance(character) {
   if (over < 0) return 0.004 + (10 + over) * 0.002;
   return clamp(0.08 + over * 0.06, 0, 0.85);
 }
-  return { STAT_KEYS, STAT_LABELS, ageFactor, agingDecay, trainingRate, zenkaiBoost, bestForm, equippedWeapon, weaponAttackBonus, combatPower, powerTier, winChance, statAverage, applyStatDelta, looksScore, healthMaxFor, staminaMaxFor, kiMaxFor, lifeExpectancy, naturalDeathChance };
+  return { STAT_KEYS, STAT_LABELS, ageFactor, agingDecay, trainingRate, zenkaiBoost, bestForm, equippedWeapon, weaponAttackBonus, gearDefenseBonus, combatPower, powerTier, winChance, statAverage, applyStatDelta, looksScore, healthMaxFor, staminaMaxFor, kiMaxFor, lifeExpectancy, naturalDeathChance };
 })();
 
 /* ==== data/planets.js ==== */
@@ -10258,12 +10303,19 @@ const { render } = __mod_engine_text_js;
 
 /** Slots a wearable item can occupy. One thing per slot. */
 const SLOTS = {
-  body: 'Worn', head: 'Head', held: 'Carried', trinket: 'Trinket', none: null,
+  body: 'Worn', head: 'Head', face: 'Face', feet: 'Feet', held: 'Carried', trinket: 'Trinket', none: null,
 };
 
 function slotOf(item) {
   if (!item) return 'none';
-  if (item.cat === 'accessory') return ['acc_hat', 'acc_bandana', 'acc_headband', 'acc_sunglasses', 'acc_glasses'].includes(item.id) ? 'head' : 'trinket';
+  // Clothing (and anything else authored with a real slot) says where it
+  // goes directly, rather than being sorted by id-matching.
+  if (item.slot) return item.slot;
+  if (item.cat === 'accessory') {
+    if (['acc_hat', 'acc_bandana', 'acc_headband'].includes(item.id)) return 'head';
+    if (['acc_sunglasses', 'acc_glasses'].includes(item.id)) return 'face';
+    return 'trinket';
+  }
   if (item.id === 'battle_armour' || item.id === 'weighted_clothing' || item.id === 'turtle_shell') return 'body';
   if (item.cat === 'weapon') return 'held';
   if (item.id === 'scouter') return 'head';
@@ -10275,7 +10327,10 @@ function itemSlot(itemId) {
   return slotOf(getItem(itemId));
 }
 
-/** Everything a character is carrying, as rows the UI can render. */
+/** Everything a character is carrying, as rows the UI can render. Anything
+ * given a custom name (a commission, or a rename after the fact) shows
+ * that instead of the catalog name - the entry is what makes it yours,
+ * the template just says what it is made of. */
 function inventoryOf(character) {
   const bag = character.bag || [];
   return bag.map((entry) => {
@@ -10283,7 +10338,8 @@ function inventoryOf(character) {
     return {
       ...entry,
       item,
-      name: item ? item.name : entry.id,
+      name: entry.customName || (item ? item.name : entry.id),
+      emblem: entry.emblem || null,
       desc: item ? item.desc : '',
       cat: item ? item.cat : 'misc',
       slot: slotOf(item),
@@ -26908,7 +26964,7 @@ const { unlockableForms, tryUnlockForm, nearbyForms } = __mod_engine_progression
 const { getPlace, PLACES } = __mod_data_places_js;
 const { getItem, ITEMS } = __mod_data_items_js;
 const { liveShopStock, demandFor, isImportedHere, tradeRelationships } = __mod_engine_market_js;
-const { buyItem, valueHere, hasItem, addItem, inventoryOf, removeItem } = __mod_engine_inventory_js;
+const { buyItem, valueHere, hasItem, addItem, inventoryOf, removeItem, findEntry } = __mod_engine_inventory_js;
 const { topicsFor, converse } = __mod_engine_conversation_js;
 const { homeOptions, settleHome, homeOf, starshipOption, buildStarship, shipOf, shipRoomOptions, addShipRoom, inviteAboard, sellStarship, spreadWord, DEED_SCALE, homeBonus } = __mod_engine_settlement_js;
 const { currencyFor, formatMoney, balance, priceIn, canAfford, debit } = __mod_data_currency_js;
@@ -27220,6 +27276,78 @@ const ACTIONS = [
       const res = fitProsthetic(s.character, opt.entry.id, fitter.quality);
       adjust(s, { happiness: 12, karma: fitter.karma || 0 });
       return { text: `${res.text} ${render('{The first week is the worst part|Learning it takes a season and you have the season|You spend a month reaching for things and missing}.', {}, rng)}` };
+    },
+  },
+  // Clothing made to order rather than pulled off a shop shelf - same
+  // qualityMult mechanic weaponAttackBonus already reads, now also read by
+  // gearDefenseBonus (stats.js) for anything worn with a passive.defence.
+  {
+    id: 'commission_clothing', maxPerYear: 4, slots: 1, name: 'Commission an outfit', cat: 'body', cost: 'A season',
+    desc: 'Something made to fit rather than pulled off a rack. Whoever makes it decides more than the design does.',
+    available: (s) => !s.character.inAfterlife
+      && ITEMS.some((i) => i.cat === 'clothing' && !hasItem(s.character, i.id)),
+    options: (s) => {
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      const mine = (s.character.iq || 100) >= 110 || s.character.stats.technique >= 60;
+      const tailors = livingNpcs(s).filter((n) => (n.closeness || 0) > 30
+        && n.stats && (n.stats.technique >= 70 || n.stats.intellect >= 70)).slice(0, 2);
+      const list = [];
+      for (const item of ITEMS.filter((i) => i.cat === 'clothing' && !hasItem(s.character, i.id))) {
+        const baseCost = priceIn(item.cost, cur.id);
+        if (mine) {
+          list.push({ id: `self:${item.id}`, label: `${item.name} - make it yourself (${formatMoney(Math.round(baseCost * 0.5), cur.id)})`, hint: item.desc });
+        }
+        for (const t of tailors) {
+          list.push({ id: `hire:${item.id}:${t.id}`, label: `${item.name} - ask ${t.name} (${formatMoney(Math.round(baseCost * 1.15), cur.id)})`, hint: item.desc });
+        }
+        list.push({ id: `order:${item.id}`, label: `${item.name} - order it made (${formatMoney(baseCost, cur.id)})`, hint: item.desc });
+      }
+      return list;
+    },
+    run: (s, rng, params) => {
+      const raw = params && params.option;
+      if (!raw) return { text: 'You commission nothing.' };
+      const [tier, itemId, npcId] = raw.split(':');
+      const item = getItem(itemId);
+      if (!item || hasItem(s.character, itemId)) return { text: 'There is nothing left to commission.' };
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      const baseCost = priceIn(item.cost, cur.id);
+      const c = s.character;
+      const give = (qualityMult, from) => {
+        addItem(c, itemId, { condition: 100, from });
+        const entry = findEntry(c, itemId);
+        entry.qualityMult = qualityMult;
+        entry.worn = true;
+      };
+      if (tier === 'self') {
+        const cost = Math.round(baseCost * 0.5);
+        if (!canAfford(c, cur.id, cost)) return { text: `${formatMoney(cost, cur.id)} in materials, and you are short.` };
+        debit(c, cur.id, cost);
+        give(0.9);
+        adjust(s, { happiness: 10, stats: { technique: 2 } });
+        fact(s, `Made their own ${item.name}.`, { type: 'item', weight: 3, tags: ['asset', 'clothing'] });
+        return { text: `You cut and fit it yourself. ${item.name}, entirely yours.` };
+      }
+      if (tier === 'hire') {
+        const npc = npcId ? findNpc(s, npcId) : null;
+        const cost = Math.round(baseCost * 1.15);
+        if (!canAfford(c, cur.id, cost)) return { text: `${npc ? npc.name : 'They'} quote ${formatMoney(cost, cur.id)} and do not haggle.` };
+        debit(c, cur.id, cost);
+        give(1.1, npc ? npc.name : undefined);
+        if (npc) {
+          npc.closeness = clamp(npc.closeness + 4, 0, 100);
+          npc.respect = clamp((npc.respect || 0) + 4, 0, 100);
+        }
+        adjust(s, { happiness: 10 });
+        fact(s, `${npc ? npc.name : 'Someone'} made them ${item.name}.`, { type: 'item', weight: 3, tags: ['asset', 'clothing'] });
+        return { text: `${npc ? npc.name : 'They'} take your measurements. ${item.name}, properly made.` };
+      }
+      if (!canAfford(c, cur.id, baseCost)) return { text: `${formatMoney(baseCost, cur.id)}, and you do not have it.` };
+      debit(c, cur.id, baseCost);
+      give(1);
+      adjust(s, { happiness: 6 });
+      fact(s, `Commissioned ${item.name}.`, { type: 'item', weight: 2, tags: ['asset', 'clothing'] });
+      return { text: `${item.name}, made to order.` };
     },
   },
   {
@@ -30172,7 +30300,7 @@ const { npcActions, runNpcAction, canVisitLiving, checkRomanceSpark } = __mod_en
 const { scoreReplyLocally, applyReply, impressionLabel } = __mod_engine_dialogue_js;
 const { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } = __mod_engine_ai_js;
 const { numberish, zeni } = __mod_engine_text_js;
-const { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere, repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot } = __mod_engine_inventory_js;
+const { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere, repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot, findEntry } = __mod_engine_inventory_js;
 const { currencyFor, balance, formatMoney, exchange, CURRENCIES } = __mod_data_currency_js;
 const { getItem } = __mod_data_items_js;
 const { TRAITS, getTrait, TRAIT_KINDS } = __mod_data_traits_js;
@@ -31256,7 +31384,8 @@ function doSocial(npcId, actionId) {
  * already invented (a signature technique, a form built past its parent)
  * kept exactly as it was otherwise, renamed to whatever you actually type.
  */
-function openRenamePanel(title, currentName, onSave) {
+function openRenamePanel(title, currentName, onSave, onDone) {
+  const back = onDone || panelPower;
   const { body } = sheetShell(title, 'Yours. Call it whatever you actually want.');
   const input = document.createElement('input');
   input.className = 'text-input';
@@ -31273,13 +31402,55 @@ function openRenamePanel(title, currentName, onSave) {
     if (!name) { flash('Name it something.'); return; }
     onSave(name);
     autosave();
-    panelPower();
+    back();
   });
   body.appendChild(save);
 
   const cancel = el('button', 'ghost-btn', 'Cancel');
   cancel.type = 'button';
-  cancel.addEventListener('click', panelPower);
+  cancel.addEventListener('click', back);
+  body.appendChild(cancel);
+  openSheet('panel');
+}
+
+/** Naming and marking a piece of gear that is actually yours - a custom
+ * name plus a short emblem/motto, both optional, both stored on the bag
+ * entry rather than the shared item catalog. */
+function openGearPersonalizePanel(entry, itemName) {
+  const { body } = sheetShell(`Personalize ${itemName}`, 'A name and a mark, yours to set or leave blank.');
+  const nameInput = document.createElement('input');
+  nameInput.className = 'text-input';
+  nameInput.type = 'text';
+  nameInput.maxLength = 40;
+  nameInput.placeholder = itemName;
+  nameInput.value = entry.customName || '';
+  nameInput.autocomplete = 'off';
+  body.appendChild(el('div', 'group-label', 'Name'));
+  body.appendChild(nameInput);
+
+  const emblemInput = document.createElement('input');
+  emblemInput.className = 'text-input';
+  emblemInput.type = 'text';
+  emblemInput.maxLength = 24;
+  emblemInput.placeholder = 'A mark, a motto, a house sigil';
+  emblemInput.value = entry.emblem || '';
+  emblemInput.autocomplete = 'off';
+  body.appendChild(el('div', 'group-label', 'Emblem'));
+  body.appendChild(emblemInput);
+
+  const save = el('button', 'primary-btn', 'Save');
+  save.type = 'button';
+  save.addEventListener('click', () => {
+    entry.customName = nameInput.value.trim() || null;
+    entry.emblem = emblemInput.value.trim() || null;
+    autosave();
+    panelInventory();
+  });
+  body.appendChild(save);
+
+  const cancel = el('button', 'ghost-btn', 'Cancel');
+  cancel.type = 'button';
+  cancel.addEventListener('click', panelInventory);
   body.appendChild(cancel);
   openSheet('panel');
 }
@@ -31657,6 +31828,12 @@ function panelInventory() {
         r.type = 'button';
         r.addEventListener('click', () => { flash(repairItem(GAME, row.id).text); panelInventory(); });
         acts.appendChild(r);
+      }
+      if (row.cat === 'clothing' || row.cat === 'weapon') {
+        const p = el('button', 'mini', 'Personalize');
+        p.type = 'button';
+        p.addEventListener('click', () => openGearPersonalizePanel(findEntry(c, row.id), row.item ? row.item.name : row.name));
+        acts.appendChild(p);
       }
       const sellPrice = valueHere(GAME, row.id, { sell: true });
       const sl = el('button', 'mini', `Sell ${formatMoney(sellPrice.amount, sellPrice.currency)}`);

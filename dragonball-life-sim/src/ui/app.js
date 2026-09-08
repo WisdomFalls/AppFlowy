@@ -30,7 +30,7 @@ import { scoreReplyLocally, applyReply, impressionLabel } from '../engine/dialog
 import { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } from '../engine/ai.js';
 import { numberish, zeni } from '../engine/text.js';
 import { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere,
-  repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot } from '../engine/inventory.js';
+  repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot, findEntry } from '../engine/inventory.js';
 import { currencyFor, balance, formatMoney, exchange, CURRENCIES } from '../data/currency.js';
 import { getItem } from '../data/items.js';
 import { TRAITS, getTrait, TRAIT_KINDS } from '../data/traits.js';
@@ -1118,7 +1118,8 @@ function doSocial(npcId, actionId) {
  * already invented (a signature technique, a form built past its parent)
  * kept exactly as it was otherwise, renamed to whatever you actually type.
  */
-function openRenamePanel(title, currentName, onSave) {
+function openRenamePanel(title, currentName, onSave, onDone) {
+  const back = onDone || panelPower;
   const { body } = sheetShell(title, 'Yours. Call it whatever you actually want.');
   const input = document.createElement('input');
   input.className = 'text-input';
@@ -1135,13 +1136,55 @@ function openRenamePanel(title, currentName, onSave) {
     if (!name) { flash('Name it something.'); return; }
     onSave(name);
     autosave();
-    panelPower();
+    back();
   });
   body.appendChild(save);
 
   const cancel = el('button', 'ghost-btn', 'Cancel');
   cancel.type = 'button';
-  cancel.addEventListener('click', panelPower);
+  cancel.addEventListener('click', back);
+  body.appendChild(cancel);
+  openSheet('panel');
+}
+
+/** Naming and marking a piece of gear that is actually yours - a custom
+ * name plus a short emblem/motto, both optional, both stored on the bag
+ * entry rather than the shared item catalog. */
+function openGearPersonalizePanel(entry, itemName) {
+  const { body } = sheetShell(`Personalize ${itemName}`, 'A name and a mark, yours to set or leave blank.');
+  const nameInput = document.createElement('input');
+  nameInput.className = 'text-input';
+  nameInput.type = 'text';
+  nameInput.maxLength = 40;
+  nameInput.placeholder = itemName;
+  nameInput.value = entry.customName || '';
+  nameInput.autocomplete = 'off';
+  body.appendChild(el('div', 'group-label', 'Name'));
+  body.appendChild(nameInput);
+
+  const emblemInput = document.createElement('input');
+  emblemInput.className = 'text-input';
+  emblemInput.type = 'text';
+  emblemInput.maxLength = 24;
+  emblemInput.placeholder = 'A mark, a motto, a house sigil';
+  emblemInput.value = entry.emblem || '';
+  emblemInput.autocomplete = 'off';
+  body.appendChild(el('div', 'group-label', 'Emblem'));
+  body.appendChild(emblemInput);
+
+  const save = el('button', 'primary-btn', 'Save');
+  save.type = 'button';
+  save.addEventListener('click', () => {
+    entry.customName = nameInput.value.trim() || null;
+    entry.emblem = emblemInput.value.trim() || null;
+    autosave();
+    panelInventory();
+  });
+  body.appendChild(save);
+
+  const cancel = el('button', 'ghost-btn', 'Cancel');
+  cancel.type = 'button';
+  cancel.addEventListener('click', panelInventory);
   body.appendChild(cancel);
   openSheet('panel');
 }
@@ -1519,6 +1562,12 @@ function panelInventory() {
         r.type = 'button';
         r.addEventListener('click', () => { flash(repairItem(GAME, row.id).text); panelInventory(); });
         acts.appendChild(r);
+      }
+      if (row.cat === 'clothing' || row.cat === 'weapon') {
+        const p = el('button', 'mini', 'Personalize');
+        p.type = 'button';
+        p.addEventListener('click', () => openGearPersonalizePanel(findEntry(c, row.id), row.item ? row.item.name : row.name));
+        acts.appendChild(p);
       }
       const sellPrice = valueHere(GAME, row.id, { sell: true });
       const sl = el('button', 'mini', `Sell ${formatMoney(sellPrice.amount, sellPrice.currency)}`);
