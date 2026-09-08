@@ -22,6 +22,7 @@ import { getItem } from '../data/items.js';
 import { checkEarnedTraits, traitEffect } from '../data/traits.js';
 import { processReputationQueue, homeBonus, shipOf, SHIP_ROOM_BY_ID } from './settlement.js';
 import { currencyFor, credit, priceIn, formatMoney } from '../data/currency.js';
+import { refreshMostWantedBoard } from './bounty.js';
 
 const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
 
@@ -464,6 +465,8 @@ function passiveYear(state, rng) {
   const c = state.character;
   const race = getRace(c.raceId);
   const entries = [];
+
+  if (!c.inAfterlife) refreshMostWantedBoard(state, rng);
 
   // Physical drift
   const decay = agingDecay(c);

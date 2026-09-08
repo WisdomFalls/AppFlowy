@@ -11823,6 +11823,25 @@ const FACTIONS = [
       { name: 'a demon warband', power: 9, note: 'The way through held.' },
     ],
   },
+  {
+    id: 'bounty_hunters_guild',
+    name: "The Bounty Hunters' Guild",
+    emblem: 'No banner - just a price list, and a strict rule about getting paid first.',
+    leader: null,
+    colours: ['#4a4a4a', '#c9a227'],
+    alignment: -10,
+    from: 700,
+    scope: 'galaxy', universe: 7,
+    goal: 'Whoever is worth the most today. No politics, no side, just the contract.',
+    stance: 'rival',
+    recruits: true,
+    desc: 'Loosely organised, badly paid at the bottom, extremely well paid at the top. Anyone with a warrant, a grudge, or enough money can put a name on the list, and the Guild does not ask why - a name known enough is a name worth pricing.',
+    squads: [
+      { name: 'a jobbing hunter', power: 1.2, note: 'Working a low contract and hoping you are worth less trouble than the file suggests.' },
+      { name: 'a licensed hunter crew', power: 4, note: 'They work in pairs. It is not a fair fight and it is not supposed to be.' },
+      { name: 'a Guild specialist', power: 16, note: 'The kind of name that gets whispered before a contract this size.', elite: true },
+    ],
+  },
 ];
 
 const FACTION_BY_ID = Object.fromEntries(FACTIONS.map((f) => [f.id, f]));
@@ -19038,6 +19057,83 @@ function inventForm(state, rng, baseFormId, name) {
   return { TRIAL_KINDS, STAT_TRIALS, startTrial, trialBonus, gradeTrial, resolveTrial, getMastery, setMastery, masteryEffect, inventForm };
 })();
 
+/* ==== engine/bounty.js ==== */
+const __mod_engine_bounty_js = (function () {
+// The underworld's side of fame: a price on your own head once you have
+// earned one, and a standing board of other people's prices you can go
+// collect on. Refreshed once a year (refreshMostWantedBoard, called from
+// lifecycle.js's passiveYear) rather than on demand, so listing the board
+// never has to touch the shared rng mid-render.
+
+const { clamp } = __mod_engine_rng_js;
+const { makeNpc } = __mod_engine_npc_js;
+const { addNpc } = __mod_engine_state_js;
+
+const WANTED_TARGET = 5;
+
+const WANTED_REASONS = [
+  'Piracy along the trade lanes.',
+  'Killed a licensed hunter who came for somebody else.',
+  'Burned a settlement down for refusing to pay tribute.',
+  'Stole a warship, crew and all.',
+  'Sold weapons to whichever side was losing, repeatedly.',
+  'Broke out of the Galactic Prison and has not been seen since.',
+  'Ran a slaving operation out of a decommissioned station.',
+  'Killed a Patrol officer and everyone who saw it happen.',
+];
+
+/** What your own name is worth to whoever is keeping the board. Zero until
+ * your karma actually crosses into "criminal", not just "not a saint". */
+function wantedLevel(character) {
+  const karma = character.karma || 0;
+  const fame = character.fame || 0;
+  if (karma >= -20) return 0;
+  return Math.round((Math.abs(karma) + 20) * (10 + fame) * 60);
+}
+
+/** Top the board back up to WANTED_TARGET names and drop anyone already
+ * dealt with (dead, captured, or otherwise removed from state.npcs). Called
+ * once a year with that turn's rng - never from a pure read like options(). */
+function refreshMostWantedBoard(state, rng) {
+  const c = state.character;
+  state.world.mostWanted = (state.world.mostWanted || [])
+    .filter((w) => {
+      const npc = state.npcs[w.npcId];
+      return npc && npc.alive && !npc.captive;
+    });
+  const mine = Math.max(1, c.power || 1);
+  while (state.world.mostWanted.length < WANTED_TARGET) {
+    const npc = makeNpc(rng, {
+      year: c.birthYear + c.age, placeId: c.placeId,
+      minAge: 20, maxAge: 65,
+    });
+    npc.relation = 'stranger';
+    npc.power = Math.max(1, Math.round(mine * rng.float(0.4, 2.4)));
+    addNpc(state, npc);
+    state.world.mostWanted.push({
+      npcId: npc.id,
+      bounty: Math.round(clamp(npc.power * rng.float(30, 90), 8000, 6e8)),
+      reason: rng.pick(WANTED_REASONS),
+    });
+  }
+}
+
+/** Pure read of the current board - no rng, safe to call from options() or
+ * a display panel as often as it likes. */
+function mostWantedBoard(state) {
+  return (state.world.mostWanted || [])
+    .map((w) => ({ ...w, npc: state.npcs[w.npcId] }))
+    .filter((w) => w.npc && w.npc.alive)
+    .sort((a, b) => b.bounty - a.bounty);
+}
+
+/** Take a name off the board once it has been collected on. */
+function clearBounty(state, npcId) {
+  state.world.mostWanted = (state.world.mostWanted || []).filter((w) => w.npcId !== npcId);
+}
+  return { wantedLevel, refreshMostWantedBoard, mostWantedBoard, clearBounty };
+})();
+
 /* ==== engine/lifecycle.js ==== */
 const __mod_engine_lifecycle_js = (function () {
 // The turn loop. A year is: passive drift, then a short queue of generated
@@ -19064,6 +19160,7 @@ const { getItem } = __mod_data_items_js;
 const { checkEarnedTraits, traitEffect } = __mod_data_traits_js;
 const { processReputationQueue, homeBonus, shipOf, SHIP_ROOM_BY_ID } = __mod_engine_settlement_js;
 const { currencyFor, credit, priceIn, formatMoney } = __mod_data_currency_js;
+const { refreshMostWantedBoard } = __mod_engine_bounty_js;
 
 const TECHNIQUE_POOL = TECHNIQUES.filter((t) => t.tier <= 6).map((t) => t.id);
 
@@ -19506,6 +19603,8 @@ function passiveYear(state, rng) {
   const c = state.character;
   const race = getRace(c.raceId);
   const entries = [];
+
+  if (!c.inAfterlife) refreshMostWantedBoard(state, rng);
 
   // Physical drift
   const decay = agingDecay(c);
@@ -27256,6 +27355,7 @@ const { createTournament, autoRunTournament, settle } = __mod_engine_tournament_
 const { travelOptions, travelTo, actOnWorld, standingOn, planetAreas, wildTrainingRisk, trainAllOutOnWild, planetDestroyed } = __mod_engine_worlds_js;
 const { getPlanet, PLANETS, planetExists } = __mod_data_planets_js;
 const { randomHostileShip, resolveShipBattle, narrateShipBattle, resolveShipCrash } = __mod_engine_shipbattle_js;
+const { mostWantedBoard, clearBounty } = __mod_engine_bounty_js;
 const { generateFullName, generateSignatureName } = __mod_data_names_js;
 const { numberish } = __mod_engine_text_js;
 const { localMoney } = __mod_engine_events_helpers_js;
@@ -27683,6 +27783,84 @@ const ACTIONS = [
         text: `Took ${target.name}. Whatever happens to them now, it is because of that.`,
       });
       return { text: render(`{They do not go quietly, and it does not matter|One good hit is all it takes|There is a moment where they understand what is happening, and then it is over}. ${target.name} is yours now, for whatever you have planned.`, {}, rng) };
+    },
+  },
+  // A name, a price, and whoever posted it not caring how you settle it -
+  // the Most Wanted board itself lives in bounty.js, refreshed once a year
+  // (lifecycle.js's passiveYear) rather than generated here, so listing it
+  // never touches the shared rng mid-render.
+  {
+    id: 'hunt_bounty', maxPerYear: 2, minMaturity: 14, tooYoung: 'Nobody takes a bounty from someone this young seriously.', slots: 2, name: 'Hunt a bounty', cat: 'world', cost: 'A season', danger: true,
+    desc: 'A name, a price, and a reason not to be gentle about it.',
+    available: (s) => !s.character.inAfterlife && mostWantedBoard(s).length > 0,
+    options: (s) => {
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      return mostWantedBoard(s).map((w) => ({
+        id: w.npcId,
+        label: `${w.npc.name} (${numberish(w.npc.power)}) - ${formatMoney(priceIn(w.bounty, cur.id), cur.id)}`,
+        hint: w.reason,
+      }));
+    },
+    run: (s, rng, params) => {
+      const board = mostWantedBoard(s);
+      const entry = board.find((w) => w.npcId === (params && params.option)) || board[0];
+      if (!entry) return { text: 'There is nobody left on the board.' };
+      const target = entry.npc;
+      const mine = combatPower(s.character);
+      const chance = clamp(0.35 + Math.log10(Math.max(1, mine / Math.max(1, target.power))) * 0.3, 0.08, 0.92);
+      if (!rng.chance(chance)) {
+        adjust(s, { health: -30, happiness: -6 });
+        return { text: `${target.name} ${render('{gets away|is more than the file said|does not go down easy and does not go down at all}', {}, rng)}.` };
+      }
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      const payout = priceIn(entry.bounty, cur.id);
+      credit(s.character, cur.id, payout);
+      clearBounty(s, target.id);
+      target.alive = false;
+      target.deadSince = currentYear(s);
+      target.causeOfDeath = `Brought in on a bounty by ${s.character.name}`;
+      s.stats.kills++;
+      adjust(s, { karma: 6, fame: 3 });
+      fact(s, `Collected the bounty on ${target.name}.`, { type: 'bounty', weight: 6, subject: target.id, tags: ['bounty', 'kill'] });
+      return { text: `${render('{It does not take long|They fight, and then they do not|One name off the board}', {}, rng)}. ${formatMoney(payout, cur.id)}.` };
+    },
+  },
+  {
+    id: 'hire_hitman', maxPerYear: 3, minMaturity: 14, slots: 1, name: 'Hire someone to deal with it', cat: 'power', cost: 'A season', danger: true,
+    desc: 'Pay somebody else to do the part you do not want your name on. There is no version of this that is not what it sounds like.',
+    available: (s) => !s.character.inAfterlife && livingNpcs(s).some((n) => n.id !== s.character.captiveId),
+    options: (s) => {
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      return livingNpcs(s).filter((n) => n.id !== s.character.captiveId).slice(0, 12).map((n) => {
+        const cost = priceIn(Math.max(20000, n.power * 400), cur.id);
+        return {
+          id: n.id, label: `${n.name} - ${formatMoney(cost, cur.id)}`, hint: relationLabel(n),
+          disabled: !canAfford(s.character, cur.id, cost),
+        };
+      });
+    },
+    run: (s, rng, params) => {
+      const target = params && params.option ? findNpc(s, params.option) : null;
+      if (!target || !target.alive) return { text: 'There is nobody to send anyone after.' };
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      const cost = priceIn(Math.max(20000, target.power * 400), cur.id);
+      if (!canAfford(s.character, cur.id, cost)) return { text: `${formatMoney(cost, cur.id)}, and you do not have it.` };
+      debit(s.character, cur.id, cost);
+      // A hired hand is never quite the fight you would buy in the open -
+      // a discount contractor, not somebody you trained with.
+      const hitmanPower = Math.max(1, target.power * rng.float(0.5, 1.3));
+      const chance = clamp(0.3 + Math.log10(Math.max(1, hitmanPower / Math.max(1, target.power))) * 0.4, 0.1, 0.85);
+      const traced = rng.chance(0.3);
+      adjust(s, { karma: -18 });
+      if (rng.chance(chance)) {
+        target.alive = false;
+        target.deadSince = currentYear(s);
+        target.causeOfDeath = traced ? `Killed by someone ${s.character.name} hired` : 'Killed. Nobody ever finds out by whom.';
+        s.stats.kills++;
+        fact(s, `Had ${target.name} killed.`, { type: 'crime', weight: traced ? 9 : 6, subject: target.id, tags: ['crime', 'kill', 'hitman'] });
+        return { text: `${render('{It is over before you hear about it|A name you gave somebody, and then a name in the obituaries|You do not ask how}', {}, rng)}. ${traced ? 'It gets back to people, eventually, that it was you.' : 'Nobody connects it to you.'}` };
+      }
+      return { text: `${render('{The contractor does not come back|Word comes back that it did not go well|Whoever you hired is not answering any more}', {}, rng)}. ${target.name} is still very much alive, and now has a reason to be careful.` };
     },
   },
   {
@@ -30759,7 +30937,8 @@ const { scoreReplyLocally, applyReply, impressionLabel } = __mod_engine_dialogue
 const { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } = __mod_engine_ai_js;
 const { numberish, zeni } = __mod_engine_text_js;
 const { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere, repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot, findEntry } = __mod_engine_inventory_js;
-const { currencyFor, balance, formatMoney, exchange, CURRENCIES } = __mod_data_currency_js;
+const { currencyFor, balance, formatMoney, exchange, CURRENCIES, priceIn } = __mod_data_currency_js;
+const { mostWantedBoard, wantedLevel } = __mod_engine_bounty_js;
 const { getItem } = __mod_data_items_js;
 const { TRAITS, getTrait, TRAIT_KINDS } = __mod_data_traits_js;
 const { reputationOf, homeOf, homeBonus, shipOf, SHIP_ROOM_BY_ID, SHIP_HULL_BY_ID, SHIP_COMPONENT_BY_ID, renameShip } = __mod_engine_settlement_js;
@@ -32397,6 +32576,7 @@ function panelWorlds() {
   const c = GAME.character;
   const here = getPlace(c.placeId);
   const year = currentYear(GAME);
+  const cur = currencyFor(here.planet);
   const { body } = sheetShell('The worlds', getPlanet(here.planet).name);
 
   body.appendChild(el('div', 'group-label', 'Where you are'));
@@ -32441,6 +32621,30 @@ function panelWorlds() {
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', w.influence ? w.influence + '%' : '-'));
     body.appendChild(row);
+  }
+
+  const wanted = mostWantedBoard(GAME);
+  const myBounty = wantedLevel(c);
+  if (wanted.length || myBounty) {
+    body.appendChild(el('div', 'group-label', 'Most Wanted'));
+    if (myBounty) {
+      const mine = el('div', 'row owned');
+      const mineMain = el('div', 'row-main');
+      mineMain.appendChild(el('div', 'row-title', `${c.name} (you)`));
+      mineMain.appendChild(el('div', 'row-note', 'Word is out. Somebody, somewhere, is pricing you.'));
+      mine.appendChild(mineMain);
+      mine.appendChild(el('div', 'row-value', formatMoney(priceIn(myBounty, cur.id), cur.id)));
+      body.appendChild(mine);
+    }
+    for (const w of wanted) {
+      const row = el('div', 'row');
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', `${w.npc.name} (${w.npc.power ? numberish(w.npc.power) : '?'})`));
+      main.appendChild(el('div', 'row-note', w.reason));
+      row.appendChild(main);
+      row.appendChild(el('div', 'row-value', formatMoney(priceIn(w.bounty, cur.id), cur.id)));
+      body.appendChild(row);
+    }
   }
 
   body.appendChild(el('div', 'group-label', 'Everywhere else'));

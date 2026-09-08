@@ -31,7 +31,8 @@ import { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRE
 import { numberish, zeni } from '../engine/text.js';
 import { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere,
   repairItem, giveItem, knownItems, npcBag, requestItem, itemSlot, findEntry } from '../engine/inventory.js';
-import { currencyFor, balance, formatMoney, exchange, CURRENCIES } from '../data/currency.js';
+import { currencyFor, balance, formatMoney, exchange, CURRENCIES, priceIn } from '../data/currency.js';
+import { mostWantedBoard, wantedLevel } from '../engine/bounty.js';
 import { getItem } from '../data/items.js';
 import { TRAITS, getTrait, TRAIT_KINDS } from '../data/traits.js';
 import { reputationOf, homeOf, homeBonus, shipOf, SHIP_ROOM_BY_ID, SHIP_HULL_BY_ID, SHIP_COMPONENT_BY_ID, renameShip } from '../engine/settlement.js';
@@ -1673,6 +1674,7 @@ function panelWorlds() {
   const c = GAME.character;
   const here = getPlace(c.placeId);
   const year = currentYear(GAME);
+  const cur = currencyFor(here.planet);
   const { body } = sheetShell('The worlds', getPlanet(here.planet).name);
 
   body.appendChild(el('div', 'group-label', 'Where you are'));
@@ -1717,6 +1719,30 @@ function panelWorlds() {
     row.appendChild(main);
     row.appendChild(el('div', 'row-value', w.influence ? w.influence + '%' : '-'));
     body.appendChild(row);
+  }
+
+  const wanted = mostWantedBoard(GAME);
+  const myBounty = wantedLevel(c);
+  if (wanted.length || myBounty) {
+    body.appendChild(el('div', 'group-label', 'Most Wanted'));
+    if (myBounty) {
+      const mine = el('div', 'row owned');
+      const mineMain = el('div', 'row-main');
+      mineMain.appendChild(el('div', 'row-title', `${c.name} (you)`));
+      mineMain.appendChild(el('div', 'row-note', 'Word is out. Somebody, somewhere, is pricing you.'));
+      mine.appendChild(mineMain);
+      mine.appendChild(el('div', 'row-value', formatMoney(priceIn(myBounty, cur.id), cur.id)));
+      body.appendChild(mine);
+    }
+    for (const w of wanted) {
+      const row = el('div', 'row');
+      const main = el('div', 'row-main');
+      main.appendChild(el('div', 'row-title', `${w.npc.name} (${w.npc.power ? numberish(w.npc.power) : '?'})`));
+      main.appendChild(el('div', 'row-note', w.reason));
+      row.appendChild(main);
+      row.appendChild(el('div', 'row-value', formatMoney(priceIn(w.bounty, cur.id), cur.id)));
+      body.appendChild(row);
+    }
   }
 
   body.appendChild(el('div', 'group-label', 'Everywhere else'));

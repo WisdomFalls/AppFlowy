@@ -315,6 +315,25 @@ export const FACTIONS = [
       { name: 'a demon warband', power: 9, note: 'The way through held.' },
     ],
   },
+  {
+    id: 'bounty_hunters_guild',
+    name: "The Bounty Hunters' Guild",
+    emblem: 'No banner - just a price list, and a strict rule about getting paid first.',
+    leader: null,
+    colours: ['#4a4a4a', '#c9a227'],
+    alignment: -10,
+    from: 700,
+    scope: 'galaxy', universe: 7,
+    goal: 'Whoever is worth the most today. No politics, no side, just the contract.',
+    stance: 'rival',
+    recruits: true,
+    desc: 'Loosely organised, badly paid at the bottom, extremely well paid at the top. Anyone with a warrant, a grudge, or enough money can put a name on the list, and the Guild does not ask why - a name known enough is a name worth pricing.',
+    squads: [
+      { name: 'a jobbing hunter', power: 1.2, note: 'Working a low contract and hoping you are worth less trouble than the file suggests.' },
+      { name: 'a licensed hunter crew', power: 4, note: 'They work in pairs. It is not a fair fight and it is not supposed to be.' },
+      { name: 'a Guild specialist', power: 16, note: 'The kind of name that gets whispered before a contract this size.', elite: true },
+    ],
+  },
 ];
 
 export const FACTION_BY_ID = Object.fromEntries(FACTIONS.map((f) => [f.id, f]));

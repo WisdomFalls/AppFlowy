@@ -32,6 +32,7 @@ import { createTournament, autoRunTournament, settle } from '../tournament.js';
 import { travelOptions, travelTo, actOnWorld, standingOn, planetAreas, wildTrainingRisk, trainAllOutOnWild, planetDestroyed } from '../worlds.js';
 import { getPlanet, PLANETS, planetExists } from '../../data/planets.js';
 import { randomHostileShip, resolveShipBattle, narrateShipBattle, resolveShipCrash } from '../shipbattle.js';
+import { mostWantedBoard, clearBounty } from '../bounty.js';
 import { generateFullName, generateSignatureName } from '../../data/names.js';
 import { numberish } from '../text.js';
 import { localMoney } from './helpers.js';
@@ -459,6 +460,84 @@ export const ACTIONS = [
         text: `Took ${target.name}. Whatever happens to them now, it is because of that.`,
       });
       return { text: render(`{They do not go quietly, and it does not matter|One good hit is all it takes|There is a moment where they understand what is happening, and then it is over}. ${target.name} is yours now, for whatever you have planned.`, {}, rng) };
+    },
+  },
+  // A name, a price, and whoever posted it not caring how you settle it -
+  // the Most Wanted board itself lives in bounty.js, refreshed once a year
+  // (lifecycle.js's passiveYear) rather than generated here, so listing it
+  // never touches the shared rng mid-render.
+  {
+    id: 'hunt_bounty', maxPerYear: 2, minMaturity: 14, tooYoung: 'Nobody takes a bounty from someone this young seriously.', slots: 2, name: 'Hunt a bounty', cat: 'world', cost: 'A season', danger: true,
+    desc: 'A name, a price, and a reason not to be gentle about it.',
+    available: (s) => !s.character.inAfterlife && mostWantedBoard(s).length > 0,
+    options: (s) => {
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      return mostWantedBoard(s).map((w) => ({
+        id: w.npcId,
+        label: `${w.npc.name} (${numberish(w.npc.power)}) - ${formatMoney(priceIn(w.bounty, cur.id), cur.id)}`,
+        hint: w.reason,
+      }));
+    },
+    run: (s, rng, params) => {
+      const board = mostWantedBoard(s);
+      const entry = board.find((w) => w.npcId === (params && params.option)) || board[0];
+      if (!entry) return { text: 'There is nobody left on the board.' };
+      const target = entry.npc;
+      const mine = combatPower(s.character);
+      const chance = clamp(0.35 + Math.log10(Math.max(1, mine / Math.max(1, target.power))) * 0.3, 0.08, 0.92);
+      if (!rng.chance(chance)) {
+        adjust(s, { health: -30, happiness: -6 });
+        return { text: `${target.name} ${render('{gets away|is more than the file said|does not go down easy and does not go down at all}', {}, rng)}.` };
+      }
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      const payout = priceIn(entry.bounty, cur.id);
+      credit(s.character, cur.id, payout);
+      clearBounty(s, target.id);
+      target.alive = false;
+      target.deadSince = currentYear(s);
+      target.causeOfDeath = `Brought in on a bounty by ${s.character.name}`;
+      s.stats.kills++;
+      adjust(s, { karma: 6, fame: 3 });
+      fact(s, `Collected the bounty on ${target.name}.`, { type: 'bounty', weight: 6, subject: target.id, tags: ['bounty', 'kill'] });
+      return { text: `${render('{It does not take long|They fight, and then they do not|One name off the board}', {}, rng)}. ${formatMoney(payout, cur.id)}.` };
+    },
+  },
+  {
+    id: 'hire_hitman', maxPerYear: 3, minMaturity: 14, slots: 1, name: 'Hire someone to deal with it', cat: 'power', cost: 'A season', danger: true,
+    desc: 'Pay somebody else to do the part you do not want your name on. There is no version of this that is not what it sounds like.',
+    available: (s) => !s.character.inAfterlife && livingNpcs(s).some((n) => n.id !== s.character.captiveId),
+    options: (s) => {
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      return livingNpcs(s).filter((n) => n.id !== s.character.captiveId).slice(0, 12).map((n) => {
+        const cost = priceIn(Math.max(20000, n.power * 400), cur.id);
+        return {
+          id: n.id, label: `${n.name} - ${formatMoney(cost, cur.id)}`, hint: relationLabel(n),
+          disabled: !canAfford(s.character, cur.id, cost),
+        };
+      });
+    },
+    run: (s, rng, params) => {
+      const target = params && params.option ? findNpc(s, params.option) : null;
+      if (!target || !target.alive) return { text: 'There is nobody to send anyone after.' };
+      const cur = currencyFor(getPlace(s.character.placeId).planet);
+      const cost = priceIn(Math.max(20000, target.power * 400), cur.id);
+      if (!canAfford(s.character, cur.id, cost)) return { text: `${formatMoney(cost, cur.id)}, and you do not have it.` };
+      debit(s.character, cur.id, cost);
+      // A hired hand is never quite the fight you would buy in the open -
+      // a discount contractor, not somebody you trained with.
+      const hitmanPower = Math.max(1, target.power * rng.float(0.5, 1.3));
+      const chance = clamp(0.3 + Math.log10(Math.max(1, hitmanPower / Math.max(1, target.power))) * 0.4, 0.1, 0.85);
+      const traced = rng.chance(0.3);
+      adjust(s, { karma: -18 });
+      if (rng.chance(chance)) {
+        target.alive = false;
+        target.deadSince = currentYear(s);
+        target.causeOfDeath = traced ? `Killed by someone ${s.character.name} hired` : 'Killed. Nobody ever finds out by whom.';
+        s.stats.kills++;
+        fact(s, `Had ${target.name} killed.`, { type: 'crime', weight: traced ? 9 : 6, subject: target.id, tags: ['crime', 'kill', 'hitman'] });
+        return { text: `${render('{It is over before you hear about it|A name you gave somebody, and then a name in the obituaries|You do not ask how}', {}, rng)}. ${traced ? 'It gets back to people, eventually, that it was you.' : 'Nobody connects it to you.'}` };
+      }
+      return { text: `${render('{The contractor does not come back|Word comes back that it did not go well|Whoever you hired is not answering any more}', {}, rng)}. ${target.name} is still very much alive, and now has a reason to be careful.` };
     },
   },
   {
