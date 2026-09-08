@@ -175,6 +175,38 @@ export const SHIP_ROOMS = [
 ];
 export const SHIP_ROOM_BY_ID = Object.fromEntries(SHIP_ROOMS.map((r) => [r.id, r]));
 
+// The hull is the actual design choice - what the ship is built as, not
+// just what gets added to it afterward. Each one trades speed, cargo and
+// how much punishment the hull itself can take before the rooms inside it
+// matter at all. hull/hullMax are what ship-to-ship combat will eventually
+// read; nothing currently spends them down.
+export const SHIP_HULLS = [
+  { id: 'runabout', name: 'Runabout', costMult: 0.7, baseSpeed: 8, baseHull: 60, cargo: 2, crew: 2,
+    desc: 'Small and quick. Room for one or two people who need to be somewhere fast.' },
+  { id: 'cruiser', name: 'Cruiser', costMult: 1, baseSpeed: 5, baseHull: 100, cargo: 6, crew: 8,
+    desc: 'The standard build. Room enough for a family and whatever they are carrying.' },
+  { id: 'freighter', name: 'Freighter', costMult: 1.4, baseSpeed: 3, baseHull: 140, cargo: 20, crew: 6,
+    desc: 'Slow and built like a brick. Whatever you are hauling, it holds.' },
+  { id: 'warship', name: 'Warship', costMult: 2.1, baseSpeed: 6, baseHull: 220, cargo: 3, crew: 12,
+    desc: 'Armoured and armed before it is comfortable. Built to survive being shot at.' },
+];
+export const SHIP_HULL_BY_ID = Object.fromEntries(SHIP_HULLS.map((h) => [h.id, h]));
+
+// Functional fittings, distinct from SHIP_ROOMS' comfort/training rooms -
+// these change what the ship itself can do (how fast, how tough, how armed,
+// how much it can carry) rather than what it is like to live aboard.
+export const SHIP_COMPONENTS = [
+  { id: 'engine', name: 'Engine upgrade', cost: 9000000, speed: 2,
+    desc: 'Faster between worlds. Nothing else about it changes.' },
+  { id: 'plating', name: 'Hull plating', cost: 10000000, hull: 40,
+    desc: 'More ship left after something hits it.' },
+  { id: 'weapons_bay', name: 'Weapons bay', cost: 18000000, firepower: 25,
+    desc: 'Something to fire back with, if it ever comes to that.' },
+  { id: 'cargo_hold', name: 'Cargo expansion', cost: 5000000, cargo: 8,
+    desc: 'More room for whatever you are hauling between worlds.' },
+];
+export const SHIP_COMPONENT_BY_ID = Object.fromEntries(SHIP_COMPONENTS.map((c) => [c.id, c]));
+
 export function shipOf(state) {
   const home = state.character.home;
   return home && home.kind === 'starship' ? home : null;
@@ -183,36 +215,43 @@ export function shipOf(state) {
 /** The one-time build: money, materials, and somebody who can actually do
  * the engineering - a personal genius, or a company that does this for a
  * living. Distinct from homeOptions()'s build/buy/take because a starship
- * is never "self-built", however sharp you are. */
-export function starshipOption(state) {
+ * is never "self-built", however sharp you are. One option per hull, since
+ * the hull is the actual design choice - what it is built as, not something
+ * bolted on afterward. */
+export function starshipOptions(state) {
   const c = state.character;
   const place = getPlace(c.placeId);
   const cur = currencyFor(place.planet);
-  const price = priceIn(320000000, cur.id);
-  return {
-    id: 'starship', how: 'starship',
-    label: 'Commission a space-traveling home',
-    hint: `${formatMoney(price, cur.id)} in materials and engineering. It goes where you go.`,
-    price, currency: cur.id,
-    disabled: !!shipOf(state) || !canAfford(c, cur.id, price),
-  };
+  const already = !!shipOf(state);
+  return SHIP_HULLS.map((h) => {
+    const price = priceIn(Math.round(320000000 * h.costMult), cur.id);
+    return {
+      id: `starship:${h.id}`, how: 'starship', hullId: h.id,
+      label: `Commission a ${h.name.toLowerCase()}`,
+      hint: `${formatMoney(price, cur.id)} in materials and engineering. ${h.desc}`,
+      price, currency: cur.id,
+      disabled: already || !canAfford(c, cur.id, price),
+    };
+  });
 }
 
-export function buildStarship(state, rng, engineerName) {
+export function buildStarship(state, rng, engineerName, hullId) {
   const c = state.character;
   const place = getPlace(c.placeId);
   const cur = currencyFor(place.planet);
-  const opt = starshipOption(state);
-  if (opt.disabled) {
-    return { ok: false, text: shipOf(state) ? 'You already have one.' : `That costs ${formatMoney(opt.price, cur.id)}. You are not there yet.` };
-  }
-  debit(c, cur.id, opt.price);
+  const hull = SHIP_HULL_BY_ID[hullId] || SHIP_HULL_BY_ID.cruiser;
+  if (shipOf(state)) return { ok: false, text: 'You already have one.' };
+  const price = priceIn(Math.round(320000000 * hull.costMult), cur.id);
+  if (!canAfford(c, cur.id, price)) return { ok: false, text: `That costs ${formatMoney(price, cur.id)}. You are not there yet.` };
+  debit(c, cur.id, price);
   const family = Object.values(state.npcs || {}).filter((n) => n.alive
     && ['spouse', 'child', 'parent'].includes(n.relation));
   c.home = {
-    kind: 'starship', name: 'The ship', placeId: c.placeId, planet: place.planet,
+    kind: 'starship', name: `The ${hull.name}`, placeId: c.placeId, planet: place.planet,
     comfort: 10, train: 1, since: c.birthYear + c.age, builtBy: engineerName || null,
-    rooms: [], occupants: family.map((n) => n.id),
+    rooms: [], components: [], occupants: family.map((n) => n.id),
+    hullType: hull.id, speed: hull.baseSpeed, hull: hull.baseHull, hullMax: hull.baseHull,
+    cargo: hull.cargo, crew: hull.crew,
   };
   return {
     ok: true, built: true, movedIn: family,
@@ -222,6 +261,58 @@ export function buildStarship(state, rng, engineerName) {
   };
 }
 
+/** Fitting (or upgrading) a functional component - engine, plating, weapons,
+ * cargo - as opposed to SHIP_ROOMS' comfort-and-training additions. */
+export function shipComponentOptions(state) {
+  const ship = shipOf(state);
+  if (!ship) return [];
+  const c = state.character;
+  const cur = currencyFor(getPlace(c.placeId).planet);
+  ship.components = ship.components || [];
+  return SHIP_COMPONENTS.map((comp) => {
+    const price = priceIn(comp.cost, cur.id);
+    const have = ship.components.includes(comp.id);
+    return {
+      id: comp.id, comp, price, currency: cur.id, have,
+      label: have ? `Upgrade the ${comp.name.toLowerCase()} again` : `Fit a ${comp.name.toLowerCase()}`,
+      hint: `${formatMoney(price, cur.id)}. ${comp.desc}`,
+      disabled: !canAfford(c, cur.id, price),
+    };
+  });
+}
+
+export function addShipComponent(state, compId) {
+  const ship = shipOf(state);
+  const comp = SHIP_COMPONENT_BY_ID[compId];
+  if (!ship || !comp) return { ok: false, text: 'Nothing to fit that to.' };
+  const c = state.character;
+  const cur = currencyFor(getPlace(c.placeId).planet);
+  const price = priceIn(comp.cost, cur.id);
+  if (!canAfford(c, cur.id, price)) return { ok: false, text: `That costs ${formatMoney(price, cur.id)}. You do not have it.` };
+  debit(c, cur.id, price);
+  ship.components = ship.components || [];
+  const already = ship.components.includes(compId);
+  if (!already) ship.components.push(compId);
+  if (comp.speed) ship.speed = (ship.speed || 0) + comp.speed;
+  if (comp.hull) { ship.hullMax = (ship.hullMax || 0) + comp.hull; ship.hull = (ship.hull || 0) + comp.hull; }
+  if (comp.firepower) ship.firepower = (ship.firepower || 0) + comp.firepower;
+  if (comp.cargo) ship.cargo = (ship.cargo || 0) + comp.cargo;
+  return {
+    ok: true, upgraded: already,
+    text: already ? `The ${comp.name.toLowerCase()} gets better, stacked on what was already there.`
+      : `${comp.name}, fitted. ${comp.desc}`,
+  };
+}
+
+/** Naming your own ship, same as any other thing a player invents rather
+ * than one the generator handed them. No turn cost - a name is not a build. */
+export function renameShip(state, name) {
+  const ship = shipOf(state);
+  if (!ship) return { ok: false, text: 'There is no ship to name.' };
+  ship.name = name;
+  return { ok: true };
+}
+
 /** Taking somebody else's, rather than paying for your own - no debit, and
  * it arrives already fitted with a couple of the rooms a home like that
  * would actually have had. */
@@ -229,11 +320,14 @@ export function claimStarship(state, rng, opts = {}) {
   const c = state.character;
   const place = getPlace(c.placeId);
   const already = SHIP_ROOMS.filter(() => rng.chance(0.4)).map((r) => r.id);
+  const hull = SHIP_HULL_BY_ID[opts.hullId] || rng.pick(SHIP_HULLS);
   c.home = {
-    kind: 'starship', name: opts.name || 'The ship', placeId: c.placeId, planet: place.planet,
+    kind: 'starship', name: opts.name || `The ${hull.name}`, placeId: c.placeId, planet: place.planet,
     comfort: 10 + already.reduce((n, id) => n + (SHIP_ROOM_BY_ID[id]?.comfort || 0), 0),
     train: already.some((id) => SHIP_ROOM_BY_ID[id]?.train) ? Math.max(...already.map((id) => SHIP_ROOM_BY_ID[id]?.train || 1)) : 1,
-    since: c.birthYear + c.age, stolen: true, rooms: already, occupants: [],
+    since: c.birthYear + c.age, stolen: true, rooms: already, components: [], occupants: [],
+    hullType: hull.id, speed: hull.baseSpeed, hull: hull.baseHull, hullMax: hull.baseHull,
+    cargo: hull.cargo, crew: hull.crew,
   };
   return c.home;
 }
@@ -295,7 +389,10 @@ export function sellStarship(state) {
   if (!ship) return { ok: false, text: 'There is nothing to sell.' };
   const c = state.character;
   const cur = currencyFor(getPlace(c.placeId).planet);
-  const spent = priceIn(320000000, cur.id) + ship.rooms.reduce((n, id) => n + priceIn(SHIP_ROOM_BY_ID[id]?.cost || 0, cur.id), 0);
+  const hull = SHIP_HULL_BY_ID[ship.hullType] || SHIP_HULL_BY_ID.cruiser;
+  const spent = priceIn(Math.round(320000000 * hull.costMult), cur.id)
+    + ship.rooms.reduce((n, id) => n + priceIn(SHIP_ROOM_BY_ID[id]?.cost || 0, cur.id), 0)
+    + (ship.components || []).reduce((n, id) => n + priceIn(SHIP_COMPONENT_BY_ID[id]?.cost || 0, cur.id), 0);
   const refund = Math.round(spent * 0.35);
   credit(c, cur.id, refund);
   c.home = null;

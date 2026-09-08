@@ -34,7 +34,7 @@ import { inventoryOf, ensureBag, toggleWorn, sellItem, buyItem, valueHere,
 import { currencyFor, balance, formatMoney, exchange, CURRENCIES } from '../data/currency.js';
 import { getItem } from '../data/items.js';
 import { TRAITS, getTrait, TRAIT_KINDS } from '../data/traits.js';
-import { reputationOf, homeOf, homeBonus, shipOf, SHIP_ROOM_BY_ID } from '../engine/settlement.js';
+import { reputationOf, homeOf, homeBonus, shipOf, SHIP_ROOM_BY_ID, SHIP_HULL_BY_ID, SHIP_COMPONENT_BY_ID, renameShip } from '../engine/settlement.js';
 import { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSense } from '../engine/perception.js';
 import { getRng, saveRng, findNpc } from '../engine/state.js';
 import { ceilingFor, ceilingBlock, ceilingPressure, masteryLabel } from '../engine/mastery.js';
@@ -1839,13 +1839,25 @@ function panelRecords() {
     const row = el('div', 'row owned');
     const main = el('div', 'row-main');
     const rooms = ship.rooms.map((id) => SHIP_ROOM_BY_ID[id]?.name).filter(Boolean);
+    const components = (ship.components || []).map((id) => SHIP_COMPONENT_BY_ID[id]?.name).filter(Boolean);
     const occupants = (ship.occupants || []).map((id) => (id === 'you' ? null : GAME.npcs[id]?.name)).filter(Boolean);
+    const hull = SHIP_HULL_BY_ID[ship.hullType];
     main.appendChild(el('div', 'row-title', ship.name));
+    if (hull) {
+      main.appendChild(el('div', 'row-note',
+        `${hull.name}. Speed ${ship.speed ?? hull.baseSpeed}, hull ${ship.hull ?? hull.baseHull}/${ship.hullMax ?? hull.baseHull}`
+        + `${ship.firepower ? `, firepower ${ship.firepower}` : ''}, cargo ${ship.cargo ?? hull.cargo}.`));
+    }
     main.appendChild(el('div', 'row-note',
       `${rooms.length ? rooms.join(', ') : 'Empty hull, nothing added yet'}.`
+      + (components.length ? ` Fitted: ${components.join(', ')}.` : '')
       + (occupants.length ? ` Aboard: ${occupants.join(', ')}.` : '')));
     row.appendChild(main);
     body.appendChild(row);
+    const rename = el('button', 'ghost-btn', 'Rename the ship');
+    rename.type = 'button';
+    rename.addEventListener('click', () => openRenamePanel('Rename the ship', ship.name, (name) => { renameShip(GAME, name); }, panelRecords));
+    body.appendChild(rename);
   }
 
   body.appendChild(el('div', 'group-label', 'You'));
