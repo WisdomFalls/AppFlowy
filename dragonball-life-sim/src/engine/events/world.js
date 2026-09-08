@@ -160,7 +160,7 @@ registerEvents([
       // to arrive is not the same question as being invited.
       const invited = ev.id !== 'tournament_of_power' || tournamentInvite(ctx);
       const reachable = canGetThere && invited;
-      return { evId: ev.id, evName: ev.name, evBlurb: ev.blurb, evThreat: ev.threat, reachable, invited, canGetThere };
+      return { evId: ev.id, evName: ev.name, evBlurb: ev.blurb, evThreat: ev.threat, evCanonId: ev.canonId || null, reachable, invited, canGetThere };
     },
     title: (ctx, s) => s.evName,
     text: (ctx, s) => `[evBlurb] ${s.reachable
@@ -278,8 +278,14 @@ registerEvents([
             const kit = ev.threat > 1e8 ? ['ki_blast', 'death_beam', 'death_ball']
               : ev.threat > 1e4 ? ['ki_blast', 'galick_gun']
                 : ev.threat > 500 ? ['ki_blast', 'dodon_ray'] : [];
+            // A named canon foe (Granolah, Gas, ...) carries its canonId
+            // through the same way meetCanon-built NPCs do, so the fight
+            // actually attaches to the real character record afterward -
+            // karma weighting, Hell tracking, a real relationship if they
+            // live - instead of dissolving into a nameless statline.
             return offerBattle(c2, {
               name: ev.foe || ev.name, power: ev.threat, raceId: 'other', techniques: kit,
+              canonId: ev.canonId || null,
             }, {
               reason: 'saga', timelineId: ev.id, stakes: 'lethal', protecting: true,
               intro: `${ev.blurb} You are standing in it.`,

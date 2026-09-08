@@ -329,6 +329,36 @@ export const CANON = [
     personality: 'Frieza with a press office. Runs the same slave-labour empire under a company name and a smile that has fooled entire worlds.',
     quirk: 'Poisons his own blade before a fight and calls it a fair contest.' },
 
+  // -------------------------------------------------------- the last Cerealian
+  { id: 'granolah', name: 'Granolah', race: 'cerealian', years: [665, null], home: 'cereal',
+    // The wish spikes him past almost anyone alive and then it fades - the
+    // dragon gave him the strength, not the time to keep it. 785 is what is
+    // actually left once the effect settles: still formidable, nowhere near
+    // what he touched for those few years.
+    tags: ['bounty_hunter', 'survivor', 'rival', 'ally'], temperament: 'grim',
+    power: { 760: 600000, 781: 600000, 782: 8e12, 785: 4e11 },
+    teaches: ['ki_blast'],
+    personality: 'The last of his kind, raised by a Namekian on a planet full of ghosts, hunting bounties across a galaxy that owes him one.',
+    quirk: 'Counts everyone he has killed out loud, once a year, whether anyone is listening or not.' },
+  { id: 'monaito', name: 'Elder Monaito', race: 'namekian', years: [500, null], home: 'cereal',
+    tags: ['mentor', 'namekian'], temperament: 'weary',
+    power: { 782: 400 },
+    teaches: [],
+    personality: 'Raised the last Cerealian alone because nobody else was left to. Has quietly trained something far more dangerous since.',
+    quirk: 'Refuses to say what he actually taught Gas, even now.' },
+  { id: 'gas', name: 'Gas', race: 'other', years: [758, null], home: 'frieza_ship',
+    tags: ['threat', 'heeter'], temperament: 'eager',
+    power: { 762: 50000, 781: 2000000, 782: 4.5e13 },
+    teaches: [],
+    personality: 'The Heeter family\'s own weapon, trained in secret for exactly one purpose - being handed the title Granolah wished for himself.',
+    quirk: 'Asks, sincerely, whether he is strong enough yet. Every single fight.' },
+  { id: 'elec', name: 'Elec', race: 'other', years: [710, null], home: 'frieza_ship',
+    tags: ['villain', 'heeter'], temperament: 'ruthless',
+    power: { 782: 1000 },
+    teaches: [],
+    personality: 'Heads a family that deals in bounties, secrets, and other people\'s wars - and raised his own son as an investment.',
+    quirk: 'Refers to Gas as "the asset" in front of him and means it fondly.' },
+
   // ------------------------------------------------------------- Frieza Force
   { id: 'frieza', name: 'Frieza', race: 'frostdemon', years: [680, null], home: 'frieza_ship',
     tags: ['villain', 'emperor', 'threat', 'imperial'], temperament: 'cruel',
