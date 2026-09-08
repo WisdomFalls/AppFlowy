@@ -27674,7 +27674,7 @@ const { render } = __mod_engine_text_js;
 const { adjust, findNpc, currentYear, addNpc } = __mod_engine_state_js;
 const { addFact } = __mod_engine_memory_js;
 const { combatPower, weaponAttackBonus, looksScore, STAT_KEYS, STAT_LABELS } = __mod_engine_stats_js;
-const { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild, weddingLine, courtLine, birthLine, describeLineage } = __mod_engine_npc_js;
+const { bondScore, bondLabel, romanceLabel, learnAbout, relationLabel, makeChild, weddingLine, courtLine, birthLine, describeLineage, spouseFlavor } = __mod_engine_npc_js;
 const { npcBag } = __mod_engine_inventory_js;
 const { shipOf, inviteAboard } = __mod_engine_settlement_js;
 
@@ -27729,6 +27729,11 @@ function bestTrainableStat(character, npc) {
     if (gap > bestGap) { bestGap = gap; best = key; }
   }
   return bestGap >= 8 ? best : null;
+}
+
+/** Whoever else you are actually committed to, if anyone. */
+function currentPartner(state, excludeId) {
+  return Object.values(state.npcs).find((n) => n.alive && n.id !== excludeId && ['lover', 'spouse'].includes(n.relation));
 }
 
 function chargeSocial(npc, changes) {
@@ -27958,6 +27963,33 @@ const SOCIAL_ACTIONS = [
 
   // ---------------------------------------------------------- romance
   {
+    id: 'compliment', name: 'Compliment them', tone: 'warm', slots: 0, maxPerYear: 4,
+    desc: 'Say something nice, on purpose.',
+    available: (state, npc) => npc.alive && !['parent', 'sibling', 'child'].includes(npc.relation),
+    run: (state, rng, npc) => {
+      const tags = npc.tags || [];
+      const vain = tags.includes('vain');
+      const cold = tags.includes('cold') || tags.includes('grim');
+      const chance = clamp(0.55 + (vain ? 0.25 : 0) - (cold ? 0.2 : 0) + state.character.stats.charisma / 400, 0.15, 0.95);
+      if (rng.chance(chance)) {
+        const gain = vain ? rng.int(8, 16) : rng.int(3, 9);
+        chargeSocial(npc, { closeness: gain, romance: ['lover', 'spouse'].includes(npc.relation) ? Math.round(gain * 0.6) : 0 });
+        adjust(state, { happiness: 3 });
+        return {
+          text: vain
+            ? render(`{They light up completely|"Go on."|They were clearly waiting for somebody to say it}.`, {}, rng)
+            : render(`{They say thanks and mean it|A small smile, and that is the whole reaction|It lands better than you expected}.`, {}, rng),
+        };
+      }
+      chargeSocial(npc, { tension: cold ? 4 : 1 });
+      return {
+        text: cold
+          ? render(`{They do not know what to do with that and say nothing|"...Right." They change the subject|It slides off them entirely}.`, {}, rng)
+          : render(`{It comes out wrong|They think you want something|Bad timing}.`, {}, rng),
+      };
+    },
+  },
+  {
     id: 'crush', name: 'Tell them you like them', tone: 'romance', slots: 1, maxPerYear: 1,
     desc: 'You are ten. It is a big deal and it is not complicated.',
     available: (state, npc) => state.character.age >= CRUSH_MIN_AGE && state.character.age < ROMANCE_MIN_AGE
@@ -27990,7 +28022,20 @@ const SOCIAL_ACTIONS = [
         chargeSocial(npc, { romance: 45, closeness: 15, trust: 8 });
         adjust(state, { happiness: 20 });
         note(state, `Fell for ${npc.name}.`, { type: 'romance', subject: npc.id, tags: ['romance'], weight: 5 });
-        return { text: render(`{You handle it badly and it works anyway|They say "finally"|Neither of you is any good at this}. {It is a good year|You do not stop grinning for a week|Somebody had a bet on it}.`, {}, rng) };
+        let text = render(`{You handle it badly and it works anyway|They say "finally"|Neither of you is any good at this}. {It is a good year|You do not stop grinning for a week|Somebody had a bet on it}.`, {}, rng);
+        // Falling for somebody new while you already belong to somebody is
+        // not information that stays contained just because you want it to.
+        const partner = currentPartner(state, npc.id);
+        if (partner && rng.chance(0.35 + (partner.tags.includes('jealous') ? 0.35 : 0))) {
+          const bad = partner.tags.includes('jealous') || partner.tags.includes('vengeful');
+          chargeSocial(partner, {
+            tension: rng.int(bad ? 30 : 18, bad ? 50 : 35),
+            trust: -rng.int(15, 30),
+            closeness: -rng.int(10, 25),
+          });
+          text += ` ${partner.name} finds out.${bad ? ' They do not take it well.' : ' It changes something between you, quietly.'}`;
+        }
+        return { text };
       }
       chargeSocial(npc, { tension: 10, closeness: -8 });
       adjust(state, { happiness: -14 });
@@ -28043,6 +28088,31 @@ const SOCIAL_ACTIONS = [
           + (child.inheritedPower > state.character.power ? ' Something in them is already bigger than you.' : '')
           + (blood ? ` By blood, ${child.name} is ${blood}.` : ''),
       };
+    },
+  },
+  {
+    id: 'end_it', name: 'End it', tone: 'romance', slots: 1, maxPerYear: 1, danger: true,
+    desc: 'Leave, or ask them to. Some things do not survive being said out loud.',
+    available: (state, npc) => ['lover', 'spouse'].includes(npc.relation),
+    run: (state, rng, npc) => {
+      const wasMarried = npc.relation === 'spouse';
+      const f = spouseFlavor(npc);
+      const mutual = (npc.romance || 0) < 30 || (npc.tension || 0) > 50;
+      npc.relation = mutual ? 'acquaintance' : 'enemy';
+      chargeSocial(npc, { romance: -100, closeness: -30, tension: mutual ? 10 : 40 });
+      if (wasMarried) adjust(state, { happiness: -20, zeni: -rng.int(10000, 200000) });
+      else adjust(state, { happiness: -12 });
+      note(state, `${wasMarried ? 'Divorced' : 'Broke things off with'} ${npc.name}.`, {
+        type: 'romance', subject: npc.id, tags: ['romance'], weight: 6,
+      });
+      const line = f.fierce
+        ? render(`{It ends loudly|Something gets broken, and it is not just the relationship|Neither of you is quiet about it}.`, {}, rng)
+        : f.gentle
+          ? render(`{It is sad and it is calm, both|You are kind to each other right up until the end|Nobody raises their voice}.`, {}, rng)
+          : f.vain
+            ? render(`{They make sure everyone hears their version first|It becomes a whole production|They walk away like they meant to leave first}.`, {}, rng)
+            : render(`{It is over, and it takes both of you a while to actually believe that|There is a long silence and then it is done|You say the true thing and it ends the conversation}.`, {}, rng);
+      return { text: `${wasMarried ? 'The marriage ends.' : 'Whatever this was, it is over now.'} ${line}` };
     },
   },
 
