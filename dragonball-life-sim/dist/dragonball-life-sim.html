@@ -30982,6 +30982,57 @@ const { ACTIONS, availableActions, runAction, actionOptions } = __mod_engine_eve
   return { createGame, defaultCreation, characterSummary, currentYear, livingNpcs, aiContext, startYear, choose, currentEvent, enterAfterlife, epitaph, beginLegacy, die, insertEvent, renarrateLast, skipRemaining, eventsRemaining, reviveCharacter, tickRevivalEffort, openingLogEntry, acceptPermanentDeath, initSampling, improviseEvent, narrateOutcome, backendName, aiAvailable, getApiKey, setApiKey, errorCopy, interpretWish, PRESETS, save, load, listSaves, clearSlot, exportString, importString, allTemplates, ladderStatus, nearbyForms, unlockableForms, Rng, ACTIONS, availableActions, runAction, actionOptions };
 })();
 
+/* ==== engine/leaderboard.js ==== */
+const __mod_engine_leaderboard_js = (function () {
+// Where you actually stand. seek_challenge and hold_tournament both find
+// somebody in a power band scaled to be a plausible fight - useful for
+// picking an opponent, useless for answering "who is actually strongest
+// right now, and where do I fall on that list." This is the honest version:
+// no scaling, no matchmaking, just the canon roster (and you) sorted by raw
+// power.
+//
+// NPCs are left out on purpose. A locally generated stranger is not a name
+// anyone could look up or compare against - a leaderboard of "who's
+// strongest" only means something for beings the setting itself keeps track
+// of, which in this data is the canon cast.
+
+const { canonAvailable, canonPower, canonUniverse } = __mod_data_canon_js;
+const { combatPower, powerTier } = __mod_engine_stats_js;
+const { currentYear } = __mod_engine_state_js;
+
+/**
+ * Ranked, most powerful first. `scope: 'universe'` (default) only counts
+ * beings in the player's current universe; `'multiverse'` counts everyone
+ * the game tracks anywhere. Always includes the player, wherever they fall.
+ */
+function strongestBeings(state, opts = {}) {
+  const c = state.character;
+  const year = currentYear(state);
+  const scope = opts.scope === 'multiverse' ? 'multiverse' : 'universe';
+  const myUniverse = c.universe || 7;
+
+  const rows = canonAvailable(year, (ch) => scope === 'multiverse' || canonUniverse(ch) === myUniverse)
+    .map((ch) => ({
+      id: ch.id, name: ch.name, power: Math.max(1, Math.round(canonPower(ch, year))),
+      universe: canonUniverse(ch), isPlayer: false,
+    }));
+
+  rows.push({
+    id: 'you', name: c.name, power: Math.max(1, Math.round(combatPower(c))),
+    universe: myUniverse, isPlayer: true,
+  });
+
+  rows.sort((a, b) => b.power - a.power);
+  rows.forEach((r, i) => {
+    r.rank = i + 1;
+    r.tier = powerTier(r.power);
+  });
+
+  return { rows, you: rows.find((r) => r.isPlayer), total: rows.length, scope };
+}
+  return { strongestBeings };
+})();
+
 /* ==== engine/dialogue.js ==== */
 const __mod_engine_dialogue_js = (function () {
 // Saying your own words to somebody. With a model connected, it reads the line
@@ -31725,6 +31776,7 @@ const { BRANCHES, TECH_BY_ID, techniquePurity, techniqueDisplayName } = __mod_da
 const { getTransformation, ladderFor } = __mod_data_transformations_js;
 const { getCanon } = __mod_data_canon_js;
 const { STAT_KEYS, STAT_LABELS, combatPower, powerTier, looksScore } = __mod_engine_stats_js;
+const { strongestBeings } = __mod_engine_leaderboard_js;
 const { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } = __mod_engine_npc_js;
 const { npcActions, runNpcAction, canVisitLiving, checkRomanceSpark } = __mod_engine_social_js;
 const { scoreReplyLocally, applyReply, impressionLabel } = __mod_engine_dialogue_js;
@@ -32906,6 +32958,16 @@ function panelPower() {
   }
   body.appendChild(grid);
 
+  const rankRow = el('button', 'row');
+  rankRow.type = 'button';
+  const rankMain = el('div', 'row-main');
+  const rank = strongestBeings(GAME);
+  rankMain.appendChild(el('div', 'row-title', 'Where you rank'));
+  rankMain.appendChild(el('div', 'row-note', `#${rank.you.rank} of ${rank.total} known beings in your universe.`));
+  rankRow.appendChild(rankMain);
+  rankRow.addEventListener('click', () => panelLeaderboard());
+  body.appendChild(rankRow);
+
   // The roof. A ceiling nobody can see reads as broken progression, so it is
   // stated plainly along with what would lift it.
   const block = ceilingBlock(GAME);
@@ -33084,6 +33146,54 @@ function panelPower() {
       body.appendChild(row);
     }
   }
+  openSheet('panel');
+}
+
+function panelLeaderboard(scope) {
+  const c = GAME.character;
+  const rank = strongestBeings(GAME, { scope: scope || 'universe' });
+  const { body } = sheetShell('Strongest beings', rank.scope === 'multiverse' ? 'Across every universe this game tracks' : 'In your own universe');
+
+  const toggle = el('div', 'toggle-row');
+  const uBtn = el('button', 'mini' + (rank.scope === 'universe' ? ' active' : ''), 'Your universe');
+  uBtn.type = 'button';
+  uBtn.addEventListener('click', () => panelLeaderboard('universe'));
+  const mBtn = el('button', 'mini' + (rank.scope === 'multiverse' ? ' active' : ''), 'Every universe');
+  mBtn.type = 'button';
+  mBtn.addEventListener('click', () => panelLeaderboard('multiverse'));
+  toggle.appendChild(uBtn);
+  toggle.appendChild(mBtn);
+  body.appendChild(toggle);
+
+  body.appendChild(el('p', 'row-note',
+    'Ranked by raw power, not by who could plausibly beat who - the same figure combatPower() uses everywhere else. '
+    + 'Only beings the setting itself keeps track of are counted; nobody you met on the road is on this list.'));
+
+  const TOP_N = 15;
+  const top = rank.rows.slice(0, TOP_N);
+
+  body.appendChild(el('div', 'group-label', `Top ${top.length}`));
+  for (const r of top) {
+    const row = el('div', 'row' + (r.isPlayer ? ' owned' : ''));
+    const main = el('div', 'row-main');
+    main.appendChild(el('div', 'row-title', `#${r.rank} ${r.name}${r.isPlayer ? ' (you)' : ''}`));
+    main.appendChild(el('div', 'row-note', `${r.tier}${rank.scope === 'multiverse' ? `, Universe ${r.universe}` : ''}`));
+    row.appendChild(main);
+    row.appendChild(el('div', 'row-value', numberish(r.power)));
+    body.appendChild(row);
+  }
+
+  if (!top.some((r) => r.isPlayer)) {
+    body.appendChild(el('div', 'group-label', 'You'));
+    const row = el('div', 'row owned');
+    const main = el('div', 'row-main');
+    main.appendChild(el('div', 'row-title', `#${rank.you.rank} ${rank.you.name}`));
+    main.appendChild(el('div', 'row-note', `${rank.you.tier}, out of ${rank.total} known.`));
+    row.appendChild(main);
+    row.appendChild(el('div', 'row-value', numberish(rank.you.power)));
+    body.appendChild(row);
+  }
+
   openSheet('panel');
 }
 

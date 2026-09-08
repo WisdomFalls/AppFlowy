@@ -24,6 +24,7 @@ import { BRANCHES, TECH_BY_ID, techniquePurity, techniqueDisplayName } from '../
 import { getTransformation, ladderFor } from '../data/transformations.js';
 import { getCanon } from '../data/canon.js';
 import { STAT_KEYS, STAT_LABELS, combatPower, powerTier, looksScore } from '../engine/stats.js';
+import { strongestBeings } from '../engine/leaderboard.js';
 import { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } from '../engine/npc.js';
 import { npcActions, runNpcAction, canVisitLiving, checkRomanceSpark } from '../engine/social.js';
 import { scoreReplyLocally, applyReply, impressionLabel } from '../engine/dialogue.js';
@@ -1210,6 +1211,16 @@ function panelPower() {
   }
   body.appendChild(grid);
 
+  const rankRow = el('button', 'row');
+  rankRow.type = 'button';
+  const rankMain = el('div', 'row-main');
+  const rank = strongestBeings(GAME);
+  rankMain.appendChild(el('div', 'row-title', 'Where you rank'));
+  rankMain.appendChild(el('div', 'row-note', `#${rank.you.rank} of ${rank.total} known beings in your universe.`));
+  rankRow.appendChild(rankMain);
+  rankRow.addEventListener('click', () => panelLeaderboard());
+  body.appendChild(rankRow);
+
   // The roof. A ceiling nobody can see reads as broken progression, so it is
   // stated plainly along with what would lift it.
   const block = ceilingBlock(GAME);
@@ -1388,6 +1399,54 @@ function panelPower() {
       body.appendChild(row);
     }
   }
+  openSheet('panel');
+}
+
+function panelLeaderboard(scope) {
+  const c = GAME.character;
+  const rank = strongestBeings(GAME, { scope: scope || 'universe' });
+  const { body } = sheetShell('Strongest beings', rank.scope === 'multiverse' ? 'Across every universe this game tracks' : 'In your own universe');
+
+  const toggle = el('div', 'toggle-row');
+  const uBtn = el('button', 'mini' + (rank.scope === 'universe' ? ' active' : ''), 'Your universe');
+  uBtn.type = 'button';
+  uBtn.addEventListener('click', () => panelLeaderboard('universe'));
+  const mBtn = el('button', 'mini' + (rank.scope === 'multiverse' ? ' active' : ''), 'Every universe');
+  mBtn.type = 'button';
+  mBtn.addEventListener('click', () => panelLeaderboard('multiverse'));
+  toggle.appendChild(uBtn);
+  toggle.appendChild(mBtn);
+  body.appendChild(toggle);
+
+  body.appendChild(el('p', 'row-note',
+    'Ranked by raw power, not by who could plausibly beat who - the same figure combatPower() uses everywhere else. '
+    + 'Only beings the setting itself keeps track of are counted; nobody you met on the road is on this list.'));
+
+  const TOP_N = 15;
+  const top = rank.rows.slice(0, TOP_N);
+
+  body.appendChild(el('div', 'group-label', `Top ${top.length}`));
+  for (const r of top) {
+    const row = el('div', 'row' + (r.isPlayer ? ' owned' : ''));
+    const main = el('div', 'row-main');
+    main.appendChild(el('div', 'row-title', `#${r.rank} ${r.name}${r.isPlayer ? ' (you)' : ''}`));
+    main.appendChild(el('div', 'row-note', `${r.tier}${rank.scope === 'multiverse' ? `, Universe ${r.universe}` : ''}`));
+    row.appendChild(main);
+    row.appendChild(el('div', 'row-value', numberish(r.power)));
+    body.appendChild(row);
+  }
+
+  if (!top.some((r) => r.isPlayer)) {
+    body.appendChild(el('div', 'group-label', 'You'));
+    const row = el('div', 'row owned');
+    const main = el('div', 'row-main');
+    main.appendChild(el('div', 'row-title', `#${rank.you.rank} ${rank.you.name}`));
+    main.appendChild(el('div', 'row-note', `${rank.you.tier}, out of ${rank.total} known.`));
+    row.appendChild(main);
+    row.appendChild(el('div', 'row-value', numberish(rank.you.power)));
+    body.appendChild(row);
+  }
+
   openSheet('panel');
 }
 
