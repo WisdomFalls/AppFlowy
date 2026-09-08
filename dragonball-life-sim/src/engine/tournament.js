@@ -205,9 +205,14 @@ export function buildEntrants(state, rng, format, opts = {}) {
 
   // The other universes send their own people. They are not in the canon file
   // because they only exist for one era, but they are named, and beating one
-  // of them is remembered.
-  if (format.universe || format.id === 'top') {
-    const visitors = (format.id === 'top' ? multiverseField(year, ['u7']) : universeFighters('u' + format.universe, year))
+  // of them is remembered. A player-hosted tournament can reach for this too
+  // (opts.universeScope for another world in your own universe, opts.multiversal
+  // for a real cross-universe draw) - not just the lore-locked formats.
+  const myUniverse = c.universe || 7;
+  if (format.universe || format.id === 'top' || opts.multiversal || opts.universeScope) {
+    const visitors = (opts.multiversal || format.id === 'top'
+      ? multiverseField(year, ['u' + myUniverse])
+      : universeFighters('u' + (opts.universeScope || format.universe), year))
       .filter((f) => f.power >= band.min / 3 && f.power <= band.max * 3)
       .map((f) => ({
         id: 'universe_' + f.name.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
@@ -219,8 +224,8 @@ export function buildEntrants(state, rng, format, opts = {}) {
         universe: f.universe,
         flavour: f.flavour,
       }));
-    // Universe 7 gets its share of the draw; the visitors take the rest.
-    const visitorShare = format.id === 'top' ? 0.7 : 0.5;
+    // The home crowd gets its share of the draw; the visitors take the rest.
+    const visitorShare = (opts.multiversal || format.id === 'top') ? 0.7 : 0.5;
     const visitorSlots = Math.max(1, Math.round((size - 1) * visitorShare));
     pool = pool.slice(0, Math.max(0, size - 1 - visitorSlots))
       .concat(visitors.sort(() => rng.next() - 0.5).slice(0, visitorSlots));

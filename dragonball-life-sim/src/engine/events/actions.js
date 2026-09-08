@@ -1801,18 +1801,28 @@ export const ACTIONS = [
     available: (s) => s.character.age >= 14 && !s.character.inAfterlife && s.character.zeni >= 50000,
     options: (s) => {
       const c = s.character;
+      // A local card and an open invitational never leave the ground you are
+      // standing on. Reaching further needs the means to actually reach -
+      // the same off-world and cross-universe checks seek_challenge already
+      // uses - and a name big enough that anyone that far away has heard it.
+      const canSpace = c.items.includes('spaceship') || c.items.includes('attack_ball')
+        || c.techniques.includes('instant_transmission') || !!shipOf(s);
+      const canCrossUniverse = c.techniques.includes('kai_kai') || c.flags.zeno_pass
+        || c.flags.won_tournament_of_power || c.flags.angel_escort;
       const tiers = [
-        { id: 'local', label: 'A local card', hint: `${localMoney(s, 50000)}. Whoever hears about it.`, cost: 50000, spread: 4, canon: false },
-        { id: 'open', label: 'An open invitational', hint: `${localMoney(s, 400000)}. Word gets around.`, cost: 400000, spread: 12, canon: true },
-        { id: 'callout', label: 'Call out the strongest alive', hint: `${localMoney(s, 2000000)}. You are asking for it.`, cost: 2000000, spread: 45, canon: true },
+        { id: 'local', label: 'A local card', hint: `${localMoney(s, 50000)}. Whoever hears about it.`, cost: 50000, spread: 4, canon: false, gated: false },
+        { id: 'open', label: 'An open invitational', hint: `${localMoney(s, 400000)}. Word gets around.`, cost: 400000, spread: 12, canon: true, fame: 12, gated: false },
+        { id: 'callout', label: 'Call out the strongest alive', hint: `${localMoney(s, 2000000)}. You are asking for it.`, cost: 2000000, spread: 45, canon: true, fame: 45, gated: false },
+        { id: 'interplanetary', label: 'An interplanetary card', hint: `${localMoney(s, 8000000)}. Fighters from other worlds actually make the trip.`, cost: 8000000, spread: 90, canon: true, fame: 60, gated: !canSpace, gateNote: 'You have no way to bring anyone from off this world.' },
+        { id: 'multiversal', label: 'A multiversal draw', hint: `${localMoney(s, 40000000)}. Somebody in another universe hears about this and comes anyway.`, cost: 40000000, spread: 200, canon: true, fame: 80, gated: !canCrossUniverse, gateNote: 'You have no way to reach another universe, let alone invite one here.' },
       ];
       return tiers.map((t) => ({
         ...t,
-        disabled: c.zeni < t.cost || (t.canon && c.fame < (t.id === 'callout' ? 45 : 12)),
+        disabled: c.zeni < t.cost || t.gated || (t.fame && c.fame < t.fame),
         hint: c.zeni < t.cost ? `You cannot cover the ${localMoney(s, t.cost)} purse.`
-          : (t.canon && c.fame < (t.id === 'callout' ? 45 : 12))
-            ? 'Nobody worth fighting has heard of you yet.'
-            : t.hint,
+          : t.gated ? t.gateNote
+            : (t.fame && c.fame < t.fame) ? 'Nobody worth fighting has heard of you yet.'
+              : t.hint,
       }));
     },
     run: (s, rng, params) => {
@@ -1821,6 +1831,8 @@ export const ACTIONS = [
         local: { cost: 50000, spread: 4, canon: false, size: 8 },
         open: { cost: 400000, spread: 12, canon: true, size: 8 },
         callout: { cost: 2000000, spread: 45, canon: true, size: 8 },
+        interplanetary: { cost: 8000000, spread: 90, canon: true, size: 10, universeScope: s.character.universe || 7 },
+        multiversal: { cost: 40000000, spread: 200, canon: true, size: 16, multiversal: true },
       }[tier];
       s.character.zeni -= spec.cost;
       const t = createTournament(s, rng, {
@@ -1829,6 +1841,8 @@ export const ACTIONS = [
         spread: spec.spread,
         canon: spec.canon,
         size: spec.size,
+        universeScope: spec.universeScope,
+        multiversal: spec.multiversal,
         name: `${s.character.name}'s Invitational`,
         placeId: s.character.placeId,
       });
