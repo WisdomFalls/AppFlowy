@@ -85,6 +85,123 @@ export const PROSTHETICS = {
   artificial_organ: { id: 'artificial_organ', name: 'an artificial organ', restores: 0.8, stats: { durability: 2 }, mark: null },
 };
 
+/**
+ * Generic system for targetable anatomical features (Saiyan tail, potential horns, wings, etc).
+ * Each feature specifies which races can have it, how it affects stats/damage when lost, and how to restore it.
+ * Stored in character.features: { featureId: { has: true/false, lost: number of times lost, restored: number of times restored } }
+ */
+export const ANATOMICAL_FEATURES = {
+  saiyan_tail: {
+    id: 'saiyan_tail', name: 'tail',
+    races: ['saiyan', 'half_saiyan'],
+    recoveryMechanic: 'regeneration',  // How this body part comes back (regeneration, surgery, wish, etc)
+    statPenalty: { strength: -8, speed: -5 },
+    powerMult: 0.92,
+    desc: 'Your tail is a sensory organ and weapon both. Without it, you lose a third of your balance and reach.',
+    mark: null,  // no scar mark for tail loss specifically
+  },
+};
+
+/**
+ * Check if a character can have a given anatomical feature.
+ * Returns true if the character's race supports this feature.
+ */
+export function canHaveFeature(character, featureId) {
+  const feature = ANATOMICAL_FEATURES[featureId];
+  if (!feature) return false;
+  return feature.races.includes(character.raceId);
+}
+
+/**
+ * Initialize a character's anatomical features based on their race and current state.
+ * Call once during character creation to set up the feature registry.
+ */
+export function initializeFeatures(character) {
+  if (!character.features) {
+    character.features = {};
+  }
+  for (const [featureId, spec] of Object.entries(ANATOMICAL_FEATURES)) {
+    if (canHaveFeature(character, featureId)) {
+      if (!character.features[featureId]) {
+        character.features[featureId] = {
+          has: !character.injuries?.some(i => i.id === `lost_${featureId.split('_')[0]}`),
+          lost: 0,
+          restored: 0,
+        };
+      }
+    }
+  }
+  return character.features;
+}
+
+/**
+ * Target and sever/damage an anatomical feature in combat.
+ * Returns the narrative line describing what happened, or null if the feature is already lost.
+ */
+export function targetFeature(character, rng, featureId, from, opts = {}) {
+  const feature = ANATOMICAL_FEATURES[featureId];
+  if (!feature) return null;
+  if (!canHaveFeature(character, featureId)) return null;
+
+  initializeFeatures(character);
+  const feat = character.features[featureId];
+  if (!feat || !feat.has) return null;
+
+  // Special case: Saiyan tail regenerates for most Saiyans
+  if (featureId === 'saiyan_tail' && hasPerk(character, 'regeneration') && !opts.force) {
+    return `${from ? from + ' takes' : 'Your'} tail is severed, but it regrows before the shock wears off.`;
+  }
+
+  feat.has = false;
+  feat.lost = (feat.lost || 0) + 1;
+
+  // Apply stat penalties
+  if (feature.statPenalty) {
+    bumpStats(character, feature.statPenalty, 1, 1, {});
+  }
+  if (feature.powerMult) {
+    character.power = Math.max(1, Math.round(character.power * feature.powerMult));
+  }
+
+  return opts.text || `${from ? from + ' severs' : 'You lose'} ${feature.name}. ${feature.desc}`;
+}
+
+/**
+ * Restore a severed anatomical feature (via regeneration, healing, wish, etc).
+ * Returns success message or error message.
+ */
+export function restoreFeature(character, featureId) {
+  const feature = ANATOMICAL_FEATURES[featureId];
+  if (!feature) return { ok: false, text: 'That feature cannot be restored.' };
+
+  initializeFeatures(character);
+  const feat = character.features[featureId];
+  if (!feat) return { ok: false, text: 'Nothing to restore.' };
+  if (feat.has) return { ok: false, text: 'It is already there.' };
+
+  feat.has = true;
+  feat.restored = (feat.restored || 0) + 1;
+
+  // Reverse stat penalties
+  if (feature.statPenalty) {
+    bumpStats(character, feature.statPenalty, -1, 1, {});
+  }
+  if (feature.powerMult) {
+    character.power = Math.max(1, Math.round(character.power / feature.powerMult));
+  }
+
+  return { ok: true, text: `${feature.name.charAt(0).toUpperCase()}${feature.name.slice(1)} restored.` };
+}
+
+/**
+ * Check if a character currently has a given anatomical feature.
+ */
+export function hasFeature(character, featureId) {
+  initializeFeatures(character);
+  const feat = character.features?.[featureId];
+  return !!(feat && feat.has);
+}
+
 /** Who can fit one, and how well, in a given year and place. */
 export const FITTERS = [
   { id: 'capsule', name: 'Capsule Corporation', quality: 1.0, cost: 400000, from: 750,

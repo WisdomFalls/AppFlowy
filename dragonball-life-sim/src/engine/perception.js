@@ -28,6 +28,41 @@ export function hasKiSense(character) {
     && (forms.includes('ui_mastered') || forms.includes('ui_perfected')));
 }
 
+/**
+ * Check if a character's ki is normally detectable via sensing.
+ * Some androids and artificial beings have ki that does not register on normal senses.
+ * This is distinct from invisibility - an android with undetectable ki can still be seen,
+ * but their power level cannot be sensed without alternative detection methods.
+ */
+export function hasDetectableKi(target) {
+  const raceId = target.raceId || '';
+  // Android types have invisible/undetectable ki as a race feature
+  if (raceId === 'android' || raceId === 'half_android' || raceId === 'frost_android') {
+    // If they have an active technique or form that makes them visible, ki is detectable
+    const suppressing = (target.techniques || []).includes('ki_suppress');
+    if (suppressing) return false;
+    // Check for explicit visibility flag (e.g., from training that makes them detectable)
+    if (target.flags?.ki_detectable) return true;
+    // By default, androids have undetectable ki
+    return false;
+  }
+  // All other races have naturally detectable ki (unless tech/technique makes it invisible)
+  const techniques = target.techniques || [];
+  if (techniques.includes('ki_suppress')) return false;
+  return true;
+}
+
+/**
+ * Check if a character can actually sense a target's power through normal ki-sensing.
+ * Succeeds only if:
+ * 1. The observer has ki sense AND
+ * 2. The target's ki is naturally detectable (not an android with hidden ki, not suppressing, etc)
+ */
+export function canSenseKi(observer, target) {
+  if (!hasKiSense(observer)) return false;
+  return hasDetectableKi(target);
+}
+
 /** Can this character read exact numbers off anybody at all? */
 export function canReadPower(character) {
   return hasKiSense(character) || hasScouter(character);
@@ -35,19 +70,26 @@ export function canReadPower(character) {
 
 /**
  * How a power level reads to this character. Returns the string to show and
- * whether a scouter just died getting it.
+ * whether a scouter just died getting it. Accounts for android ki invisibility.
  */
 export function readPower(state, targetPower, opts = {}) {
   const c = state.character;
+  const target = opts.target;  // Optional: the character being sensed
   const mine = combatPower(c);
   const ratio = targetPower / Math.max(1, mine);
 
   if (hasKiSense(c)) {
     // Ki sense is a feel, not a display, but a trained one is accurate.
+    // UNLESS the target is an android with undetectable ki
+    if (target && !hasDetectableKi(target)) {
+      return { known: false, exact: false, broke: false, how: 'ki sense (blocked)',
+        text: 'you cannot sense their ki - whatever they are, they do not broadcast it' };
+    }
     return { known: true, exact: true, broke: false, text: fmt(targetPower), how: 'ki sense' };
   }
 
   if (hasScouter(c)) {
+    // Scouters can measure android ki (it is still there, just not sensable by living beings)
     if (targetPower > SCOUTER_CEILING) {
       // The classic. It reads, it climbs, and then it does not exist any more.
       if (!opts.peek && !state.character.flags.scouter_broken) {
