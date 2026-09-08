@@ -25,7 +25,7 @@ import { getTransformation, ladderFor } from '../data/transformations.js';
 import { getCanon } from '../data/canon.js';
 import { STAT_KEYS, STAT_LABELS, combatPower, powerTier, looksScore } from '../engine/stats.js';
 import { relationLabel, bondScore, bondLabel, romanceLabel, dossier, knowledgeLabel } from '../engine/npc.js';
-import { npcActions, runNpcAction, canVisitLiving } from '../engine/social.js';
+import { npcActions, runNpcAction, canVisitLiving, checkRomanceSpark } from '../engine/social.js';
 import { scoreReplyLocally, applyReply, impressionLabel } from '../engine/dialogue.js';
 import { judgeReply, getAiConfig, setAiConfig, backendLabel, testAiEndpoint, PRESETS } from '../engine/ai.js';
 import { numberish, zeni } from '../engine/text.js';
@@ -36,7 +36,7 @@ import { getItem } from '../data/items.js';
 import { TRAITS, getTrait, TRAIT_KINDS } from '../data/traits.js';
 import { reputationOf, homeOf, homeBonus, shipOf, SHIP_ROOM_BY_ID } from '../engine/settlement.js';
 import { readPower, describePower, shortPower, canReadPower, hasScouter, hasKiSense } from '../engine/perception.js';
-import { getRng, saveRng } from '../engine/state.js';
+import { getRng, saveRng, findNpc } from '../engine/state.js';
 import { ceilingFor, ceilingBlock, ceilingPressure, masteryLabel } from '../engine/mastery.js';
 import { injuryList } from '../engine/body.js';
 import { worldManifest } from '../engine/worlds.js';
@@ -2688,7 +2688,20 @@ function endBattle() {
     spare.addEventListener('click', () => {
       const spareGain = Math.max(3, Math.min(20, Math.round(8 + alignment * -0.15)));
       GAME.character.karma = Math.min(100, GAME.character.karma + spareGain);
-      pushBattleLines(['You leave them breathing. They will remember that, one way or the other.'], 'big');
+      const lines = ['You leave them breathing. They will remember that, one way or the other.'];
+      // Allowing a real fight to end without a death is exactly the moment
+      // a spark either does or does not happen - the same check a spar
+      // rolls, on somebody who was trying to kill you a minute ago instead
+      // of somebody who agreed to trade blows for the afternoon.
+      const foeNpcId = (BATTLE.them.ref && BATTLE.them.ref.npcId) || (BATTLE.foeRef && BATTLE.foeRef.npcId) || null;
+      const foeNpc = foeNpcId && findNpc(GAME, foeNpcId);
+      if (foeNpc) {
+        const rng = getRng(GAME);
+        const spark = checkRomanceSpark(GAME, rng, foeNpc);
+        saveRng(GAME, rng);
+        if (spark) lines.push(spark.text);
+      }
+      pushBattleLines(lines, 'big');
       spare.remove();
       const kill = document.querySelector('.bact.kill');
       if (kill) kill.remove();

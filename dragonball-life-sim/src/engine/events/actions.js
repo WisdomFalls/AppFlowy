@@ -24,6 +24,7 @@ import { prostheticOptions, fittersFor, fitProsthetic, injuries, injuryList, mec
 import { actionBlocked, ageGate, chargeAction, grantTrainingPower, costLabel,
   limitFor, usedThisYear, trainingRoomLeft } from '../economy.js';
 import { makeNpc, bondScore, relationLabel, RELATIONS } from '../npc.js';
+import { checkRomanceSpark } from '../social.js';
 import { canonAvailable, canonPower, canonPlace, canonUniverse } from '../../data/canon.js';
 import { ballsHeld, startHunt, ballsAreInert, summonReady } from '../dragonballs.js';
 import { startTrial, STAT_TRIALS, TRIAL_KINDS, getMastery, masteryEffect, inventForm } from '../trials.js';
@@ -995,6 +996,11 @@ export const ACTIONS = [
       const { gained } = trainOnce(s, rng, { intensity: 1.1, mentorMult: npc.power > combatPower(s.character) ? 1.3 : 1, slice: 0.3 });
       let text = `${describeGap(combatPower(s.character), npc.power)} ${narrateFight(res, rng, npc.name)}`;
       if (res.zenkai) text += ` ${render('{You come back from it heavier|Your body rebuilds stronger|Zenkai}', {}, rng)}.`;
+      // A spar is the one place two people show each other exactly what
+      // they are made of, and for some people - Saiyans especially - that
+      // is the whole appeal.
+      const spark = checkRomanceSpark(s, rng, npc);
+      if (spark) text += ` ${spark.text}`;
       return { text, gained };
     },
   },

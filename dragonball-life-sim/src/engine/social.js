@@ -37,6 +37,83 @@ function note(state, text, opts = {}) {
   });
 }
 
+/**
+ * What somebody actually looks for in a partner. Rolled once per character
+ * the first time it is needed and kept from then on, so the same person's
+ * taste does not change fight to fight. Saiyans are the one race where
+ * strength in a partner is close to a given; everyone else runs the full
+ * range, and it can run either way regardless of sex - the preference is
+ * the character's, not their species' rulebook applied evenly.
+ */
+function getPreferences(character, rng) {
+  if (character.romPref) return character.romPref;
+  const saiyanBlood = character.raceId === 'saiyan' || character.raceId === 'halfsaiyan';
+  character.romPref = {
+    strength: saiyanBlood ? rng.float(0.65, 1) : rng.float(0.05, 0.55),
+    heightCm: rng.int(150, 205),
+    heightTolerance: rng.int(15, 40),
+    build: rng.pick(['small', 'wiry', 'lean', 'balanced', 'stocky', 'massive']),
+  };
+  return character.romPref;
+}
+
+/**
+ * A fight is the one place two people show each other exactly what they are
+ * made of, and for some people - Saiyans especially - that is the whole
+ * appeal. Call this after a spar, or after a real fight that ends with both
+ * people still standing. Mutual: what the other person just showed matters
+ * against what you personally look for, and what you showed matters against
+ * what they look for, same as any other attraction runs both directions.
+ */
+export function checkRomanceSpark(state, rng, npc, opts = {}) {
+  const c = state.character;
+  if (!npc || !npc.alive) return null;
+  if (['parent', 'sibling', 'child', 'spouse', 'lover'].includes(npc.relation)) return null;
+  if (Math.abs((npc.age ?? c.age) - c.age) > 25) return null;
+
+  const myPref = getPreferences(c, rng);
+  const theirPref = getPreferences(npc, rng);
+  const theirPower = clamp(Math.log10(Math.max(1, npc.power)) / 8, 0, 1);
+  const myPower = clamp(Math.log10(Math.max(1, combatPower(c))) / 8, 0, 1);
+
+  let score = 0.06;
+  // What you just watched them do, weighed against how much that kind of
+  // strength actually matters to you - and the mirror of it, what they saw
+  // in you weighed against how much it matters to them.
+  score += myPref.strength * theirPower * 0.45;
+  score += theirPref.strength * myPower * 0.3;
+
+  const theirHeight = (npc.appearance && npc.appearance.heightCm) || 170;
+  const heightMatch = clamp(1 - Math.abs(theirHeight - myPref.heightCm) / (myPref.heightTolerance * 2), 0, 1);
+  score += heightMatch * 0.08;
+  if (npc.appearance && npc.appearance.buildShape === myPref.build) score += 0.06;
+
+  score += looksScore(c) / 1400;
+  score += (npc.closeness || 0) / 500;
+  score = clamp(score, 0, opts.cap ?? 0.7);
+
+  if (!rng.chance(score)) return null;
+
+  if (!npc.relation || npc.relation === 'stranger') npc.relation = 'acquaintance';
+  npc.closeness = clamp((npc.closeness || 0) + rng.int(6, 14), 0, 100);
+  npc.romance = clamp((npc.romance || 0) + rng.int(8, 18), 0, 100);
+  npc.tension = clamp((npc.tension || 0) - 6, 0, 100);
+  npc.tags = npc.tags || [];
+
+  const bold = npc.tags.includes('bold');
+  const boldLines = [
+    'You fight like that and expect me to just walk away?',
+    'I do not know what that was, but I want to see it again.',
+    'Careful. I am going to remember that.',
+  ];
+  const text = render(
+    `{Something about the way [n] fights catches you off guard|A moment in it and neither of you is entirely thinking about the fight any more|You catch [n] looking at you differently once it is over}. `
+    + (bold ? `"${rng.pick(boldLines)}" [n] does not pretend otherwise.` : `Neither of you says anything about it. Not yet.`),
+    { n: npc.name }, rng,
+  );
+  return { text, bold };
+}
+
 const ROMANCE_MIN_AGE = 15;      // before this it is a childhood crush and nothing else
 const CRUSH_MIN_AGE = 10;
 const COMMIT_MIN_AGE = 16;
